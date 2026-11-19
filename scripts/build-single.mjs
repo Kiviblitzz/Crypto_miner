@@ -11,7 +11,7 @@ html = html.replace(/<script type="module" crossorigin src="\.?\/?([^"]+)"><\/sc
 html = html.replace(/<link rel="stylesheet" crossorigin href="\.?\/?([^"]+)">/g, (_, href) => `<style>${readFileSync(join(dist, href), 'utf8')}</style>`);
 // Modul-Script ans Ende des Bodys, damit das DOM bereits existiert
 const m = html.match(/<script type="module">[\s\S]*?<\/script>/);
-if (m) { html = html.replace(m[0], ''); html = html.replace('</body>', `${m[0]}\n</body>`); }
+if (m) { html = html.replace(m[0], () => ''); html = html.replace('</body>', () => `${m[0]}\n</body>`); }
 
 mkdirSync('play', { recursive: true });
 writeFileSync('play/HASHWERK.html', html);
