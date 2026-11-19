@@ -1308,3 +1308,21 @@ body.aiming #crosshair { width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; bac
 #goals .goal > div:last-child { flex-wrap: nowrap !important; white-space: nowrap; }
 .pause-set .ps-t { min-width: 96px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .pause-set .ps-t.off { background: rgba(255,236,210,.05); }
+/* Runde 8 (GPT) */
+.logo-wrap::before { background: radial-gradient(closest-side, rgba(20,12,6,.72) 0%, rgba(20,12,6,.6) 60%, transparent 100%) !important; }
+@media (min-width: 721px) { #prompt { top: calc(50% + 56px) !important; } }
+#goals .goal .bag i { position: relative; }
+#goals .goal .bag i .tk { position: absolute; right: -3px; bottom: -3px; width: 11px; height: 11px; border-radius: 50%; background: #5fd38d; box-shadow: 0 0 0 1.5px #2a1f18; }
+#goals .goal .bag i .tk::after { content: ''; position: absolute; left: 3.5px; top: 1.5px; width: 3px; height: 5px; border: solid #123d24; border-width: 0 1.6px 1.6px 0; transform: rotate(45deg); }
+body[data-modal="intro"] #st-btc { visibility: hidden; }
+body.showrun #st-wallet { visibility: hidden; }
+.skills .sk { min-height: 112px; padding: 14px !important; box-sizing: border-box; }
+.skills .sk-learn { display: flex; justify-content: space-between; gap: 10px; }
+#build .item .thumb { height: 128px !important; }
+.tiles .acts .btn.sellb b { font: 700 15px var(--font-fun) !important; }
+.tiles .acts .btn.sellb small { font: 700 13px var(--font) !important; color: inherit; opacity: .85 !important; }
+.pause-set { flex-wrap: wrap; }
+.pause-set .ps-s { flex-basis: 100%; min-height: 24px; }
+.pause-set .ps-s span { white-space: nowrap; }
+.pause-set .ps-s b { min-width: 34px; text-align: right; font: 700 14px var(--font-fun); color: var(--acc); }
+#ps-sens:focus-visible { outline: 2px solid #ffd25c; outline-offset: 4px; }

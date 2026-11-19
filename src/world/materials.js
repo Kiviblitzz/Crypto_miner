@@ -58,7 +58,7 @@ export const TEX = {
     speckle(g, w, h, 4000, ['rgba(0,0,0,0.1)', 'rgba(255,255,255,0.06)']);
   }, { repeat: rep }),
   plaster: (rep, color = '#e9e2d4') => canvasTex('plaster' + color, 256, 256, (g, w, h) => {
-    g.fillStyle = color; g.fillRect(0, 0, w, h); speckle(g, w, h, 2500, ['rgba(0,0,0,0.035)', 'rgba(255,255,255,0.06)'], [1, 3]);
+    g.fillStyle = color; g.fillRect(0, 0, w, h); speckle(g, w, h, 1200, ['rgba(0,0,0,0.03)', 'rgba(255,255,255,0.05)'], [1, 2]);
   }, { repeat: rep }),
   corrugated: (rep, color = '#8d96a0') => canvasTex('corr' + color, 256, 256, (g, w, h) => {
     g.fillStyle = color; g.fillRect(0, 0, w, h);

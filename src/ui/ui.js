@@ -19,9 +19,9 @@ const PART_ICON = {
       psu: '<rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="10" cy="12" r="4"/><path d="M10 9.5v5M7.5 12h5M17.5 9v6"/>' };
 const PNAME = { mobo: 'Mainboard', cpu: 'Prozessor', gpu: 'Grafikkarte', psu: 'Netzteil' };
 const SKILL = {
-  hw: { name: 'Schrauben', learn: 'Teile einbauen, Geräte aufstellen', short: 'Einbauen', icon: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5a1.8 1.8 0 0 0 2.5 2.5l5.8-5.8a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>', now: (lv) => (lv > 1 ? `Hardware ${4 * (lv - 1)} % günstiger` : 'Noch kein Bonus'), next: (lv) => `Hardware ${4 * lv} % günstiger` },
-  mining: { name: 'Mining', learn: 'Jeder Tag, an dem dein PC schürft', short: 'Schürfen', icon: '<path d="M14.5 4.5c2.8-.6 5.4.7 6.5 3-2.2-.9-4.4-.8-6.2.2"/><path d="M14.5 4.5c-2.6 1.3-4 3.7-4 6.3 1-1.8 2.7-3 4.8-3.6"/><path d="M12.6 9.8 3.5 19a1.6 1.6 0 0 0 2.3 2.3l9.2-9.2"/>', now: (lv) => (lv > 1 ? `+${4 * (lv - 1)} % Ertrag` : 'Noch kein Bonus'), next: (lv) => `+${4 * lv} % Ertrag` },
-  trade: { name: 'Handel', learn: 'Coins verkaufen', short: 'Verkaufen', icon: '<circle cx="9" cy="9" r="5.5"/><path d="M14.6 8.8a5.5 5.5 0 1 1-5.8 5.8"/><path d="M9 6.8v4.4M7.2 9h3.6"/>', now: (lv) => `Gebühr ${[4, 3, 2, 1, 0.5][lv - 1].toLocaleString('de-DE')} %`, next: (lv) => `Gebühr ${[3, 2, 1, 0.5][lv - 1]?.toLocaleString('de-DE') ?? '–'} %` },
+  hw: { name: 'Schrauben', learn: 'Teile einbauen, Geräte aufstellen', short: 'Einbauen', icon: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5a1.8 1.8 0 0 0 2.5 2.5l5.8-5.8a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>', now: (lv) => (lv > 1 ? `Hardware −${4 * (lv - 1)} %` : 'Noch kein Bonus'), next: (lv) => `−${4 * lv} %` },
+  mining: { name: 'Mining', learn: 'Jeder Tag, an dem dein PC schürft', short: 'Schürfen', icon: '<path d="M14.5 4.5c2.8-.6 5.4.7 6.5 3-2.2-.9-4.4-.8-6.2.2"/><path d="M14.5 4.5c-2.6 1.3-4 3.7-4 6.3 1-1.8 2.7-3 4.8-3.6"/><path d="M12.6 9.8 3.5 19a1.6 1.6 0 0 0 2.3 2.3l9.2-9.2"/>', now: (lv) => (lv > 1 ? `Ertrag +${4 * (lv - 1)} %` : 'Noch kein Bonus'), next: (lv) => `+${4 * lv} %` },
+  trade: { name: 'Handel', learn: 'Coins verkaufen', short: 'Verkaufen', icon: '<circle cx="9" cy="9" r="5.5"/><path d="M14.6 8.8a5.5 5.5 0 1 1-5.8 5.8"/><path d="M9 6.8v4.4M7.2 9h3.6"/>', now: (lv) => `Gebühr ${[4, 3, 2, 1, 0.5][lv - 1].toLocaleString('de-DE')} %`, next: (lv) => `${[3, 2, 1, 0.5][lv - 1]?.toLocaleString('de-DE') ?? '–'} %` },
 };
 const skillSvg = (k, size = 22) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${SKILL[k].icon}</svg>`;
 const partSvg = (t, size = 22) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${PART_ICON[t]}</svg>`;
@@ -65,7 +65,7 @@ export class UI {
     const snd = $('#ps-sound'), sens = $('#ps-sens');
     const applySnd = () => { const on = pref.sound !== false; snd.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/>${on ? '<path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>' : '<path d="M16 9.5l5 5M21 9.5l-5 5"/>'}</svg><span>Ton</span>`; snd.setAttribute('aria-pressed', on); snd.title = on ? 'Ton ist an – klicken zum Ausschalten' : 'Ton ist aus – klicken zum Einschalten'; snd.classList.toggle('off', !on); this.audio?.setMuted?.(!on); };
     snd.onclick = () => { pref.sound = pref.sound === false; savePref(); applySnd(); };
-    sens.value = pref.sens || 1; const applySens = () => { this.w.player.sens = 0.0022 * (+sens.value || 1); };
+    sens.value = pref.sens || 1; const applySens = () => { this.w.player.sens = 0.0022 * (+sens.value || 1); const v = $('#ps-val'); if (v) v.textContent = (+sens.value).toLocaleString('de-DE', { minimumFractionDigits: 1 }) + '×'; };
     sens.oninput = () => { pref.sens = +sens.value; savePref(); applySens(); };
     setTimeout(() => { applySnd(); applySens(); }, 0);
     $('#clickhint').onclick = () => this.w.requestLock();
@@ -153,7 +153,7 @@ export class UI {
     if (s.chapter === 0 && w.mode === 'play' && !this.paused && s.current === 'kinder') {
       const pc = g.facObjects('kinder').find((o) => o.type === 'tower');
       const spots = w.room?.looseSpots || {}, lying = Object.keys(s.loose || {}).filter((t) => spots[t]);
-      if (pc && !s.flags.miningStarted && lying.length) { const cp = w.camera.position, d = (t) => Math.hypot(spots[t][0] - cp.x, spots[t][2] - cp.z) + (w.toScreen(spots[t][0], spots[t][1] + 0.1, spots[t][2]).on ? 0 : 100); const t = lying.sort((a, b) => d(a) - d(b))[0]; pos = [spots[t][0], spots[t][1] + 0.1, spots[t][2]]; label = PNAME[t]; aimed = w.aim?.loose === t; }
+      if (pc && !s.flags.miningStarted && lying.length) { const cp = w.camera.position, d = (t) => Math.hypot(spots[t][0] - cp.x, spots[t][2] - cp.z) + (w.toScreen(spots[t][0], spots[t][1] + 0.1, spots[t][2]).on ? 0 : 100); const keep = lying.includes(this.markLoose) && w.toScreen(spots[this.markLoose][0], spots[this.markLoose][1] + 0.1, spots[this.markLoose][2]).on; const t = keep ? this.markLoose : lying.sort((a, b) => d(a) - d(b))[0]; this.markLoose = w.markLoose = t; pos = [spots[t][0], spots[t][1] + 0.1, spots[t][2]]; label = PNAME[t]; aimed = w.aim?.loose === t; }
       else if (pc && !s.flags.miningStarted) { pos = [pc.x, 0.78, pc.z]; label = g.pcReady(pc) ? 'PC einschalten' : 'Teile einbauen'; aimed = w.aim?.uid === pc.uid; }
       else if (g.has('market') && !(s.stats.sold > 0)) { const pr = w.room?.props?.find((p) => p.action === 'market'); if (pr) { pos = [pr.c[0], pr.c[1] + 0.16, pr.c[2]]; label = 'Börse'; aimed = w.aim?.prop === pr; } }
     }
@@ -176,7 +176,7 @@ export class UI {
   liveWallet() {
     const g = this.g, s = g.s, el = $('#st-wallet'); if (!el) return;
     const on = (!s.feat || s.flags.miningStarted) && !document.getElementById('splash')?.offsetParent;
-    el.style.display = on ? '' : 'none'; document.body.classList.toggle('has-wallet', on); if (!on) return;
+    el.style.display = on ? '' : 'none'; document.body.classList.toggle('has-wallet', on); document.body.classList.toggle('showrun', !!this.showRun); if (!on) return;
     if (this.rateDay !== s.day || !this.rateT || performance.now() - this.rateT > 1000) { this.rate = this.btcRate(); this.rateDay = s.day; this.rateT = performance.now(); }
     const w = s.wallet.BTC, live = w.ex + w.cold + this.pendingBtc();
     const txt = `<div class="v"><span class="cn">₿</span> ${fmtCoin(live)}</div><div class="l">≈ ${fmtUSD(live * g.price('BTC'))}</div>`;
@@ -267,7 +267,7 @@ export class UI {
   openUI() { this.pause(false); if (this.w.mode === 'play') this.w.setMode('ui'); }
   resume() {
     this.pause(false);
-    if (!$('#modal').classList.contains('hidden')) { this.modalKind = null; $('#modal').classList.add('hidden'); this.onModalClose?.(); this.onModalClose = null; }
+    if (!$('#modal').classList.contains('hidden')) { this.modalKind = null; document.body.dataset.modal = ''; $('#modal').classList.add('hidden'); this.onModalClose?.(); this.onModalClose = null; }
     document.body.classList.remove('show-build', 'show-goals'); this.dock();
     if (this.inspUid) { this.inspUid = null; $('#inspector').classList.add('hidden'); this.w.select(null); }
     this.w.focusObject?.(null); this.pickType = null; this.showRun = false; this.w.ghostPart?.(null);
@@ -294,9 +294,9 @@ export class UI {
     const box = $('#featcards'); box.innerHTML = '';
     const PRIO = ['market', 'build', 'skills', 'speed2', 'autosell', 'rigs', 'company', 'coins', 'cold', 'heat', 'map', 'techs', 'ranking', 'loan', 'buycoins', 'speed3', 'phone'];
     const top = [...q].sort((a, b) => (PRIO.indexOf(a) + 99) % 99 - (PRIO.indexOf(b) + 99) % 99)[0], rest = q.filter((f) => f !== top);
-    const el = h(`<div class="featcard"><div class="fc-t">Neu</div><div class="fc-h">${esc(FEATURES[top].title)}</div><div class="fc-b">${FEATURES[top].text}</div>${rest.length ? `<div class="fc-more">Außerdem: ${rest.map((f) => esc(FEATURES[f].title)).join(', ')}</div>` : ''}</div>`);
+    const el = h(`<div class="featcard"><div class="fc-t">Neu</div><div class="fc-h">${esc(FEATURES[top].title)}</div><div class="fc-b">${FEATURES[top].text}</div>${rest.length && top !== 'market' ? `<div class="fc-more">Außerdem: ${rest.map((f) => esc(FEATURES[f].title)).join(', ')}</div>` : ''}</div>`);
     box.append(el); clearTimeout(this.featHide);
-    this.featHide = setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 600); }, 5200);
+    this.featHide = setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 600); }, top === 'market' ? 4000 : 5200);
     this.speedBar(); this.dock(); this.keysHint(); this.sites(); this.goals();
   }
   // Tasten-Hinweise unten rechts: nur, was schon freigeschaltet ist
@@ -626,7 +626,7 @@ export class UI {
       let prog = '';
       if (!done && go.progress) { const [cur, tgt, kind] = go.progress(s, g.helpers()); if (kind === 'parts') { prog = `<span class="cnt">${cur} / ${tgt}</span>`; } else { const f = (v) => (kind === 'hash' ? fmtHash(v) : fmtUSD(v)); const pc = Math.max(0, Math.min(100, tgt ? (cur / tgt) * 100 : 0)); prog = `<div style="font-size:11px;color:var(--dim)">${f(Math.max(0, cur))} / ${f(tgt)}</div><div class="bar" style="width:180px"><div style="width:${pc}%;background:#ffb000"></div></div>`; } }
       const gk = s.chapter + ':' + go.id, enter = gk !== this.goalKey; this.goalKey = gk;
-      const bag = s.loose && !s.flags.miningStarted && go.id === 'collect' ? `<span class="bag">${['mobo', 'cpu', 'gpu', 'psu'].map((t) => `<i class="${s.loose[t] ? 'miss' : 'got'}" title="${PNAME[t]}">${partSvg(t, 16)}</i>`).join('')}</span>` : '';
+      const bag = s.loose && !s.flags.miningStarted && go.id === 'collect' ? `<span class="bag">${['mobo', 'cpu', 'gpu', 'psu'].map((t) => `<i class="${s.loose[t] ? 'miss' : 'got'}" title="${PNAME[t]}${s.loose[t] ? ' – noch nicht gefunden' : ' – eingesammelt'}">${partSvg(t, 16)}${s.loose[t] ? '' : '<b class="tk"></b>'}</i>`).join('')}</span>` : '';
       const gtext = go.id === 'sell' && !g.has('market') ? 'Lass deinen PC ein paar Tage schürfen' : go.text;
       const row = h(`<div class="goal ${done ? 'done' : ''} ${enter ? 'enter' : ''}"><div class="ck">${done ? '✓' : ''}</div><div>${esc(gtext)}${prog}${bag}</div></div>`);
       if (!done && go.action) { const b = h(`<button class="btn small primary"><kbd>G</kbd>${esc(go.action.label)}</button>`); b.disabled = !g.canPayGoal(go); b.onclick = () => { if (g.goalAction(go)) { this.toast('✔ Erledigt!', 'good'); this.goals(); } }; row.lastElementChild.append(h('<br/>'), b); }
@@ -696,8 +696,8 @@ export class UI {
   }
 
   // ---------- Modals ----------
-  openModal(node, cls = '', kind = null) { document.getElementById('lvup')?.remove(); this.openUI(); const m = $('#modal'); m.classList.remove('hidden'); const card = m.querySelector('.modal-card'); card.className = 'modal-card ' + cls; const b = m.querySelector('.modal-body'); b.innerHTML = ''; b.append(node); this.modalKind = kind; this.dock(); }
-  closeModal() { $('#modal').classList.add('hidden'); this.modalKind = null; this.dock(); const cb = this.onModalClose; this.onModalClose = null; cb?.(); if (!this.inspUid && !document.body.classList.contains('show-build') && $('#modal').classList.contains('hidden') && (this.w.mode === 'ui')) this.w.setMode('play'); }
+  openModal(node, cls = '', kind = null) { document.getElementById('lvup')?.remove(); this.openUI(); const m = $('#modal'); m.classList.remove('hidden'); const card = m.querySelector('.modal-card'); card.className = 'modal-card ' + cls; const b = m.querySelector('.modal-body'); b.innerHTML = ''; b.append(node); this.modalKind = kind; document.body.dataset.modal = kind || ''; this.dock(); }
+  closeModal() { $('#modal').classList.add('hidden'); this.modalKind = null; document.body.dataset.modal = ''; this.dock(); const cb = this.onModalClose; this.onModalClose = null; cb?.(); if (!this.inspUid && !document.body.classList.contains('show-build') && $('#modal').classList.contains('hidden') && (this.w.mode === 'ui')) this.w.setMode('play'); }
   // Spielstart: Nachricht von Deniz – Bitcoin gibt es jetzt, dein PC kann das. Mit Kurs.
   introPhone(onClose) {
     const g = this.g, s = g.s, p = g.price('BTC');
@@ -764,7 +764,7 @@ export class UI {
     const r1 = hold.querySelector('.acts');
     const fee = g.s.skills ? g.tradeFee() : 0.005, net = (f) => (w.ex + pend) * f * p * (1 - fee);
     hold.querySelector('.info').append(h(`<div class="fee">Gebühr ${(fee * 100).toLocaleString('de-DE')} % · Handel senkt sie</div>`));
-    for (const f of [0.25, 0.5, 1]) { const b = h(`<button class="btn sellb ${f === 1 ? 'primary' : ''}"><b>+${fmtUSD(net(f))}</b><small>${f === 1 ? 'Alles verkaufen' : f * 100 + ' % verkaufen'}</small></button>`); b.disabled = w.ex + pend <= 0; b.onclick = () => { if (pend) g.creditPending(c.id, this.pendingBtc()); const u = g.sell(c.id, f); this.audio?.cash(); this.flashCash(u); this.toast(`Verkauft für ${fmtUSD(u)}`, 'good', 2500); this.market(); }; r1.append(b); }
+    for (const f of [0.25, 0.5, 1]) { const b = h(`<button class="btn sellb ${f === 1 ? 'primary' : ''}"><b>${f === 1 ? 'Alles verkaufen' : f * 100 + ' % verkaufen'}</b><small>+${fmtUSD(net(f))}</small></button>`); b.disabled = w.ex + pend <= 0; b.onclick = () => { if (pend) g.creditPending(c.id, this.pendingBtc()); const u = g.sell(c.id, f); this.audio?.cash(); this.flashCash(u); this.toast(`Verkauft für ${fmtUSD(u)}`, 'good', 2500); this.market(); }; r1.append(b); }
     if (g.has('cold')) { const ct = tile('Cold-Wallet', w.cold, 'cold'); const tc = h(`<button class="btn small">${w.cold > 0 && w.ex === 0 ? 'Auf Börse holen' : 'Einlagern'}</button>`); tc.onclick = () => { g.transfer(c.id, !(w.cold > 0 && w.ex === 0)); this.market(); }; ct.querySelector('.acts').append(tc); tiles.append(ct); }
     det.append(tiles);
     const r2 = h(`<div class="row" style="align-items:center"><span style="font-size:13px">Kaufen für</span><input type="number" min="0" step="100" value="${Math.max(0, Math.round(Math.min(s.cash, 1000)))}"/><span>$</span><button class="btn small primary">Kaufen</button></div>`);
@@ -1013,7 +1013,7 @@ export class UI {
     const list = body.querySelector('.sk-list');
     for (const k of ['hw', 'mining', 'trade']) {
       const x = s.skills[k] || 0, lv = g.skillLv(k), lo = SKILL_XP[lv - 1], hi = SKILL_XP[lv], pc = hi ? Math.round(((x - lo) / (hi - lo)) * 100) : 100;
-      list.append(h(`<div class="sk" data-skill="${k}"><div class="sk-ic">${skillSvg(k, 26)}</div><div class="sk-main"><div class="sk-top"><b>${SKILL[k].name}</b><span class="sk-lv">Stufe ${lv}</span></div><div class="sk-bar"><div style="width:${pc}%"></div></div><div class="sk-row"><span>${SKILL[k].now(lv)}</span><span>${hi ? `${x - lo} / ${hi - lo} EP` : 'Höchste Stufe'}</span></div><div class="sk-learn">${hi ? `Nächste Stufe: ${SKILL[k].next(lv)} · ` : ''}EP durch ${SKILL[k].short}</div></div></div>`));
+      list.append(h(`<div class="sk" data-skill="${k}"><div class="sk-ic">${skillSvg(k, 26)}</div><div class="sk-main"><div class="sk-top"><b>${SKILL[k].name}</b><span class="sk-lv">Stufe ${lv}</span></div><div class="sk-bar"><div style="width:${pc}%"></div></div><div class="sk-row"><span>${SKILL[k].now(lv)}</span><span>${hi ? `${x - lo} / ${hi - lo} EP` : 'Höchste Stufe'}</span></div><div class="sk-learn"><span>${hi ? `Nächste Stufe: ${SKILL[k].next(lv)}` : 'Höchste Stufe erreicht'}</span><span>EP durch ${SKILL[k].short}</span></div></div></div>`));
     }
     this.openModal(body, 'narrow', 'skills');
   }

@@ -338,7 +338,8 @@ export class World {
       this.looseGroup.add(g); this.looseItems[t] = g;
     }
     const left = Object.values(this.looseItems).filter((g) => !g.userData.flying);
-    this.glow.selectedObjects = left; this.glow.enabled = left.length > 0;
+    this.looseGroup.visible = this.mode !== 'title';
+    this.glow.selectedObjects = left; this.glow.enabled = left.length > 0 && this.mode !== 'title';
   }
   haloTex() {
     if (this._halo) return this._halo; const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
@@ -352,7 +353,7 @@ export class World {
   updateLoose(dt) {
     if (!this.looseItems) return;
     for (const [t, g] of Object.entries(this.looseItems)) {
-      const h = g.children.find((c) => c.userData.halo); if (h) h.material.opacity = 0.2 + 0.1 * Math.sin(this.t * 2.4 + g.position.x * 3);
+      const h = g.children.find((c) => c.userData.halo); if (h) h.material.opacity = (t === this.markLoose ? 0.24 : 0.07) + (t === this.markLoose ? 0.08 : 0.03) * Math.sin(this.t * 2.4 + g.position.x * 3);
       if (g.userData.flying) {
         const f = (g.userData.flying += dt), k = Math.min(1, f / 0.42), tgt = this.camera.position.clone().addScaledVector(this.camera.getWorldDirection(new THREE.Vector3()), 0.3).add(new THREE.Vector3(0, -0.45, 0));
         g.position.lerp(tgt, k * 0.35); g.scale.setScalar(Math.max(0.001, 1 - 1.6 * k)); g.rotation.y += dt * 6;
@@ -940,8 +941,9 @@ export class World {
         const f = this.focus, k = this.focusK * this.focusK * (3 - 2 * this.focusK);
         if (f) { if (!this.fc) this.fc = { pos: f.pos.clone(), q: f.q.clone(), light: f.light.clone() }; const a = 1 - Math.exp(-dt * 3.2); this.fc.pos.lerp(f.pos, a); this.fc.q.slerp(f.q, a); this.fc.light.lerp(f.light, a); }
         this.camera.position.lerp(this.fc.pos, k); this.camera.quaternion.slerp(this.fc.q, k);
-        if (this.focusLight) { this.focusLight.position.copy(this.fc.light); this.focusLight.intensity = 0.85 * k; }
-      } else { this.fc = null; if (this.focusLight) this.focusLight.intensity = 0; }
+        if (this.focusLight) { this.focusLight.position.copy(this.fc.light); this.focusLight.intensity = 1.1 * k; }
+        if (this.outline && !this.outline.pulsePeriod) this.outline.edgeStrength = 1.8 - 1.35 * k;
+      } else { this.fc = null; if (this.focusLight) this.focusLight.intensity = 0; if (this.outline) this.outline.edgeStrength = 1.8; }
     }
     this.vm.update(dt, { moving: this.player.moving && this.mode === 'play', bob: this.player.bob, placing: !!this.placing, visible: this.mode === 'play' || this.mode === 'ui', uiOpen: this.mode === 'ui' });
     // Tag/Nacht
@@ -960,7 +962,7 @@ export class World {
     }
     const blink = (Math.sin(this.t * 7) > 0.2) ? 3.5 : 0.6, blink2 = (Math.sin(this.t * 5.3 + 1) > -0.3) ? 3 : 0.4;
     M.ledGreen().emissiveIntensity = blink; M.ledGreen2().emissiveIntensity = blink2; M.ledAmber().emissiveIntensity = blink2 * 0.9;
-    M.rgb().emissive.setHSL(0.07 + 0.05 * Math.sin(this.t * 0.6), 0.95, 0.55);
+    M.rgb().emissive.setHSL(0.07 + 0.05 * Math.sin(this.t * 0.6), 0.95, 0.55); { let on = false; for (const e of this.entries.values()) if (e.running) { on = true; break; } const tgt = on && this.mode !== 'title' ? 2.2 : this.mode === 'title' ? 0.6 : 0.15; M.rgb().emissiveIntensity += (tgt - M.rgb().emissiveIntensity) * Math.min(1, dt * 3); }
     // Rendern
     if (this.quality === 'low') { const r = this.renderer; r.render(this.scene, this.camera); if (this.vm.root.visible) { r.autoClear = false; r.clearDepth(); r.render(this.vm.scene, this.camera); r.autoClear = true; } } else this.composer.render();
   }
