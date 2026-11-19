@@ -72,15 +72,15 @@ export class ViewModel {
   }
   setTablet(text) {
     const g = this.tabCanvas.getContext('2d');
-    const grd = g.createLinearGradient(0, 0, 0, 160); grd.addColorStop(0, '#13213a'); grd.addColorStop(1, '#0a0f1a');
+    const grd = g.createLinearGradient(0, 0, 0, 160); grd.addColorStop(0, '#3a2b22'); grd.addColorStop(1, '#241a14');
     g.fillStyle = grd; g.fillRect(0, 0, 256, 160);
-    g.strokeStyle = 'rgba(93,170,255,0.12)'; for (let x = 0; x < 256; x += 16) { g.beginPath(); g.moveTo(x, 40); g.lineTo(x, 130); g.stroke(); }
-    g.fillStyle = '#ffb000'; g.font = 'bold 22px Arial'; g.fillText('HASHWERK BAU', 14, 32);
-    g.fillStyle = '#e8edf4'; g.font = '18px Arial';
-    const words = String(text || '').split(' '); let line = '', y = 66;
+    g.strokeStyle = 'rgba(255,214,160,0.08)'; for (let x = 8; x < 256; x += 16) { g.beginPath(); g.moveTo(x, 44); g.lineTo(x, 126); g.stroke(); } for (let y = 44; y < 128; y += 16) { g.beginPath(); g.moveTo(8, y); g.lineTo(248, y); g.stroke(); }
+    g.fillStyle = '#ffc23a'; g.font = '700 22px Fredoka, Nunito, sans-serif'; g.fillText('Bauen', 14, 32);
+    g.fillStyle = '#fff4e6'; g.font = '600 18px Nunito, sans-serif';
+    const words = String(text || '').split(' '); let line = '', y = 68;
     for (const w of words) { if ((line + w).length > 22) { g.fillText(line, 14, y); y += 24; line = ''; } line += w + ' '; }
     g.fillText(line, 14, y);
-    g.fillStyle = '#5dff9c'; g.font = '15px Arial'; g.fillText('Klick = setzen · R = drehen', 14, 148);
+    g.fillStyle = '#c9b8a3'; g.font = '700 15px Nunito, sans-serif'; g.fillText('Klick = setzen · R = drehen', 14, 148);
     this.tabTex.needsUpdate = true;
   }
   toggleLamp() { this.lampOn = !this.lampOn; this.lamp.intensity = this.lampOn ? 26 : 0; return this.lampOn; }

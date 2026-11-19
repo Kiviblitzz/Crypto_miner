@@ -295,28 +295,34 @@ export function buildRoom(def) {
 // Umgebung außerhalb des Raums
 const facadeCache = new Map();
 export const nightMats = [];
+export const nightGround = [];
 export function buildOutside(kind, def) {
   const g = new THREE.Group();
   const { w, d } = def;
-  const grass = mat('grass', { color: 0x5d8a44, roughness: 1 });
+  const grass = mat('grass', { color: 0x5d8a44, roughness: 1 }); grass.userData.day ??= grass.color.clone(); grass.userData.night ??= new THREE.Color(0x1d2a1f); if (!nightGround.includes(grass)) nightGround.push(grass);
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(600, kind === 'fjord' ? 300 : 600), kind === 'city' || kind === 'industrial' ? mat('asphalt', { map: TEX.concrete([60, 60], 70), roughness: 1 }) : grass);
   ground.rotation.x = -Math.PI / 2; ground.position.set(w / 2, -0.12, kind === 'fjord' ? 130 : d / 2); ground.receiveShadow = true; g.add(ground);
   if (kind === 'fjord') { const quay = new THREE.Mesh(new THREE.BoxGeometry(600, 2, 6), mat('quay', { color: 0x6f747a, roughness: 0.9 })); quay.position.set(w / 2, -1.1, -23); g.add(quay); }
-  const rnd = (a, b) => a + Math.random() * (b - a);
+  // Fester Seed: jedes Mal dieselbe Kulisse
+  let seed = 0x9e3779b9 ^ (kind.length * 977 + (def.style || '').length * 131);
+  const rand = () => { seed |= 0; seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const rnd = (a, b) => a + rand() * (b - a);
+  // Blickachse aus dem Fenster (Schlafzimmer: Rückwand, Richtung −z) freihalten
+  const view = def.style === 'bedroom' ? -Math.PI / 2 : null, inView = (a, deg) => view != null && Math.abs(Math.atan2(Math.sin(a - view), Math.cos(a - view))) < THREE.MathUtils.degToRad(deg);
   if (kind === 'town' || kind === 'garden' || kind === 'yard') {
     // Nachbarhäuser & Bäume
-    const roofM = mat('roof', { color: 0x8f3b2a, roughness: 0.8 });
+    const roofM = mat('roof', { color: 0x8f3b2a, roughness: 0.8 }); roofM.userData.day ??= roofM.color.clone(); roofM.userData.night ??= new THREE.Color(0x2e1a1c); if (!nightGround.includes(roofM)) nightGround.push(roofM);
     // Fassaden mit Fensterraster; nachts gehen zufällig Fenster an (emissiveMap)
     const facade = (col) => { const key = 'facade' + col; if (facadeCache.has(key)) return facadeCache.get(key);
       const c = document.createElement('canvas'); c.width = 256; c.height = 256; const gg = c.getContext('2d'); gg.fillStyle = col; gg.fillRect(0, 0, 256, 256);
       const e = document.createElement('canvas'); e.width = 256; e.height = 256; const ge = e.getContext('2d'); ge.fillStyle = '#000'; ge.fillRect(0, 0, 256, 256);
-      for (let y = 0; y < 3; y++) for (let x = 0; x < 4; x++) { const px = 22 + x * 58, py = 30 + y * 74; gg.fillStyle = '#5b6b78'; gg.fillRect(px, py, 34, 44); gg.fillStyle = '#f4efe6'; gg.fillRect(px - 3, py + 44, 40, 5); gg.fillRect(px + 15, py, 4, 44); if (Math.random() < 0.45) { ge.fillStyle = Math.random() < 0.5 ? '#ffcf86' : '#ffb35c'; ge.fillRect(px, py, 34, 44); } }
+      for (let y = 0; y < 3; y++) for (let x = 0; x < 4; x++) { const px = 22 + x * 58, py = 30 + y * 74; gg.fillStyle = '#5b6b78'; gg.fillRect(px, py, 34, 44); gg.fillStyle = '#f4efe6'; gg.fillRect(px - 3, py + 44, 40, 5); gg.fillRect(px + 15, py, 4, 44); if (rand() < 0.45) { ge.fillStyle = rand() < 0.5 ? '#ffcf7a' : '#ffb35c'; ge.fillRect(px, py, 34, 44); } }
       const t = new THREE.CanvasTexture(c), te = new THREE.CanvasTexture(e); t.colorSpace = te.colorSpace = THREE.SRGBColorSpace;
       const m = new THREE.MeshStandardMaterial({ map: t, emissive: 0xffffff, emissiveMap: te, emissiveIntensity: 0, roughness: 0.9 }); facadeCache.set(key, m); nightMats.push(m); return m; };
     for (let i = 0; i < 16; i++) {
-      const a = (i / 16) * Math.PI * 2 + rnd(-0.1, 0.1), r = rnd(16, 30);
+      const a = (i / 16) * Math.PI * 2 + rnd(-0.1, 0.1), front = inView(a, 80); let r = rnd(16, 30); if (front) r = rnd(40, 48);
       const x = w / 2 + Math.cos(a) * r, z = d / 2 + Math.sin(a) * r;
-      const hw = rnd(6, 9), hd = rnd(6, 8), hh = rnd(5, 8);
+      const hw = rnd(6, 9), hd = rnd(6, 8); let hh = rnd(5, 8); if (front) hh = rnd(4.6, 5.6);
       const house = new THREE.Mesh(new THREE.BoxGeometry(hw, hh, hd), facade(['#ece2cc', '#dccaa8', '#cfd8dc', '#e8d2c0'][i % 4])); house.position.set(x, hh / 2, z); house.lookAt(w / 2, hh / 2, d / 2); house.castShadow = true; g.add(house);
       // Satteldach (Dreiecksprisma)
       const roof = new THREE.Mesh(new THREE.CylinderGeometry(hw * 0.62, hw * 0.62, hd + 0.6, 3, 1), roofM);
@@ -324,11 +330,18 @@ export function buildOutside(kind, def) {
       const chim = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.6, 0.6), mat('chimney', { color: 0x8a5a48, roughness: 0.9 })); chim.position.set(x + rnd(-1.5, 1.5), hh + 1.6, z + rnd(-1, 1)); g.add(chim);
     }
     if (def.style === 'bedroom') {
+      // Ferne Häuserzeile vor dem Fenster: niedrige Silhouetten mit warmen Fenstern
+      for (let k = 0; k < 7; k++) {
+        const a = view + THREE.MathUtils.degToRad(-58 + k * 15 + rnd(-3, 3)), r = rnd(34, 44), hw = rnd(5, 8), hd = rnd(5, 7), hh = rnd(4.2, 5.4);
+        const x = w / 2 + Math.cos(a) * r, z = d / 2 + Math.sin(a) * r;
+        const house = new THREE.Mesh(new THREE.BoxGeometry(hw, hh, hd), facade(['#e8d2c0', '#dccaa8', '#ece2cc'][k % 3])); house.position.set(x, hh / 2, z); house.lookAt(w / 2, hh / 2, d / 2); g.add(house);
+        const roof = new THREE.Mesh(new THREE.CylinderGeometry(hw * 0.62, hw * 0.62, hd + 0.6, 3, 1), roofM); roof.position.set(x, hh + hw * 0.18, z); roof.scale.set(1, 1, 0.55); roof.quaternion.copy(house.quaternion).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0))); g.add(roof);
+      }
       // Dachgeschoss: das eigene Haus steht darunter, man blickt über die Dächer
       g.position.y = -4.6;
       const own = new THREE.Mesh(new THREE.BoxGeometry(w + 0.4, 4.4, d + 0.4), facade('#e8dcc4')); own.position.set(w / 2, 2.2, d / 2); g.add(own); // endet unter dem Zimmerboden (kein Z-Fighting)
     }
-    for (let i = 0; i < 24; i++) { const a = Math.random() * Math.PI * 2, r = rnd(10, 40); const t = new THREE.Group(); t.position.set(w / 2 + Math.cos(a) * r, 0, d / 2 + Math.sin(a) * r); cyl(t, 0.15, 0.2, 2, mat('trunk', { color: 0x5b3b24 }), 0, 1, 0, 8); const c = new THREE.Mesh(new THREE.SphereGeometry(rnd(1.2, 2), 10, 8), mat('treeTop', { color: 0x3f7a36, roughness: 0.9 })); c.position.y = 2.8; c.castShadow = true; t.add(c); g.add(t); }
+    for (let i = 0; i < 24; i++) { const a = rand() * Math.PI * 2, r = inView(a, 80) ? rnd(16, 38) : rnd(10, 40); const t = new THREE.Group(); t.position.set(w / 2 + Math.cos(a) * r, 0, d / 2 + Math.sin(a) * r); cyl(t, 0.15, 0.2, 2, mat('trunk', { color: 0x5b3b24 }), 0, 1, 0, 8); const c = new THREE.Mesh(new THREE.SphereGeometry(rnd(1.2, 2), 10, 8), mat('treeTop', { color: 0x3f7a36, roughness: 0.9 })); c.position.y = 2.8; c.castShadow = true; t.add(c); g.add(t); }
   } else if (kind === 'industrial' || kind === 'city') {
     for (let i = 0; i < 16; i++) { const a = (i / 16) * Math.PI * 2, r = rnd(45, 80); const bw = rnd(10, 25), bh = kind === 'city' ? rnd(15, 60) : rnd(6, 14), bd = rnd(10, 25); const b = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bd), mat('bld' + (i % 3), { color: [0x9aa3ad, 0x7f8a96, 0xb5bcc4][i % 3], roughness: 0.8 })); b.position.set(w / 2 + Math.cos(a) * r, bh / 2, d / 2 + Math.sin(a) * r); g.add(b); }
   } else if (kind === 'fjord') {

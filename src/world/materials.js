@@ -162,6 +162,6 @@ export const M = {
   ledWhite: () => mat('ledWhite', { color: 0x333333, emissive: 0xfff4e0, emissiveIntensity: 2.5 }),
   rgb: () => mat('rgb', { color: 0x111111, emissive: 0xff00aa, emissiveIntensity: 2.2 }),
   screen: () => mat('screen', { color: 0x050810, emissive: 0x2a6fd6, emissiveIntensity: 1.2, roughness: 0.2 }),
-  lampShade: () => mat('lampShade', { color: 0xfff6e0, emissive: 0xffd9a0, emissiveIntensity: 1.6, side: THREE.DoubleSide }),
+  lampShade: () => mat('lampShade', { color: 0xfff6e0, emissive: 0xffd2a0, emissiveIntensity: 0.95, side: THREE.DoubleSide }),
   tube: () => mat('tube', { color: 0xffffff, emissive: 0xf2f7ff, emissiveIntensity: 2.5 }),
 };

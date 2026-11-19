@@ -48,10 +48,20 @@ export class UI {
     game.on('refresh', () => this.refresh());
     game.on('goal', () => { this.audio?.cash(); });
     game.on('unlockable', (id) => { this.milestone('Kapitel geschafft', `${FACILITY[id].short} ist frei`); this.toast(`<b>${FACILITY[id].short}</b> ist frei`, 'good', 8000); this.goals(); this.sites(); });
-    setInterval(() => this.top(), 200);
+    setInterval(() => { this.top(); this.buildAfford(); }, 200);
     this.refresh(); this.ticker();
   }
 
+  // Geldbeträge im Katalog: ab 10 $ ganze Dollar, darunter mit Cent – überall gleich
+  money(v) { return v >= 10 ? Math.ceil(v - 1e-9).toLocaleString('de-DE') + ' $' : fmtUSD(v); }
+  buildAfford() {
+    if (!document.body.classList.contains('show-build')) return;
+    const cash = this.g.s.cash;
+    for (const card of document.querySelectorAll('#build .item[data-price]')) {
+      const p = +card.dataset.price, short = p > cash; card.classList.toggle('dis', short || !!card.dataset.hydro);
+      const m = card.querySelector('.miss'); if (m) { const t = short ? `Dir fehlen ${this.money(p - cash)}` : ''; if (m.textContent !== t) m.textContent = t; }
+    }
+  }
   refresh() { this.top(); this.sites(); this.build(true); this.goals(); this.dock(); if (this.inspUid) this.inspect(this.inspUid, true); }
   onDay() {
     this.sites(); this.goals(); this.keysHint();
@@ -83,7 +93,8 @@ export class UI {
     if (!sh) { for (const a of ['scrypt', 'ethash', 'kawpow', 'kheavy', 'equihash', 'rx', 'cn']) { const v = g.algoHash(a); if (v) { sh = v; shAlgo = a; break; } } }
     const smc = g.summary[s.current]; $('#heat').classList.toggle('on', !!smc && smc.temp > 38 && !smc.tripped);
     const nw = g.netWorthFast();
-    const ease = (cur, target) => (cur == null || Math.abs(target - cur) > Math.abs(target) * 0.5 + 1e4 ? target : cur + (target - cur) * 0.35);
+    const now = performance.now(), k = 1 - Math.exp(-Math.min(2, (now - (this.lastTop || now - 200)) / 1000) / 0.22); this.lastTop = now;
+    const ease = (cur, target) => (cur == null || Math.abs(target - cur) > Math.abs(target) * 0.5 + 1e4 || Math.abs(target - cur) < 0.005 ? target : cur + (target - cur) * k);
     this.dCash = ease(this.dCash, s.cash); this.dNw = ease(this.dNw, nw);
     const mOn = !s.feat || s.flags.miningStarted;
     for (const [id, ok] of [['#st-profit', mOn], ['#st-hash', mOn], ['#st-nw', g.has('rigs')]]) $(id).style.display = ok ? '' : 'none';
@@ -167,7 +178,7 @@ export class UI {
       if (it.kind === 'device') { const r = g.revenueFor({ [it.algo]: it.hash }, g.bestCoin({ [it.algo]: it.hash }, it.vram || 99) || 'BTC', it.vram || 99); const cost = it.watt / 1000 * 24 * g.elecPrice(fac); s = `${fmtHash(it.hash, it.algo)} · ${fmtWatt(it.watt)} · ${ALGO_LABEL[it.algo]}<br/>≈ <b class="${r - cost >= 0 ? 'pos' : 'neg'}">${r - cost >= 0 ? '+' : ''}${fmtUSD(r - cost)}/Tag</b> hier${it.hydro ? ' · nur in Rack/Container' : ''}`; }
       if (it.kind === 'cooling') s = `Kühlt ${fmtWatt(it.cool)} · verbraucht ${fmtWatt(it.watt)}`;
       if (it.kind === 'holder') s = esc(it.desc);
-      const card = h(`<div class="item ${price > g.s.cash || it.hydro ? 'dis' : ''}"><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${price >= 10 ? Math.round(price).toLocaleString('de-DE') + ' $' : fmtUSD(price)}</span></div><div class="s">${s}</div>${price > g.s.cash ? `<div class="miss">Dir fehlen ${fmtUSD(price - g.s.cash)}</div>` : ''}</div>`);
+      const card = h(`<div class="item ${price > g.s.cash || it.hydro ? 'dis' : ''}" data-price="${price}" ${it.hydro ? 'data-hydro="1"' : ''}><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${this.money(price)}</span></div><div class="s">${s}</div><div class="miss">${price > g.s.cash ? `Dir fehlen ${this.money(price - g.s.cash)}` : ''}</div></div>`);
       try { const url = this.w.thumbnail(it.id); if (url) card.prepend(h(`<div class="thumb"><img alt="" src="${url}"/></div>`)); } catch (e) { /* ohne Vorschau weiter */ }
       card.onclick = () => {
         if (it.hydro) { this.toast('Hydro-Miner nur in Rack oder Container.', 'bad'); return; }
@@ -195,7 +206,7 @@ export class UI {
   resume() {
     this.pause(false);
     if (!$('#modal').classList.contains('hidden')) { this.modalKind = null; $('#modal').classList.add('hidden'); this.onModalClose?.(); this.onModalClose = null; }
-    document.body.classList.remove('show-build', 'show-goals');
+    document.body.classList.remove('show-build', 'show-goals'); this.dock();
     if (this.inspUid) { this.inspUid = null; $('#inspector').classList.add('hidden'); this.w.select(null); }
     if (this.w.mode === 'ui' || this.w.mode === 'play') this.w.setMode('play');
   }
@@ -234,7 +245,7 @@ export class UI {
   }
   toggleBuild() {
     if (document.body.classList.contains('show-build')) { this.resume(); return; }
-    this.resume(); document.body.classList.add('show-build'); this.build(true); this.openUI();
+    this.resume(); document.body.classList.add('show-build'); this.build(true); this.openUI(); this.dock();
   }
   prompt(aim) {
     const el = $('#prompt');
@@ -271,13 +282,13 @@ export class UI {
   travel(door) {
     const g = this.g;
     if (!FACILITIES.some((f) => f.id !== g.s.current && (g.s.unlocked.includes(f.id) || g.canUnlock(f.id)))) { this.toast('Die Tür bleibt erst mal zu.', 'info', 2200); return; }
-    const body = h(`<div><h2>${esc(door.label)}</h2><p style="color:#94a0b2;margin-top:-6px">Wohin willst du?</p><div class="cards"></div></div>`);
+    const body = h(`<div><h2>${esc(door.label)}</h2><p style="color:var(--dim);margin-top:-6px">Wohin willst du?</p><div class="cards"></div></div>`);
     const cards = body.querySelector('.cards');
     for (const f of FACILITIES) {
       const un = g.s.unlocked.includes(f.id), here = g.s.current === f.id, can = g.canUnlock(f.id);
       if (!un && !can) continue;
       const sm = g.summary[f.id];
-      const c = h(`<div class="card"><h3>${here ? '' : ''}${esc(f.name)}</h3><div class="sub">${esc(f.place)}</div>${un && sm ? `<div style="font-size:12px;color:#94a0b2">${fmtWatt(sm.watt)} · ${sm.temp.toFixed(1)} °C · ${g.facObjects(f.id).length} Objekte</div>` : ''}</div>`);
+      const c = h(`<div class="card"><h3>${here ? '' : ''}${esc(f.name)}</h3><div class="sub">${esc(f.place)}</div>${un && sm ? `<div style="font-size:12px;color:var(--dim)">${fmtWatt(sm.watt)} · ${sm.temp.toFixed(1)} °C · ${g.facObjects(f.id).length} Objekte</div>` : ''}</div>`);
       const b = h(`<button class="btn small ${here ? '' : 'primary'}" style="margin-top:6px">${here ? 'Hierbleiben' : un ? 'Hingehen' : f.cost ? `Übernehmen (${fmtUSD(f.cost)})` : 'Einziehen'}</button>`);
       b.onclick = () => { this.closeModal(); if (here) return; if (!un) { this.unlock(f.id); return; } this.switchSite(f.id); };
       c.append(b); cards.append(c);
@@ -298,7 +309,7 @@ export class UI {
     this.inspectStats();
     const c = $('#insp-ctrl');
     if (!g.s.flags.miningStarted && def.kind === 'rig') {
-      const st = h(`<div class="sec"><button class="btn primary big" style="width:100%">Mining starten</button></div>`);
+      const st = h(`<div class="sec start"><button class="btn primary big wide"><span class="bi"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span><span class="bt">Mining starten</span></button></div>`);
       st.querySelector('button').onclick = () => { g.startMining(uid); this.audio?.powerOn(); this.w.pulse?.(uid); this.toast('Mining läuft!', 'good', 3000); this.inspect(uid); this.tutorial(); };
       c.append(st);
       return;
@@ -342,11 +353,20 @@ export class UI {
     const a = sm.per.get(uid) || g.analyze(o);
     const badge = $('#insp-badge');
     const st = sm.tripped ? ['bad', 'Kein Strom'] : a.status === 'broken' ? ['bad', 'Defekt'] : a.status === 'partial' ? ['warn', 'Teilweise defekt'] : a.status === 'psu' ? ['bad', 'Netzteil zu schwach'] : a.status === 'incomplete' ? ['warn', 'Unvollständig'] : a.status === 'empty' ? ['idle', 'Leer'] : a.status === 'idle' ? ['idle', 'Pausiert (unrentabel)'] : a.status === 'off' ? ['idle', 'Aus'] : def.kind === 'decor' ? ['idle', 'Deko'] : ['ok', sm.throttle < 1 ? 'Läuft (gedrosselt)' : 'Läuft'];
-    if (badge) badge.innerHTML = `<span class="badge ${st[0]}">${st[1]}</span>`;
+    if (badge) badge.innerHTML = `<span class="badge ${st[0]}"><i></i>${st[1]}</span>`;
     let rev = 0, hs = [];
-    for (const u of a.units) { rev += u.rev * sm.throttle; if (u.idle) hs.push(`<span style="color:#94a0b2">pausiert – wäre ${fmtUSD(u.potential)}/Tag mit ${u.coin ? COIN[u.coin].name : '–'}</span>`); else if (u.coin) hs.push(`${fmtHash(u.h * sm.throttle, u.algo)} → ${COIN[u.coin].name}`); else if (Object.keys(u.hash).length) hs.push('kein lohnender Coin'); if (u.note) hs.push(`<span class="neg">${u.note}</span>`); }
+    for (const u of a.units) { rev += u.rev * sm.throttle; if (u.idle) hs.push(`<span style="color:var(--dim)">pausiert – wäre ${fmtUSD(u.potential)}/Tag mit ${u.coin ? COIN[u.coin].name : '–'}</span>`); else if (u.coin) hs.push(`${fmtHash(u.h * sm.throttle, u.algo)} → ${COIN[u.coin].name}`); else if (Object.keys(u.hash).length) hs.push('kein lohnender Coin'); if (u.note) hs.push(`<span class="neg">${u.note}</span>`); }
     const cost = (a.watt / 1000) * 24 * sm.elec;
     const rows = [];
+    if (a.status === 'off' && (def.kind === 'rig' || def.kind === 'device' || def.kind === 'holder')) {
+      // Ausgeschaltet: zeigen, was das Gerät könnte
+      const pa = g.analyze({ ...o, mode: 'on' }); let ph = 0, pr = 0, algo = null, coin = null; for (const u of pa.units) { ph += u.h || 0; pr += (u.rev || u.potential || 0); algo ||= u.algo; coin ||= u.coin; }
+      if (ph) rows.push(['Rechenleistung', fmtHash(ph, algo)]);
+      if (pa.watt) rows.push(['Verbrauch', fmtWatt(pa.watt)]);
+      if (pr) { const px = g.price(coin || 'BTC') || 1, cn = pr / px; rows.push(['Ertrag / Tag', `<span class="pos">≈ ${cn >= 10 ? Math.round(cn).toLocaleString('de-DE') : fmtCoin(cn)} ${coin || 'BTC'}</span> <span style="color:var(--dim)">(${fmtUSD(pr)})</span>`]); }
+      const el = $('#insp-stats'); if (el) el.innerHTML = `<div class="kv">${rows.map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join('')}</div>`;
+      return;
+    }
     if (a.note && a.status !== 'off') rows.push(['Hinweis', `<span class="neg">${esc(a.note)}</span>`]);
     if (hs.length) rows.push(['Leistung', hs.join('<br/>')]);
     if (def.kind !== 'decor' && a.watt > 0) rows.push(['Verbrauch', fmtWatt(a.watt)]);
@@ -364,10 +384,10 @@ export class UI {
     slot('CPU', p.cpu, () => this.partPicker(o, 'cpu'));
     const watt = 25 + g.partIds(o).reduce((a, id) => a + (PART[id].watt || 0), 0);
     slot(`Netzteil`, p.psu, () => this.partPicker(o, 'psu'));
-    if (p.psu) sec.append(h(`<div style="font-size:12px;color:${watt > PART[p.psu].cap ? '#ff6b6b' : '#94a0b2'};margin:-2px 0 6px 4px">Last: ${watt} W / ${PART[p.psu].cap} W</div>`));
+    if (p.psu) sec.append(h(`<div style="font-size:12px;color:${watt > PART[p.psu].cap ? '#ff8f84' : 'var(--dim)'};margin:-2px 0 6px 4px">Last: ${watt} W / ${PART[p.psu].cap} W</div>`));
     const cap = g.rigGpuCap(o);
     for (let i = 0; i < cap; i++) slot(`GPU ${i + 1}`, p.gpus[i], () => this.partPicker(o, 'gpu', Math.min(i, p.gpus.length)));
-    if (!p.mobo) sec.append(h(`<div style="font-size:12px;color:#94a0b2">Zuerst ein Mainboard einbauen.</div>`));
+    if (!p.mobo) sec.append(h(`<div style="font-size:12px;color:var(--dim)">Zuerst ein Mainboard einbauen.</div>`));
     const row = h('<div class="row"></div>');
     if (!p.mobo || !p.cpu || !p.psu) { const b = h(`<button class="btn primary small">Basis-Teile einbauen</button>`); b.onclick = () => { const r = g.quickBase(o.uid); if (!r) this.toast('Nicht genug Geld.', 'bad'); this.inspect(o.uid); }; row.append(b); }
     if (p.mobo && p.gpus.length < cap) {
@@ -461,7 +481,7 @@ export class UI {
       const done = !!s.goals[go.id];
       if (done || shown >= 1) continue; shown++;
       let prog = '';
-      if (!done && go.progress) { const [cur, tgt, kind] = go.progress(s, g.helpers()); const f = (v) => (kind === 'hash' ? fmtHash(v) : fmtUSD(v)); const pc = Math.max(0, Math.min(100, tgt ? (cur / tgt) * 100 : 0)); prog = `<div style="font-size:11px;color:#94a0b2">${f(Math.max(0, cur))} / ${f(tgt)}</div><div class="bar" style="width:180px"><div style="width:${pc}%;background:#ffb000"></div></div>`; }
+      if (!done && go.progress) { const [cur, tgt, kind] = go.progress(s, g.helpers()); const f = (v) => (kind === 'hash' ? fmtHash(v) : fmtUSD(v)); const pc = Math.max(0, Math.min(100, tgt ? (cur / tgt) * 100 : 0)); prog = `<div style="font-size:11px;color:var(--dim)">${f(Math.max(0, cur))} / ${f(tgt)}</div><div class="bar" style="width:180px"><div style="width:${pc}%;background:#ffb000"></div></div>`; }
       const gk = s.chapter + ':' + go.id, enter = gk !== this.goalKey; this.goalKey = gk;
       const row = h(`<div class="goal ${done ? 'done' : ''} ${enter ? 'enter' : ''}"><div class="ck">${done ? '✓' : ''}</div><div>${esc(go.text)}${prog}</div></div>`);
       if (!done && go.action) { const b = h(`<button class="btn small primary"><kbd>G</kbd>${esc(go.action.label)}</button>`); b.disabled = !g.canPayGoal(go); b.onclick = () => { if (g.goalAction(go)) { this.toast('✔ Erledigt!', 'good'); this.goals(); } }; row.lastElementChild.append(h('<br/>'), b); }
@@ -488,7 +508,7 @@ export class UI {
       const btc = s.wallet.BTC.ex;
       if (!s.flags.miningStarted) t = this.inspUid ? 'Klick auf <b>Mining starten</b>.' : 'Dein PC steht neben dem Schreibtischstuhl. Geh hin, schau ihn an und drück <kbd>E</kbd>.';
       else if (!g.has('market')) t = this.inspUid ? 'Dein PC schürft jetzt Bitcoin. Schließ das Fenster mit <kbd>E</kbd> und lass ihn ein paar Tage arbeiten.' : 'Dein PC schürft Bitcoin. Lass ihn ein paar Tage arbeiten, bis sich etwas angesammelt hat …';
-      else if (!(s.stats.sold > 0)) t = this.modalKind === 'market' ? 'Klick bei Bitcoin auf <b>100 % verkaufen</b>.' : `Du hast ${fmtCoin(btc)} BTC. Geh zum <b>PC-Monitor</b> auf dem Schreibtisch und drück <kbd>E</kbd>, um sie zu verkaufen.`;
+      else if (!(s.stats.sold > 0)) t = this.modalKind === 'market' ? 'Klick auf <b>Alles verkaufen</b>.' : `Du hast ${fmtCoin(btc)} BTC. Geh zum <b>PC-Monitor</b> auf dem Schreibtisch und drück <kbd>E</kbd>, um sie zu verkaufen.`;
       else if (!s.flags.boughtGpu) t = this.inspUid ? 'Klick auf den <b>freien GPU-Slot</b> und kauf eine zweite Grafikkarte.' : 'Mehr Grafikkarten = mehr Bitcoin. Schau deinen PC an (<kbd>E</kbd>) und bau eine zweite Karte ein.';
       else if (!s.goals.earn) t = 'Lass den PC arbeiten (Tempo mit <kbd>1</kbd> <kbd>2</kbd>) und verkauf regelmäßig am Monitor. Ziel: 1.000 $ verdient.';
     }
@@ -522,7 +542,8 @@ export class UI {
       ['', 'Technik', 'T', () => this.techs(), techN], ['', 'Rangliste', 'L', () => this.ranking()], ['', this.w.empire ? 'Zurück' : 'Karte', 'K', () => this.toggleMap()], ['', 'Menü', 'ESC', () => this.menu()],
     ];
     const need = { B: 'build', M: 'market', P: 'phone', C: 'company', T: 'techs', L: 'ranking', K: 'map' };
-    for (const [ic, l, key, fn, b] of btns.filter((x) => !need[x[2]] || g.has(need[x[2]]))) { const e = h(`<button title="${l} (${key})"><span class="ic">${ic}</span>${l}<span class="key">${key}</span>${b ? `<span class="bdg">${b}</span>` : ''}</button>`); e.onclick = fn; el.append(e); }
+    const act = document.body.classList.contains('show-build') ? 'B' : this.w.empire ? 'K' : ({ market: 'M', phone: 'P', company: 'C', techs: 'T', ranking: 'L', menu: 'ESC' })[this.modalKind] || (this.paused ? 'ESC' : null);
+    for (const [ic, l, key, fn, b] of btns.filter((x) => !need[x[2]] || g.has(need[x[2]]))) { const e = h(`<button class="${act === key ? 'on' : ''}" title="${l} (${key})"><span class="ic">${ic}</span>${l}<span class="key">${key}</span>${b ? `<span class="bdg">${b}</span>` : ''}</button>`); e.onclick = fn; el.append(e); }
   }
   toggleMap() {
     if (this.w.empire) { this.w.hideEmpire(); this.pause(false); this.w.setMode('play'); }
@@ -530,19 +551,20 @@ export class UI {
   }
 
   // ---------- Modals ----------
-  openModal(node, cls = '', kind = null) { this.openUI(); const m = $('#modal'); m.classList.remove('hidden'); const card = m.querySelector('.modal-card'); card.className = 'modal-card ' + cls; const b = m.querySelector('.modal-body'); b.innerHTML = ''; b.append(node); this.modalKind = kind; }
-  closeModal() { $('#modal').classList.add('hidden'); this.modalKind = null; const cb = this.onModalClose; this.onModalClose = null; cb?.(); if (!this.inspUid && !document.body.classList.contains('show-build') && $('#modal').classList.contains('hidden') && (this.w.mode === 'ui')) this.w.setMode('play'); }
+  openModal(node, cls = '', kind = null) { this.openUI(); const m = $('#modal'); m.classList.remove('hidden'); const card = m.querySelector('.modal-card'); card.className = 'modal-card ' + cls; const b = m.querySelector('.modal-body'); b.innerHTML = ''; b.append(node); this.modalKind = kind; this.dock(); }
+  closeModal() { $('#modal').classList.add('hidden'); this.modalKind = null; this.dock(); const cb = this.onModalClose; this.onModalClose = null; cb?.(); if (!this.inspUid && !document.body.classList.contains('show-build') && $('#modal').classList.contains('hidden') && (this.w.mode === 'ui')) this.w.setMode('play'); }
   // Spielstart: Nachricht von Deniz – Bitcoin gibt es jetzt, dein PC kann das. Mit Kurs.
   introPhone(onClose) {
     const g = this.g, s = g.s, p = g.price('BTC');
     const m0 = s.messages.find((m) => m.id === 'm0');
     const txt = m0 ? m0.text : MESSAGES.find((m) => m.id === 'm0').text;
     const body = h(`<div class="intro-phone"><div class="ip-date">${fmtDate(s.day)}</div>
-      <div class="phone"><div class="ph-top"><div class="av"><svg viewBox="0 0 40 40" width="40" height="40"><circle cx="20" cy="20" r="20" fill="#6fb8ff"/><path d="M6 40c1-8 7-12 14-12s13 4 14 12z" fill="#e2574c"/><circle cx="20" cy="18" r="8.5" fill="#e7b48f"/><path d="M11 17c0-7 5-10 10-10 6 0 9 4 8 9-3-3-7-4-11-3-3 1-5 2-7 4z" fill="#2f241e"/><circle cx="17" cy="19" r="1.1" fill="#2f241e"/><circle cx="23" cy="19" r="1.1" fill="#2f241e"/><path d="M17 22.5q3 2.2 6 0" stroke="#8a4a3a" stroke-width="1.3" fill="none" stroke-linecap="round"/></svg></div><div><b>Deniz</b><span class="on">online</span></div></div>
+      <div class="phone"><div class="ph-top"><div class="av"><svg viewBox="0 0 40 40" width="40" height="40"><circle cx="20" cy="20" r="20" fill="#ffcf8a"/><path d="M6 40c1-8 7-12 14-12s13 4 14 12z" fill="#e2574c"/><circle cx="20" cy="18" r="8.5" fill="#e7b48f"/><path d="M11 17c0-7 5-10 10-10 6 0 9 4 8 9-3-3-7-4-11-3-3 1-5 2-7 4z" fill="#2f241e"/><circle cx="17" cy="19" r="1.1" fill="#2f241e"/><circle cx="23" cy="19" r="1.1" fill="#2f241e"/><path d="M17 22.5q3 2.2 6 0" stroke="#8a4a3a" stroke-width="1.3" fill="none" stroke-linecap="round"/></svg></div><div><b>Deniz</b><span class="on">online</span></div></div>
         <div class="msg f-Deniz">${esc(txt)}</div>
         <div class="msg f-Deniz pricecard"><div class="pc-h"><span class="pc-dot">₿</span>Bitcoin · BTC</div><div class="pc-p">${fmtUSD(p)}</div><canvas class="chart" width="900" height="300"></canvas></div>
         <div class="msg f-Deniz">Probier’s aus! Starte das Mining an deinem PC.</div>
-      </div><div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn primary big">Zum PC</button></div></div>`);
+        <div class="row ip-act"><button class="btn primary big">Zum PC</button></div>
+      </div></div>`);
     if (m0) m0.read = true;
     body.querySelector('button').onclick = () => this.closeModal();
     this.onModalClose = onClose;
@@ -570,16 +592,16 @@ export class UI {
       row.onclick = () => { this.marketCoin = c.id; this.market(); };
       list.append(row);
     }
-    if (g.has('coins')) list.append(h(`<div style="padding:8px 10px;color:#94a0b2;font-size:13px">Gesamt: <b style="color:#fff">${fmtUSD(total)}</b></div>`));
+    if (g.has('coins')) list.append(h(`<div style="padding:8px 10px;color:var(--dim);font-size:13px">Gesamt: <b style="color:#fff">${fmtUSD(total)}</b></div>`));
     const sa = h(`<button class="btn small" style="margin:4px 10px">Alle Coins verkaufen</button>`); sa.onclick = () => { const u = g.sellAll(); this.audio?.cash(); this.toast(`Alles verkauft: ${fmtUSD(u)}`, 'good', 3000); this.market(); }; if (g.has('coins')) list.append(sa);
     const pc = h(`<label style="display:flex;gap:8px;align-items:center;padding:4px 10px;font-size:13px"><input type="checkbox" ${s.payoutCold ? 'checked' : ''}/> Neue Coins in die Cold-Wallet</label>`);
     pc.querySelector('input').onchange = (e) => { s.payoutCold = e.target.checked; };
     if (g.has('cold')) list.append(pc);
     const c = COIN[this.marketCoin], w = s.wallet[c.id], p = g.price(c.id);
     const det = body.querySelector('.detail');
-    det.append(h(`<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">${c.name} <span style="color:#94a0b2">${c.id}</span></h3><div style="font-size:22px;font-weight:800">${fmtUSD(p)}</div></div>`));
+    det.append(h(`<div class="mk-head"><span class="cdot" style="background:${c.color}">${c.id === 'BTC' ? '₿' : c.id.slice(0, 1)}</span><h3>${c.name} <span class="tk">${c.id}</span></h3><div class="px">${fmtUSD(p)}</div></div>`));
     const hp = g.coinActive(c.id) ? g.revPerHash(c.id) : 0; const hpUnit = c.algo(s.day) === 'sha256' ? [1e12, 'TH/s'] : c.algo(s.day) === 'scrypt' ? [1e9, 'GH/s'] : c.algo(s.day) === 'kheavy' ? [1e12, 'TH/s'] : c.algo(s.day) === 'equihash' ? [1e3, 'kSol/s'] : ['rx', 'cn'].includes(c.algo(s.day)) ? [1e3, 'kH/s'] : [1e6, 'MH/s'];
-    if (g.has('coins')) det.append(h(`<div style="color:#94a0b2;font-size:12px;margin:4px 0 8px">${esc(c.desc)} · Algo: ${ALGO_LABEL[c.algo(s.day)]} · Netz: ${s.day >= c.start ? fmtHash(g.netHash(c.id), c.algo(s.day)) : '—'}${hp ? ` · Hashprice: <b style="color:#e8edf4">${fmtUSD(hp * hpUnit[0])} pro ${hpUnit[1]} und Tag</b>` : ''}${c.end && s.day >= c.end ? ' · <b class="neg">Mining beendet</b>' : ''}</div>`));
+    if (g.has('coins')) det.append(h(`<div style="color:var(--dim);font-size:12px;margin:4px 0 8px">${esc(c.desc)} · Algo: ${ALGO_LABEL[c.algo(s.day)]} · Netz: ${s.day >= c.start ? fmtHash(g.netHash(c.id), c.algo(s.day)) : '—'}${hp ? ` · Hashprice: <b style="color:var(--text)">${fmtUSD(hp * hpUnit[0])} pro ${hpUnit[1]} und Tag</b>` : ''}${c.end && s.day >= c.end ? ' · <b class="neg">Mining beendet</b>' : ''}</div>`));
     if (c.id === 'BTC' && g.has('autosell')) { const nh = HALVINGS.find((d) => d > s.day); if (nh) det.append(h(`<div style="font-size:13px;margin:-2px 0 8px">Nächstes Halving: <b>${fmtDate(nh)}</b> (in ${(nh - s.day).toLocaleString('de-DE')} Tagen) – Blockbelohnung ${String(BTC_REWARD(s.day)).replace('.', ',')} → ${String(BTC_REWARD(nh)).replace('.', ',')} BTC</div>`)); }
     const cv = h('<canvas class="chart" width="1200" height="520"></canvas>'); det.append(cv);
     const range = h(`<div class="seg" style="margin-top:10px"></div>`);
@@ -589,12 +611,12 @@ export class UI {
     this.range ??= 365;
     requestAnimationFrame(() => this.chart(cv, c.id, this.range));
     const mined = (s.stats.coins || {})[c.id] || 0;
-    const kv = h(`<div class="kv"><div class="k">Du hast</div><div class="v">${fmtCoin(w.ex)} ${c.id} (${fmtUSD(w.ex * p)})</div><div class="k">In der Cold-Wallet</div><div class="v">${fmtCoin(w.cold)} ${c.id} (${fmtUSD(w.cold * p)})</div></div>`);
-    det.append(kv);
-    const r1 = h('<div class="row"></div>');
+    const tile = (k, coin, cls = '') => h(`<div class="tile ${cls}"><div class="info"><div class="k">${k}</div><div class="v">${fmtCoin(coin)} <small>${c.id}</small></div><div class="u">≈ ${fmtUSD(coin * p)}</div></div><div class="acts"></div></div>`);
+    const tiles = h('<div class="tiles"></div>'), hold = tile('Du hast', w.ex, 'hold'); tiles.append(hold);
+    const r1 = hold.querySelector('.acts');
     for (const f of [0.25, 0.5, 1]) { const b = h(`<button class="btn ${f === 1 ? 'primary' : ''}">${f === 1 ? 'Alles verkaufen' : f * 100 + ' %'}</button>`); b.disabled = w.ex <= 0; b.onclick = () => { const u = g.sell(c.id, f); this.audio?.cash(); this.flashCash(u); this.toast(`Verkauft für ${fmtUSD(u)}`, 'good', 2500); this.market(); }; r1.append(b); }
-    const tc = !g.has('cold') ? null : h(`<button class="btn small">⇄ ${w.cold > 0 && w.ex === 0 ? 'Auf Börse holen' : 'In Cold-Wallet'}</button>`); if (tc) tc.onclick = () => { g.transfer(c.id, !(w.cold > 0 && w.ex === 0)); this.market(); }; if (tc) r1.append(tc);
-    det.append(r1);
+    if (g.has('cold')) { const ct = tile('Cold-Wallet', w.cold, 'cold'); const tc = h(`<button class="btn small">${w.cold > 0 && w.ex === 0 ? 'Auf Börse holen' : 'Einlagern'}</button>`); tc.onclick = () => { g.transfer(c.id, !(w.cold > 0 && w.ex === 0)); this.market(); }; ct.querySelector('.acts').append(tc); tiles.append(ct); }
+    det.append(tiles);
     const r2 = h(`<div class="row" style="align-items:center"><span style="font-size:13px">Kaufen für</span><input type="number" min="0" step="100" value="${Math.max(0, Math.round(Math.min(s.cash, 1000)))}"/><span>$</span><button class="btn small primary">Kaufen</button></div>`);
     r2.querySelector('button').onclick = () => { const v = +r2.querySelector('input').value; if (g.coinActive(c.id) || s.day >= c.start) { const u = g.buy(c.id, v); if (u) this.toast(`${fmtUSD(u)} in ${c.name} investiert`, 'good', 2500); this.market(); } };
     if (g.has('buycoins')) det.append(r2);
@@ -609,22 +631,32 @@ export class UI {
     const cw = cv.clientWidth || 600, chh = cv.clientHeight || 220; cv.width = Math.round(cw * dpr); cv.height = Math.round(chh * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const W = cw, H = chh; ctx.clearRect(0, 0, W, H);
     const start = Math.max(COIN[id].start, s.day - range, toDay('2010-07-17')), end = s.day;
-    if (end - start < 2) { ctx.fillStyle = '#94a0b2'; ctx.font = '600 14px Nunito, sans-serif'; ctx.fillText('Noch keine Kursdaten', 40, 60); return; }
+    if (end - start < 2) { ctx.fillStyle = '#c9b8a3'; ctx.font = '600 14px Nunito, sans-serif'; ctx.fillText('Noch keine Kursdaten', 40, 60); return; }
     const n = Math.max(2, Math.min(300, end - start)), pts = []; ctx.lineJoin = 'round';
     for (let i = 0; i <= n; i++) { const d = Math.round(start + (end - start) * (i / n)); pts.push([d, g.price(id, d)]); }
     const vals = pts.map((p) => p[1]).filter((v) => v > 0);
     const logScale = Math.max(...vals) / Math.min(...vals) > 30;
     const tf = (v) => (logScale ? Math.log10(Math.max(v, 1e-9)) : v);
     const mn = Math.min(...vals.map(tf)), mx = Math.max(...vals.map(tf));
-    const pad = mini ? 6 : 78, padR = mini ? 6 : 18, padB = mini ? 6 : 24, x = (i) => pad + (i / n) * (W - pad - padR), y = (v) => H - padB - ((tf(v) - mn) / (mx - mn || 1)) * (H - padB - (mini ? 6 : 14));
-    ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.fillStyle = '#bcc6d3'; ctx.font = '600 13px Nunito, sans-serif'; ctx.lineWidth = 1;
-    ctx.fillStyle = '#c9b8a3';
-    if (!mini) for (let k = 0; k <= 4; k++) { const v = mn + ((mx - mn) * k) / 4; const yy = H - padB - (k / 4) * (H - padB - 14); ctx.beginPath(); ctx.moveTo(pad, yy); ctx.lineTo(W - padR, yy); ctx.stroke(); ctx.fillText(fmtUSD(logScale ? Math.pow(10, v) : v), 4, yy - 4); }
+    const padT = mini ? 6 : 26, padR = mini ? 6 : 18, padB = mini ? 6 : 26; let pad = mini ? 6 : 78;
+    // Runde Achsenwerte (linear) bzw. Zehnerpotenzen (log)
+    let ticks = [], lo = mn, hi = mx, st = 0;
+    if (!mini) {
+      if (logScale) { for (let e = Math.floor(mn); e <= Math.ceil(mx); e++) ticks.push(e); lo = Math.min(lo, ticks[0]); hi = Math.max(hi, ticks[ticks.length - 1]); }
+      else { const raw = (mx - mn) / 4 || Math.abs(mx) * 0.1 || 1, mag = Math.pow(10, Math.floor(Math.log10(raw))); st = [1, 2, 2.5, 5, 10].map((k) => k * mag).find((k) => k >= raw) || 10 * mag; lo = Math.floor(mn / st) * st; hi = Math.ceil(mx / st) * st; for (let v = lo; v <= hi + st * 0.01; v += st) ticks.push(v); }
+    }
+    const dec = st ? Math.max(0, Math.ceil(-Math.log10(st) - 1e-9) + (Math.abs(st / Math.pow(10, Math.floor(Math.log10(st))) - 2.5) < 1e-6 ? 1 : 0)) : 0;
+    const tl = (t) => { const v = logScale ? Math.pow(10, t) : t; return !logScale && v > 0 && v < 1 ? v.toFixed(dec).replace('.', ',') + ' $' : fmtUSD(v); };
+    if (!mini) { ctx.font = '600 13px Nunito, sans-serif'; pad = Math.max(56, ...ticks.map((t) => ctx.measureText(tl(t)).width)) + 20; }
+    const x = (i) => pad + (i / n) * (W - pad - padR), y = (v) => H - padB - ((tf(v) - lo) / (hi - lo || 1)) * (H - padB - padT);
+    ctx.strokeStyle = 'rgba(255,240,220,0.07)'; ctx.font = '600 13px Nunito, sans-serif'; ctx.lineWidth = 1; ctx.fillStyle = '#c9b8a3'; ctx.textBaseline = 'middle';
+    if (!mini) for (const t of ticks) { const yy = H - padB - ((t - lo) / (hi - lo || 1)) * (H - padB - padT); ctx.beginPath(); ctx.moveTo(pad, yy); ctx.lineTo(W - padR, yy); ctx.stroke(); ctx.textAlign = 'right'; ctx.fillText(tl(t), pad - 10, yy); }
+    ctx.textBaseline = 'alphabetic';
     if (!mini) { ctx.textAlign = 'left'; ctx.fillText(fmtDate(start), pad, H - 6); ctx.textAlign = 'right'; ctx.fillText(fmtDate(end), W - padR, H - 6); ctx.textAlign = 'left'; }
     const grad = ctx.createLinearGradient(0, 0, 0, H); grad.addColorStop(0, COIN[id].color + '38'); grad.addColorStop(1, COIN[id].color + '00');
     ctx.beginPath(); pts.forEach(([d, v], i) => (i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v)))); ctx.lineTo(x(n), H - padB); ctx.lineTo(x(0), H - padB); ctx.fillStyle = grad; ctx.fill();
     ctx.beginPath(); pts.forEach(([d, v], i) => (i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v)))); ctx.strokeStyle = COIN[id].color; ctx.lineWidth = 2; ctx.stroke();
-    if (logScale && !mini) { ctx.fillStyle = '#9a8a78'; ctx.textAlign = 'right'; ctx.fillText('log', W - padR, 14); ctx.textAlign = 'left'; }
+    if (logScale && !mini) { ctx.fillStyle = '#9a8a78'; ctx.textAlign = 'right'; ctx.fillText('log. Skala', W - padR, 14); ctx.textAlign = 'left'; }
   }
 
   phone() {
@@ -655,12 +687,12 @@ export class UI {
       if (un) {
         const nx = f.power[fs.power + 1];
         if (nx) { const b = h(`<button class="btn small">${esc(nx.label)}: ${fmtNum(nx.kw, 0)} kW (${fmtUSD(nx.cost)})</button>`); b.disabled = s.cash < nx.cost; b.onclick = () => { if (g.upgradePower(f.id)) { this.toast('Stromanschluss ausgebaut!', 'good'); this.company(); this.sites(); } }; c.append(b); }
-        else c.append(h('<div style="font-size:12px;color:#94a0b2">Maximaler Anschluss erreicht.</div>'));
+        else c.append(h('<div style="font-size:12px;color:var(--dim)">Maximaler Anschluss erreicht.</div>'));
         const step = g.solarStep(f.id);
         if (step) { const cost = step * g.solarPricePerKwp(); const sb = h(`<button class="btn small">+${step} kWp Solar (${fmtUSD(cost)})</button>`); sb.disabled = s.cash < cost; sb.onclick = () => { if (g.buildSolar(f.id)) { this.toast(`Solaranlage erweitert (${f.short})`, 'good'); this.company(); } }; c.append(sb); }
         if (s.current !== f.id) { const go = h('<button class="btn small" style="margin-left:6px">Hingehen</button>'); go.onclick = () => { this.closeModal(); this.switchSite(f.id); }; c.append(go); }
       } else if (can) { const b = h(`<button class="btn primary small">Übernehmen (${fmtUSD(f.cost)})</button>`); b.onclick = () => { this.closeModal(); this.unlock(f.id); }; c.append(b); }
-      else { const ci = CHAPTERS.findIndex((ch) => ch.unlock === f.id); c.append(h(`<div style="font-size:12px;color:#8d96a3">Ab ${(CHAPTERS[ci]?.minDate || '').slice(0, 4)}</div>`)); }
+      else { const ci = CHAPTERS.findIndex((ch) => ch.unlock === f.id); c.append(h(`<div style="font-size:12px;color:var(--dim)">Ab ${(CHAPTERS[ci]?.minDate || '').slice(0, 4)}</div>`)); }
       cards.append(c);
     }
     const st = body.querySelector('.staff');
@@ -688,14 +720,14 @@ export class UI {
     const g = this.g;
     const body = h(`<div class="story"><div class="ch">Ein Anruf aus Zug</div>
       <p><b>Viktor Kral, MONOLITH Hash AG:</b> „China hat die halbe Branche abgeschaltet. Ich kaufe jetzt. <b>${fmtUSD(usd)}</b> in bar für die Hashwerk GmbH – alle Standorte, alle Maschinen. Sie wären mit Anfang dreißig fertig mit Arbeiten."</p>
-      <p style="color:#94a0b2">Dein aktuelles Vermögen: ${fmtUSD(g.netWorth())}. Deniz schaut dich an und sagt nichts.</p>
+      <p style="color:var(--dim)">Dein aktuelles Vermögen: ${fmtUSD(g.netWorth())}. Deniz schaut dich an und sagt nichts.</p>
       <div class="row" style="justify-content:flex-end"><button class="btn danger" data-a="yes">Verkaufen</button><button class="btn primary" data-a="no">Ablehnen – wir machen weiter</button></div></div>`);
     body.querySelector('[data-a=no]').onclick = () => { g.s.flags.offerDeclined = true; this.closeModal(); this.toast('<b>Deniz:</b> JA! Ich wusste es. Wir holen ihn ein.', 'msg', 7000); };
     body.querySelector('[data-a=yes]').onclick = () => {
       g.s.flags.soldOut = true; this.closeModal();
       const b2 = h(`<div class="story" style="text-align:center"><div class="ch">Ende: Verkauft</div><div style="font-size:34px;font-weight:900;margin:6px 0">${fmtUSD(usd)}</div>
         <p>Du unterschreibst in Zug. MONOLITH übernimmt Hashwerk – und Viktor Kral bekommt seinen Rekord. Elektro Brandt gibt es immer noch; Papa hat dir einen Schlüssel für die Werkstatt hinterlegt.</p>
-        <p style="color:#94a0b2">Willst du es lieber noch einmal versuchen? Du kannst den Vertrag zerreißen und weiterspielen.</p>
+        <p style="color:var(--dim)">Willst du es lieber noch einmal versuchen? Du kannst den Vertrag zerreißen und weiterspielen.</p>
         <div class="row" style="justify-content:center"><button class="btn primary">Vertrag zerreißen & weiterspielen</button></div></div>`);
       b2.querySelector('button').onclick = () => { g.s.flags.offerDeclined = true; this.closeModal(); };
       this.openModal(b2, 'narrow', 'story');
@@ -711,7 +743,7 @@ export class UI {
       <div style="font-size:40px;font-weight:900;margin:6px 0">MONOLITH überholt!</div>
       <p>Vor ${years} Jahren stand ein alter PC neben deinem Bett. Heute rechnet Hashwerk mit <b>${fmtHash(sha)}</b> – das sind <b>${pctDE(sha / net)} %</b> aller Bitcoin-Blöcke weltweit.</p>
       <div class="kv" style="max-width:420px;margin:14px auto;text-align:left"><div class="k">Vermögen</div><div class="v">${fmtUSD(g.netWorth())}</div><div class="k">Geräte</div><div class="v">${devs.toLocaleString('de-DE')}</div><div class="k">Standorte</div><div class="v">${s.unlocked.length}</div><div class="k">Insgesamt geschürft</div><div class="v">${fmtUSD(s.stats.minedUSD)}</div><div class="k">Stromkosten</div><div class="v">${fmtUSD(s.stats.elec)}</div></div>
-      <p style="color:#94a0b2">Papa hat den Laden übrigens behalten. Er repariert immer noch Radios – aus Spaß.</p>
+      <p style="color:var(--dim)">Papa hat den Laden übrigens behalten. Er repariert immer noch Radios – aus Spaß.</p>
       <div class="row" style="justify-content:center"><button class="btn primary big">Endlos weiterspielen</button></div></div>`);
     body.querySelector('button').onclick = () => this.closeModal();
     this.audio?.fanfare(); this.openModal(body, 'narrow', 'story');
@@ -743,26 +775,26 @@ export class UI {
     entries.push({ name: 'Hashwerk (Du)', h: mine, me: true });
     entries.sort((a, b) => b.h - a.h);
     const rank = entries.findIndex((e) => e.me) + 1;
-    const body = h(`<div><h2>Rangliste der Bitcoin-Miner</h2><p style="color:#94a0b2;margin-top:-6px">Netz-Hashrate: <b style="color:#fff">${fmtHash(net)}</b> · Dein Anteil: <b style="color:#ffb000">${pctDE(mine / net)} %</b> · Platz <b>${rank}</b> von ${entries.length}</p>
+    const body = h(`<div><h2>Rangliste der Bitcoin-Miner</h2><p style="color:var(--dim);margin-top:-6px">Netz-Hashrate: <b style="color:#fff">${fmtHash(net)}</b> · Dein Anteil: <b style="color:#ffb000">${pctDE(mine / net)} %</b> · Platz <b>${rank}</b> von ${entries.length}</p>
       <table class="tbl"><tr><th>#</th><th>Miner</th><th>Hashrate</th><th>Anteil</th></tr>${entries.map((e, i) => `<tr class="${e.me ? 'me' : ''} ${e.rival ? 'rival' : ''}"><td>${i + 1}</td><td>${esc(e.name)}</td><td>${fmtHash(e.h)}</td><td>${pctDE(e.h / net)} %</td></tr>`).join('')}</table>
       <div class="sec"><h4>Deine Hashrate (SHA-256, log)</h4><canvas class="nwchart" width="1000" height="240"></canvas></div>
       <div class="sec"><h4>Dein Weg</h4><div class="path"></div></div></div>`);
     const ms = Object.entries(s.milestones || {}).sort((a, b) => a[1] - b[1]);
     const label = (k) => { if (k === 'cold') return 'Cold-Wallet-Profi (Börsenpleite überstanden)'; const v = +k.slice(1); return k[0] === 'h' ? `${fmtHash(v)} Hashrate` : v >= 1e9 ? 'Milliardär' : v >= 1e6 ? (v === 1e6 ? 'Millionär' : fmtUSD(v) + ' Vermögen') : fmtUSD(v) + ' Vermögen'; };
     const unl = s.unlocked.map((id) => [FACILITY[id].name, null]);
-    body.querySelector('.path').innerHTML = (ms.length ? ms.map(([k, d]) => `<div style="display:flex;gap:10px;font-size:13px;padding:2px 0"><span style="color:#ffb000;min-width:86px">${fmtDate(d)}</span><span>${label(k)}</span></div>`).join('') : '<div class="empty">Noch keine Meilensteine.</div>') + `<div style="font-size:12px;color:#94a0b2;margin-top:6px">Standorte: ${unl.map((u) => u[0]).join(' → ')}</div>`;
+    body.querySelector('.path').innerHTML = (ms.length ? ms.map(([k, d]) => `<div style="display:flex;gap:10px;font-size:13px;padding:2px 0"><span style="color:#ffb000;min-width:86px">${fmtDate(d)}</span><span>${label(k)}</span></div>`).join('') : '<div class="empty">Noch keine Meilensteine.</div>') + `<div style="font-size:12px;color:var(--dim);margin-top:6px">Standorte: ${unl.map((u) => u[0]).join(' → ')}</div>`;
     requestAnimationFrame(() => {
       const cv = body.querySelector('canvas'); if (!cv) return; const ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
       const hist = s.stats.history.filter((p) => p.h > 0);
-      if (hist.length < 3) { ctx.fillStyle = '#94a0b2'; ctx.font = '24px sans-serif'; ctx.fillText('Noch zu wenig Daten.', 30, 60); return; }
+      if (hist.length < 3) { ctx.fillStyle = '#c9b8a3'; ctx.font = '600 24px Nunito, sans-serif'; ctx.fillText('Noch zu wenig Daten.', 30, 60); return; }
       const lg = (v) => Math.log10(Math.max(1, v)); const net = hist.map((p) => g.netHash('BTC', p.d));
       const mn = lg(Math.min(...hist.map((p) => p.h))), mx = lg(Math.max(...net)) + 0.2;
       const x = (i) => 70 + (i / (hist.length - 1)) * (W - 90), y = (v) => H - 28 - ((lg(v) - mn) / (mx - mn || 1)) * (H - 50);
-      ctx.fillStyle = '#bcc6d3'; ctx.font = '18px sans-serif'; ctx.strokeStyle = 'rgba(255,255,255,.07)';
+      ctx.fillStyle = '#d9c9b4'; ctx.font = '600 18px Nunito, sans-serif'; ctx.strokeStyle = 'rgba(255,255,255,.07)';
       for (let k = 0; k <= 3; k++) { const v = Math.pow(10, mn + ((mx - mn) * k) / 3), yy = y(v); ctx.beginPath(); ctx.moveTo(70, yy); ctx.lineTo(W - 10, yy); ctx.stroke(); ctx.fillText(fmtHash(v), 2, yy - 4); }
-      ctx.beginPath(); net.forEach((v, i) => (i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v)))); ctx.strokeStyle = '#5d687a'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.beginPath(); net.forEach((v, i) => (i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v)))); ctx.strokeStyle = '#8a7462'; ctx.lineWidth = 2; ctx.stroke();
       ctx.beginPath(); hist.forEach((p, i) => (i ? ctx.lineTo(x(i), y(p.h)) : ctx.moveTo(x(i), y(p.h)))); ctx.strokeStyle = '#ffb000'; ctx.lineWidth = 3; ctx.stroke();
-      ctx.fillStyle = '#ffb000'; ctx.fillText('Du', W - 50, y(hist[hist.length - 1].h) - 8); ctx.fillStyle = '#94a0b2'; ctx.fillText('Netz', W - 60, y(net[net.length - 1]) - 8);
+      ctx.fillStyle = '#ffb000'; ctx.fillText('Du', W - 50, y(hist[hist.length - 1].h) - 8); ctx.fillStyle = '#c9b8a3'; ctx.fillText('Netz', W - 60, y(net[net.length - 1]) - 8);
     });
     this.openModal(body, 'narrow', 'ranking');
   }
@@ -772,7 +804,7 @@ export class UI {
     const body = h(`<div><h2>Menü</h2><div class="row"><button class="btn primary" data-a="save">Speichern</button><button class="btn" data-a="load">Laden</button><button class="btn danger" data-a="new">Neues Spiel</button></div>
       <div class="sec"><h4>Grafik</h4><div class="row"><button class="btn small ${this.w.quality === 'high' ? 'primary' : ''}" data-q="high">Hoch</button><button class="btn small ${this.w.quality === 'medium' ? 'primary' : ''}" data-q="medium">Mittel</button><button class="btn small ${this.w.quality === 'low' ? 'primary' : ''}" data-q="low">Niedrig</button></div></div>
       <div class="sec"><h4>Ton</h4><div class="row"><button class="btn small" data-a="mute">${this.audio?.muted ? 'Ton an' : 'Ton aus'}</button></div></div>
-      <div class="sec"><div style="font-size:12px;color:#8d96a3">Fan-Projekt · alle Namen fiktiv · keine Anlageberatung</div></div></div>`);
+      <div class="sec"><div style="font-size:12px;color:var(--dim)">Fan-Projekt · alle Namen fiktiv · keine Anlageberatung</div></div></div>`);
     body.querySelector('[data-a=save]').onclick = () => { this.toast(g.save() ? 'Gespeichert' : 'Speichern fehlgeschlagen', 'good', 2000); };
     body.querySelector('[data-a=load]').onclick = () => { if (g.load()) { this.closeModal(); this.switchSite(g.s.current); this.speedBar(); this.toast('Spielstand geladen', 'good'); } else this.toast('Kein Spielstand gefunden', 'bad'); };
     const nb = body.querySelector('[data-a=new]');
@@ -819,11 +851,11 @@ export class UI {
   }
   nwChart(cv) {
     const hist = this.g.s.stats.history; const ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
-    ctx.clearRect(0, 0, W, H); if (hist.length < 3) { ctx.fillStyle = '#94a0b2'; ctx.font = '26px sans-serif'; ctx.fillText('Noch zu wenig Daten – spiel ein paar Wochen.', 30, 60); return; }
+    ctx.clearRect(0, 0, W, H); if (hist.length < 3) { ctx.fillStyle = '#c9b8a3'; ctx.font = '600 26px Nunito, sans-serif'; ctx.fillText('Noch zu wenig Daten – spiel ein paar Wochen.', 30, 60); return; }
     const vals = hist.map((p) => Math.max(1, p.n)); const lg = (v) => Math.log10(v);
     const mn = lg(Math.min(...vals)), mx = lg(Math.max(...vals)) + 0.01;
     const x = (i) => 70 + (i / (hist.length - 1)) * (W - 90), y = (v) => H - 30 - ((lg(v) - mn) / (mx - mn)) * (H - 60);
-    ctx.strokeStyle = 'rgba(255,255,255,.07)'; ctx.fillStyle = '#bcc6d3'; ctx.font = '20px sans-serif';
+    ctx.strokeStyle = 'rgba(255,255,255,.07)'; ctx.fillStyle = '#d9c9b4'; ctx.font = '600 20px Nunito, sans-serif';
     for (let k = 0; k <= 3; k++) { const v = mn + ((mx - mn) * k) / 3, yy = H - 30 - (k / 3) * (H - 60); ctx.beginPath(); ctx.moveTo(70, yy); ctx.lineTo(W - 10, yy); ctx.stroke(); ctx.fillText(fmtUSD(Math.pow(10, v)), 2, yy - 4); }
     ctx.fillText(fmtDate(hist[0].d), 70, H - 6); ctx.fillText(fmtDate(hist[hist.length - 1].d), W - 150, H - 6);
     ctx.beginPath(); hist.forEach((p, i) => (i ? ctx.lineTo(x(i), y(vals[i])) : ctx.moveTo(x(i), y(vals[i])))); ctx.strokeStyle = '#ffb000'; ctx.lineWidth = 3; ctx.stroke();

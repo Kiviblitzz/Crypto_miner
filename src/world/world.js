@@ -25,7 +25,8 @@ const GradeShader = {
 };
 import { buildRoom, buildOutside } from './rooms.js';
 import { objectModel } from './models.js';
-import { nightMats } from './rooms.js';
+import { nightMats, nightGround } from './rooms.js';
+const NIGHT_GRASS = new THREE.Color(0x1d2a1f), NIGHT_FACADE = new THREE.Color(0x4a5068);
 import { M, mat } from './materials.js';
 import { FACILITY } from '../data/world.js';
 import { PLACEABLE } from '../data/hardware.js';
@@ -94,7 +95,15 @@ export class World {
     this.sky.renderOrder = -10; this.scene.add(this.sky);
     { const n = 700, pos = new Float32Array(n * 3); for (let i = 0; i < n; i++) { const u = Math.random() * 2 - 1, t = Math.random() * Math.PI * 2, y = Math.abs(u) * 0.9 + 0.08, r = Math.sqrt(1 - y * y); pos.set([Math.cos(t) * r * 380, y * 380, Math.sin(t) * r * 380], i * 3); }
       const gs = new THREE.BufferGeometry(); gs.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-      this.stars = new THREE.Points(gs, new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false, transparent: true, opacity: 0, depthWrite: false, fog: false })); this.scene.add(this.stars); }
+      this.stars = new THREE.Points(gs, new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false, transparent: true, opacity: 0, depthWrite: false, fog: false })); this.scene.add(this.stars);
+      // Mond: tief am Himmel in Fensterrichtung
+      const mc = document.createElement('canvas'); mc.width = mc.height = 128; const mg = mc.getContext('2d');
+      const halo = mg.createRadialGradient(64, 64, 18, 64, 64, 64); halo.addColorStop(0, 'rgba(255,244,214,.55)'); halo.addColorStop(1, 'rgba(255,244,214,0)'); mg.fillStyle = halo; mg.fillRect(0, 0, 128, 128);
+      const disc = mg.createRadialGradient(56, 56, 4, 64, 64, 26); disc.addColorStop(0, '#fffaf0'); disc.addColorStop(1, '#efe2c4'); mg.fillStyle = disc; mg.beginPath(); mg.arc(64, 64, 26, 0, 7); mg.fill();
+      mg.fillStyle = 'rgba(190,170,140,.35)'; for (const [cx, cy, cr] of [[56, 58, 6], [72, 70, 4], [68, 52, 3.5], [54, 74, 3]]) { mg.beginPath(); mg.arc(cx, cy, cr, 0, 7); mg.fill(); }
+      const mt = new THREE.CanvasTexture(mc); mt.colorSpace = THREE.SRGBColorSpace;
+      this.moonSp = new THREE.Sprite(new THREE.SpriteMaterial({ map: mt, transparent: true, opacity: 0, depthWrite: false, fog: false })); this.moonSp.scale.set(30, 30, 1);
+      this.moonSp.position.copy(new THREE.Vector3(-0.5, 0.1, -1).normalize().multiplyScalar(360)); this.moonSp.renderOrder = -9; this.stars.add(this.moonSp); }
 
     // Postprocessing
     // Multisampling im Composer: glatte Kanten trotz Nachbearbeitung (Bloom)
@@ -122,7 +131,7 @@ export class World {
 
     this.objGroup = new THREE.Group(); this.scene.add(this.objGroup);
     this.entries = new Map(); // uid -> {group, key, sprite}
-    this.icons = { broken: iconTexture('broken', '#ff6b5e'), warn: iconTexture('warn', '#ffb000'), power: iconTexture('power', '#8d96a3'), empty: iconTexture('empty', '#4cc9f0'), sleep: iconTexture('sleep', '#7d8aa0') };
+    this.icons = { broken: iconTexture('broken', '#ff6b5e'), warn: iconTexture('warn', '#ffb000'), power: iconTexture('power', '#a08a74'), empty: iconTexture('empty', '#ffa867'), sleep: iconTexture('sleep', '#b08a62') };
     this.raycaster = new THREE.Raycaster(); this.mouse = new THREE.Vector2(); this.floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     this.keys = {}; this.placing = null; this.selected = null; this.hoverUid = null;
     this.selBox = new THREE.Box3Helper(new THREE.Box3(), 0xffffff); this.selBox.material.transparent = true; this.selBox.material.opacity = 0.18; this.selBox.material.depthWrite = false; this.selBox.visible = false; this.scene.add(this.selBox);
@@ -329,7 +338,7 @@ export class World {
     this.controls.enabled = m === 'map';
     if (m === 'play') this.requestLock();
     else if (document.pointerLockElement) { this.expectUnlock = true; document.exitPointerLock(); }
-    if (m !== 'play') { this.aim = null; this.onAim?.(null); if (!this.selected) this.selBox.visible = false; }
+    if (m !== 'play') { this.aim = null; this.onAim?.(null); if (!this.selected) this.selBox.visible = false; this.popups?.forEach((p) => (p.visible = false)); }
     this.onModeChange?.(m);
   }
   requestLock() {
@@ -450,9 +459,18 @@ export class World {
     const model = objectModel({ type, parts: def.kind === 'rig' ? { mobo: null, cpu: null, psu: null, gpus: [] } : undefined, items: def.kind === 'holder' ? [] : undefined, rot: 0 });
     this.thumbScene.add(model);
     const box = new THREE.Box3().setFromObject(model), size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
-    const rad = size.length() / 2, dist = rad / Math.sin(THREE.MathUtils.degToRad(15)) * 1.2;
-    const dir = new THREE.Vector3(1, 0.62, 1.25).normalize();
-    this.thumbCam.position.copy(c).addScaledVector(dir, dist); this.thumbCam.lookAt(c); this.thumbCam.near = dist / 50; this.thumbCam.far = dist * 4; this.thumbCam.updateProjectionMatrix();
+    const rad = size.length() / 2; let dist = rad / Math.sin(THREE.MathUtils.degToRad(15)) * 1.2;
+    const dir = new THREE.Vector3(1, 0.62, 1.25).normalize(), cam = this.thumbCam, tgt = c.clone();
+    const corners = []; for (let i = 0; i < 8; i++) corners.push(new THREE.Vector3(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z));
+    // Eng einrahmen: Objekt füllt ~78 % der Höhe bzw. ~86 % der Breite
+    for (let it = 0; it < 4; it++) {
+      cam.position.copy(tgt).addScaledVector(dir, dist); cam.lookAt(tgt); cam.near = dist / 50; cam.far = dist * 4; cam.updateProjectionMatrix(); cam.updateMatrixWorld();
+      let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const q of corners) { const v = q.clone().project(cam); x0 = Math.min(x0, v.x); x1 = Math.max(x1, v.x); y0 = Math.min(y0, v.y); y1 = Math.max(y1, v.y); }
+      const sx = (x1 - x0) / 2 / 0.86, sy = (y1 - y0) / 2 / 0.78, sc = Math.max(sx, sy);
+      const off = new THREE.Vector3((x0 + x1) / 2, (y0 + y1) / 2, 0.5).unproject(cam).sub(new THREE.Vector3(0, 0, 0.5).unproject(cam));
+      tgt.add(off); dist *= 0.35 + 0.65 * sc;
+    }
+    cam.position.copy(tgt).addScaledVector(dir, dist); cam.lookAt(tgt); cam.near = dist / 50; cam.far = dist * 4; cam.updateProjectionMatrix();
     const prevT = r.getRenderTarget(); r.setRenderTarget(this.thumbRT); r.setClearColor(0x000000, 0); r.clear(); r.render(this.thumbScene, this.thumbCam);
     const px = new Uint8Array(W * H * 4); r.readRenderTargetPixels(this.thumbRT, 0, 0, W, H, px); r.setRenderTarget(prevT);
     this.thumbScene.remove(model);
@@ -463,7 +481,7 @@ export class World {
   }
   // Kleine Münzen springen aus dem Gerät (Rückmeldung für Einkommen)
   coinBurst(pos, n) {
-    if (!this.coinTex) { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'); const gr = g.createRadialGradient(26, 24, 4, 32, 32, 30); gr.addColorStop(0, '#fff3b0'); gr.addColorStop(0.5, '#ffc93a'); gr.addColorStop(1, '#c98a00'); g.fillStyle = gr; g.beginPath(); g.arc(32, 32, 28, 0, 7); g.fill(); g.strokeStyle = 'rgba(120,70,0,.6)'; g.lineWidth = 3; g.stroke(); g.fillStyle = 'rgba(120,70,0,.75)'; g.font = 'bold 34px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('₿', 32, 34); this.coinTex = new THREE.CanvasTexture(c); this.coinTex.colorSpace = THREE.SRGBColorSpace; this.coins = []; }
+    if (!this.coinTex) { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'); const gr = g.createRadialGradient(26, 24, 4, 32, 32, 30); gr.addColorStop(0, '#fff3b0'); gr.addColorStop(0.5, '#ffc93a'); gr.addColorStop(1, '#c98a00'); g.fillStyle = gr; g.beginPath(); g.arc(32, 32, 28, 0, 7); g.fill(); g.strokeStyle = 'rgba(120,70,0,.6)'; g.lineWidth = 3; g.stroke(); g.fillStyle = 'rgba(120,70,0,.75)'; g.font = '700 34px Nunito, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('₿', 32, 34); this.coinTex = new THREE.CanvasTexture(c); this.coinTex.colorSpace = THREE.SRGBColorSpace; this.coins = []; }
     for (let i = 0; i < n; i++) {
       let k = this.coins.find((q) => !q.visible);
       if (!k) { if (this.coins.length >= 40) return; k = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.coinTex, transparent: true, depthWrite: false })); k.renderOrder = 9; this.scene.add(k); this.coins.push(k); }
@@ -617,8 +635,8 @@ export class World {
       for (const o of this.game.facObjects(id)) { const m = objectModel(o); m.position.set(x + o.x, 0, -def.d / 2 + o.z); m.rotation.y = -o.rot * Math.PI / 2; g.add(m); }
       // Schild
       const c = document.createElement('canvas'); c.width = 512; c.height = 128; const cx = c.getContext('2d');
-      cx.fillStyle = 'rgba(14,17,23,0.85)'; cx.fillRect(0, 0, 512, 128); cx.fillStyle = '#ffb000'; cx.font = 'bold 54px Arial'; cx.textAlign = 'center'; cx.fillText(def.name, 256, 62);
-      const sm = this.game.summary[id]; cx.fillStyle = '#e8edf4'; cx.font = '26px Arial';
+      cx.fillStyle = 'rgba(38,28,22,0.88)'; cx.beginPath(); cx.roundRect(4, 4, 504, 120, 28); cx.fill(); cx.fillStyle = '#ffc23a'; cx.font = '700 54px Fredoka, Nunito, sans-serif'; cx.textAlign = 'center'; cx.fillText(def.name, 256, 62);
+      const sm = this.game.summary[id]; cx.fillStyle = '#f3e6d4'; cx.font = '600 26px Nunito, sans-serif';
       const sha = sm ? (sm.hashByAlgo.sha256 || 0) * sm.throttle : 0;
       cx.fillText(`${def.w}×${def.d} m · ${sm ? (sm.watt / 1000).toFixed(sm.watt < 1e4 ? 2 : 0) : 0} kW${sha ? ' · ' + fmtHash(sha) : ''}`, 256, 106);
       const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
@@ -835,7 +853,9 @@ export class World {
       this.skyU.horizon.value.set(def.style === 'fjord' ? 0xd6e6f2 : 0xdfe9f2).lerp(new THREE.Color(0xf2a66a), warm * 0.8).lerp(new THREE.Color(0x1b2340), nightT);
       this.skyU.sunDir.value.copy(this.sun.position).sub(this.sun.target.position).normalize();
       this.sky.position.set(def.w / 2, 0, def.d / 2); this.stars.position.copy(this.sky.position);
-      this.stars.material.opacity = Math.max(0, nightT - 0.2) * 0.9;
+      this.stars.material.opacity = Math.max(0, nightT - 0.2) * 0.9; if (this.moonSp) this.moonSp.material.opacity = Math.min(1, Math.max(0, nightT - 0.15) * 1.4);
+      for (const m of nightGround) m.color.copy(m.userData.day).lerp(m.userData.night || NIGHT_GRASS, nightT * 0.85);
+      for (const m of nightMats) m.color.setRGB(1, 1, 1).lerp(NIGHT_FACADE, nightT * 0.8);
       for (const m of nightMats) m.emissiveIntensity = nightT * 1.3;
       M.window().color.set(0xbfe2ff).lerp(new THREE.Color(0x101a33), nightT); M.window().opacity = 0.35 - 0.22 * nightT;
     }

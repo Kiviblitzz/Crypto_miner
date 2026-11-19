@@ -986,3 +986,66 @@ body:has(#pause:not(.hidden)) #top, body:has(#pause:not(.hidden)) #goals, body:h
 .intro-phone .pricecard { background: #35271e !important; }
 #build .item .thumb { height: 128px; padding: 12px; box-sizing: border-box; background: radial-gradient(ellipse at 50% 75%, rgba(255,236,210,.14), rgba(255,236,210,.03) 70%); }
 #build .item.dis .thumb { opacity: .9 !important; } #build .item.dis .thumb img { filter: grayscale(.15) brightness(1) drop-shadow(0 8px 10px rgba(0,0,0,.35)) !important; }
+/* Strenge Kritik Runde 3 (strengster Reviewer) */
+:root { --acc2: #ffa867; --acc-soft: rgba(255, 176, 0, .16); }
+/* Logo: größere Münze, mittig zur Wortmarke */
+.logo-coin { width: 132px !important; height: 132px !important; align-self: center; }
+.logo-wrap { align-items: center; }
+/* Ein Knopf-System: auch Titel- und Pausenknöpfe als Pille */
+#splash .splash-btns .btn, #pause .pause-card .btn { border-radius: 999px !important; }
+#splash .splash-btns .btn .bi, #pause .pause-card .btn .bi { border-radius: 50% !important; }
+.btn.big { font: 600 17px/1.1 var(--font-fun) !important; padding: 13px 24px !important; }
+.btn.wide { width: 100%; display: flex !important; align-items: center; justify-content: center; gap: 10px; }
+.btn .bi { display: inline-grid; place-items: center; }
+#inspector .sec.start .btn .bi { width: 30px; height: 30px; border-radius: 50%; background: rgba(255,255,255,.35); color: #7a4500; }
+/* Pause: Marke mit Münze */
+.pause-brand { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0 0 8px; }
+.pause-coin { width: 54px; height: 54px; flex: none; filter: drop-shadow(0 4px 8px rgba(0,0,0,.35)); }
+.pause-logo { width: 250px !important; margin: 0 !important; }
+/* Status-Chip mit Punkt */
+.badge { display: inline-flex; align-items: center; gap: 6px; font: 700 12px var(--font) !important; padding: 4px 10px 4px 8px !important; }
+.badge i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; opacity: .9; }
+.badge.idle { background: #5a4536 !important; color: #f0dfc8 !important; }
+.badge.ok { background: rgba(95,211,141,.18) !important; color: #9fe8bd !important; }
+.badge.ok i { box-shadow: 0 0 6px #5fd38d; }
+/* HUD oben rechts: BTC als warme Pille */
+@media (min-width: 721px) {
+  #st-btc { background: rgba(38,28,22,.72); border-radius: 999px; padding: 4px 12px; text-shadow: none !important; }
+  #st-btc .l { display: none; }
+  #st-btc .v::before { color: var(--dim) !important; }
+  #st-btc .neg { color: #ff8f84 !important; font-weight: 800; }
+  #st-btc .pos { font-weight: 800; }
+  #inspector { top: 142px !important; }
+}
+/* Dock: aktiver Bereich */
+#dock button.on { background: var(--acc-soft) !important; color: var(--acc) !important; box-shadow: inset 0 0 0 1px rgba(255,176,0,.35) !important; }
+/* Bau-Katalog: warme, hellere Bühne für die Vorschaubilder, weicher Hintergrund */
+#build .item .thumb { background: radial-gradient(ellipse at 50% 70%, #6b5240, #46352a 78%) !important; border-radius: 14px; padding: 8px !important; }
+#build .item .miss:empty { display: none; }
+@media (min-width: 721px) {
+  body.show-build #build { box-shadow: var(--soft) !important; }
+  body.show-build::before { content: ''; position: fixed; inset: 0; z-index: 30; background: rgba(22,16,12,.32); backdrop-filter: blur(2px); pointer-events: none; }
+}
+/* Börse: Kopf mit Münz-Marke, Bestand als Kacheln */
+.mk-head { display: flex; align-items: center; gap: 10px; }
+.mk-head h3 { margin: 0; font: 600 22px var(--font-fun); flex: 1; }
+.mk-head .tk { color: var(--dim); font-weight: 500; }
+.mk-head .px { font: 700 24px var(--font-fun); }
+.mk-head .cdot { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font: 700 16px var(--font-fun); color: #4a2a00; box-shadow: 0 2px 0 rgba(0,0,0,.3), inset 0 -2px 0 rgba(0,0,0,.15); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 12px 0; }
+.tiles .tile { background: var(--surface-1); border-radius: 14px; padding: 10px 14px; box-shadow: inset 0 0 0 1px var(--stroke); }
+.tiles .k { font: 700 12px var(--font); color: var(--dim); text-transform: none; }
+.tiles .v { font: 700 20px var(--font-fun); margin-top: 2px; }
+.tiles .v small { font: 600 13px var(--font); color: var(--dim); }
+.tiles .u { font: 600 13px var(--font); color: var(--text2); }
+.tiles { display: flex !important; flex-direction: column; }
+.tiles .tile { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.tiles .acts { display: flex; gap: 8px; flex-wrap: wrap; }
+.tiles .acts .btn { min-width: 64px; }
+@media (min-width: 721px) { body:has(#modal:not(.hidden)) #top { z-index: 32; } }
+.intro-phone .ip-act { justify-content: flex-end; margin: 14px 0 0; }
+@media (min-width: 721px) { body:has(#modal:not(.hidden)) #goals { z-index: 32; } }
+@media (min-width: 721px) {
+  #top #st-btc { background: rgba(38,28,22,.72); border-radius: 999px; padding: 5px 12px 5px 14px; margin-top: 4px; align-items: center; }
+  #top #st-btc .v { font: 700 14px var(--font-fun) !important; }
+}

@@ -698,7 +698,7 @@ export function fmtUSD(v, compact = true) {
   return `${sign}${a.toPrecision(3).replace('.', ',')} $`;
 }
 export function fmtNum(v, d = 2) { return nf(d).format(v); }
-export function fmtCoin(v) { const a = Math.abs(v); if (a >= 1e6) return nf(2).format(v / 1e6) + ' Mio.'; if (a >= 1000) return nf(0).format(v); if (a >= 1) return nf(3).format(v); if (a === 0) return '0'; return v.toPrecision(3).replace('.', ','); }
+export function fmtCoin(v) { const a = Math.abs(v); if (a >= 1e6) return nf(2).format(v / 1e6) + ' Mio.'; if (a >= 1000) return nf(0).format(v); if (a >= 100) return nf(1).format(v); if (a >= 10) return nf(2).format(v); if (a >= 1) return nf(3).format(v); if (a === 0) return '0'; return v.toPrecision(3).replace('.', ','); }
 export function fmtHash(h, algo) {
   const unit = algo === 'equihash' ? 'Sol/s' : 'H/s';
   const u = ['', 'k', 'M', 'G', 'T', 'P', 'E']; let i = 0;
