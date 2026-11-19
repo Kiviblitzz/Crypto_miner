@@ -1,5 +1,6 @@
 // 3D-Welt in Ego-Perspektive: Renderer, Spieler, Standorte, Interaktion per Fadenkreuz, Bauen, Tag/Nacht, Karte
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Player } from './player.js';
 import { ViewModel } from './viewmodel.js';
@@ -68,6 +69,7 @@ export class World {
     // Postprocessing
     this.composer = new EffectComposer(r);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
+    { const vp = new RenderPass(this.vm.scene, this.camera); vp.clear = false; vp.clearDepth = true; this.composer.addPass(vp); }
     this.bloom = new UnrealBloomPass(new THREE.Vector2(512, 512), 0.45, 0.3, 0.97);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
@@ -556,20 +558,42 @@ export class World {
   }
 
   // ---------- Personal (NPCs) ----------
-  makePerson(vest = 0xff8a00, hat = true, skin = 0xe0b394) {
+  // Figur: Kapsel-Gliedmaßen mit Gelenken, Schuhe, Gesicht (Augen, Nase, Ohren), Haare oder Helm
+  makePerson(vest = 0xff8a00, hat = true, skin = 0xe0b394, hair = 0x2a1a10) {
     const g = new THREE.Group();
-    const mk = (geo, m, x, y, z) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.castShadow = true; g.add(o); return o; };
-    const pants = mat('npcPants', { color: 0x2b3446, roughness: 0.9 }), skinM = mat('npcSkin' + skin, { color: skin, roughness: 0.8 }), vestM = mat('npcVest' + vest, { color: vest, roughness: 0.6, emissive: vest, emissiveIntensity: 0.08 });
-    const legG = new THREE.BoxGeometry(0.12, 0.8, 0.14); legG.translate(0, -0.4, 0);
-    const armG = new THREE.BoxGeometry(0.09, 0.62, 0.1); armG.translate(0, -0.31, 0);
-    const legL = mk(legG, pants, -0.08, 0.82, 0), legR = mk(legG, pants, 0.08, 0.82, 0);
-    mk(new THREE.BoxGeometry(0.36, 0.56, 0.22), vestM, 0, 1.1, 0);
-    mk(new THREE.BoxGeometry(0.37, 0.05, 0.23), mat('npcStripe', { color: 0xdddddd, emissive: 0xffffff, emissiveIntensity: 0.3 }), 0, 1.05, 0);
-    const armL = mk(armG, vestM, -0.24, 1.36, 0), armR = mk(armG, vestM, 0.24, 1.36, 0);
-    mk(new THREE.SphereGeometry(0.12, 14, 10), skinM, 0, 1.52, 0);
-    if (hat) { const h = mk(new THREE.SphereGeometry(0.135, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat('npcHat', { color: 0xffd400, roughness: 0.4 }), 0, 1.55, 0); }
-    else mk(new THREE.BoxGeometry(0.25, 0.08, 0.25), mat('npcHair', { color: 0x2a1a10, roughness: 0.9 }), 0, 1.63, -0.01);
-    g.userData = { legL, legR, armL, armR, phase: Math.random() * 6, target: null, wait: 0, speed: 1.1 + Math.random() * 0.4 };
+    const cap = (r, len, seg = 12) => { const k = `cap${r}|${len}`; if (!this._pg) this._pg = new Map(); if (!this._pg.has(k)) { const geo = new THREE.CapsuleGeometry(r, len, 4, seg); geo.translate(0, -len / 2 - r * 0.6, 0); this._pg.set(k, geo); } return this._pg.get(k); };
+    const mk = (geo, m, parent, x, y, z, sx = 1, sy = 1, sz = 1) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.scale.set(sx, sy, sz); o.castShadow = true; parent.add(o); return o; };
+    const pants = mat('npcPants', { color: 0x2b3446, roughness: 0.9 }), skinM = mat('npcSkin' + skin, { color: skin, roughness: 0.65 }), vestM = mat('npcVest' + vest, { color: vest, roughness: 0.6, emissive: vest, emissiveIntensity: 0.08 });
+    const shirt = mat('npcShirt', { color: 0x3c4250, roughness: 0.85 }), shoe = mat('npcShoe', { color: 0x1d1f24, roughness: 0.6 }), dark = mat('npcEye', { color: 0x15171c, roughness: 0.2 });
+    const stripe = mat('npcStripe', { color: 0xdddddd, emissive: 0xffffff, emissiveIntensity: 0.3, roughness: 0.3 }), hairM = mat('npcHair' + hair, { color: hair, roughness: 0.9 });
+    const sph = (r) => new THREE.SphereGeometry(r, 16, 12);
+    // Beine mit Hüftgelenk (Pivot oben)
+    const leg = (x) => { const l = new THREE.Group(); l.position.set(x, 0.86, 0); g.add(l); mk(cap(0.066, 0.62), pants, l, 0, 0, 0); const sh = mk(new RoundedBoxGeometry(0.11, 0.07, 0.24, 3, 0.03), shoe, l, 0, -0.82, 0.035); sh.castShadow = true; return l; };
+    const legL = leg(-0.085), legR = leg(0.085);
+    mk(new RoundedBoxGeometry(0.31, 0.14, 0.19, 3, 0.05), pants, g, 0, 0.9, 0);
+    // Oberkörper (Kapsel, abgeflacht) + Warnwesten-Streifen
+    mk(new THREE.CapsuleGeometry(0.16, 0.28, 6, 18), vestM, g, 0, 1.2, 0, 1.05, 1, 0.66);
+    for (const y of [1.08, 1.2]) mk(new THREE.CylinderGeometry(0.17, 0.17, 0.035, 22, 1, true), stripe, g, 0, y, 0, 1.05, 1, 0.68);
+    mk(new THREE.CylinderGeometry(0.045, 0.05, 0.08, 12), skinM, g, 0, 1.47, 0);
+    // Arme mit Schultergelenk
+    const arm = (x) => { const a = new THREE.Group(); a.position.set(x, 1.4, 0); g.add(a); mk(cap(0.052, 0.24), shirt, a, 0, 0.02, 0); mk(cap(0.043, 0.2), skinM, a, 0, -0.27, 0); mk(sph(0.048), skinM, a, 0, -0.58, 0.01, 0.85, 1.15, 0.7); return a; };
+    const armL = arm(-0.22), armR = arm(0.22);
+    // Kopf mit Gesicht
+    const hy = 1.62;
+    mk(sph(0.108), skinM, g, 0, hy, 0, 0.94, 1.08, 1);
+    for (const s of [-1, 1]) { mk(sph(0.024), skinM, g, s * 0.1, hy, -0.005, 0.5, 1, 0.8); mk(sph(0.012), dark, g, s * 0.036, hy + 0.018, 0.094); mk(new THREE.BoxGeometry(0.032, 0.007, 0.01), hairM, g, s * 0.037, hy + 0.043, 0.096); }
+    mk(sph(0.017), skinM, g, 0, hy - 0.008, 0.106, 0.8, 1, 1);
+    mk(new THREE.BoxGeometry(0.036, 0.006, 0.006), mat('npcMouth', { color: 0x8a4a3a, roughness: 0.6 }), g, 0, hy - 0.048, 0.098);
+    let hairMesh = null;
+    if (hat) {
+      mk(new THREE.SphereGeometry(0.125, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), mat('npcHat', { color: 0xffd400, roughness: 0.4 }), g, 0, hy + 0.02, 0);
+      mk(new THREE.CylinderGeometry(0.135, 0.14, 0.012, 22), mat('npcHat', { color: 0xffd400, roughness: 0.4 }), g, 0, hy + 0.02, 0.02, 1, 1, 1.12);
+      mk(new THREE.BoxGeometry(0.02, 0.06, 0.2), mat('npcHat', { color: 0xffd400, roughness: 0.4 }), g, 0, hy + 0.13, 0);
+    } else {
+      hairMesh = mk(new THREE.SphereGeometry(0.116, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), hairM, g, 0, hy + 0.012, -0.008, 0.96, 1.05, 1.05);
+      hairMesh.rotation.x = -0.25;
+    }
+    g.userData = { legL, legR, armL, armR, hair: hairMesh, phase: Math.random() * 6, target: null, wait: 0, speed: 1.1 + Math.random() * 0.4 };
     return g;
   }
   syncPeople() {
@@ -588,7 +612,7 @@ export class World {
       if (this.people.userData[key]) continue;
       const p = this.makePerson(vest, false, skin); p.userData.static = true; p.userData.work = true;
       p.position.set(x, 0, z); p.rotation.y = ry; this.people.userData[key] = p; this.people.add(p);
-      p.children.filter((c) => c.geometry?.type === 'BoxGeometry' && Math.abs(c.position.y - 1.63) < 0.01).forEach((h) => (h.material = mat('npcGrayHair', { color: 0xbfbfbf, roughness: 0.9 })));
+      if (p.userData.hair) p.userData.hair.material = mat('npcGrayHair', { color: 0xbfbfbf, roughness: 0.9 });
     }
     want += fam.length;
     if (this.people.userData.me) want += 1;
@@ -685,7 +709,7 @@ export class World {
     M.ledGreen().emissiveIntensity = blink; M.ledGreen2().emissiveIntensity = blink2; M.ledAmber().emissiveIntensity = blink2 * 0.9;
     M.rgb().emissive.setHSL((this.t * 0.08) % 1, 1, 0.5);
     // Rendern
-    if (this.quality === 'low') this.renderer.render(this.scene, this.camera); else this.composer.render();
+    if (this.quality === 'low') { const r = this.renderer; r.render(this.scene, this.camera); if (this.vm.root.visible) { r.autoClear = false; r.clearDepth(); r.render(this.vm.scene, this.camera); r.autoClear = true; } } else this.composer.render();
   }
 
   updateDaylight(frac) {

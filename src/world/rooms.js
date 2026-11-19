@@ -1,7 +1,8 @@
 // Räume / Standorte – Böden, Wände (mit Ausblendung zur Kamera), Möbel, Licht
 import * as THREE from 'three';
 import { TEX, M, mat, textTexture } from './materials.js';
-import { box, cyl, fan } from './models.js';
+import { box, cyl, fan, instance } from './models.js';
+import { furniture } from './furniture.js';
 
 function wallMat(key, tex) { return mat('wall_' + key, { map: tex, roughness: 0.9 }); }
 
@@ -87,42 +88,27 @@ export function buildRoom(def) {
     poster(S.left, textTexture([{ text: 'SUBNET', font: 'bold 120px Impact, Arial', color: '#ffdd55' }, { text: 'LIVE · TOUR 2010', font: '40px Arial', color: '#fff' }], { bg: '#1b1036', accent: '#ff3d7f', deco: (g, W, H) => { g.fillStyle = '#ff3d7f55'; for (let i = 0; i < 12; i++) { g.beginPath(); g.arc(W / 2, H * 0.62, 30 + i * 22, Math.PI, 0); g.stroke(); } } }), 0.6, 0.85, 1.5, 1.6, 0.085);
     poster(S.right, textTexture([{ text: 'TO THE', font: 'bold 70px Arial' }, { text: 'MOON', font: 'bold 120px Arial', color: '#ffd23f' }, { text: '🚀', font: '120px Arial' }], { bg: '#0b1630', deco: (g, W, H) => { g.fillStyle = '#fff'; for (let i = 0; i < 80; i++) g.fillRect(Math.random() * W, Math.random() * H, 2, 2); } }), 0.6, 0.85, 1.0, 1.6, 0.085);
     poster(S.back, textTexture([{ text: 'WORLD MAP', font: 'bold 44px Arial', color: '#333' }], { bg: '#e8dcbc', deco: (g, W, H) => { g.fillStyle = '#7da36a'; for (let i = 0; i < 14; i++) { g.beginPath(); g.ellipse(Math.random() * W, H * 0.3 + Math.random() * H * 0.5, 30 + Math.random() * 50, 20 + Math.random() * 30, Math.random(), 0, 7); g.fill(); } } }), 0.9, 0.6, 2.75, 1.85, 0.085);
-    // Bett
+    // Möbel (modelliert, gebacken)
     const g = S.root;
-    const wood = mat('bedWood', { color: 0x8b5a33, roughness: 0.7 });
-    box(g, 1.0, 0.3, 2.0, wood, 0.5, 0, 2.5); box(g, 0.95, 0.18, 1.95, mat('mattress', { color: 0xf3f3f0, roughness: 0.9 }), 0.5, 0.3, 2.5);
-    box(g, 0.98, 0.08, 1.4, mat('blanket', { color: 0x3d6db5, roughness: 0.95 }), 0.5, 0.47, 2.75);
-    box(g, 0.6, 0.12, 0.35, mat('pillow', { color: 0xffffff, roughness: 0.95 }), 0.5, 0.48, 1.75);
-    box(g, 1.0, 0.75, 0.05, wood, 0.5, 0, 1.5);
+    const put = (type, x, z, ry = 0) => { const f = instance('furn:' + type, () => furniture(type), { lod: false }); f.position.set(x, 0, z); f.rotation.y = ry; g.add(f); return f; };
+    put('bed', 0.5, 2.5);
     B.blocked.push(blk(0, 1.5, 1.0, 3.5));
-    // Kleiderschrank
-    box(g, 0.6, 2.0, 1.0, mat('wardrobe', { color: 0xe8e2d6, roughness: 0.6 }), 0.3, 0, 0.5);
-    box(g, 0.01, 1.9, 0.01, M.alu(), 0.6, 0.05, 0.5);
+    put('wardrobe', 0.3, 0.5);
     B.blocked.push(blk(0, 0, 0.6, 1.0));
-    // Schreibtisch
-    const desk = mat('desk', { color: 0xd8c3a0, roughness: 0.55 });
-    box(g, 1.5, 0.04, 0.5, desk, 2.75, 0.72, 0.25);
-    for (const x of [2.05, 3.45]) box(g, 0.04, 0.72, 0.46, desk, x, 0, 0.25);
+    put('desk', 2.75, 0.25);
     // Monitor mit Mining-Konsole
     const scrC = document.createElement('canvas'); scrC.width = 512; scrC.height = 288; const scr = new THREE.CanvasTexture(scrC); scr.colorSpace = THREE.SRGBColorSpace;
     B.screens.push({ canvas: scrC, tex: scr, kind: 'pc' });
-    box(g, 0.5, 0.32, 0.03, M.black(), 2.6, 0.92, 0.12);
-    const sm = new THREE.Mesh(new THREE.PlaneGeometry(0.46, 0.27), new THREE.MeshStandardMaterial({ map: scr, emissive: 0xffffff, emissiveMap: scr, emissiveIntensity: 0.9, roughness: 0.3 })); sm.position.set(2.6, 1.08, 0.136); g.add(sm);
-    box(g, 0.06, 0.18, 0.06, M.black(), 2.6, 0.76, 0.1);
-    box(g, 0.42, 0.02, 0.14, M.black(), 2.6, 0.76, 0.33); box(g, 0.06, 0.02, 0.1, M.black(), 2.95, 0.76, 0.33);
-    box(g, 0.1, 0.25, 0.1, mat('mug', { color: 0xc23b3b, roughness: 0.4 }), 3.25, 0.76, 0.2);
+    put('monitor', 2.6, 0.14).position.y = 0.74;
+    const sm = new THREE.Mesh(new THREE.PlaneGeometry(0.49, 0.285), new THREE.MeshStandardMaterial({ map: scr, emissive: 0xffffff, emissiveMap: scr, emissiveIntensity: 0.9, roughness: 0.25 })); sm.position.set(2.6, 0.74 + 0.32, 0.152); g.add(sm);
     B.blocked.push(blk(2.0, 0, 3.5, 0.5));
     // Stuhl
-    const ch = new THREE.Group(); ch.position.set(2.75, 0, 0.78); g.add(ch);
-    cyl(ch, 0.25, 0.25, 0.03, M.black(), 0, 0.03, 0, 10); cyl(ch, 0.025, 0.025, 0.42, M.alu(), 0, 0.24, 0, 8);
-    box(ch, 0.46, 0.08, 0.46, mat('chairFab', { color: 0x262a33, roughness: 0.9 }), 0, 0.45, 0); box(ch, 0.46, 0.55, 0.07, mat('chairFab', { color: 0x262a33, roughness: 0.9 }), 0, 0.53, 0.22);
+    put('chair', 2.75, 0.78, 0.15);
     B.blocked.push(blk(2.5, 0.5, 3.0, 1.0));
     // Teppich
     const rug = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.3), mat('rug', { map: TEX.carpet([1, 1], 350), roughness: 1 })); rug.rotation.x = -Math.PI / 2; rug.position.set(2.0, 0.005, 2.3); rug.receiveShadow = true; g.add(rug);
     // Regal rechts hinten an der Wand
-    box(g, 0.45, 1.9, 0.32, desk, 3.75, 0, 0.16);
-    for (const y of [0.4, 0.8, 1.2, 1.6]) box(g, 0.43, 0.02, 0.3, mat('shelfWood', { color: 0xbfa77f, roughness: 0.6 }), 3.75, y, 0.17);
-    for (let i = 0; i < 12; i++) box(g, 0.035, 0.24, 0.2, mat('book' + (i % 3), { color: [0xa33, 0x37a, 0x3a5][i % 3], roughness: 0.8 }), 3.58 + (i % 6) * 0.06, i < 6 ? 0.82 : 1.22, 0.18);
+    put('bookshelf', 3.75, 0.16);
     B.blocked.push(blk(3.5, 0, 4.0, 0.5));
     B.lights.push({ pos: [2.0, 2.4, 1.8], color: 0xffd7a0, intensity: 3.5, dist: 8 });
     B.outside = 'town';
