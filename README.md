@@ -63,6 +63,8 @@ Ein-Datei-Version neu bauen: `npm run build:single`.
 * **Wetter & Welt:** echte Hitzewellen (2015–2025) heizen die Räume auf, Schnee im Winter, Polarlicht am Fjord.
 * **Solaranlagen (☀️):** pro Standort ausbaubar, saisonaler Ertrag wie in Deutschland, als Modulfeld in 3D.
 * **Bankkredit:** schneller wachsen mit historischen Zinsen – mit dem Risiko von 2022.
+* **Feedback:** schwebende Ertrags-Einblendungen über laufenden Geräten, Kurs-Alarme bei starken Bewegungen,
+  Rangliste mit Hashrate-Kurve gegen das Netz und „Dein Weg" mit allen Meilensteinen.
 * **Wärmebild (H):** zeigt Hitzequellen und Kühlbereiche wie die Overlays im Vorbild.
 * **3D:** Alle Modelle prozedural im Code gebaut (keine fremden Assets, keine Logos), Tag/Nacht,
   Bloom-LEDs, Wände blenden sich zur Kamera aus, Rundgang-Modus in Ego-Perspektive.
@@ -72,11 +74,13 @@ Ein-Datei-Version neu bauen: `npm run build:single`.
 | Eingabe | Aktion |
 |---|---|
 | Linksklick | Objekt auswählen / bauen |
+| Doppelklick | Auf Gerät heranzoomen |
 | Rechts ziehen | Kamera drehen |
 | Mitte ziehen | Kamera schieben |
 | Mausrad | Zoom |
 | WASD / Pfeile, Q/E | Kamera bewegen / drehen |
 | R | Beim Bauen drehen |
+| H | Wärmebild |
 | Shift | Mehrfach bauen |
 | Leertaste, 1–4 | Pause, Tempo |
 | F | Rundgang (Ego-Perspektive) |
