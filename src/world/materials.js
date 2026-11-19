@@ -39,9 +39,9 @@ export const TEX = {
     g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(0, 0, w, 2); g.fillRect(0, 0, 2, h);
   }, { repeat: rep }),
   tiles: (rep) => canvasTex('tiles', 256, 256, (g, w, h) => {
-    g.fillStyle = '#c9ced6'; g.fillRect(0, 0, w, h);
-    g.fillStyle = '#9aa1ab'; g.fillRect(0, 0, w, 4); g.fillRect(0, 0, 4, h);
-    speckle(g, w, h, 800, ['rgba(0,0,0,0.05)', 'rgba(255,255,255,0.2)']);
+    g.fillStyle = '#b3b9c2'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#878f9a'; g.fillRect(0, 0, w, 4); g.fillRect(0, 0, 4, h);
+    speckle(g, w, h, 800, ['rgba(0,0,0,0.05)', 'rgba(255,255,255,0.15)']);
   }, { repeat: rep }),
   perfTile: (rep) => canvasTex('perftile', 256, 256, (g, w, h) => {
     g.fillStyle = '#c9ced6'; g.fillRect(0, 0, w, h);

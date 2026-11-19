@@ -190,7 +190,9 @@ export function buildHolder(type, items = []) {
     box(root, W - 0.03, 0.06, 0.005, M.ledBlue(), 0, H - 0.1, D / 2 + 0.008);
     const levels = [0.12, 0.6, 1.08, 1.56];
     for (const y of levels) box(root, W - 0.05, 0.012, D - 0.05, M.steel(), 0, y - 0.012, 0);
-    items.forEach((it, i) => { const d = PLACEABLE[it.id]; const lv = Math.floor(i / 3), col = i % 3; if (lv > 3) return; const m = buildDevice(d.look, root); if (d.look === 'hydro') { m.position.set(0, levels[lv] + col * 0.12, 0); } else m.position.set(-0.18 + col * 0.18, levels[lv], 0); });
+    items.forEach((it, i) => { const d = PLACEABLE[it.id]; const lv = Math.floor(i / 3), col = i % 3; if (lv > 3) return; const m = buildDevice(d.look, root); if (d.look === 'hydro') { m.position.set(0, levels[lv] + col * 0.12, 0); } else m.position.set(-0.18 + col * 0.18, levels[lv], 0);
+      box(root, 0.025, 0.012, 0.006, i % 2 ? M.ledGreen() : M.ledGreen2(), -0.18 + col * 0.18, levels[lv] + 0.3, D / 2 + 0.012); });
+    if (items.length) box(root, 0.08, 0.03, 0.006, M.ledBlue(), 0.2, H - 0.25, D / 2 + 0.012);
   } else if (type === 'container') {
     const L = 12.2, W = 2.44, H = 2.9;
     const shell = mat('containerShell', { color: 0x2f6f73, roughness: 0.55, metalness: 0.5 });

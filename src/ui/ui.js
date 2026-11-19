@@ -26,6 +26,7 @@ export class UI {
     game.on('message', (m) => { this.toast(`${FACE[m.from] || '💬'} <b>${esc(m.from)}:</b> ${esc(m.text.length > 90 ? m.text.slice(0, 88) + '…' : m.text)}`, 'msg', 7000); this.dock(); });
     game.on('news', () => this.ticker());
     game.on('milestone', (t, sub) => this.milestone(t, sub));
+    game.on('won', () => this.ending());
     game.on('release', (it, text) => { this.toast(`🆕 ${esc(text)}`, 'info', 6000); this.ticker(); this.lastBuildDay = -99; });
     game.on('update', () => this.onDay());
     game.on('refresh', () => this.refresh());
@@ -432,6 +433,20 @@ export class UI {
     const nwc = h('<div class="sec"><h4>Vermögensverlauf (log)</h4><canvas class="nwchart" width="1100" height="260"></canvas></div>'); st.append(nwc); requestAnimationFrame(() => this.nwChart(nwc.querySelector('canvas')));
     st.append(h(`<div class="sec"><h4>Bilanz pro Tag</h4><div class="kv"><div class="k">Mining-Ertrag</div><div class="v pos">${fmtUSD(p.rev)}</div><div class="k">Strom, Miete, Löhne</div><div class="v neg">−${fmtUSD(p.cost)}</div><div class="k">Gesamt geschürft</div><div class="v">${fmtUSD(s.stats.minedUSD)}</div><div class="k">Stromkosten bisher</div><div class="v">${fmtUSD(s.stats.elec)}</div><div class="k">In Hardware investiert</div><div class="v">${fmtUSD(s.stats.spentHW)}</div></div></div>`));
     this.openModal(body, '', 'company');
+  }
+
+  ending() {
+    const g = this.g, s = g.s; const sha = g.algoHash('sha256'), net = g.netHash('BTC');
+    const years = ((s.day - toDay('2010-10-01')) / 365).toFixed(1);
+    const devs = s.unlocked.reduce((n, id) => n + s.fac[id].objects.reduce((k, o) => k + (o.items ? o.items.length : 1), 0), 0);
+    const body = h(`<div class="story" style="text-align:center"><div class="ch">Finale</div>
+      <div style="font-size:40px;font-weight:900;margin:6px 0">🏆 MONOLITH überholt!</div>
+      <p>Vor ${years} Jahren stand ein alter PC neben deinem Bett. Heute rechnet Hashwerk mit <b>${fmtHash(sha)}</b> – das sind <b>${((sha / net) * 100).toPrecision(3)} %</b> aller Bitcoin-Blöcke weltweit.</p>
+      <div class="kv" style="max-width:420px;margin:14px auto;text-align:left"><div class="k">Vermögen</div><div class="v">${fmtUSD(g.netWorth())}</div><div class="k">Geräte</div><div class="v">${devs.toLocaleString('de-DE')}</div><div class="k">Standorte</div><div class="v">${s.unlocked.length}</div><div class="k">Insgesamt geschürft</div><div class="v">${fmtUSD(s.stats.minedUSD)}</div><div class="k">Stromkosten</div><div class="v">${fmtUSD(s.stats.elec)}</div></div>
+      <p style="color:#94a0b2">Papa hat den Laden übrigens behalten. Er repariert immer noch Radios – aus Spaß.</p>
+      <div class="row" style="justify-content:center"><button class="btn primary big">Endlos weiterspielen</button></div></div>`);
+    body.querySelector('button').onclick = () => this.closeModal();
+    this.audio?.fanfare(); this.openModal(body, 'narrow', 'story');
   }
 
   techs() {
