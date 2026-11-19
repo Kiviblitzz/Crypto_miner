@@ -297,10 +297,10 @@ export class World {
   }
   updateInstall(dt) {
     const a = this.install; if (!a) return;
-    a.t += dt; const k = Math.min(1, a.t / 0.38), c1 = 1.70158, c3 = c1 + 1, eb = 1 + c3 * Math.pow(k - 1, 3) + c1 * Math.pow(k - 1, 2);
-    a.part.position.set((1 - eb) * 0.18, (1 - k) * (1 - k) * 0.03, 0);
+    a.t += dt; const k = Math.min(1, a.t / 0.48), c1 = 1.70158, c3 = c1 + 1, eb = 1 + c3 * Math.pow(k - 1, 3) + c1 * Math.pow(k - 1, 2);
+    a.part.position.set((1 - eb) * 0.24, (1 - k) * (1 - k) * 0.03, 0);
     if (k >= 1 && !a.snapped) { a.snapped = true; this.onSnap?.(a.uid); }
-    if (a.t > 0.55) { this.install = null; const e = this.entries.get(a.uid); if (e) e.key = null; this.syncObjects(); if (this.selected === a.uid) this.refreshSelBox(); this.onInstalled?.(a.uid); }
+    if (a.t > 0.66) { this.install = null; const e = this.entries.get(a.uid); if (e) e.key = null; this.syncObjects(); if (this.selected === a.uid) this.refreshSelBox(); this.onInstalled?.(a.uid); }
   }
   // Halbtransparente Vorschau: hier kommt das Teil hin
   ghostPart(uid, type, id) { this.ghostSpec = uid && type && id ? { uid, type, id } : null; this.applyGhost(); }
@@ -311,7 +311,10 @@ export class World {
     if (sp.type === 'gpu') parts.gpus.push(sp.id); else parts[sp.type] = sp.id;
     const g = rigPartModel({ ...e.obj, parts }, sp.type);
     this.ghostMat ||= new THREE.MeshBasicMaterial({ color: 0xffb547, transparent: true, opacity: 0.3, depthWrite: false });
-    g.traverse((m) => { if (m.isMesh) { m.material = this.ghostMat; m.castShadow = false; m.raycast = () => {}; } });
+    this.ghostLine ||= new THREE.LineBasicMaterial({ color: 0xffd08a, transparent: true, opacity: 0.65, depthWrite: false });
+    const edges = [];
+    g.traverse((m) => { if (m.isMesh) { m.material = this.ghostMat; m.castShadow = false; m.raycast = () => {}; if (m.geometry.attributes.position.count < 4000) { const l = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, 35), this.ghostLine); l.raycast = () => {}; edges.push([m, l]); } } });
+    for (const [m, l] of edges) m.add(l);
     this.ghost = g; e.group.add(g);
   }
   // Weltpunkt → Bildschirmposition (für Hinweise am Objekt)
@@ -584,7 +587,7 @@ export class World {
       cam.position.copy(tgt).addScaledVector(dir, dist); cam.lookAt(tgt); cam.near = dist / 50; cam.far = dist * 4; cam.updateProjectionMatrix(); cam.updateMatrixWorld();
       let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const q of corners) { const v = q.clone().project(cam); x0 = Math.min(x0, v.x); x1 = Math.max(x1, v.x); y0 = Math.min(y0, v.y); y1 = Math.max(y1, v.y); }
       ext = [x0, x1, y0, y1];
-      const sx = (x1 - x0) / 2 / 0.86, sy = (y1 - y0) / 2 / 0.78, sc = Math.max(sx, sy);
+      const sx = (x1 - x0) / 2 / 0.86, sy = (y1 - y0) / 2 / 0.82, sc = Math.max(sx, sy);
       const want = new THREE.Vector3((x0 + x1) / 2, y0 + 0.8 * sc, 0.5);
       const off = want.unproject(cam).sub(new THREE.Vector3(0, 0, 0.5).unproject(cam));
       tgt.add(off); dist *= 0.35 + 0.65 * sc;
@@ -935,7 +938,7 @@ export class World {
         const f = this.focus, k = this.focusK * this.focusK * (3 - 2 * this.focusK);
         if (f) { if (!this.fc) this.fc = { pos: f.pos.clone(), q: f.q.clone(), light: f.light.clone() }; const a = 1 - Math.exp(-dt * 3.2); this.fc.pos.lerp(f.pos, a); this.fc.q.slerp(f.q, a); this.fc.light.lerp(f.light, a); }
         this.camera.position.lerp(this.fc.pos, k); this.camera.quaternion.slerp(this.fc.q, k);
-        if (this.focusLight) { this.focusLight.position.copy(this.fc.light); this.focusLight.intensity = 0.55 * k; }
+        if (this.focusLight) { this.focusLight.position.copy(this.fc.light); this.focusLight.intensity = 0.85 * k; }
       } else { this.fc = null; if (this.focusLight) this.focusLight.intensity = 0; }
     }
     this.vm.update(dt, { moving: this.player.moving && this.mode === 'play', bob: this.player.bob, placing: !!this.placing, visible: this.mode === 'play' || this.mode === 'ui', uiOpen: this.mode === 'ui' });
@@ -944,7 +947,7 @@ export class World {
     if (this.mode === 'title' || this.visFrac == null) this.visFrac = s.frac;
     else { const df = (s.frac - this.visFrac + 1) % 1; this.visFrac = (this.visFrac + Math.min(df, dt / 90)) % 1; }
     this.updateDaylight(this.visFrac);
-    this.updatePeople(dt); this.updateSmoke(dt); this.updateWeather(dt); this.updatePopups(dt); this.updateInstall(dt); this.updateLoose(dt); if (this.ghostMat) this.ghostMat.opacity = 0.15 + 0.07 * Math.sin(this.t * 4);
+    this.updatePeople(dt); this.updateSmoke(dt); this.updateWeather(dt); this.updatePopups(dt); this.updateInstall(dt); this.updateLoose(dt); if (this.ghostMat) { this.ghostMat.opacity = 0.12 + 0.04 * Math.sin(this.t * 4); this.ghostLine.opacity = 0.5 + 0.2 * Math.sin(this.t * 4); }
     // Lüfter & LEDs
     const fanSpeed = 28 * dt;
     for (const e of this.entries.values()) {

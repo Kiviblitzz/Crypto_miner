@@ -1282,3 +1282,22 @@ body:has(#pause:not(.hidden)) #top, body:has(#pause:not(.hidden)) #goals, body:h
 .pause-set .ps-s { flex: 1; display: flex; align-items: center; gap: 8px; font: 600 14px var(--font-fun); color: var(--text2); }
 .pause-set input[type=range] { flex: 1; accent-color: #ffb000; }
 .pause-note { font: 600 12px var(--font); color: var(--dim); text-align: center; margin-top: 2px; }
+/* Runde 7 (GPT) */
+body.aiming #crosshair { width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; background: #ffd25c; box-shadow: 0 0 0 2px rgba(30,18,8,.85); }
+#goals .goal > div:last-child { align-items: center !important; }
+#goals .goal .bag { align-items: center !important; }
+#goals .goal .bag i { display: grid !important; place-items: center; width: 24px !important; height: 24px !important; line-height: 0; }
+#goals .goal .bag i svg { display: block; }
+#goals .goal .bag i.empty { opacity: 1 !important; color: #bca890 !important; background: rgba(255,236,210,.07) !important; }
+.pcb-live b { font-size: 36px !important; }
+.pcb-parts summary { cursor: pointer; list-style: none; font: 700 13px var(--font); color: var(--dim); padding: 8px 4px; }
+.pcb-parts summary::before { content: '▸ '; } .pcb-parts[open] summary::before { content: '▾ '; }
+.pcb-parts .pcb-step { margin-top: 8px; }
+.tiles .acts .btn.sellb b { font: 700 16px var(--font-fun); }
+.tiles .acts .btn.sellb small { font: 600 12px var(--font) !important; margin-top: 1px; }
+.skills .sk-row { font-size: 14px !important; }
+.skills .sk-learn { font-size: 13px !important; }
+#build .item .thumb { height: 144px !important; }
+#ps-sens { -webkit-appearance: none; appearance: none; height: 6px; border-radius: 999px; background: #5a4638; outline: none; }
+#ps-sens::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #ffb000; box-shadow: 0 2px 0 #a66313; cursor: pointer; }
+#ps-sens::-moz-range-thumb { width: 16px; height: 16px; border: 0; border-radius: 50%; background: #ffb000; cursor: pointer; }

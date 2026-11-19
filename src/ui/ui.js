@@ -19,9 +19,9 @@ const PART_ICON = {
       psu: '<rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="10" cy="12" r="4"/><path d="M10 9.5v5M7.5 12h5M17.5 9v6"/>' };
 const PNAME = { mobo: 'Mainboard', cpu: 'Prozessor', gpu: 'Grafikkarte', psu: 'Netzteil' };
 const SKILL = {
-  hw: { name: 'Schrauben', learn: 'Teile einbauen, Geräte aufstellen', icon: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5a1.8 1.8 0 0 0 2.5 2.5l5.8-5.8a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>', now: (lv) => (lv > 1 ? `Hardware ${4 * (lv - 1)} % günstiger` : 'Noch kein Bonus'), next: (lv) => `Hardware ${4 * lv} % günstiger` },
-  mining: { name: 'Mining', learn: 'Jeder Tag, an dem dein PC schürft', icon: '<path d="M14.5 4.5c2.8-.6 5.4.7 6.5 3-2.2-.9-4.4-.8-6.2.2"/><path d="M14.5 4.5c-2.6 1.3-4 3.7-4 6.3 1-1.8 2.7-3 4.8-3.6"/><path d="M12.6 9.8 3.5 19a1.6 1.6 0 0 0 2.3 2.3l9.2-9.2"/>', now: (lv) => (lv > 1 ? `+${4 * (lv - 1)} % Ertrag` : 'Noch kein Bonus'), next: (lv) => `+${4 * lv} % Ertrag` },
-  trade: { name: 'Handel', learn: 'Coins verkaufen', icon: '<circle cx="9" cy="9" r="5.5"/><path d="M14.6 8.8a5.5 5.5 0 1 1-5.8 5.8"/><path d="M9 6.8v4.4M7.2 9h3.6"/>', now: (lv) => `Gebühr ${[4, 3, 2, 1, 0.5][lv - 1].toLocaleString('de-DE')} %`, next: (lv) => `Gebühr ${[3, 2, 1, 0.5][lv - 1]?.toLocaleString('de-DE') ?? '–'} %` },
+  hw: { name: 'Schrauben', learn: 'Teile einbauen, Geräte aufstellen', short: 'Einbauen', icon: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5a1.8 1.8 0 0 0 2.5 2.5l5.8-5.8a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>', now: (lv) => (lv > 1 ? `Hardware ${4 * (lv - 1)} % günstiger` : 'Noch kein Bonus'), next: (lv) => `Hardware ${4 * lv} % günstiger` },
+  mining: { name: 'Mining', learn: 'Jeder Tag, an dem dein PC schürft', short: 'Schürfen', icon: '<path d="M14.5 4.5c2.8-.6 5.4.7 6.5 3-2.2-.9-4.4-.8-6.2.2"/><path d="M14.5 4.5c-2.6 1.3-4 3.7-4 6.3 1-1.8 2.7-3 4.8-3.6"/><path d="M12.6 9.8 3.5 19a1.6 1.6 0 0 0 2.3 2.3l9.2-9.2"/>', now: (lv) => (lv > 1 ? `+${4 * (lv - 1)} % Ertrag` : 'Noch kein Bonus'), next: (lv) => `+${4 * lv} % Ertrag` },
+  trade: { name: 'Handel', learn: 'Coins verkaufen', short: 'Verkaufen', icon: '<circle cx="9" cy="9" r="5.5"/><path d="M14.6 8.8a5.5 5.5 0 1 1-5.8 5.8"/><path d="M9 6.8v4.4M7.2 9h3.6"/>', now: (lv) => `Gebühr ${[4, 3, 2, 1, 0.5][lv - 1].toLocaleString('de-DE')} %`, next: (lv) => `Gebühr ${[3, 2, 1, 0.5][lv - 1]?.toLocaleString('de-DE') ?? '–'} %` },
 };
 const skillSvg = (k, size = 22) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${SKILL[k].icon}</svg>`;
 const partSvg = (t, size = 22) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${PART_ICON[t]}</svg>`;
@@ -34,14 +34,14 @@ export class UI {
     world.onHeat = () => this.sites();
     world.onEmpire = (on) => { this.dock(); this.hint(on ? 'Ziehen = drehen · Rad = Zoom · K = zurück' : null); document.body.classList.toggle('empire', on); };
     world.onPlacing = (on) => { this.placingHint = on; this.prompt(null); this.hint(on ? 'Klick = setzen · R = drehen · Rechtsklick = abbrechen' : null); };
-    world.onAim = (aim) => this.prompt(aim);
+    world.onAim = (aim) => { document.body.classList.toggle('aiming', !!aim); this.prompt(aim); };
     world.onInteract = (uid) => this.openInspector(uid);
     world.onDoor = (door) => this.travel(door);
     world.onProp = (p) => this.useProp(p);
     world.onSnap = () => this.audio?.install?.();
     world.onNoAim = () => { // E ohne Ziel: das markierte Ziel in Reichweite benutzen
       const t = this.objTarget, g = this.g; if (!t) return;
-      const lt = Object.keys(g.s.loose || {}).find((k) => t.label === `${PNAME[k]} aufheben`); if (lt) { world.onLoose(lt); return; }
+      const lt = Object.keys(g.s.loose || {}).find((k) => t.label === PNAME[k]); if (lt) { world.onLoose(lt); return; }
       const pc = g.facObjects(g.s.current).find((o) => o.type === 'tower'); if (pc && /einbauen|einschalten/i.test(t.label)) { this.openInspector(pc.uid); return; }
       const pr = world.room?.props?.find((p) => p.action === 'market'); if (pr && t.label === 'Börse') this.useProp(pr);
     };
@@ -153,9 +153,9 @@ export class UI {
     if (s.chapter === 0 && w.mode === 'play' && !this.paused && s.current === 'kinder') {
       const pc = g.facObjects('kinder').find((o) => o.type === 'tower');
       const spots = w.room?.looseSpots || {}, lying = Object.keys(s.loose || {}).filter((t) => spots[t]);
-      if (pc && !s.flags.miningStarted && lying.length) { const cp = w.camera.position, d = (t) => Math.hypot(spots[t][0] - cp.x, spots[t][2] - cp.z) + (w.toScreen(spots[t][0], spots[t][1] + 0.1, spots[t][2]).on ? 0 : 100); const t = lying.sort((a, b) => d(a) - d(b))[0]; pos = [spots[t][0], spots[t][1] + 0.1, spots[t][2]]; label = `${PNAME[t]} aufheben`; aimed = w.aim?.loose === t; }
+      if (pc && !s.flags.miningStarted && lying.length) { const cp = w.camera.position, d = (t) => Math.hypot(spots[t][0] - cp.x, spots[t][2] - cp.z) + (w.toScreen(spots[t][0], spots[t][1] + 0.1, spots[t][2]).on ? 0 : 100); const t = lying.sort((a, b) => d(a) - d(b))[0]; pos = [spots[t][0], spots[t][1] + 0.1, spots[t][2]]; label = PNAME[t]; aimed = w.aim?.loose === t; }
       else if (pc && !s.flags.miningStarted) { pos = [pc.x, 0.78, pc.z]; label = g.pcReady(pc) ? 'PC einschalten' : 'Teile einbauen'; aimed = w.aim?.uid === pc.uid; }
-      else if (g.has('market') && !(s.stats.sold > 0)) { const pr = w.room?.props?.find((p) => p.action === 'market'); if (pr) { pos = [pr.c[0], pr.c[1] + 0.34, pr.c[2]]; label = 'Börse'; aimed = w.aim?.prop === pr; } }
+      else if (g.has('market') && !(s.stats.sold > 0)) { const pr = w.room?.props?.find((p) => p.action === 'market'); if (pr) { pos = [pr.c[0], pr.c[1] + 0.12, pr.c[2]]; label = 'Börse'; aimed = w.aim?.prop === pr; } }
     }
     const sp = pos && w.toScreen(...pos);
     this.objTarget = sp && sp.dist < 2.0 ? { label, pos } : null;
@@ -454,20 +454,21 @@ export class UI {
     setTimeout(() => this.w.ghostPart?.(o.uid, firstNext, s.invIds?.[firstNext]), 0);
     const sec = h(`<div class="pcb ${running ? 'running' : ''}"></div>`);
     if (running) sec.append(h(`<div class="pcb-live"><span class="lab">Schon geschürft</span><b id="pcb-live">Miner startet …</b><span class="sub">Dein PC arbeitet jetzt für dich.</span></div>`));
+    const partsBox = running ? h('<details class="pcb-parts"><summary>Verbaute Teile (4)</summary></details>') : null; if (partsBox) sec.append(partsBox);
     steps.forEach(([t, lab]) => {
-      const id = cur(t), it = id ? PART[id] : null, carried = s.inv?.includes(t), lying = s.loose?.[t];
+      const id = cur(t), snapping = this.installing && this.installingType === t, it = id ? PART[id] : null, carried = s.inv?.includes(t), lying = s.loose?.[t];
       const needMobo = !it && carried && (t === 'cpu' || t === 'gpu') && !p.mobo;
       const st = it ? 'done' : carried ? (needMobo ? 'wait' : t === firstNext ? 'next' : 'ready') : 'lying';
-      const sub = it ? esc(it.name) : carried ? (needMobo ? 'Erst das Mainboard einbauen' : 'In deiner Tasche') : lying ? `Liegt ${spots[t]?.[4] || 'im Zimmer'}` : '–';
-      const row = h(`<div class="pcb-step ${st === 'done' ? 'done' : st === 'next' ? 'next' : st === 'ready' ? 'ready' : 'locked'}"><span class="ic">${partSvg(t)}${it ? '<i class="tick"></i>' : ''}</span><div class="tx"><b>${lab}</b><span>${sub}</span></div>${st === 'next' || st === 'ready' ? `<button class="btn small ${st === 'next' ? 'primary' : ''}" ${this.installing ? 'disabled' : ''}>Einbauen</button>` : ''}</div>`);
+      const sub = snapping ? 'rastet ein …' : it ? esc(it.name) : carried ? (needMobo ? 'Erst das Mainboard einbauen' : 'In deiner Tasche') : lying ? `Liegt ${spots[t]?.[4] || 'im Zimmer'}` : '–';
+      const row = h(`<div class="pcb-step ${st === 'done' ? 'done' : st === 'next' ? 'next' : st === 'ready' ? 'ready' : 'locked'}"><span class="ic">${partSvg(t)}${it && !snapping ? '<i class="tick"></i>' : ''}</span><div class="tx"><b>${lab}</b><span>${sub}</span></div>${st === 'next' || st === 'ready' ? `<button class="btn small ${st === 'next' ? 'primary' : ''}" ${this.installing ? 'disabled' : ''}>Einbauen</button>` : ''}</div>`);
       const b = row.querySelector('button');
       if (b) { row.onmouseenter = b.onfocus = () => this.w.ghostPart?.(o.uid, t, s.invIds?.[t]); row.onmouseleave = b.onblur = () => this.w.ghostPart?.(o.uid, firstNext, s.invIds?.[firstNext]); }
       if (b) b.onclick = () => {
         if (this.installing || !g.installLoose(o.uid, t)) return;
-        this.installing = true; clearTimeout(this.instT); this.instT = setTimeout(() => { this.installing = false; }, 1600); this.w.ghostPart?.(null); this.inspect(o.uid); this.w.animateInstall?.(o.uid, t);
+        this.installing = true; this.installingType = t; clearTimeout(this.instT); this.instT = setTimeout(() => { this.installing = false; }, 1600); this.w.ghostPart?.(null); this.inspect(o.uid); this.w.animateInstall?.(o.uid, t);
         this.toast(g.pcReady(o) ? 'Alle Teile sind drin. Schalt deinen PC ein!' : `${lab} eingebaut`, 'good', 2600);
       };
-      sec.append(row);
+      (partsBox || sec).append(row);
     });
     if (!running) {
       // Live-Vorschau: was der PC mit den eingebauten Teilen schafft
@@ -706,7 +707,7 @@ export class UI {
       <div class="phone"><div class="ph-top"><div class="av"><svg viewBox="0 0 40 40" width="40" height="40"><circle cx="20" cy="20" r="20" fill="#ffcf8a"/><path d="M6 40c1-8 7-12 14-12s13 4 14 12z" fill="#e2574c"/><circle cx="20" cy="18" r="8.5" fill="#e7b48f"/><path d="M11 17c0-7 5-10 10-10 6 0 9 4 8 9-3-3-7-4-11-3-3 1-5 2-7 4z" fill="#2f241e"/><circle cx="17" cy="19" r="1.1" fill="#2f241e"/><circle cx="23" cy="19" r="1.1" fill="#2f241e"/><path d="M17 22.5q3 2.2 6 0" stroke="#8a4a3a" stroke-width="1.3" fill="none" stroke-linecap="round"/></svg></div><div><b>Deniz</b><span class="on">online</span></div></div>
         <div class="msg f-Deniz">${esc(txt)}</div>
         <div class="msg f-Deniz link"><div class="pc-line"><span class="pc-dot">₿</span><span>Bitcoin</span><b>${fmtUSD(p)}</b><canvas class="spark"></canvas></div></div>
-        <div class="msg f-Deniz">Die alten Teile liegen noch im Zimmer. Sammel alle vier ein, dann bauen wir den PC.</div>
+        <div class="msg f-Deniz">Deine alten PC-Teile liegen doch noch im Zimmer. Schau eins an und drück E.</div>
         <div class="row ip-act"><button class="btn primary big">Los geht’s</button></div>
       </div></div>`);
     if (m0) m0.read = true;
@@ -763,7 +764,7 @@ export class UI {
     const r1 = hold.querySelector('.acts');
     const fee = g.s.skills ? g.tradeFee() : 0.005, net = (f) => (w.ex + pend) * f * p * (1 - fee);
     hold.querySelector('.info').append(h(`<div class="fee">Gebühr ${(fee * 100).toLocaleString('de-DE')} % · Handel senkt sie</div>`));
-    for (const f of [0.25, 0.5, 1]) { const b = h(`<button class="btn sellb ${f === 1 ? 'primary' : ''}"><span>${f === 1 ? 'Alles verkaufen' : f * 100 + ' % verkaufen'}</span><small>+${fmtUSD(net(f))}</small></button>`); b.disabled = w.ex + pend <= 0; b.onclick = () => { if (pend) g.creditPending(c.id, this.pendingBtc()); const u = g.sell(c.id, f); this.audio?.cash(); this.flashCash(u); this.toast(`Verkauft für ${fmtUSD(u)}`, 'good', 2500); this.market(); }; r1.append(b); }
+    for (const f of [0.25, 0.5, 1]) { const b = h(`<button class="btn sellb ${f === 1 ? 'primary' : ''}"><b>+${fmtUSD(net(f))}</b><small>${f === 1 ? 'Alles verkaufen' : f * 100 + ' % verkaufen'}</small></button>`); b.disabled = w.ex + pend <= 0; b.onclick = () => { if (pend) g.creditPending(c.id, this.pendingBtc()); const u = g.sell(c.id, f); this.audio?.cash(); this.flashCash(u); this.toast(`Verkauft für ${fmtUSD(u)}`, 'good', 2500); this.market(); }; r1.append(b); }
     if (g.has('cold')) { const ct = tile('Cold-Wallet', w.cold, 'cold'); const tc = h(`<button class="btn small">${w.cold > 0 && w.ex === 0 ? 'Auf Börse holen' : 'Einlagern'}</button>`); tc.onclick = () => { g.transfer(c.id, !(w.cold > 0 && w.ex === 0)); this.market(); }; ct.querySelector('.acts').append(tc); tiles.append(ct); }
     det.append(tiles);
     const r2 = h(`<div class="row" style="align-items:center"><span style="font-size:13px">Kaufen für</span><input type="number" min="0" step="100" value="${Math.max(0, Math.round(Math.min(s.cash, 1000)))}"/><span>$</span><button class="btn small primary">Kaufen</button></div>`);
@@ -1012,7 +1013,7 @@ export class UI {
     const list = body.querySelector('.sk-list');
     for (const k of ['hw', 'mining', 'trade']) {
       const x = s.skills[k] || 0, lv = g.skillLv(k), lo = SKILL_XP[lv - 1], hi = SKILL_XP[lv], pc = hi ? Math.round(((x - lo) / (hi - lo)) * 100) : 100;
-      list.append(h(`<div class="sk" data-skill="${k}"><div class="sk-ic">${skillSvg(k, 26)}</div><div class="sk-main"><div class="sk-top"><b>${SKILL[k].name}</b><span class="sk-lv">Stufe ${lv}</span></div><div class="sk-bar"><div style="width:${pc}%"></div></div><div class="sk-row"><span>${SKILL[k].now(lv)}</span><span>${hi ? `${x - lo} / ${hi - lo} EP` : 'Höchste Stufe'}</span></div><div class="sk-learn">${hi ? `<div>Stufe ${lv + 1}: ${SKILL[k].next(lv)}</div>` : ''}<div>Lernst du durch: ${SKILL[k].learn}</div></div></div></div>`));
+      list.append(h(`<div class="sk" data-skill="${k}"><div class="sk-ic">${skillSvg(k, 26)}</div><div class="sk-main"><div class="sk-top"><b>${SKILL[k].name}</b><span class="sk-lv">Stufe ${lv}</span></div><div class="sk-bar"><div style="width:${pc}%"></div></div><div class="sk-row"><span>${SKILL[k].now(lv)}</span><span>${hi ? `${x - lo} / ${hi - lo} EP` : 'Höchste Stufe'}</span></div><div class="sk-learn">${hi ? `Nächste Stufe: ${SKILL[k].next(lv)} · ` : ''}EP durch ${SKILL[k].short}</div></div></div>`));
     }
     this.openModal(body, 'narrow', 'skills');
   }

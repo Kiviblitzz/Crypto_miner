@@ -92,7 +92,7 @@ function loop(now) {
     // Langsamer Blick durchs Kinderzimmer hinter dem Titelbild
     const t = now / 1000 * 0.12;
     world.camera.position.set(3.3, 1.6, 3.05);
-    world.controls.target.set(2.6 + Math.sin(t) * 0.7, 1.05 + Math.sin(t * 0.7) * 0.12, 0.4 + Math.cos(t) * 0.3);
+    world.controls.target.set(2.35 + Math.sin(t) * 0.4, 1.0 + Math.sin(t * 0.7) * 0.1, 0.4 + Math.cos(t) * 0.25);
     s.frac = 0.83;
   } else if (s.speed && document.getElementById('modal').classList.contains('hidden') && !ui.paused && (s.flags.miningStarted || !s.feat)) { // Zeit steht, bis der erste PC läuft
     s.frac += dt / (ui.showRun ? 60 : SEC_PER_DAY[s.speed]); if (ui.showRun) s.frac = Math.min(s.frac, 0.995); // Einschalt-Moment in Zeitlupe, ohne Tageswechsel
