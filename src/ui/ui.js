@@ -481,7 +481,7 @@ export class UI {
 
   ending() {
     const g = this.g, s = g.s; const sha = g.algoHash('sha256'), net = g.netHash('BTC');
-    const years = ((s.day - toDay('2010-10-01')) / 365).toFixed(1);
+    const years = ((s.day - toDay('2010-10-01')) / 365).toFixed(1).replace('.', ',');
     const devs = s.unlocked.reduce((n, id) => n + s.fac[id].objects.reduce((k, o) => k + (o.items ? o.items.length : 1), 0), 0);
     const body = h(`<div class="story" style="text-align:center"><div class="ch">Finale</div>
       <div style="font-size:40px;font-weight:900;margin:6px 0">🏆 MONOLITH überholt!</div>
