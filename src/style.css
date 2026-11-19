@@ -1471,3 +1471,21 @@ body:has(#inspector:not(.hidden)) #xpbox { bottom: 78px !important; }
   .ticket .tk-sum { padding-block: 6px !important; gap: 2px !important; }
   .ticket .tk-go { min-height: 44px !important; }
 }
+/* ===== Runde 13 ===== */
+/* Titel: Münze kleiner, Wortmarke kompakter, Block bündig über den Knöpfen */
+.logo-coin { width: 88px !important; height: 88px !important; }
+.logo-svg { width: 330px !important; }
+.logo-wrap { gap: 6px !important; }
+/* Bau-Katalog: Produkt füllt die Bühne */
+#build .item .thumb { height: 148px !important; padding: 4px !important; }
+/* Börse: Einstiegshilfe hat zwei Zeilen Platz */
+.ticket .tk-msg { min-height: 32px !important; line-height: 16px; }
+/* Start: Live-Zähler etwas zurück, damit die Hardware wirkt */
+.pcb-live b { font-size: 30px !important; }
+/* Sammelfortschritt: Tasche in eigener Zeile */
+#goals .goal:has(.bag) { border-radius: 16px !important; align-items: flex-start; }
+#goals .goal:has(.bag) > div:last-child { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; row-gap: 6px; }
+#goals .goal .bag { flex-basis: 100%; display: flex !important; gap: 6px; margin: 0 !important; }
+#goals .goal:has(.bag) .ck { margin-top: 2px; }
+#goals .goal .bag i .tk { width: 13px !important; height: 13px !important; right: -4px !important; bottom: -4px !important; }
+#goals .goal .bag i .tk::after { left: 4.3px !important; top: 2px !important; width: 3.4px !important; height: 6px !important; }

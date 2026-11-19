@@ -82,10 +82,10 @@ export function buildRoom(def) {
     });
     windowFrame(S.back, 1.0, 2.0, 0.9, 2.15, 0.15);
     // Tür (rechts, nahe vorne)
-    box(S.right, 0.86, 2.02, 0.04, mat('door', { color: 0xf4f1ea, roughness: 0.5 }), 3.03, 0, 0.02);
+    box(S.right, 0.86, 2.046, 0.04, mat('door', { color: 0xf4f1ea, roughness: 0.5 }), 3.03, 0, 0.02, 0, 0.004);
     for (const [y, h] of [[0.16, 0.78], [1.1, 0.78]]) box(S.right, 0.6, h, 0.012, mat('doorPanel', { color: 0xe6e1d6, roughness: 0.5 }), 3.03, y, 0.045, 0, 0.004);
-    for (const x of [2.575, 3.475]) box(S.right, 0.06, 2.1, 0.07, M.white(), x, 0, 0.035);
-    box(S.right, 0.96, 0.06, 0.07, M.white(), 3.025, 2.05, 0.035);
+    for (const x of [2.575, 3.475]) box(S.right, 0.06, 2.112, 0.07, M.white(), x, 0, 0.035, 0, 0.006);
+    box(S.right, 0.96, 0.07, 0.07, M.white(), 3.025, 2.042, 0.035, 0, 0.006);
     cyl(S.right, 0.026, 0.026, 0.012, X.chrome(), 3.36, 1.0, 0.046, 20, 'z');
     box(S.right, 0.13, 0.02, 0.02, X.chrome(), 3.31, 0.99, 0.07, 0, 0.008);
     cyl(S.right, 0.008, 0.008, 0.03, X.chrome(), 3.36, 1.0, 0.06, 10, 'z');
@@ -157,9 +157,31 @@ export function buildRoom(def) {
     cyl(g, 0.05, 0.05, 0.9, M.copper(), 0.3, 1.95, 4.4, 10);
     B.blocked.push(blk(0, 4.0, 0.7, 5.0));
     // Treppe
-    const st = mat('stairs', { color: 0x9c8f7c, roughness: 0.8 });
-    for (let i = 0; i < 8; i++) box(g, 1.2, 0.3 * (i + 1), 0.25, st, 6.4, 0, 1.9 - i * 0.25);
-    B.blocked.push(blk(5.8, 0, 7.0, 2.0));
+    {
+      const N = 10, rise = h / N, run = 0.22, z0 = N * run, x0 = 5.8, W = 1.2;
+      const prof = new THREE.Shape(); prof.moveTo(-z0, 0);
+      for (let i = 0; i < N; i++) { const zf = z0 - i * run; prof.lineTo(-zf, (i + 1) * rise); prof.lineTo(-(zf - run), (i + 1) * rise); }
+      prof.lineTo(0, 0); prof.lineTo(-z0, 0);
+      const body = new THREE.Mesh(new THREE.ExtrudeGeometry(prof, { depth: W, bevelEnabled: false }), mat('stairConcrete', { map: TEX.concrete([1, 1], 77), color: 0xb4ab9c, roughness: 0.95 }));
+      body.rotation.y = Math.PI / 2; body.position.set(x0, 0, 0); body.castShadow = body.receiveShadow = true; g.add(body);
+      const tread = mat('stairTread', { map: TEX.wood([1, 0.3]), color: 0xa27a52, roughness: 0.7 }), nose = mat('stairNose', { color: 0x6e5236, roughness: 0.6 });
+      for (let i = 0; i < N; i++) {
+        const zf = z0 - i * run, y = (i + 1) * rise;
+        const t = new THREE.Mesh(new THREE.BoxGeometry(W - 0.04, 0.03, run + 0.02), tread); t.position.set(x0 + W / 2 + 0.02, y + 0.015, zf - run / 2 + 0.01); t.castShadow = t.receiveShadow = true; g.add(t);
+        const n = new THREE.Mesh(new THREE.BoxGeometry(W - 0.04, 0.032, 0.025), nose); n.position.set(x0 + W / 2 + 0.02, y + 0.014, zf + 0.012); g.add(n);
+      }
+      // Geländer an der offenen Seite: Pfosten, Stäbe, Handlauf 85 cm über den Stufenkanten
+      const rail = mat('stairRail', { color: 0x5a4130, roughness: 0.55 }), bal = mat('stairBal', { color: 0x2b2622, roughness: 0.5, metalness: 0.4 });
+      const xr = x0 + 0.04, yAt = (z) => (z0 - z) / run * rise + 0.85;
+      const post = (z, top) => { const p = new THREE.Mesh(new THREE.BoxGeometry(0.06, top, 0.06), rail); p.position.set(xr, top / 2, z); p.castShadow = true; g.add(p); };
+      const zA = z0 - 0.05, zB = z0 - 6.2 * run; post(zA, yAt(zA) + 0.05); post(zB, Math.min(h - 0.02, yAt(zB) + 0.05));
+      const pA = new THREE.Vector3(xr, yAt(zA), zA), pB = new THREE.Vector3(xr, yAt(zB), zB), len = pA.distanceTo(pB);
+      const hr = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, len, 12), rail); hr.position.copy(pA).lerp(pB, 0.5); hr.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), pB.clone().sub(pA).normalize()); hr.castShadow = true; g.add(hr);
+      for (let i = 1; i < 6; i++) { const z = z0 - (i + 0.5) * run, y0 = (i + 1) * rise + 0.03, y1 = yAt(z) - 0.02; const b = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.009, y1 - y0, 8), bal); b.position.set(xr, (y0 + y1) / 2, z); g.add(b); }
+      // Treppenloch in der Decke
+      const hole = new THREE.Mesh(new THREE.PlaneGeometry(W, 1.3), new THREE.MeshBasicMaterial({ color: 0x0d0a08 })); hole.rotation.x = Math.PI / 2; hole.position.set(x0 + W / 2, h - 0.004, 0.65); g.add(hole);
+      B.blocked.push(blk(5.75, 0, 7.0, z0 + 0.05));
+    }
     // Regal mit Kartons
     box(g, 1.0, 1.6, 0.4, M.steel(), 3.0, 0, 0.2);
     for (let i = 0; i < 5; i++) box(g, 0.3, 0.25, 0.3, mat('carton', { color: 0xb08a5a, roughness: 0.9 }), 2.65 + (i % 3) * 0.35, 1.6 * (i < 3 ? 0.25 : 0.6), 0.2);
@@ -176,10 +198,18 @@ export function buildRoom(def) {
     const fr = mat('bikeFrame', { color: 0x2266aa, roughness: 0.4, metalness: 0.6 });
     for (const [x, y, rz, l] of [[-0.12, 0.55, 0.9, 0.75], [0.25, 0.55, -0.6, 0.6], [0.05, 0.75, 0, 0.7]]) { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, l, 6), fr); b.position.set(x, y, 0); b.rotation.z = rz + Math.PI / 2 * (rz === 0 ? 1 : 0); bike.add(b); }
     B.blocked.push(blk(6.2, 2.8, 7.0, 4.4));
-    for (let i = 0; i < 3; i++) box(g, 0.55, 0.35, 0.4, mat('xmasBox' + i, { color: [0xa83232, 0x2f7d3a, 0xc9a227][i], roughness: 0.8 }), 4.6 + (i % 2) * 0.1, i * 0.35, 4.75);
+    // Aufbewahrungsboxen mit Deckel und beschriftetem Etikett
+    const labels = ['Weihnachten', 'Fotos', 'Kabel'];
+    for (let i = 0; i < 3; i++) {
+      const x = 4.6 + (i % 2) * 0.1, y = i * 0.36;
+      box(g, 0.55, 0.32, 0.4, mat('storeBox' + i, { color: [0x8c4a3e, 0x55705a, 0xa08850][i], roughness: 0.6 }), x, y, 4.75, 0, 0.02);
+      box(g, 0.58, 0.04, 0.43, mat('storeLid' + i, { color: [0x6e382f, 0x405745, 0x806b3e][i], roughness: 0.55 }), x, y + 0.32, 4.75, 0, 0.012);
+      const lab = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.08), new THREE.MeshStandardMaterial({ map: textTexture([{ text: labels[i], font: 'bold 44px "Comic Sans MS", cursive', color: '#2a2a2a' }], { w: 256, h: 96, bg: '#efe6cf' }), roughness: 0.9 }));
+      lab.position.set(x, y + 0.17, 4.75 - 0.202); lab.rotation.y = Math.PI; g.add(lab);
+    }
     B.blocked.push(blk(4.3, 4.5, 5.0, 5.0));
     B.outside = 'garden';
-    B.doors = [{ c: [6.4, 1.2, 1.0], s: [1.2, 2.4, 2.0], label: 'Kellertreppe' }];
+    B.doors = [{ c: [6.4, 1.2, 1.1], s: [1.2, 2.4, 2.2], label: 'Kellertreppe' }];
     B.spawn = { x: 5.2, z: 2.7, look: [2.0, 2.6] };
     // Alte PC-Teile im verstaubten Keller (Start)
     B.looseSpots = { mobo: [2.0, 0.405, 3.6, 0.4, 'auf einem Karton'], cpu: [0.32, 0.852, 1.3, 0.3, 'auf der Waschmaschine'], gpu: [1.3, 0.305, 4.45, 0.9, 'auf der Holzkiste'], psu: [4.25, 0.0, 0.48, -0.2, 'neben dem Regal'] };
@@ -371,10 +401,39 @@ function webTexture() {
   for (let r = 22; r < 250; r += 22 + r * 0.08) { g.beginPath(); for (let a = 0; a <= 8; a++) { const t = (a / 8) * Math.PI / 2, rr = r * (0.92 + 0.08 * Math.sin(a * 2.3)); const x = Math.cos(t) * rr, y = Math.sin(t) * rr; if (a) g.quadraticCurveTo(Math.cos(t - 0.1) * rr * 0.93, Math.sin(t - 0.1) * rr * 0.93, x, y); else g.moveTo(x, y); } g.stroke(); }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
+// Tuch über einem alten Sessel: Höhenfeld aus Sitz, Armlehnen und Lehne, weich geglättet,
+// mit Falten an den Seiten und einem welligen Saum am Boden
+function drapedSheet() {
+  const R = 72, SX = 1.04, SZ = 0.98, Hf = new Float32Array((R + 1) * (R + 1));
+  const chairH = (x, z) => {
+    const ax = Math.abs(x); if (ax > 0.42 || z < -0.4 || z > 0.37) return 0;
+    if (z < -0.2) return 0.98 - (ax > 0.3 ? (ax - 0.3) * 0.9 : 0) + (z + 0.2) * 0.4;
+    if (ax > 0.29) return 0.64;
+    return 0.47 - (z > 0.25 ? (z - 0.25) * 0.5 : 0);
+  };
+  for (let j = 0; j <= R; j++) for (let i = 0; i <= R; i++) Hf[j * (R + 1) + i] = chairH((i / R - 0.5) * SX, (j / R - 0.5) * SZ);
+  const tmp = new Float32Array(Hf.length);
+  for (let it = 0; it < 4; it++) {
+    for (let j = 0; j <= R; j++) for (let i = 0; i <= R; i++) { let s = 0, n = 0; for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const a = i + di, b = j + dj; if (a < 0 || b < 0 || a > R || b > R) continue; s += Hf[b * (R + 1) + a]; n++; } tmp[j * (R + 1) + i] = s / n; }
+    for (let k = 0; k < Hf.length; k++) Hf[k] = Math.max(tmp[k], it < 2 ? 0 : Hf[k] * 0.98);
+  }
+  const geo = new THREE.PlaneGeometry(SX, SZ, R, R); geo.rotateX(-Math.PI / 2);
+  const pos = geo.attributes.position;
+  for (let k = 0; k < pos.count; k++) {
+    const i = k % (R + 1), j = Math.floor(k / (R + 1)), x = pos.getX(k), z = pos.getZ(k), hgt = Hf[j * (R + 1) + i];
+    const ang = Math.atan2(z, x), slope = Math.min(1, Math.max(0, hgt) * 3) * (hgt < 0.4 ? 1 : 0.35);
+    const fold = (Math.sin(ang * 13 + 1.3) * 0.6 + Math.sin(ang * 7 - 0.4) * 0.4) * 0.035 * slope;
+    const r = Math.hypot(x, z), push = hgt < 0.03 ? 0.035 * Math.sin(ang * 5 + 1.7) + 0.02 * Math.sin(ang * 11) : 0;
+    const k2 = 1 + (fold + push) / Math.max(0.2, r);
+    pos.setXYZ(k, x * k2, Math.max(0.006, hgt + Math.sin(x * 23 + z * 17) * 0.006 + (hgt < 0.02 ? 0.004 * Math.sin(ang * 9) : 0)), z * k2);
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
 export function buildDustyClutter(def) {
   const g = new THREE.Group(), blocked = [], h = def.h;
   const carton = mat('cartonDusty', { color: 0xa88a62, roughness: 0.95 }), tape = mat('cartonTape', { color: 0xcdb98e, roughness: 0.7 });
-  const wood = mat('crateWood', { color: 0x8a6a48, roughness: 0.9 }), sheet = mat('dustSheet', { color: 0xd8d2c6, roughness: 1 });
+  const wood = mat('crateWood', { color: 0x8a6a48, roughness: 0.9 }), sheet = mat('dustSheet', { color: 0xcfc7b8, roughness: 1, side: THREE.DoubleSide });
   const box3 = (w, hh, d, m, x, y, z, ry = 0) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, hh, d), m); b.position.set(x, y + hh / 2, z); b.rotation.y = ry; b.castShadow = b.receiveShadow = true; g.add(b); return b; };
   const kart = (x, z, w, hh, d, ry = 0, y = 0) => { box3(w, hh, d, carton, x, y, z, ry); box3(w * 1.002, 0.004, 0.06, tape, x, y + hh, z, ry); blocked.push(blk(x - w / 2 - 0.05, z - d / 2 - 0.05, x + w / 2 + 0.05, z + d / 2 + 0.05)); };
   // Kartons (auf einem liegt das Mainboard), ein Stapel am Regal
@@ -384,11 +443,8 @@ export function buildDustyClutter(def) {
   box3(0.55, 0.3, 0.42, wood, 1.3, 0, 4.45, 0.08); for (const dy of [0.08, 0.2]) box3(0.56, 0.03, 0.43, mat('crateSlat', { color: 0x6f5238, roughness: 0.9 }), 1.3, dy, 4.45, 0.08);
   blocked.push(blk(0.95, 4.15, 1.65, 4.75));
   // Abgedeckter alter Sessel
-  const chair = new THREE.Group(); chair.position.set(3.35, 0, 4.25); chair.rotation.y = -0.5; g.add(chair);
-  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.45, 0.7), sheet); seat.position.y = 0.225; chair.add(seat);
-  const back = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.5, 0.18), sheet); back.position.set(0, 0.68, -0.28); back.rotation.x = -0.12; chair.add(back);
-  for (const sx of [-1, 1]) { const arm = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.2, 0.62), sheet); arm.position.set(sx * 0.33, 0.55, 0); chair.add(arm); }
-  const drape = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.52, 0.12, 16, 1, true), sheet); drape.position.y = 0.05; drape.scale.z = 0.85; chair.add(drape);
+  const chair = new THREE.Group(); chair.position.set(3.35, 0, 4.3); chair.rotation.y = 2.5; g.add(chair);
+  chair.add(new THREE.Mesh(drapedSheet(), sheet));
   chair.traverse((m) => { if (m.isMesh) { m.castShadow = m.receiveShadow = true; } });
   blocked.push(blk(2.85, 3.8, 3.85, 4.75));
   // Schmutzschleier unten an den Wänden und staubige Flecken am Boden
@@ -410,7 +466,7 @@ export function buildDustyClutter(def) {
   for (let i = 0; i < n; i++) pos.set([0.3 + Math.random() * (def.w - 0.6), 0.2 + Math.random() * (h - 0.4), 0.3 + Math.random() * (def.d - 0.6)], i * 3);
   const dg = new THREE.BufferGeometry(); dg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   const dc = document.createElement('canvas'); dc.width = dc.height = 32; const dg2 = dc.getContext('2d'); const rg = dg2.createRadialGradient(16, 16, 0, 16, 16, 16); rg.addColorStop(0, 'rgba(255,240,215,1)'); rg.addColorStop(1, 'rgba(255,240,215,0)'); dg2.fillStyle = rg; dg2.fillRect(0, 0, 32, 32);
-  const dust = new THREE.Points(dg, new THREE.PointsMaterial({ map: new THREE.CanvasTexture(dc), color: 0xffe4c0, size: 0.018, transparent: true, opacity: 0.6, depthWrite: false, blending: THREE.AdditiveBlending }));
+  const dust = new THREE.Points(dg, new THREE.PointsMaterial({ map: new THREE.CanvasTexture(dc), color: 0xffe4c0, size: 0.014, transparent: true, opacity: 0.45, depthWrite: false, blending: THREE.AdditiveBlending }));
   dust.raycast = () => {}; g.add(dust); g.userData.dust = dust;
   return { group: g, blocked };
 }

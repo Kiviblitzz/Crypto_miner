@@ -43,14 +43,14 @@ export class UI {
       const t = this.objTarget, g = this.g; if (!t) return;
       const lt = Object.keys(g.s.loose || {}).find((k) => t.label === PNAME[k]); if (lt) { world.onLoose(lt); return; }
       const pc = g.facObjects(g.s.current).find((o) => o.type === 'tower'); if (pc && t.label === 'Dein PC') { this.openInspector(pc.uid); return; }
-      const pr = world.room?.props?.find((p) => p.action === 'market'); if (pr && t.label === 'Börse') { this.useProp(pr); return; }
+      const pr = world.room?.props?.find((p) => p.action === 'market'); if (pr && (t.label === 'Börse' || t.label === 'Bitcoin verkaufen')) { this.useProp(pr); return; }
       if ((t.label === 'Keller' || t.label === 'Hoch in dein Zimmer') && world.room?.doors?.[0]) this.travel(world.room.doors[0]);
     };
     world.onInstalled = (uid) => { this.installing = false; const q = this.xpQ || []; this.xpQ = []; q.forEach(([k, n, lv]) => this.xpPop(k, n, lv)); if (this.inspUid === uid) this.inspect(uid); if (this.afterSnap) { this.toast(this.afterSnap, 'good', 2600); this.afterSnap = null; } };
     world.onLoose = (t) => { this.w.pickupFx(t); if (!this.g.s.loose?.[t]) return; this.toast(`${PNAME[t]} in der Tasche`, 'good', 2200); if (!this.g.pickUp(t)) return; this.lastPick = { t, at: performance.now() }; setTimeout(() => this.goals(), 1300); this.audio?.install?.(); this.goals(); };
     game.on('xp', (k, n, lv) => this.xpPop(k, n, lv));
     world.onIncome = () => { this.bumpWallet(); this.audio?.tick?.(); };
-    world.onLamp = (on) => this.toast(on ? 'Taschenlampe an' : 'Taschenlampe aus', 'info', 1500);
+    world.onLamp = (on) => { this.toast(on ? 'Taschenlampe an' : 'Taschenlampe aus', 'info', 1500); this.keysHint(); };
     world.onPause = () => this.pause(true);
     world.onCanvasClickInUI = () => this.resume();
     world.onPlaced = (o) => { const d = PLACEABLE[o.type]; if (d.kind === 'rig' || d.kind === 'holder') this.toast(`Anschauen und <kbd>E</kbd>: bestücken`, 'good', 5000); };
@@ -154,13 +154,13 @@ export class UI {
     const el = $('#objmark'); if (!el) return;
     const g = this.g, s = g.s, w = this.w; let pos = null, label = '', aimed = false;
     const inKeller = w.facId === 'keller' && this.visiting, door = w.room?.doors?.[0];
-    if (s.chapter === 0 && w.mode === 'play' && !this.paused && !s.flags.miningStarted && door && ((w.facId === 'kinder' && Object.keys(s.loose || {}).length) || (inKeller && !Object.keys(s.loose || {}).length))) { pos = [door.c[0] - 0.1, 1.55, door.c[2]]; label = inKeller ? 'Hoch in dein Zimmer' : 'Keller'; aimed = w.aim?.door === door; }
+    if (s.chapter === 0 && w.mode === 'play' && !this.paused && !s.flags.miningStarted && door && ((w.facId === 'kinder' && Object.keys(s.loose || {}).length) || (inKeller && !Object.keys(s.loose || {}).length))) { pos = inKeller ? [door.c[0] - 0.2, 0.75, door.c[2] + door.s[2] / 2 + 0.15] : [door.c[0] - 0.1, 1.55, door.c[2]]; label = inKeller ? 'Hoch in dein Zimmer' : 'Keller'; aimed = w.aim?.door === door; }
     else if (s.chapter === 0 && w.mode === 'play' && !this.paused && (w.facId === 'kinder' || inKeller)) {
       const pc = w.facId === 'kinder' ? g.facObjects('kinder').find((o) => o.type === 'tower') : { x: 0, z: 0, uid: -1 };
       const spots = w.room?.looseSpots || {}, lying = Object.keys(s.loose || {}).filter((t) => spots[t]);
       if (pc && !s.flags.miningStarted && lying.length) { const cp = w.camera.position, d = (t) => Math.hypot(spots[t][0] - cp.x, spots[t][2] - cp.z) + (w.toScreen(spots[t][0], spots[t][1] + 0.1, spots[t][2]).on ? 0 : 100); const keep = lying.includes(this.markLoose) && w.toScreen(spots[this.markLoose][0], spots[this.markLoose][1] + 0.1, spots[this.markLoose][2]).on; const t = keep ? this.markLoose : lying.sort((a, b) => d(a) - d(b))[0]; this.markLoose = w.markLoose = t; pos = [spots[t][0], spots[t][1] + 0.1, spots[t][2]]; label = PNAME[t]; aimed = w.aim?.loose === t; }
       else if (pc && pc.uid !== -1 && !s.flags.miningStarted) { pos = [pc.x, 0.78, pc.z]; label = 'Dein PC'; aimed = w.aim?.uid === pc.uid; }
-      else if (g.has('market') && !(s.stats.sold > 0)) { const pr = w.room?.props?.find((p) => p.action === 'market'); if (pr) { pos = [pr.c[0], pr.c[1] + 0.16, pr.c[2]]; label = 'Börse'; aimed = w.aim?.prop === pr; } }
+      else if (g.has('market') && !(s.stats.sold > 0)) { const pr = w.room?.props?.find((p) => p.action === 'market'); if (pr) { pos = [pr.c[0], pr.c[1] + 0.16, pr.c[2]]; label = 'Bitcoin verkaufen'; aimed = w.aim?.prop === pr; } }
     }
     const sp = pos && w.toScreen(...pos);
     this.objTarget = sp && sp.dist < 2.0 ? { label, pos } : null;
@@ -314,6 +314,7 @@ export class UI {
     const unread = g.s.messages.filter((m) => !m.read).length;
     const ks = [['build', 'B', 'Bauen'], ['market', 'M', 'Börse']].filter(([f]) => g.has(f));
     if (unread) ks.unshift(['phone', 'P', `Handy (${unread})`]);
+    if (this.w.facId === 'keller' && this.w.dusty) ks.unshift(['lamp', 'F', this.w.vm?.lampOn ? 'Lampe aus' : 'Taschenlampe']);
     el.innerHTML = ks.map(([, k, l]) => `<span><kbd>${k}</kbd>${l}</span>`).join('') + '<span><kbd>Esc</kbd>Menü</span>';
   }
   toggleBuild() {
@@ -362,7 +363,7 @@ export class UI {
     this.fade(); this.resume();
     setTimeout(() => {
       this.w.loadFacility(down ? 'keller' : this.g.s.current); this.visiting = down ? 'keller' : null;
-      document.body.classList.toggle('visiting', !!down); this.w.setMode('play'); this.goals(); this.sites();
+      document.body.classList.toggle('visiting', !!down); this.w.setMode('play'); this.goals(); this.sites(); this.keysHint();
       if (down) this.toast(this.w.vm?.lampOn ? 'Ganz schön staubig hier unten …' : 'Ganz schön dunkel hier unten. <kbd>F</kbd> schaltet die Taschenlampe an.', 'info', 4500);
     }, 160);
   }
@@ -811,7 +812,7 @@ export class UI {
         else { const usd = Math.min(s.cash, T.unit === 'BTC' ? coins * p / (1 - fee) : v); q = `${fmtIn(usd * (1 - fee) / p, 'BTC') || '0'} ${c.id}`; f = `−${fmtUSD(usd * fee)}`; t = fmtUSD(usd); }
       }
       tk.querySelector('.q').textContent = q; tk.querySelector('.f').textContent = f; tk.querySelector('.t').textContent = t;
-      msg.textContent = over ? (T.mode === 'sell' ? `So viel hast du nicht – höchstens ${fmtIn(floorIn(mx, T.unit), T.unit)} ${T.unit === 'BTC' ? c.id : '$'}.` : `Dafür reicht dein Geld nicht – höchstens ${fmtIn(floorIn(mx, T.unit), T.unit)} ${T.unit === 'BTC' ? c.id : '$'}.`) : (mx <= 0 ? (T.mode === 'sell' ? (s.stats.sold > 0 ? 'Alles verkauft – dein PC schürft schon weiter.' : 'Noch keine Bitcoin – dein PC schürft gerade.') : 'Kein Geld zum Kaufen da.') : '');
+      msg.textContent = over ? (T.mode === 'sell' ? `So viel hast du nicht – höchstens ${fmtIn(floorIn(mx, T.unit), T.unit)} ${T.unit === 'BTC' ? c.id : '$'}.` : `Dafür reicht dein Geld nicht – höchstens ${fmtIn(floorIn(mx, T.unit), T.unit)} ${T.unit === 'BTC' ? c.id : '$'}.`) : (mx <= 0 ? (T.mode === 'sell' ? (s.stats.sold > 0 ? 'Alles verkauft – dein PC schürft schon weiter.' : 'Noch keine Bitcoin – dein PC schürft gerade.') : 'Kein Geld zum Kaufen da.') : (v > 0 ? '' : 'Menge eingeben oder 25 %, 50 % oder 100 % wählen.'));
       msg.classList.toggle('bad', over); inp.closest('.field').classList.toggle('bad', over); tk.querySelector('.tk-sum').classList.toggle('bad', over);
       go.disabled = !ok; go.textContent = ok ? (T.mode === 'sell' ? `Verkaufen · ${t}` : `Kaufen · ${q}`) : (T.mode === 'sell' ? 'Verkaufen' : 'Kaufen');
       if (document.activeElement !== rng && !over) rng.value = mx > 0 ? Math.round(Math.min(1, v / mx) * 100) : 0;

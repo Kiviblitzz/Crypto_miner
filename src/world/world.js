@@ -124,7 +124,7 @@ export class World {
     this.composer.addPass(this.outline);
     // Leuchten für herumliegende Teile (nur am Anfang aktiv)
     this.glow = new OutlinePass(new THREE.Vector2(1280, 720), this.scene, this.camera);
-    Object.assign(this.glow, { edgeStrength: 2.4, edgeGlow: 0.45, edgeThickness: 1.2, pulsePeriod: 2.6, enabled: false });
+    Object.assign(this.glow, { edgeStrength: 1.6, edgeGlow: 0.25, edgeThickness: 1.2, pulsePeriod: 2.6, enabled: false });
     this.glow.visibleEdgeColor.set(0xffb547); this.glow.hiddenEdgeColor.set(0x5a3a10);
     this.composer.addPass(this.glow);
     { const vp = new RenderPass(this.vm.scene, this.camera); vp.clear = false; vp.clearDepth = true; this.composer.addPass(vp); }
@@ -339,7 +339,7 @@ export class World {
       this._lampD = hit ? hit.distance : 6;
     }
     this._lampDs = (this._lampDs ?? this._lampD) + (this._lampD - (this._lampDs ?? this._lampD)) * Math.min(1, dt * 6);
-    vm.lamp.intensity = 15 * Math.max(0.12, Math.min(1, Math.pow(this._lampDs / 2.6, 1.4)));
+    vm.lamp.intensity = 11 * Math.max(0.12, Math.min(1, Math.pow(this._lampDs / 3.2, 1.4)));
   }
   updateDusty(dt) {
     if (!this.dusty) return;
@@ -379,7 +379,7 @@ export class World {
   updateLoose(dt) {
     if (!this.looseItems) return;
     for (const [t, g] of Object.entries(this.looseItems)) {
-      const h = g.userData.haloMesh; if (h) h.material.opacity = g.userData.flying ? 0 :  (t === this.markLoose ? 0.3 : 0.1) + (t === this.markLoose ? 0.06 : 0.02) * Math.sin(this.t * 2.4 + g.position.x * 3);
+      const h = g.userData.haloMesh; if (h) h.material.opacity = g.userData.flying ? 0 :  (t === this.markLoose ? 0.2 : 0.08) + (t === this.markLoose ? 0.04 : 0.02) * Math.sin(this.t * 2.4 + g.position.x * 3);
       if (g.userData.flying) {
         const f = (g.userData.flying += dt), k = Math.min(1, f / 0.42), tgt = this.camera.position.clone().addScaledVector(this.camera.getWorldDirection(new THREE.Vector3()), 0.3).add(new THREE.Vector3(0, -0.45, 0));
         g.position.lerp(tgt, k * 0.35); g.scale.setScalar(Math.max(0.001, 1 - 1.6 * k)); g.rotation.y += dt * 6;
@@ -970,7 +970,7 @@ export class World {
         const f = this.focus, k = this.focusK * this.focusK * (3 - 2 * this.focusK);
         if (f) { if (!this.fc) this.fc = { pos: f.pos.clone(), q: f.q.clone(), light: f.light.clone() }; const a = 1 - Math.exp(-dt * 3.2); this.fc.pos.lerp(f.pos, a); this.fc.q.slerp(f.q, a); this.fc.light.lerp(f.light, a); }
         this.camera.position.lerp(this.fc.pos, k); this.camera.quaternion.slerp(this.fc.q, k);
-        if (this.focusLight) { this.focusLight.position.copy(this.fc.light); this.focusLight.intensity = 1.45 * k; }
+        if (this.focusLight) { this.focusLight.position.copy(this.fc.light); this.focusLight.intensity = 1.9 * k; }
         if (this.outline && !this.outline.pulsePeriod) this.outline.edgeStrength = 1.8 - 1.35 * k;
       } else { this.fc = null; if (this.focusLight) this.focusLight.intensity = 0; if (this.outline) this.outline.edgeStrength = 1.8; }
     }
@@ -980,7 +980,7 @@ export class World {
     if (this.mode === 'title' || this.visFrac == null) this.visFrac = s.frac;
     else { const df = (s.frac - this.visFrac + 1) % 1; this.visFrac = (this.visFrac + Math.min(df, dt / 90)) % 1; }
     this.updateDaylight(this.visFrac);
-    this.updatePeople(dt); this.updateSmoke(dt); this.updateWeather(dt); this.updatePopups(dt); this.updateInstall(dt); this.updateLoose(dt); this.updateDusty(dt); this.updateLamp(dt); if (this.ghostMat) { this.ghostMat.opacity = 0.1; this.ghostLine.opacity = 0.38 + 0.06 * Math.sin(this.t * 4); }
+    this.updatePeople(dt); this.updateSmoke(dt); this.updateWeather(dt); this.updatePopups(dt); this.updateInstall(dt); this.updateLoose(dt); this.updateDusty(dt); this.updateLamp(dt); if (this.ghostMat) { this.ghostMat.opacity = 0.1; this.ghostLine.opacity = 0.52 + 0.04 * Math.sin(this.t * 4); }
     // Lüfter & LEDs
     const fanSpeed = 28 * dt;
     for (const e of this.entries.values()) {
