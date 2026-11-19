@@ -10,7 +10,7 @@ import { PLACEABLE, PART } from '../data/hardware.js';
 // Detailstufe beim Bauen (lo = Fernansicht: einfache Quader, keine Schrauben)
 export const Q = { lo: false, mid: false };
 const gcache = new Map();
-const cached = (k, fn) => { const key = k + (Q.lo ? '|lo' : Q.mid ? '|mid' : ''); let g = gcache.get(key); if (!g) { g = fn(); gcache.set(key, g); } return g; };
+const cached = (k, fn) => { const key = k + (Q.lo ? '|lo' : Q.mid ? '|mid' : ''); let g = gcache.get(key); if (!g) { g = fn(); g.userData.shared = true; gcache.set(key, g); } return g; }; // shared: beim Aufräumen nicht freigeben
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 
 // ---------- Zusatz-Materialien ----------
@@ -113,7 +113,7 @@ export function labelMat(key, w, h, draw, emissive = 0) {
   const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h, rng(key.length * 977 + 13));
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
   const m = new THREE.MeshStandardMaterial({ map: t, roughness: 0.6, ...(emissive ? { emissive: 0xffffff, emissiveMap: t, emissiveIntensity: emissive } : {}) });
-  m.name = 'lbl_' + key; _lbl.set(key, m); return m;
+  m.name = 'lbl_' + key; m.userData.shared = t.userData.shared = true; _lbl.set(key, m); return m;
 }
 function barcode(g, x, y, w, h, r) { g.fillStyle = '#111'; let px = x; while (px < x + w) { const bw = 1 + Math.floor(r() * 3); if (r() > 0.4) g.fillRect(px, y, bw, h); px += bw + 1; } }
 function qr(g, x, y, s, r) { const n = 13, c = s / n; g.fillStyle = '#111'; for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) if (r() > 0.5) g.fillRect(x + i * c, y + j * c, c, c); for (const [a, b] of [[0, 0], [n - 4, 0], [0, n - 4]]) { g.fillRect(x + a * c, y + b * c, 4 * c, 4 * c); g.fillStyle = '#fff'; g.fillRect(x + (a + 0.7) * c, y + (b + 0.7) * c, 2.6 * c, 2.6 * c); g.fillStyle = '#111'; g.fillRect(x + (a + 1.3) * c, y + (b + 1.3) * c, 1.4 * c, 1.4 * c); } }
@@ -774,8 +774,8 @@ function bake(root) {
   };
   visit(root);
   const meshes = [];
-  for (const [m, gs] of buckets) { const merged = mergeGeometries(gs, false); merged.computeBoundingSphere(); meshes.push({ geom: merged, mat: m }); gs.forEach((g) => g.dispose()); }
-  const spinT = spins.map(({ obj, m }) => { obj.parent?.remove(obj); obj.position.set(0, 0, 0); obj.rotation.set(0, 0, 0); obj.scale.set(1, 1, 1); obj.updateMatrix(); return { obj, m }; });
+  for (const [m, gs] of buckets) { const merged = mergeGeometries(gs, false); merged.computeBoundingSphere(); merged.userData.shared = true; meshes.push({ geom: merged, mat: m }); gs.forEach((g) => g.dispose()); }
+  const spinT = spins.map(({ obj, m }) => { obj.parent?.remove(obj); obj.position.set(0, 0, 0); obj.rotation.set(0, 0, 0); obj.scale.set(1, 1, 1); obj.updateMatrix(); obj.traverse((c) => { if (c.geometry) c.geometry.userData.shared = true; }); return { obj, m }; });
   const bbox = new THREE.Box3().setFromObject(root);
   return { meshes, spins: spinT, bbox };
 }
@@ -792,14 +792,23 @@ export function instance(key, builder, { lod = true, dist = LOD_DIST } = {}) {
     Q.lo = Q.mid = false; const hi = bake(builder());
     let lo = null, mid = null;
     if (lod) { try { Q.mid = true; mid = bake(builder()); Q.mid = false; Q.lo = true; lo = bake(builder()); } finally { Q.lo = Q.mid = false; } }
-    t = { hi, mid, lo }; templates.set(key, t);
+    t = { hi, mid, lo, uses: 0 }; templates.set(key, t);
   }
+  t.uses++;
   const hi = fromTemplate(t.hi);
-  if (!t.lo) { hi.userData.bbox = t.hi.bbox; return hi; }
+  if (!t.lo) { hi.userData.bbox = t.hi.bbox; hi.userData.tkey = key; return hi; }
   const mid = fromTemplate(t.mid), lo = fromTemplate(t.lo);
   const l = new THREE.LOD(); l.addLevel(hi, 0); l.addLevel(mid, dist); l.addLevel(lo, dist * 2.8);
-  l.userData.fans = [...hi.userData.fans, ...mid.userData.fans, ...lo.userData.fans]; l.userData.bbox = t.hi.bbox;
+  l.userData.fans = [...hi.userData.fans, ...mid.userData.fans, ...lo.userData.fans]; l.userData.bbox = t.hi.bbox; l.userData.tkey = key;
   return l;
+}
+// Modell abmelden: Vorlagen mit wechselnder Bestückung (Rigs, Regale, Racks) werden freigegeben, sobald sie niemand mehr nutzt
+export function releaseModel(root) {
+  const key = root?.userData?.tkey, t = key && templates.get(key); if (!t) return;
+  root.userData.tkey = null; t.uses--;
+  if (t.uses > 0 || !/^(rig|hold):/.test(key)) return;
+  templates.delete(key);
+  for (const b of [t.hi, t.mid, t.lo]) if (b) for (const { geom } of b.meshes) geom.dispose();
 }
 
 // Herumliegendes Einzelteil (Start: alte Teile im Zimmer)
