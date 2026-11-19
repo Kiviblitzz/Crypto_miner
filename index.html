@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HASHWERK – Vom Kinderzimmer zum Rechenzentrum</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%2316181d'/><path d='M18 14v36M46 14v36M18 32h28' stroke='%23ffb000' stroke-width='8' stroke-linecap='round'/></svg>" />
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div id="hud">
+    <header id="top">
+      <div class="brand">HASH<span>WERK</span></div>
+      <div id="date" class="pill"></div>
+      <div id="speed" class="pill"></div>
+      <div class="stats">
+        <div class="stat" id="st-cash"></div>
+        <div class="stat" id="st-nw"></div>
+        <div class="stat" id="st-profit"></div>
+        <div class="stat" id="st-btc"></div>
+        <div class="stat" id="st-hash"></div>
+      </div>
+    </header>
+    <nav id="sites"></nav>
+    <aside id="build" class="panel"></aside>
+    <aside id="inspector" class="panel hidden"></aside>
+    <section id="goals" class="panel"></section>
+    <div id="dock"></div>
+    <footer id="ticker"><div class="tk-label">NEWS</div><div id="tk-text"></div></footer>
+    <div id="toasts"></div>
+    <div id="hint" class="hidden"></div>
+    <div id="crosshair" class="hidden">+</div>
+  </div>
+  <div id="modal" class="hidden"><div class="modal-card"><button class="modal-x" title="Schließen">✕</button><div class="modal-body"></div></div></div>
+  <div id="splash">
+    <div class="splash-inner">
+      <div class="logo">HASH<span>WERK</span></div>
+      <div class="tagline">Vom Kinderzimmer zum Rechenzentrum</div>
+      <p class="intro">Oktober 2010. Papas Elektronikladen steckt in Schulden, du hast einen alten PC, 300&nbsp;$ und eine verrückte Idee: Bitcoin.<br/>Erlebe 16 Jahre echte Krypto-Geschichte – Kurse, Halvings, neue Coins und Hardware-Generationen – und bau dein Mining-Imperium auf.</p>
+      <div class="splash-btns">
+        <button id="btn-continue" class="btn big hidden">▶ Weiterspielen</button>
+        <button id="btn-new" class="btn big primary">Neues Spiel</button>
+      </div>
+      <div class="controls-help">
+        <b>Maus:</b> Links = auswählen/bauen · Rechts ziehen = drehen · Mitte = schieben · Rad = Zoom<br/>
+        <b>Tasten:</b> WASD/Pfeile = Kamera · Q/E = drehen · R = Objekt drehen · Leertaste = Pause · 1–4 = Tempo · F = Rundgang
+      </div>
+      <div class="disclaimer">Alle Hersteller-, Produkt- und Börsennamen sind fiktiv. Kursdaten gerundet nach historischen Werten. Kein Finanzrat.</div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

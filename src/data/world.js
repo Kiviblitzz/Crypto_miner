@@ -1,0 +1,198 @@
+// Standorte, Kapitel, Story-Nachrichten und Nachrichten-Ticker
+import { toDay } from './history.js';
+
+export const FACILITIES = [
+  {
+    id: 'kinder', tier: 0, name: 'Kinderzimmer', short: 'Zimmer', place: 'Lindental, Dachgeschoss', w: 4, d: 3.5, h: 2.6,
+    power: [{ kw: 1.8, label: 'Mamas Limit' }, { kw: 3.6, cost: 250, label: 'Eigener Stromkreis (Opa verlegt ihn)' }],
+    elec: 'household', elecMult: 1.0, rent: 0, cost: 0, baseCool: 600, ambient: 0, grid: 0.5,
+    style: 'bedroom', desc: 'Dein Zimmer unterm Dach. Bett, Schreibtisch, ein altes Poster – und ein PC.',
+  },
+  {
+    id: 'keller', tier: 1, name: 'Hobbykeller', short: 'Keller', place: 'Lindental, Elternhaus', w: 7, d: 5, h: 2.4,
+    power: [{ kw: 4.5, label: 'Hausanschluss' }, { kw: 11, cost: 1500, label: 'Starkstrom 16 A (Opa)' }, { kw: 22, cost: 4000, label: 'Starkstrom 32 A (Opa)' }],
+    elec: 'household', elecMult: 1.0, rent: 0, cost: 0, baseCool: 1600, ambient: -3, grid: 0.5,
+    style: 'basement', desc: 'Kühl, staubig, mit Waschmaschine. Perfekt für die ersten Open-Frame-Rigs.',
+  },
+  {
+    id: 'werkstatt', tier: 2, name: 'Werkstatt hinterm Laden', short: 'Werkstatt', place: 'Lindental, Hinterhof Elektro Brandt', w: 10, d: 8, h: 3.6,
+    power: [{ kw: 25, label: 'Gewerbeanschluss' }, { kw: 60, cost: 12000, label: 'Verstärkter Anschluss' }, { kw: 120, cost: 30000, label: 'Eigener Trafo-Abgang' }],
+    elec: 'household', elecMult: 0.72, rent: 450, cost: 0, baseCool: 5000, ambient: 0, grid: 0.5,
+    style: 'workshop', desc: 'Papas alte Lagerwerkstatt mit Rolltor. Hier beginnt die ASIC-Ära.',
+  },
+  {
+    id: 'halle', tier: 3, name: 'Lagerhalle', short: 'Halle', place: 'Gewerbegebiet Lindental-Nord', w: 24, d: 16, h: 7,
+    power: [{ kw: 400, label: 'Mittelspannung' }, { kw: 1000, cost: 180000, label: 'Trafostation 1 MVA' }, { kw: 2000, cost: 400000, label: 'Zweite Trafostation' }],
+    elec: 'household', elecMult: 0.45, rent: 5000, cost: 20000, baseCool: 50000, ambient: 0, grid: 0.5,
+    style: 'warehouse', desc: 'Eine echte Halle. Stahlträger, Rolltore, Hallenstrahler. Zeit für Racks.',
+  },
+  {
+    id: 'rz', tier: 4, name: 'Rechenzentrum', short: 'RZ', place: 'Frankfurt-Ost', w: 36, d: 24, h: 5,
+    power: [{ kw: 2500, label: '2,5 MW' }, { kw: 6000, cost: 1500000, label: '6 MW Ausbau' }, { kw: 12000, cost: 3500000, label: '12 MW Umspannwerk' }],
+    elec: 'household', elecMult: 0.27, rent: 30000, cost: 500000, baseCool: 220000, ambient: -1, grid: 0.5,
+    style: 'datacenter', desc: 'Doppelboden, Kaltgang/Warmgang, Präzisionsklima. Hashwerk wird erwachsen.',
+  },
+  {
+    id: 'fjord', tier: 5, name: 'Fjordhalle', short: 'Fjord', place: 'Sogn, Norwegen (Wasserkraft)', w: 64, d: 40, h: 12,
+    power: [{ kw: 30000, label: '30 MW Wasserkraft' }, { kw: 60000, cost: 8000000, label: '60 MW' }, { kw: 120000, cost: 20000000, label: '120 MW' }],
+    elec: 'fixed', elecFixed: 0.035, rent: 80000, cost: 5000000, baseCool: 3000000, ambient: -12, grid: 0.5,
+    style: 'fjord', desc: 'Grüner Strom aus dem Wasserkraftwerk, eiskalte Luft vom Fjord. Das Endspiel.',
+  },
+];
+export const FACILITY = Object.fromEntries(FACILITIES.map((f) => [f.id, f]));
+
+// Kapitel & Ziele (check bekommt den Spielzustand + Hilfsfunktionen)
+export const CHAPTERS = [
+  {
+    title: 'Kapitel 1 – Das Kinderzimmer', unlock: 'keller', minDate: '2011-01-01',
+    intro: 'Oktober 2010. Papas Laden steckt in Schulden. Du hast einen alten PC, 300 $ und eine Idee.',
+    goals: [
+      { id: 'run', text: 'Starte die Zeit (▶) und lass den PC minen', check: (s) => s.stats.minedUSD > 0.3 },
+      { id: 'gpu', text: 'Kauf eine neue Grafikkarte (PC anklicken → GPU-Slot)', check: (s) => s.flags.boughtGpu },
+      { id: 'earn', text: 'Verdiene insgesamt 1.000 $', check: (s) => s.stats.minedUSD >= 1000 },
+      { id: 'papa1', text: 'Gib Papa 2.000 $ für die Stromrechnung', action: { label: '2.000 $ geben', cost: 2000, flag: 'papa1' }, check: (s) => s.flags.papa1 },
+    ],
+  },
+  {
+    title: 'Kapitel 2 – Der Hobbykeller', unlock: 'werkstatt', minDate: '2012-06-01',
+    intro: 'Papa staunt. Der Keller gehört dir – solange die Waschmaschine weiterläuft.',
+    goals: [
+      { id: 'openrig', text: 'Bau ein Milchkisten- oder Open-Frame-Rig', check: (s, h) => h.countPlaced((o) => ['crate', 'frame6', 'frame8', 'frame12'].includes(o.type)) > 0 },
+      { id: 'gh3', text: 'Erreiche 3 GH/s auf SHA-256', check: (s, h) => h.algoHash('sha256') >= 3e9 },
+      { id: 'debt', text: 'Tilge die Ladenschulden bei der Bank (15.000 $)', action: { label: '15.000 $ überweisen', cost: 15000, flag: 'debt' }, check: (s) => s.flags.debt },
+    ],
+  },
+  {
+    title: 'Kapitel 3 – Die Werkstatt', unlock: 'halle', minDate: '2014-06-01',
+    intro: 'Elektro Brandt ist gerettet. Papa überlässt dir die Werkstatt hinterm Laden.',
+    goals: [
+      { id: 'asic', text: 'Kauf deinen ersten ASIC-Miner', check: (s) => s.flags.boughtAsic },
+      { id: 'th1', text: 'Erreiche 1 TH/s auf SHA-256', check: (s, h) => h.algoHash('sha256') >= 1e12 },
+      { id: 'gmbh', text: 'Gründe die Hashwerk GmbH (25.000 $)', action: { label: 'GmbH gründen (25.000 $)', cost: 25000, flag: 'gmbh' }, check: (s) => s.flags.gmbh },
+    ],
+  },
+  {
+    title: 'Kapitel 4 – Die Lagerhalle', unlock: 'rz', minDate: '2017-06-01',
+    intro: 'Die Hashwerk GmbH zieht ins Gewerbegebiet. Deniz kündigt seinen Job und steigt ein.',
+    goals: [
+      { id: 'tech', text: 'Stelle deinen ersten Techniker ein (🏢 Firma)', check: (s) => s.staff.tech > 0 },
+      { id: 'ph1', text: 'Erreiche 1 PH/s auf SHA-256', check: (s, h) => h.algoHash('sha256') >= 1e15 },
+      { id: 'nw1m', text: 'Netto-Vermögen 1 Mio. $', check: (s, h) => h.netWorth() >= 1e6 },
+    ],
+  },
+  {
+    title: 'Kapitel 5 – Das Rechenzentrum', unlock: 'fjord', minDate: '2020-06-01',
+    intro: 'Ein echtes Rechenzentrum in Frankfurt. Viktor Kral ruft zum ersten Mal persönlich an.',
+    goals: [
+      { id: 'ph20', text: 'Erreiche 20 PH/s auf SHA-256', check: (s, h) => h.algoHash('sha256') >= 2e16 },
+      { id: 'nw10m', text: 'Netto-Vermögen 10 Mio. $', check: (s, h) => h.netWorth() >= 1e7 },
+    ],
+  },
+  {
+    title: 'Kapitel 6 – Die Fjordhalle', unlock: null, minDate: '2020-06-01',
+    intro: 'Wasserkraft, Fjordluft, 30 Megawatt. Jetzt geht es gegen MONOLITH.',
+    goals: [
+      { id: 'eh1', text: 'Erreiche 1 EH/s auf SHA-256', check: (s, h) => h.algoHash('sha256') >= 1e18 },
+      { id: 'mono', text: 'Überhole MONOLITH Hash AG bei der Hashrate', check: (s, h) => h.algoHash('sha256') > h.monolithHash() },
+    ],
+  },
+];
+
+// Handy-Nachrichten. when: Datum ODER cond(state, helpers)
+export const MESSAGES = [
+  { id: 'm0', date: '2010-10-01', from: 'Deniz', text: 'Alter, hast du das im Forum gelesen? Bitcoin! Man kann mit der Grafikkarte Geld „schürfen". Dein alter PC könnte das!' },
+  { id: 'm1', date: '2010-10-02', from: 'Papa', text: 'Die Bank hat wieder geschrieben. 15.000 $ bis Ende 2013, sonst ist der Laden weg. Mach dir keine Sorgen, das ist meine Sache.' },
+  { id: 'm2', date: '2010-10-09', from: 'Deniz', text: 'Tipp: Grafikkarten von Crimson sind viel schneller bei SHA-256 als die Verdant-Karten. Die RHD 5870 ist gerade der Hit.' },
+  { id: 'm3', cond: (s, h) => h.maxTemp() > 32, from: 'Mama', text: 'Schatz, warum ist es in deinem Zimmer so warm? Mach mal das Fenster auf! Und was brummt da so?' },
+  { id: 'm4', date: '2010-11-06', from: 'Deniz', text: '0,39 $ pro Bitcoin!! Hab gerade nachgerechnet, was wir schon gemined haben. 😳' },
+  { id: 'm5', cond: (s) => s.flags.papa1, from: 'Papa', text: 'Du hast... die ganze Stromrechnung bezahlt? Mit „Internetgeld"? Na gut. Der Keller gehört dir. Aber die Waschmaschine bleibt!' },
+  { id: 'm6', date: '2011-04-10', from: 'Deniz', text: 'Die Leute stapeln jetzt Karten in Milchkisten, ohne Gehäuse – wegen der Hitze. Sieht wild aus, funktioniert aber!' },
+  { id: 'm7', date: '2011-06-09', from: 'Deniz', text: '30 $!!! Verkaufen?? Oder halten?? Ich dreh durch.' },
+  { id: 'm8', date: '2011-06-20', from: 'Deniz', text: 'GoxBank wurde gehackt, der Kurs stürzt ab. Lass bloß nicht alles auf der Börse liegen…' },
+  { id: 'm9', cond: (s, h) => h.facilityTripped(), from: 'Opa Heinz', text: 'Na, Sicherung rausgeflogen? Junge, so ein Hausstromkreis hat Grenzen. Ich kann dir einen eigenen legen. Kostet aber.' },
+  { id: 'm10', date: '2011-07-15', from: 'Deniz', text: 'Es gibt jetzt FPGA-Boards! Kaum Strom, gute Hashrate. Teuer, aber die Zukunft?' },
+  { id: 'm11', date: '2011-10-08', from: 'Deniz', text: 'Neuer Coin: Silvercoin. Läuft auf Scrypt – da sind GPUs im Vorteil. Probier mal, deine Karten umzustellen!' },
+  { id: 'm12', cond: (s) => s.flags.debt, from: 'Papa', text: 'Ich hab heute bei der Bank geweint. Vor Freude. Elektro Brandt bleibt! Die Werkstatt hinten gehört ab jetzt dir.' },
+  { id: 'm13', date: '2012-11-28', from: 'Deniz', text: 'Halving! Ab heute gibt es nur noch 25 BTC pro Block. Unsere Erträge halbieren sich…' },
+  { id: 'm14', date: '2013-02-01', from: 'Deniz', text: 'Die ersten ASICs werden ausgeliefert! Glacier A1: 66 GH/s. Das sind 100 Grafikkarten in einer Kiste. GPUs sind für Bitcoin bald tot.' },
+  { id: 'm15', date: '2013-11-29', from: 'Mama', text: 'Im Fernsehen reden sie über Bitcoin. Über 1.000 Dollar! Ist das dein Ding?' },
+  { id: 'm16', date: '2014-02-10', from: 'Deniz', text: 'GoxBank lässt keine Auszahlungen mehr zu… Das stinkt. Zieh deine Coins in die Cold-Wallet!' },
+  { id: 'm17', date: '2014-03-12', from: 'Viktor Kral', text: 'Guten Tag. Viktor Kral, MONOLITH Hash AG. Wir haben von Ihrer kleinen Werkstatt gehört. Wir kaufen gern kleine Betriebe auf. Denken Sie darüber nach.' },
+  { id: 'm18', cond: (s) => s.flags.gmbh, from: 'Deniz', text: 'Hashwerk GmbH! Ich kündige meinen Job. Ich bin dabei. CTO? 😎' },
+  { id: 'm19', date: '2015-08-01', from: 'Deniz', text: 'Aether ist live! Ethash braucht viel Grafikspeicher – unsere alten GPUs haben endlich wieder einen Job.' },
+  { id: 'm20', date: '2016-07-09', from: 'Deniz', text: 'Zweites Halving: 12,5 BTC pro Block. Nur effiziente ASICs überleben das.' },
+  { id: 'm21', date: '2017-12-17', from: 'Opa Heinz', text: 'Mein Friseur hat mich heute nach Bitcoin gefragt. Mein FRISEUR. Verkauf was, Junge.' },
+  { id: 'm22', date: '2018-12-15', from: 'Deniz', text: 'Krypto-Winter. Und der Aether-DAG ist über 3 GB – die 3-GB-Karten können kein Aether mehr minen.' },
+  { id: 'm23', date: '2019-11-30', from: 'Deniz', text: 'Shadow wechselt auf RandomX. Jetzt minen CPUs besser als Grafikkarten. Zenon-CPUs sind dafür top.' },
+  { id: 'm24', date: '2020-03-13', from: 'Mama', text: 'Bleibt zuhause, alle. Und pass auf dich auf. Die Börsen crashen überall.' },
+  { id: 'm25', date: '2020-12-10', from: 'Deniz', text: 'Der Aether-DAG hat 4 GB geknackt. Alle 4-GB-Karten fallen raus. Aether Classic halbiert seinen DAG – dort laufen sie noch.' },
+  { id: 'm26', date: '2021-05-21', from: 'Deniz', text: 'China verbietet das Mining! Die halbe Welt-Hashrate geht offline. Für uns heißt das: größerer Anteil pro Block!' },
+  { id: 'm27', date: '2021-05-25', from: 'Viktor Kral', text: 'Interessante Zeiten. Mein Angebot steht: 40 Millionen für Hashwerk. Sie wissen, wie man mich erreicht.' },
+  { id: 'm28', date: '2022-09-15', from: 'Deniz', text: 'The Merge. Aether ist jetzt Proof-of-Stake. Alle GPUs weltweit suchen neue Coins – Corvus und Aether Classic werden geflutet.' },
+  { id: 'm29', date: '2022-11-11', from: 'Deniz', text: 'FXT ist pleite. Wer Coins auf der Börse hatte, ist sie los. Ich hoffe, du hattest die Cold-Wallet!' },
+  { id: 'm30', date: '2023-08-20', from: 'Deniz', text: 'Kaskad-ASICs sind da (Swarm KS3). GPUs sind auch bei Kaskad jetzt Geschichte.' },
+  { id: 'm31', date: '2024-01-11', from: 'Papa', text: 'Im Radio sagen sie, in Amerika gibt es jetzt Bitcoin-Fonds an der Börse. Du warst echt früh dran, Kind.' },
+  { id: 'm32', date: '2024-04-20', from: 'Deniz', text: 'Viertes Halving: 3,125 BTC. Effizienz ist alles. Hydro-Miner in Containern sind das Maß der Dinge.' },
+  { id: 'm33', date: '2025-10-06', from: 'Opa Heinz', text: '126.000 Dollar. Ich hab dir 2011 gesagt, du sollst verkaufen. Gut, dass du nie auf mich hörst.' },
+  { id: 'm34', cond: (s) => s.unlocked.includes('fjord'), from: 'Viktor Kral', text: 'Norwegen also. Mutig. Aber MONOLITH hat mehr Hashrate als ganze Länder. Sie werden uns nie einholen.' },
+  { id: 'm35', cond: (s) => s.flags.won, from: 'Deniz', text: 'WIR HABEN MONOLITH ÜBERHOLT. Vom Kinderzimmer bis hierhin. Unglaublich. Was jetzt? Weiter wachsen. Immer weiter.' },
+  { id: 'm36', date: '2026-11-19', from: 'Deniz', text: 'Wir sind in der Gegenwart angekommen. Ab jetzt schreibt der Markt seine eigene Geschichte – keiner weiß, was kommt.' },
+];
+
+// Nachrichten-Ticker. effect: optionale Spielwirkung
+export const NEWS = [
+  ['2010-10-01', 'GPU-Mining-Software jetzt öffentlich – Netz-Hashrate explodiert'],
+  ['2010-11-06', 'Bitcoin erreicht 0,39 $ – Allzeithoch'],
+  ['2010-11-27', 'Erster Mining-Pool geht online'],
+  ['2011-02-09', 'Bitcoin erreicht erstmals Parität mit dem US-Dollar'],
+  ['2011-06-08', 'Bitcoin bei 30 $! Medien berichten weltweit'],
+  ['2011-06-19', 'GoxBank gehackt – Kurs kurzzeitig auf 1 Cent'],
+  ['2011-07-01', 'FPGA-Miner kommen auf den Markt'],
+  ['2011-10-07', 'Silvercoin (Scrypt) startet – „Silber zum Bitcoin-Gold"'],
+  ['2012-11-28', 'Erstes Halving: Blockbelohnung sinkt auf 25 BTC'],
+  ['2013-02-01', 'Erste ASIC-Miner ausgeliefert: Glacier A1 mit 66 GH/s'],
+  ['2013-04-10', 'Bitcoin-Blase platzt: von 230 $ auf 70 $'],
+  ['2013-11-28', 'Bitcoin über 1.000 $!'],
+  ['2013-12-06', 'Wuffcoin startet – ein Hund erobert das Internet'],
+  ['2014-02-24', 'GoxBank insolvent! Kunden verlieren ihre Coins', { exchangeLoss: 0.7 }],
+  ['2014-04-18', 'Shadow startet – Privatsphäre-Coin mit CryptoNight'],
+  ['2014-09-11', 'Wuffcoin führt Merged Mining mit Silvercoin ein'],
+  ['2015-01-14', 'Bitcoin fällt auf 180 $ – Miner geben auf'],
+  ['2015-07-30', 'Aether geht live – Smart Contracts & Ethash'],
+  ['2016-06-15', 'Swarm S9 vorgestellt: 13,5 TH/s – Effizienz-Sprung'],
+  ['2016-07-09', 'Zweites Halving: 12,5 BTC pro Block'],
+  ['2016-07-20', 'Aether spaltet sich: Aether Classic entsteht'],
+  ['2016-10-28', 'Zeroproof startet – erste Coins für tausende Dollar gehandelt'],
+  ['2017-06-15', 'GPU-Knappheit: Miner kaufen Grafikkarten leer'],
+  ['2017-12-17', 'Bitcoin erreicht 19.500 $ – Krypto-Fieber weltweit'],
+  ['2018-01-03', 'Corvus startet – ASIC-resistent'],
+  ['2018-02-06', 'Crash: Bitcoin halbiert sich in sieben Wochen'],
+  ['2018-12-15', 'Krypto-Winter: Bitcoin bei 3.200 $'],
+  ['2019-06-26', 'Bitcoin zurück bei 13.000 $'],
+  ['2019-11-30', 'Shadow wechselt auf RandomX – CPU-Mining ist zurück'],
+  ['2020-03-12', 'Corona-Crash: Bitcoin fällt an einem Tag um 40 %'],
+  ['2020-05-11', 'Drittes Halving: 6,25 BTC pro Block'],
+  ['2020-12-31', 'Bitcoin schließt das Jahr bei 29.000 $'],
+  ['2021-02-18', 'Hersteller drosseln Mining-Leistung neuer Karten (LHR)'],
+  ['2021-04-14', 'Bitcoin bei 64.000 $ – Krypto-Börse geht an die Nasdaq'],
+  ['2021-05-08', 'Wuffcoin bei 0,70 $ – der Hund ist Milliarden wert'],
+  ['2021-05-21', 'China verbietet Krypto-Mining – Hashrate bricht ein'],
+  ['2021-08-15', 'GPU-Preise auf Rekordniveau: VTX 3080 für 1.600 $ gehandelt'],
+  ['2021-11-07', 'Kaskad startet – ein Block pro Sekunde'],
+  ['2021-11-10', 'Bitcoin-Allzeithoch: 68.800 $'],
+  ['2022-05-12', 'Stablecoin-Kollaps reißt den Markt mit'],
+  ['2022-09-15', 'The Merge: Aether wechselt zu Proof-of-Stake – GPU-Mining endet'],
+  ['2022-11-11', 'Börse FXT bricht zusammen – Milliarden Kundengelder weg', { exchangeLoss: 0.85 }],
+  ['2023-08-15', 'Kaskad-ASICs ausgeliefert – GPUs verlieren'],
+  ['2024-01-11', 'US-Behörde genehmigt Spot-Bitcoin-ETFs'],
+  ['2024-03-14', 'Bitcoin erreicht 73.000 $'],
+  ['2024-04-20', 'Viertes Halving: 3,125 BTC pro Block'],
+  ['2024-12-17', 'Bitcoin knackt 100.000 $'],
+  ['2025-10-06', 'Neues Allzeithoch: Bitcoin bei 126.000 $'],
+  ['2025-11-10', 'Zeroproof verzehnfacht sich – Privacy-Coins im Fokus'],
+  ['2026-01-24', 'Wintersturm in den USA: Miner schalten ab, Hashrate fällt stark'],
+  ['2026-02-28', 'Bitcoin rutscht unter 66.000 $'],
+  ['2026-11-19', 'Gegenwart erreicht – ab jetzt ist der Markt unvorhersehbar'],
+].map(([d, t, effect]) => ({ day: toDay(d), text: t, effect }));
+
+export const START_DAY = toDay('2010-10-01');

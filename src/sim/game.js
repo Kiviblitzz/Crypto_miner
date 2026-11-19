@@ -1,0 +1,579 @@
+// Spielzustand + tägliche Simulation (Mining, Strom, Hitze, Defekte, Markt, Story)
+import { COINS, COIN } from '../data/coins.js';
+import { PLACEABLE, PART, PLACEABLES, PARTS, GPUS } from '../data/hardware.js';
+import { FACILITIES, FACILITY, CHAPTERS, MESSAGES, NEWS, START_DAY } from '../data/world.js';
+import { BTC_HASH, POWER_HOUSEHOLD, GPU_BOOM, MONOLITH_SHARE, DAG_AET, DAG_AEC, seasonOffset, noise, toDay, BTC_PRICE } from '../data/history.js';
+
+const LAST_DATA_DAY = BTC_PRICE.lastDay;
+export const SAVE_KEY = 'hashwerk-save-v1';
+const DEFAULT_AUTOSELL = 0.8;
+
+function rnd(seed) { const x = Math.sin(seed * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); }
+function gauss() { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+
+export class Game {
+  constructor() { this.listeners = {}; this.newGame(); }
+
+  on(ev, fn) { (this.listeners[ev] ||= []).push(fn); }
+  emit(ev, ...a) { (this.listeners[ev] || []).forEach((f) => f(...a)); }
+
+  newGame() {
+    const s = {
+      version: 1, day: START_DAY, frac: 0.35, cash: 300, nextUid: 1,
+      wallet: Object.fromEntries(COINS.map((c) => [c.id, { ex: 0, cold: 0 }])),
+      autoSell: Object.fromEntries(COINS.map((c) => [c.id, DEFAULT_AUTOSELL])),
+      payoutCold: false,
+      unlocked: ['kinder'], current: 'kinder',
+      fac: Object.fromEntries(FACILITIES.map((f) => [f.id, { power: 0, tripped: false, temp: 21, objects: [] }])),
+      staff: { tech: 0 },
+      chapter: 0, goals: {}, flags: {}, messages: [], newsIdx: 0, ticker: [],
+      stats: { minedUSD: 0, sold: 0, spentHW: 0, elec: 0, history: [] },
+      endless: null, lastNet: {},
+    };
+    this.s = s;
+    this.cache = {};
+    // Startausstattung: alter Tower-PC mit Q66 + RHD 4850
+    this.addObject('kinder', 'tower', 3.75, 0.75, 0, { mobo: 'h55', cpu: 'q66', psu: 'psu400', gpus: ['rhd4850'] }, true);
+    while (s.newsIdx < NEWS.length && NEWS[s.newsIdx].day < s.day) s.newsIdx++;
+    this.dayUpdate(true);
+  }
+
+  // ---------- Speichern / Laden ----------
+  save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(this.s)); return true; } catch (e) { return false; } }
+  hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; } }
+  load() {
+    try {
+      const raw = localStorage.getItem(SAVE_KEY); if (!raw) return false;
+      const s = JSON.parse(raw); if (!s || s.version !== 1) return false;
+      for (const f of FACILITIES) s.fac[f.id] ||= { power: 0, tripped: false, temp: 21, objects: [] };
+      for (const c of COINS) { s.wallet[c.id] ||= { ex: 0, cold: 0 }; if (s.autoSell[c.id] == null) s.autoSell[c.id] = DEFAULT_AUTOSELL; }
+      this.s = s; this.cache = {}; this.dayUpdate(true); return true;
+    } catch (e) { console.warn(e); return false; }
+  }
+
+  // ---------- Markt ----------
+  price(id, day = this.s.day) {
+    const c = COIN[id]; if (day < c.start) return 0;
+    if (day > LAST_DATA_DAY && this.s.endless) return c.price(LAST_DATA_DAY) * this.s.endless[id].p;
+    const vol = id === 'BTC' ? 0.045 : 0.07;
+    return c.price(day) * Math.exp(noise(day, id.charCodeAt(0) + id.charCodeAt(1)) * vol);
+  }
+  netHash(id, day = this.s.day) {
+    const c = COIN[id]; if (day < c.start) return Infinity;
+    if (day > LAST_DATA_DAY && this.s.endless) return c.hash(LAST_DATA_DAY) * this.s.endless[id].h;
+    return c.hash(day) * Math.exp(noise(day, 99 + id.charCodeAt(0)) * 0.03);
+  }
+  coinActive(id, day = this.s.day) { const c = COIN[id]; return day >= c.start && (!c.end || day < c.end); }
+  coinAlgo(id, day = this.s.day) { return COIN[id].algo(day); }
+  elecPrice(facId, day = this.s.day) {
+    const f = FACILITY[facId];
+    if (f.elec === 'fixed') return f.elecFixed * (day > toDay('2022-03-01') && day < toDay('2023-06-01') ? 1.6 : 1);
+    return POWER_HOUSEHOLD(day) * f.elecMult;
+  }
+  // USD pro (H/s) pro Tag für Coin
+  revPerHash(id, day = this.s.day) {
+    if (!this.coinActive(id, day)) return 0;
+    const own = this.s.lastNet[id] || 0;
+    return (COIN[id].emission(day) * this.price(id, day)) / (this.netHash(id, day) + own);
+  }
+  dagOk(vram, coinId, day = this.s.day) {
+    const c = COIN[coinId];
+    if (!c.dag) return true;
+    const dag = c.dag === 'AET' ? DAG_AET(day) : DAG_AEC(day);
+    return vram >= dag + 0.05;
+  }
+  // Ertrag eines Hash-Profils {algo: H/s} für Coin
+  revenueFor(hash, coinId, vram = 99, day = this.s.day) {
+    const algo = this.coinAlgo(coinId, day);
+    const h = hash[algo] || 0; if (!h) return 0;
+    if (!this.dagOk(vram, coinId, day)) return 0;
+    let r = h * this.revPerHash(coinId, day);
+    const c = COIN[coinId];
+    if (coinId === 'SLV' && day >= COIN.WUF.mergedFrom) r += h * this.revPerHash('WUF', day);
+    return r;
+  }
+  bestCoin(hash, vram = 99, day = this.s.day) {
+    let best = null, br = 0;
+    for (const c of COINS) {
+      if (c.mergedWith && day >= c.mergedFrom) continue; // WUF läuft dann über SLV
+      const r = this.revenueFor(hash, c.id, vram, day);
+      if (r > br) { br = r; best = c.id; }
+    }
+    return best;
+  }
+  hashprice(algo, day) {
+    let best = 0;
+    for (const c of COINS) { if (this.coinActive(c.id, day) && c.algo(day) === algo) best = Math.max(best, (c.emission(day) * c.price(day)) / c.hash(day)); }
+    return best;
+  }
+
+  // ---------- Hardware-Preise & Verfügbarkeit ----------
+  itemPrice(item, day = this.s.day) {
+    const years = Math.max(0, (day - item.releaseDay) / 365);
+    let p = item.price;
+    if (item.type === 'gpu') p *= Math.max(0.3, 1 - 0.13 * years) * GPU_BOOM(day);
+    else if (item.type === 'cpu' || item.type === 'mobo' || item.type === 'psu') p *= Math.max(0.35, 1 - 0.12 * years);
+    else if (item.kind === 'device') {
+      const k = `hp_${item.algo}_${item.releaseDay}`;
+      const h0 = this.cache[k] ??= this.hashprice(item.algo, item.releaseDay + 15) || 1;
+      const h1 = this.hashprice(item.algo, Math.min(day, LAST_DATA_DAY)) || h0;
+      const ratio = Math.min(2.6, Math.max(0.06, Math.pow(h1 / h0, 0.55)));
+      p *= ratio * Math.max(0.35, 1 - 0.1 * years);
+    } else p *= Math.pow(1.02, Math.max(0, (day - toDay('2010-01-01')) / 365));
+    return Math.max(1, Math.round(p));
+  }
+  available(item, day = this.s.day) {
+    if (day < item.releaseDay) return false;
+    const years = (day - item.releaseDay) / 365;
+    if (item.type === 'gpu' || item.type === 'cpu') return years < 7;
+    if (item.type === 'mobo' || item.type === 'psu') return years < 9;
+    if (item.kind === 'device') return years < 5.5;
+    return true;
+  }
+  facTier(facId) { return FACILITY[facId].tier; }
+  placeableAllowed(item, facId) {
+    const t = this.facTier(facId);
+    if (item.minTier != null && t < item.minTier) return false;
+    if (item.maxTier != null && t > item.maxTier) return false;
+    if (item.hydro) return false; // Hydro-Miner nur in Container/Rack
+    return true;
+  }
+  shopList(cat, facId) {
+    return PLACEABLES.filter((p) => p.cat === cat && this.available(p) && (this.placeableAllowed(p, facId) || (p.hydro && this.facTier(facId) >= 3)));
+  }
+  partList(type) { return PARTS.filter((p) => p.type === type && this.available(p)).sort((a, b) => b.releaseDay - a.releaseDay); }
+
+  // ---------- Objekte ----------
+  facObjects(facId = this.s.current) { return this.s.fac[facId].objects; }
+  findObj(uid) { for (const f of Object.values(this.s.fac)) { const o = f.objects.find((x) => x.uid === uid); if (o) return o; } return null; }
+  facOf(uid) { for (const [id, f] of Object.entries(this.s.fac)) if (f.objects.some((x) => x.uid === uid)) return id; return null; }
+
+  addObject(facId, type, x, z, rot, parts, free = false) {
+    const def = PLACEABLE[type];
+    const o = { uid: this.s.nextUid++, type, x, z, rot, coin: 'auto', broken: false, bought: this.s.day };
+    if (def.kind === 'rig') o.parts = parts || { mobo: null, cpu: null, psu: null, gpus: [] };
+    if (def.kind === 'holder') o.items = [];
+    if (!free) { const p = this.itemPrice(def); if (this.s.cash < p) return null; this.s.cash -= p; this.s.stats.spentHW += p; }
+    this.s.fac[facId].objects.push(o);
+    if (def.kind === 'device' && def.look !== 'fpga' && def.look !== 'usb') this.s.flags.boughtAsic = true;
+    this.dayUpdate(true);
+    this.emit('objects', facId);
+    return o;
+  }
+  removeObject(uid) {
+    const facId = this.facOf(uid); if (!facId) return;
+    const f = this.s.fac[facId];
+    const o = f.objects.find((x) => x.uid === uid);
+    this.s.cash += this.objectValue(o);
+    f.objects = f.objects.filter((x) => x !== o);
+    this.dayUpdate(true); this.emit('objects', facId);
+  }
+  objectValue(o) {
+    const def = PLACEABLE[o.type];
+    let v = this.itemPrice(def) * 0.5;
+    if (o.parts) for (const pid of this.partIds(o)) v += this.itemPrice(PART[pid]) * 0.5;
+    if (o.items) for (const it of o.items) v += this.itemPrice(PLACEABLE[it.id]) * (it.b ? 0.2 : 0.5);
+    if (o.broken) v *= 0.4;
+    return Math.round(v);
+  }
+  partIds(o) { const p = o.parts; return [p.mobo, p.cpu, p.psu, ...p.gpus].filter(Boolean); }
+
+  // Teil in Rig einbauen (altes wird verkauft)
+  setPart(uid, slot, partId, gpuIndex = 0) {
+    const o = this.findObj(uid); if (!o || !o.parts) return false;
+    const part = partId ? PART[partId] : null;
+    const mult = slot === 'psu' ? this.psuCount(o) : 1;
+    const price = part ? this.itemPrice(part) * mult : 0;
+    let old = slot === 'gpu' ? o.parts.gpus[gpuIndex] : o.parts[slot];
+    const refund = old ? Math.round(this.itemPrice(PART[old]) * 0.5 * mult) : 0;
+    if (this.s.cash + refund < price) return false;
+    this.s.cash += refund - price; this.s.stats.spentHW += price;
+    if (slot === 'gpu') {
+      if (partId) o.parts.gpus[gpuIndex] = partId; else o.parts.gpus.splice(gpuIndex, 1);
+      o.parts.gpus = o.parts.gpus.filter(Boolean);
+      if (partId) this.s.flags.boughtGpu = true;
+    } else {
+      o.parts[slot] = partId;
+      if (slot === 'mobo') { const cap = this.rigGpuCap(o); if (o.parts.gpus.length > cap) { for (const g of o.parts.gpus.slice(cap)) this.s.cash += Math.round(this.itemPrice(PART[g]) * 0.5); o.parts.gpus = o.parts.gpus.slice(0, cap); } }
+    }
+    this.dayUpdate(true); this.emit('objects', this.facOf(uid));
+    return true;
+  }
+  psuCount(o) { return PLACEABLE[o.type].maxGpu >= 8 ? 2 : 1; }
+  rigGpuCap(o) { const def = PLACEABLE[o.type]; const mb = o.parts.mobo ? PART[o.parts.mobo] : null; return mb ? Math.min(def.maxGpu, mb.slots) : 0; }
+
+  rigWatt(o) { return 25 + this.partIds(o).reduce((a, id) => a + (PART[id].watt || 0), 0); }
+  fitPsu(o, extraW = 0) {
+    const need = this.rigWatt(o) + extraW; const n = this.psuCount(o);
+    const psus = this.partList('psu').sort((a, b) => a.cap - b.cap);
+    const fit = psus.find((x) => x.cap * n >= need) || psus[psus.length - 1];
+    return fit;
+  }
+  quickBase(uid) {
+    const o = this.findObj(uid); if (!o || !o.parts) return false;
+    const def = PLACEABLE[o.type];
+    if (!o.parts.mobo) {
+      const mbs = this.partList('mobo'); const best = Math.max(...mbs.map((m) => Math.min(m.slots, def.maxGpu)));
+      const mb = mbs.filter((m) => Math.min(m.slots, def.maxGpu) === best).sort((a, b) => this.itemPrice(a) - this.itemPrice(b))[0];
+      if (!mb || !this.setPart(uid, 'mobo', mb.id)) return false;
+    }
+    if (!o.parts.cpu) { const c = this.partList('cpu').sort((a, b) => this.itemPrice(a) - this.itemPrice(b))[0]; if (!c || !this.setPart(uid, 'cpu', c.id)) return false; }
+    if (!o.parts.psu) { const ps = this.fitPsu(o, this.rigGpuCap(o) * 160); if (!ps || !this.setPart(uid, 'psu', ps.id)) return false; }
+    return true;
+  }
+  fillGpus(uid, gpuId) {
+    const o = this.findObj(uid); if (!o || !o.parts?.mobo) return 0;
+    const cap = this.rigGpuCap(o); let n = 0;
+    while (o.parts.gpus.length < cap && this.s.cash >= this.itemPrice(PART[gpuId])) { if (!this.setPart(uid, 'gpu', gpuId, o.parts.gpus.length)) break; n++; }
+    if (o.parts.psu && this.rigWatt(o) > PART[o.parts.psu].cap * this.psuCount(o)) { const ps = this.fitPsu(o); if (ps && ps.id !== o.parts.psu) this.setPart(uid, 'psu', ps.id); }
+    return n;
+  }
+  cloneCost(o) {
+    const def = PLACEABLE[o.type]; let c = this.itemPrice(def);
+    if (o.parts) { for (const id of this.partIds(o)) c += this.itemPrice(PART[id]) * (id === o.parts.psu ? this.psuCount(o) : 1); }
+    if (o.items) for (const it of o.items) c += this.itemPrice(PLACEABLE[it.id]);
+    return Math.round(c);
+  }
+  cloneObject(src, facId, x, z, rot) {
+    const cost = this.cloneCost(src); if (this.s.cash < cost) return null;
+    const def = PLACEABLE[src.type];
+    const o = { uid: this.s.nextUid++, type: src.type, x, z, rot, coin: src.coin, broken: false, bought: this.s.day };
+    if (src.parts) o.parts = JSON.parse(JSON.stringify(src.parts));
+    if (src.items) o.items = src.items.map((i) => ({ id: i.id, b: 0 }));
+    this.s.cash -= cost; this.s.stats.spentHW += cost;
+    this.s.fac[facId].objects.push(o); this.dayUpdate(true); this.emit('objects', facId); return o;
+  }
+  holderAdd(uid, devId, n = 1) {
+    const o = this.findObj(uid); if (!o || !o.items) return 0;
+    const def = PLACEABLE[o.type], dev = PLACEABLE[devId];
+    const price = this.itemPrice(dev);
+    let added = 0;
+    while (added < n && o.items.length < def.slots && this.s.cash >= price) {
+      o.items.push({ id: devId, b: 0 }); this.s.cash -= price; this.s.stats.spentHW += price; added++;
+    }
+    if (added) { if (dev.look !== 'fpga' && dev.look !== 'usb') this.s.flags.boughtAsic = true; this.dayUpdate(true); this.emit('objects', this.facOf(uid)); }
+    return added;
+  }
+  holderRemove(uid, idx) {
+    const o = this.findObj(uid); if (!o || !o.items[idx]) return;
+    const it = o.items[idx];
+    this.s.cash += Math.round(this.itemPrice(PLACEABLE[it.id]) * (it.b ? 0.2 : 0.5));
+    o.items.splice(idx, 1); this.dayUpdate(true); this.emit('objects', this.facOf(uid));
+  }
+  holderSellAll(uid, devId) {
+    const o = this.findObj(uid); if (!o) return;
+    for (let i = o.items.length - 1; i >= 0; i--) if (!devId || o.items[i].id === devId) { const it = o.items[i]; this.s.cash += Math.round(this.itemPrice(PLACEABLE[it.id]) * (it.b ? 0.2 : 0.5)); o.items.splice(i, 1); }
+    this.dayUpdate(true); this.emit('objects', this.facOf(uid));
+  }
+  repairCost(o) {
+    if (o.items) { let c = 0; for (const it of o.items) if (it.b) c += this.itemPrice(PLACEABLE[it.id]) * 0.08; return Math.round(c); }
+    let base = this.itemPrice(PLACEABLE[o.type]);
+    if (o.parts) for (const pid of this.partIds(o)) base += this.itemPrice(PART[pid]);
+    return Math.max(5, Math.round(base * 0.08));
+  }
+  repair(uid) {
+    const o = this.findObj(uid); if (!o) return false;
+    const c = this.repairCost(o); if (this.s.cash < c) return false;
+    this.s.cash -= c; o.broken = false; if (o.items) o.items.forEach((it) => (it.b = 0));
+    this.dayUpdate(true); this.emit('objects', this.facOf(uid)); return true;
+  }
+
+  // ---------- Geräte-Analyse ----------
+  // Liefert pro Objekt: {watt, units:[{hash, vram, coin, rev, algo}], cool, heat, status}
+  analyze(o, day = this.s.day) {
+    const def = PLACEABLE[o.type];
+    const r = { watt: 0, cool: 0, heat: 0, units: [], status: 'ok', note: '' };
+    if (def.kind === 'rig') {
+      const p = o.parts;
+      if (!p.mobo || !p.cpu || !p.psu) { r.status = 'incomplete'; r.note = 'Mainboard, CPU und Netzteil nötig'; return r; }
+      const parts = this.partIds(o).map((id) => PART[id]);
+      r.watt = 25 + parts.reduce((a, x) => a + (x.watt || 0), 0);
+      const cap = PART[p.psu].cap * this.psuCount(o);
+      if (r.watt > cap) { r.status = 'psu'; r.note = `Netzteil überlastet (${r.watt} W > ${cap} W)`; r.watt = 0; return r; }
+      if (o.broken) { r.status = 'broken'; r.watt = 0; return r; }
+      const hash = {}; let vram = 99;
+      for (const id of p.gpus) { const g = PART[id]; for (const [a, h] of Object.entries(g.hash)) hash[a] = (hash[a] || 0) + h; vram = Math.min(vram, g.vram); }
+      const cpuH = PART[p.cpu].hash;
+      // GPUs + CPU (CPU zählt bei SHA-256/CN/RX mit)
+      for (const [a, h] of Object.entries(cpuH)) hash[a] = (hash[a] || 0) + h;
+      if (!p.gpus.length) vram = 99;
+      r.units.push({ hash, vram, w: r.watt });
+      r.heat = r.watt;
+    } else if (def.kind === 'device') {
+      if (o.broken) { r.status = 'broken'; return r; }
+      r.watt = def.watt; r.heat = def.watt;
+      r.units.push({ hash: { [def.algo]: def.hash }, vram: def.vram || 99, w: def.watt });
+    } else if (def.kind === 'holder') {
+      let broken = 0;
+      const groups = {};
+      for (const it of o.items) { if (it.b) { broken++; continue; } (groups[it.id] ||= 0); groups[it.id]++; }
+      for (const [id, n] of Object.entries(groups)) {
+        const d = PLACEABLE[id];
+        r.watt += d.watt * n;
+        r.units.push({ hash: { [d.algo]: d.hash * n }, vram: d.vram || 99, w: d.watt * n });
+      }
+      r.heat = def.selfCooled ? r.watt * 0.03 : r.watt;
+      if (def.selfCooled) r.watt *= 1.06; // Pumpen/Lüfter
+      if (broken) { r.status = broken === o.items.length ? 'broken' : 'partial'; r.note = `${broken} Gerät(e) defekt`; }
+      if (!o.items.length) { r.status = 'empty'; r.note = 'Leer – Geräte einsetzen'; }
+    } else if (def.kind === 'cooling') {
+      r.watt = def.watt; r.cool = def.cool; r.heat = def.watt;
+    }
+    // Coin-Wahl
+    for (const u of r.units) {
+      const coin = o.coin === 'auto' ? this.bestCoin(u.hash, u.vram, day) : o.coin;
+      u.coin = coin;
+      u.rev = coin ? this.revenueFor(u.hash, coin, u.vram, day) : 0;
+      u.algo = coin ? this.coinAlgo(coin, day) : null;
+      u.h = coin ? (u.hash[u.algo] || 0) : 0;
+      if (coin && !this.dagOk(u.vram, coin, day)) u.note = 'Zu wenig VRAM für DAG';
+    }
+    return r;
+  }
+
+  // Facility-Zusammenfassung
+  facSummary(facId, day = this.s.day) {
+    const f = this.s.fac[facId], fd = FACILITY[facId];
+    let watt = 0, heat = 0, cool = fd.baseCool, rev = 0; const per = new Map(); const hashByAlgo = {};
+    for (const o of f.objects) {
+      const a = this.analyze(o, day); per.set(o.uid, a);
+      watt += a.watt; heat += a.heat; cool += a.cool;
+      for (const u of a.units) { rev += u.rev; if (u.algo) hashByAlgo[u.algo] = (hashByAlgo[u.algo] || 0) + u.h; }
+    }
+    const capKw = fd.power[f.power].kw;
+    const ambient = 21 + fd.ambient + seasonOffset(day) * (fd.style === 'basement' ? 0.4 : 1);
+    const temp = ambient + 12 * (heat / Math.max(1, cool));
+    const throttle = temp > 38 ? Math.max(0.35, 1 - (temp - 38) * 0.05) : 1;
+    const elec = this.elecPrice(facId, day);
+    return { watt, heat, cool, rev, per, capKw, tripped: watt / 1000 > capKw, temp, throttle, elec, hashByAlgo };
+  }
+
+  // ---------- Kennzahlen ----------
+  algoHash(algo) { let h = 0; for (const id of this.s.unlocked) { const sm = this.summary[id]; if (sm && !sm.tripped) h += (sm.hashByAlgo[algo] || 0) * sm.throttle; } return h; }
+  walletValue() { let v = 0; for (const c of COINS) { const w = this.s.wallet[c.id]; v += (w.ex + w.cold) * this.price(c.id); } return v; }
+  hardwareValue() { let v = 0; for (const f of Object.values(this.s.fac)) for (const o of f.objects) v += this.objectValue(o); return v; }
+  netWorth() { return this.s.cash + this.walletValue() + this.hardwareValue(); }
+  monolithHash(day = this.s.day) { return day < toDay('2014-03-01') ? 0 : BTC_HASH(Math.min(day, LAST_DATA_DAY)) * MONOLITH_SHARE(day) * (this.s.endless ? this.s.endless.BTC.h : 1); }
+  dailyProfit() { let rev = 0, cost = 0; for (const id of this.s.unlocked) { const sm = this.summary[id]; if (!sm) continue; if (!sm.tripped) { rev += sm.rev * sm.throttle; cost += sm.watt / 1000 * 24 * sm.elec; } cost += FACILITY[id].rent / 30.4; } cost += this.s.staff.tech * this.techSalary() / 30.4; return { rev, cost, net: rev - cost }; }
+  techSalary(day = this.s.day) { return Math.round(2600 * Math.pow(1.03, (day - toDay('2014-01-01')) / 365)); }
+  techCoverage() { let n = 0; for (const id of this.s.unlocked) for (const o of this.s.fac[id].objects) { const def = PLACEABLE[o.type]; if (def.kind === 'holder') n += o.items.length; else if (def.kind !== 'decor' && def.kind !== 'cooling') n++; } return n ? Math.min(1, (this.s.staff.tech * 60) / n) : 1; }
+
+  // Zusammenfassungen für alle Standorte neu berechnen
+  dayUpdate(silent = false) {
+    this.summary = {};
+    for (const id of this.s.unlocked) this.summary[id] = this.facSummary(id);
+    if (!silent) this.emit('update');
+    else this.emit('refresh');
+  }
+
+  // ---------- Zeit ----------
+  advanceDay() {
+    const s = this.s;
+    s.day++;
+    if (s.day > LAST_DATA_DAY) this.endlessStep();
+    const day = s.day;
+    const minedByCoin = {};
+    let elecCost = 0;
+    const netOwn = {};
+    for (const id of s.unlocked) {
+      const f = s.fac[id], sm = this.facSummary(id, day);
+      const wasTripped = f.tripped;
+      f.tripped = sm.tripped; f.temp = sm.temp;
+      if (sm.tripped && !wasTripped) { this.toast(`⚡ Sicherung raus in „${FACILITY[id].name}"! Last ${(sm.watt / 1000).toFixed(1)} kW > ${sm.capKw} kW`, 'bad'); s.flags.everTripped = true; }
+      if (!sm.tripped && wasTripped) this.toast(`✅ Strom in „${FACILITY[id].name}" wieder da`, 'good');
+      if (sm.tripped) continue;
+      elecCost += (sm.watt / 1000) * 24 * sm.elec;
+      for (const o of f.objects) {
+        const a = sm.per.get(o.uid);
+        for (const u of a.units) {
+          if (!u.coin || !u.rev) continue;
+          const c = u.coin;
+          const coins = (u.h * sm.throttle) / (this.netHash(c, day) + (s.lastNet[c] || 0)) * COIN[c].emission(day);
+          minedByCoin[c] = (minedByCoin[c] || 0) + coins;
+          netOwn[c] = (netOwn[c] || 0) + u.h * sm.throttle;
+          if (c === 'SLV' && day >= COIN.WUF.mergedFrom) { const w = (u.h * sm.throttle) / (this.netHash('WUF', day) + (s.lastNet.WUF || 0)) * COIN.WUF.emission(day); minedByCoin.WUF = (minedByCoin.WUF || 0) + w; netOwn.WUF = (netOwn.WUF || 0) + u.h * sm.throttle; }
+        }
+        // Defekte
+        this.wear(o, sm.temp, day);
+      }
+    }
+    s.lastNet = netOwn;
+    // Coins gutschreiben & Auto-Verkauf
+    let sold = 0, minedUSD = 0;
+    for (const [c, n] of Object.entries(minedByCoin)) {
+      const p = this.price(c, day); minedUSD += n * p;
+      const sell = n * s.autoSell[c];
+      sold += sell * p;
+      const keep = n - sell;
+      if (s.payoutCold) s.wallet[c].cold += keep; else s.wallet[c].ex += keep;
+    }
+    s.cash += sold - elecCost;
+    s.stats.minedUSD += minedUSD; s.stats.sold += sold; s.stats.elec += elecCost;
+    // Fixkosten
+    let fixed = 0;
+    for (const id of s.unlocked) fixed += FACILITY[id].rent / 30.4;
+    fixed += s.staff.tech * this.techSalary(day) / 30.4;
+    s.cash -= fixed;
+    if (s.cash < 0) s.cash *= 1.0004; // Dispozinsen
+    // Techniker reparieren
+    this.techRepairs(day);
+    // News & Ereignisse
+    while (s.newsIdx < NEWS.length && NEWS[s.newsIdx].day <= day) {
+      const n = NEWS[s.newsIdx++];
+      s.ticker.unshift({ day: n.day, text: n.text }); s.ticker = s.ticker.slice(0, 30);
+      this.emit('news', n);
+      if (n.effect?.exchangeLoss) this.exchangeCrash(n.effect.exchangeLoss, n.text);
+    }
+    // Story
+    this.checkMessages(); this.checkGoals();
+    // Statistik
+    const d = new Date(day * 86400000);
+    if (d.getUTCDay() === 1 || s.stats.history.length === 0) {
+      s.stats.history.push({ d: day, c: Math.round(s.cash), n: Math.round(this.netWorthFast()), h: this.algoHashFrom(netOwn) });
+      if (s.stats.history.length > 1200) s.stats.history.splice(0, s.stats.history.length - 1200);
+    }
+    if (d.getUTCDate() === 1) { this.save(); this.emit('autosave'); }
+    this.dayUpdate();
+  }
+  algoHashFrom(netOwn) { return netOwn.BTC || 0; }
+  netWorthFast() { return this.s.cash + this.walletValue() + this.hardwareValue(); }
+
+  wear(o, temp, day) {
+    const def = PLACEABLE[o.type];
+    const heatMul = temp < 30 ? 1 : temp < 38 ? 1 + (temp - 30) / 8 : 2 + (temp - 38) * 0.5;
+    const life = (def.life || 6) * 365;
+    if (def.kind === 'holder') {
+      const base = def.selfCooled ? 0.0004 : 0.0007 * heatMul;
+      for (const it of o.items) { if (it.b) continue; if (Math.random() < base) it.b = 1; }
+    } else if (def.kind === 'rig' || def.kind === 'device') {
+      if (o.broken) return;
+      const age = day - (o.bought || day);
+      const p = 0.0009 * heatMul * (age > life ? 2.2 : 1) * (def.kind === 'rig' ? 1 + (o.parts.gpus.length * 0.15) : 1);
+      if (Math.random() < p) { o.broken = true; this.toast(`🔥 ${def.name} ist ausgefallen – anklicken zum Reparieren`, 'bad'); this.emit('objects', this.facOf(o.uid)); }
+    }
+  }
+  techRepairs() {
+    const s = this.s; if (!s.staff.tech) return;
+    const cov = this.techCoverage();
+    let cost = 0, n = 0;
+    for (const id of s.unlocked) for (const o of s.fac[id].objects) {
+      if (o.broken && Math.random() < cov) { cost += this.repairCost(o) * 0.6; o.broken = false; n++; }
+      if (o.items) for (const it of o.items) if (it.b && Math.random() < cov) { cost += this.itemPrice(PLACEABLE[it.id]) * 0.05; it.b = 0; n++; }
+    }
+    if (n) { s.cash -= cost; this.emit('objects', s.current); }
+  }
+  exchangeCrash(loss, text) {
+    let lostUSD = 0;
+    for (const c of COINS) { const w = this.s.wallet[c.id]; lostUSD += w.ex * loss * this.price(c.id); w.ex *= 1 - loss; }
+    if (lostUSD > 1) this.toast(`💥 ${text} – du verlierst Coins im Wert von ${fmtUSD(lostUSD)}!`, 'bad', 9000);
+    else this.toast(`🛡️ ${text} – deine Coins in der Cold-Wallet sind sicher.`, 'good', 7000);
+  }
+  endlessStep() {
+    const s = this.s;
+    if (!s.endless) s.endless = Object.fromEntries(COINS.map((c) => [c.id, { p: 1, h: 1 }]));
+    for (const c of COINS) {
+      const e = s.endless[c.id];
+      const vol = c.id === 'BTC' ? 0.028 : 0.045;
+      e.p *= Math.exp(gauss() * vol + 0.00025);
+      e.h *= Math.exp(gauss() * 0.006 + (c.id === 'BTC' ? 0.0007 : 0.0003) + (Math.log(e.p) - Math.log(e.h)) * 0.002);
+    }
+  }
+
+  // ---------- Story ----------
+  helpers() {
+    return {
+      countPlaced: (fn) => { let n = 0; for (const id of this.s.unlocked) n += this.s.fac[id].objects.filter(fn).length; return n; },
+      algoHash: (a) => this.algoHash(a), netWorth: () => this.netWorth(), monolithHash: () => this.monolithHash(),
+      maxTemp: () => Math.max(...this.s.unlocked.map((id) => this.s.fac[id].temp || 21)),
+      facilityTripped: () => this.s.unlocked.some((id) => this.s.fac[id].tripped),
+    };
+  }
+  checkMessages() {
+    const s = this.s, h = this.helpers();
+    const have = new Set(s.messages.map((m) => m.id));
+    for (const m of MESSAGES) {
+      if (have.has(m.id)) continue;
+      const ok = m.date ? s.day >= toDay(m.date) && s.day - toDay(m.date) < 40 : m.cond(s, h);
+      if (m.date && s.day - toDay(m.date) >= 40) { have.add(m.id); s.messages.push({ id: m.id, day: toDay(m.date), from: m.from, text: m.text, read: true, old: true }); continue; }
+      if (ok) { s.messages.push({ id: m.id, day: s.day, from: m.from, text: m.text, read: false }); this.emit('message', m); }
+    }
+  }
+  chapter() { return CHAPTERS[Math.min(this.s.chapter, CHAPTERS.length - 1)]; }
+  checkGoals() {
+    const s = this.s, h = this.helpers();
+    const ch = CHAPTERS[s.chapter]; if (!ch) return;
+    for (const g of ch.goals) if (!s.goals[g.id] && g.check(s, h)) { s.goals[g.id] = true; this.toast(`✔ Ziel erreicht: ${g.text}`, 'good'); }
+    const done = ch.goals.every((g) => s.goals[g.id]);
+    if (done && s.day >= toDay(ch.minDate)) {
+      if (ch.unlock) {
+        s.chapter++;
+        if (!s.unlocked.includes(ch.unlock)) this.emit('unlockable', ch.unlock);
+      } else if (!s.flags.won) { s.flags.won = true; this.emit('won'); s.chapter++; }
+    }
+  }
+  goalAction(g) {
+    if (this.s.cash < g.action.cost) return false;
+    this.s.cash -= g.action.cost; this.s.flags[g.action.flag] = true;
+    this.checkGoals(); this.dayUpdate(true); return true;
+  }
+  canUnlock(facId) {
+    const f = FACILITY[facId];
+    const ci = CHAPTERS.findIndex((c) => c.unlock === facId);
+    return ci >= 0 && this.s.chapter > ci && !this.s.unlocked.includes(facId);
+  }
+  unlockFacility(facId) {
+    const f = FACILITY[facId];
+    if (!this.canUnlock(facId) || this.s.cash < f.cost) return false;
+    this.s.cash -= f.cost; this.s.unlocked.push(facId);
+    this.dayUpdate(true); this.emit('unlocked', facId); return true;
+  }
+  upgradePower(facId) {
+    const f = this.s.fac[facId], fd = FACILITY[facId];
+    const next = fd.power[f.power + 1]; if (!next || this.s.cash < next.cost) return false;
+    this.s.cash -= next.cost; f.power++; this.dayUpdate(true); return true;
+  }
+  hireTech(n) { if (FACILITY[this.s.unlocked[this.s.unlocked.length - 1]].tier < 3 && !this.s.flags.gmbh) return false; this.s.staff.tech = Math.max(0, this.s.staff.tech + n); this.dayUpdate(true); return true; }
+
+  // ---------- Wallet ----------
+  sell(coin, frac) {
+    const w = this.s.wallet[coin]; const n = w.ex * frac; if (n <= 0) return 0;
+    const usd = n * this.price(coin) * 0.995; w.ex -= n; this.s.cash += usd; this.s.stats.sold += usd; this.dayUpdate(true); return usd;
+  }
+  buy(coin, usd) {
+    usd = Math.min(usd, this.s.cash); if (usd <= 0) return 0;
+    const p = this.price(coin); if (!p) return 0;
+    this.s.wallet[coin].ex += (usd * 0.995) / p; this.s.cash -= usd; this.dayUpdate(true); return usd;
+  }
+  transfer(coin, toCold) {
+    const w = this.s.wallet[coin];
+    if (toCold) { w.cold += w.ex; w.ex = 0; } else { w.ex += w.cold; w.cold = 0; }
+    this.dayUpdate(true);
+  }
+
+  toast(text, kind = 'info', ms = 5000) { this.emit('toast', text, kind, ms); }
+}
+
+// ---------- Formatierung ----------
+const nf = (d) => new Intl.NumberFormat('de-DE', { maximumFractionDigits: d, minimumFractionDigits: d });
+export function fmtUSD(v, compact = true) {
+  const a = Math.abs(v), sign = v < 0 ? '−' : '';
+  if (compact && a >= 1e9) return `${sign}${nf(2).format(a / 1e9)} Mrd. $`;
+  if (compact && a >= 1e6) return `${sign}${nf(2).format(a / 1e6)} Mio. $`;
+  if (a >= 100) return `${sign}${nf(0).format(a)} $`;
+  if (a >= 1) return `${sign}${nf(2).format(a)} $`;
+  if (a === 0) return '0 $';
+  return `${sign}${a.toPrecision(3).replace('.', ',')} $`;
+}
+export function fmtNum(v, d = 2) { return nf(d).format(v); }
+export function fmtCoin(v) { const a = Math.abs(v); if (a >= 1e6) return nf(2).format(v / 1e6) + ' Mio.'; if (a >= 1000) return nf(0).format(v); if (a >= 1) return nf(3).format(v); if (a === 0) return '0'; return v.toPrecision(3).replace('.', ','); }
+export function fmtHash(h, algo) {
+  const unit = algo === 'equihash' ? 'Sol/s' : 'H/s';
+  const u = ['', 'k', 'M', 'G', 'T', 'P', 'E', 'Z']; let i = 0;
+  while (h >= 1000 && i < u.length - 1) { h /= 1000; i++; }
+  return `${nf(h >= 100 ? 0 : h >= 10 ? 1 : 2).format(h)} ${u[i]}${unit}`;
+}
+export function fmtDate(day, long = false) {
+  const d = new Date(day * 86400000);
+  return d.toLocaleDateString('de-DE', long ? { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' } : { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' });
+}
+export function fmtWatt(w) { if (w >= 1e6) return `${nf(2).format(w / 1e6)} MW`; if (w >= 1000) return `${nf(1).format(w / 1000)} kW`; return `${Math.round(w)} W`; }
