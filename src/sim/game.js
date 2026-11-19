@@ -46,6 +46,7 @@ export class Game {
     // Alte Teile liegen im Zimmer herum – einsammeln und einbauen
     s.loose = { mobo: 'h55', cpu: 'cel33', gpu: 'rhd4850', psu: 'psu400' }; s.inv = [];
     s.skills = { hw: 0, mining: 0, trade: 0 };
+    s.keep = {}; s.talk = { last: {}, week: {}, joy: {}, got: {}, seen: {}, line: {} }; // Fundstücke, Gespräche (src/data/story.js)
     const pc = this.addObject('kinder', 'tower', 1.75, 0.75, 0, { mobo: null, cpu: null, psu: null, gpus: [] }, true);
     pc.mode = 'off'; // Einschalten erst, wenn alle Teile drin sind
     while (s.newsIdx < NEWS.length && NEWS[s.newsIdx].day < s.day) s.newsIdx++;
@@ -73,6 +74,7 @@ export class Game {
       for (const c of COINS) { s.wallet[c.id] ||= { ex: 0, cold: 0 }; if (s.autoSell[c.id] == null) s.autoSell[c.id] = DEFAULT_AUTOSELL; }
       s.ev ||= { done: {}, open: null, log: [], later: [], last: 0 }; s.ev.done ||= {}; s.ev.log ||= []; s.ev.later ||= [];
       s.rel ||= { papa: 0, mama: 0, opa: 0, deniz: 0 }; s.mods ||= []; s.ach ||= {}; s.flags ||= {}; s.stats ||= { minedUSD: 0, sold: 0, spentHW: 0, elec: 0, history: [] };
+      s.keep ||= {}; s.talk ||= { last: {}, week: {}, joy: {}, got: {}, seen: {}, line: {} };
       this.s = s; this.cache = {}; this.dayUpdate(true); return true;
     } catch (e) { console.warn(e); return false; }
   }

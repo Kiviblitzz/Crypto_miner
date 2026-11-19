@@ -25,6 +25,8 @@ const GradeShader = {
 };
 import { buildRoom, buildOutside, buildDustyClutter } from './rooms.js';
 import { objectModel, rigPartModel, loosePartModel } from './models.js';
+import { keepsakeModel } from './models.js';
+import { keepsakesAt } from '../data/story.js';
 import { nightMats, nightGround } from './rooms.js';
 const NIGHT_GRASS = new THREE.Color(0x1d2a1f), NIGHT_FACADE = new THREE.Color(0x4a5068);
 import { M, mat } from './materials.js';
@@ -150,6 +152,7 @@ export class World {
     window.addEventListener('resize', () => this.resize()); this.resize();
     game.on('objects', (fac) => { if (fac === this.facId) this.syncObjects(); });
     game.on('loose', () => this.syncLoose());
+    game.on('keep', () => this.syncKeep()); game.on('objects', () => this.syncKeep());
     game.on('update', () => this.spawnIncome());
   }
 
@@ -186,6 +189,7 @@ export class World {
     this.dustBulb = null;
     if (this.dusty) { const dc = buildDustyClutter(def); this.room.root.add(dc.group); this.room.blocked.push(...dc.blocked); this.dustPts = dc.group.userData.dust; for (const L of this.room.lights) { L.intensity *= 0.3; L.dist = 3.6; L.color = 0xffc98a; } this.room.lights.splice(1); this.room.lights.push({ pos: [6.4, 2.2, 0.7], color: 0xffd9a8, intensity: 0.35, dist: 3.2 }); const bl = this.room.bulbs || []; if (bl[1]) bl[1].material = mat('bulbDead', { color: 0x4a443c, roughness: 0.3 }); if (bl[0]) { bl[0].material = bl[0].material.clone(); this.dustBulb = bl[0]; } this.room.props = []; } else this.dustPts = null;
     this.syncLoose();
+    this.syncKeep();
     this.outside = buildOutside(this.room.outside, def); this.scene.add(this.outside);
     this.roomLights = this.room.lights.map((L) => { const p = new THREE.PointLight(L.color, L.intensity, L.dist, 1.6); p.position.set(...L.pos); this.scene.add(p); return p; });
     if (this.gridHelper) this.scene.remove(this.gridHelper);
@@ -388,6 +392,71 @@ export class World {
       }
     }
   }
+  // ---------- Fundstücke (Erinnerungsstücke) ----------
+  // Liegen dezent herum: schwacher Lichtfleck, ab und zu ein Funkeln – im Kegel der Taschenlampe deutlicher
+  syncKeep() {
+    if (!this.room || !this.game.s) return;
+    if (!this.keepGroup) { this.keepGroup = new THREE.Group(); this.scene.add(this.keepGroup); }
+    const list = keepsakesAt(this.game.s, this.facId), want = list.map((k) => k.id);
+    this.keepItems ||= {};
+    for (const [id, g] of Object.entries(this.keepItems)) if ((!want.includes(id) || g.userData.fac !== this.facId) && !g.userData.flying) this.dropKeep(id);
+    for (const k of list) {
+      if (this.keepItems[k.id]) continue;
+      const [x, y, z, ry] = k.spot, g = keepsakeModel(k.id);
+      // Trefferfläche etwas größer als das kleine Modell (unsichtbar)
+      const bb = new THREE.Box3().setFromObject(g), sz = bb.getSize(new THREE.Vector3()), c = bb.getCenter(new THREE.Vector3());
+      const hit = new THREE.Mesh(new THREE.BoxGeometry(Math.max(0.22, sz.x + 0.08), Math.max(0.12, sz.y + 0.06), Math.max(0.22, sz.z + 0.08)), new THREE.MeshBasicMaterial({ visible: false }));
+      hit.position.copy(c); g.add(hit);
+      g.position.set(x, y, z); g.rotation.y = ry;
+      g.traverse((m) => { m.userData.keep = k.id; if (m.isMesh && m !== hit) { m.castShadow = true; m.receiveShadow = true; } });
+      const halo = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.42), new THREE.MeshBasicMaterial({ map: this.haloTex(), color: 0xffe0a8, transparent: true, opacity: 0.03, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -4 }));
+      halo.rotation.x = -Math.PI / 2; halo.position.set(x, y + 0.004, z); halo.raycast = () => {}; halo.renderOrder = 2;
+      const glint = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.glintTex(), color: 0xfff3d6, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+      glint.position.set(x + Math.cos(ry) * sz.x * 0.25, y + sz.y + 0.02, z - Math.sin(ry) * sz.x * 0.25); glint.raycast = () => {}; glint.renderOrder = 3; glint.scale.set(0.05, 0.05, 1);
+      Object.assign(g.userData, { fac: this.facId, halo, glint, phase: (x * 7.3 + z * 3.1) % 6.28, lit: 0 });
+      this.keepGroup.add(g, halo, glint); this.keepItems[k.id] = g;
+    }
+  }
+  dropKeep(id) { const g = this.keepItems?.[id]; if (!g) return; this.keepGroup.remove(g, g.userData.halo, g.userData.glint); delete this.keepItems[id]; }
+  glintTex() {
+    if (this._glint) return this._glint; const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+    const gr = g.createRadialGradient(32, 32, 0, 32, 32, 12); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,240,200,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+    g.fillStyle = 'rgba(255,248,225,.9)'; for (const [w, h] of [[30, 2.2], [2.2, 30]]) { g.beginPath(); g.ellipse(32, 32, w, h, 0, 0, 7); g.fill(); }
+    this._glint = new THREE.CanvasTexture(c); this._glint.colorSpace = THREE.SRGBColorSpace; return this._glint;
+  }
+  // Aufheben: wie die PC-Teile kurz zur Kamera fliegen lassen
+  keepFx(id) {
+    const g = this.keepItems?.[id]; if (!g) return; g.userData.flying = 0.001; g.traverse((m) => { if (m.isMesh) m.raycast = () => {}; }); this.aimLockUntil = this.t + 0.4;
+    g.userData.halo.visible = g.userData.glint.visible = false;
+  }
+  updateKeep(dt) {
+    if (!this.keepGroup) return;
+    this.keepGroup.visible = this.mode !== 'title';
+    const cam = this.camera, fwd = cam.getWorldDirection(this._kf ||= new THREE.Vector3()), d = (this._kd ||= new THREE.Vector3()), lamp = !!this.vm?.lampOn;
+    for (const [id, g] of Object.entries(this.keepItems || {})) {
+      const u = g.userData;
+      if (u.flying) {
+        const f = (u.flying += dt), k = Math.min(1, f / 0.42), tgt = cam.position.clone().addScaledVector(fwd, 0.3).add(new THREE.Vector3(0, -0.45, 0));
+        g.position.lerp(tgt, k * 0.35); g.scale.setScalar(Math.max(0.001, 1 - 1.6 * k)); g.rotation.y += dt * 6;
+        if (k >= 1) this.dropKeep(id);
+        continue;
+      }
+      let lit = 0;
+      if (lamp) { d.subVectors(g.position, cam.position); const dist = d.length(), cos = d.normalize().dot(fwd); if (dist < 7 && cos > 0.94) lit = Math.min(1, (cos - 0.94) / 0.04) * Math.min(1, (7 - dist) / 2); }
+      u.lit += (lit - u.lit) * Math.min(1, dt * 5);
+      const aimed = this.aim?.keep === id, ph = this.t * (0.85 + 0.9 * u.lit) + u.phase, tw = Math.pow(Math.max(0, Math.sin(ph)), 16);
+      u.halo.material.opacity = 0.022 + 0.01 * Math.sin(this.t * 1.7 + u.phase) + 0.07 * u.lit + (aimed ? 0.03 : 0);
+      u.glint.material.opacity = Math.min(1, tw * (0.3 + 0.7 * u.lit) + (aimed ? 0.12 : 0)); u.glint.material.rotation = ph * 0.5;
+      const sc = 0.035 + 0.05 * tw + 0.025 * u.lit; u.glint.scale.set(sc, sc, 1);
+    }
+  }
+  keepThumb(id) { return this.thumbnail('keep:' + id, () => keepsakeModel(id, true)); }
+  // Ansprechbare Personen: unsichtbare Trefferbox mit Requisite {action:'talk', who}
+  talkHit(p, who) {
+    this._talkGeo ||= new THREE.BoxGeometry(0.56, 1.8, 0.46); this._talkMat ||= new THREE.MeshBasicMaterial({ visible: false });
+    const m = new THREE.Mesh(this._talkGeo, this._talkMat); m.position.y = 0.9;
+    m.userData.prop = { action: 'talk', who, label: 'talk:' + who + ':' + p.id, hint: '', npc: p }; p.add(m); p.userData.hit = m;
+  }
   // Erstes Einschalten: Lüfter laufen hoch, der Monitor bootet den Miner
   powerOn(uid) {
     const e = this.entries.get(uid); if (e) e.spinK = 0;
@@ -538,6 +607,7 @@ export class World {
   primaryAction() {
     if (this.placing) { this.confirmPlacement(); return; }
     const a = this.aim; if (!a) { this.onNoAim?.(); return; }
+    if (a.keep) { this.onKeep?.(a.keep); return; }
     if (a.loose) this.onLoose?.(a.loose);
     else if (a.door) this.onDoor?.(a.door);
     else if (a.prop) this.onProp?.(a.prop);
@@ -550,10 +620,14 @@ export class World {
     this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
     this.raycaster.far = this.reach() + 1.5;
     const hits = this.raycaster.intersectObjects([...this.objGroup.children, ...this.doorGroup.children, ...(this.looseGroup?.children || []), this.room.root], true);
+    { const extra = [...(this.keepGroup?.children || []), ...(this.people?.children || []).map((p) => p.userData.hit).filter(Boolean)]; if (extra.length) { hits.push(...this.raycaster.intersectObjects(extra, true)); hits.sort((a, b) => a.distance - b.distance); } } // Fundstücke und ansprechbare Personen
     this.raycaster.far = Infinity;
     let aim = null; const looseHit = hits.some((x) => x.object.userData.loose);
+    const keepHit = hits.some((x) => x.object.userData.keep);
     for (const h of hits) {
       const o = h.object; if (o.isSprite) continue;
+      if (o.userData.keep) { aim = { keep: o.userData.keep, dist: h.distance }; break; }
+      if (o.userData.prop && !o.userData.prop.who && keepHit) continue; // Fundstück unterm Bett hat Vorrang vor der Schlafen-Box
       if (o.userData.prop && looseHit) continue; // Teile auf dem Bett haben Vorrang vor der Schlafen-Box
       if (o.userData.prop?.action === 'sleep' && this.game.s.feat && !this.game.s.flags.miningStarted) continue; // vor dem ersten PC gibt es nichts zu verschlafen
       if (o.userData.loose) { aim = { loose: o.userData.loose, dist: h.distance }; break; }
@@ -562,11 +636,12 @@ export class World {
       if (o.userData.uid) { aim = { uid: o.userData.uid, dist: h.distance }; break; }
       if (o.isMesh && o.visible) break; // Wand/Möbel verdeckt
     }
-    const akey = (a) => (a ? a.uid || (a.loose && 'loose:' + a.loose) || (a.door || a.prop)?.label : null), key = akey(aim), prev = akey(this.aim);
+    const akey = (a) => (a ? a.uid || (a.loose && 'loose:' + a.loose) || (a.keep && 'keep:' + a.keep) || (a.door || a.prop)?.label : null), key = akey(aim), prev = akey(this.aim);
     this.aim = aim;
     if (key !== prev) this.onAim?.(aim);
     const e = aim?.uid && this.entries.get(aim.uid), lp = aim?.loose && this.looseItems?.[aim.loose];
     this.outline.selectedObjects = e ? [e.group] : lp ? [lp] : [];
+    if (aim?.keep && this.keepItems?.[aim.keep]) this.outline.selectedObjects = [this.keepItems[aim.keep]]; else if (aim?.prop?.npc) this.outline.selectedObjects = [aim.prop.npc];
     if (!this.selected) this.selBox.visible = false;
   }
   pick() { return this.aim?.uid || null; }
@@ -597,7 +672,7 @@ export class World {
   }
   pulse(uid) { const e = this.entries.get(uid); if (!e || !this.outline) return; this.outline.selectedObjects = [e.group]; this.outline.pulsePeriod = 0.5; this.outline.visibleEdgeColor.set(0xffc23a); clearTimeout(this.pulseT); this.pulseT = setTimeout(() => { this.outline.pulsePeriod = 0; this.outline.visibleEdgeColor.set(0xffdda0); }, 1500); }
   // Vorschaubild für den Bau-Katalog: Modell im kleinen Fotostudio rendern (einmal pro Typ)
-  thumbnail(type) {
+  thumbnail(type, build = null) {
     this.thumbs ||= new Map(); if (this.thumbs.has(type)) return this.thumbs.get(type);
     const W = 480, H = 320, r = this.renderer;
     if (!this.thumbScene) {
@@ -608,7 +683,7 @@ export class World {
       this.thumbRT = new THREE.WebGLRenderTarget(W, H, { samples: 4 });
     }
     const def = PLACEABLE[type];
-    const model = objectModel({ type, parts: def.kind === 'rig' ? { mobo: null, cpu: null, psu: null, gpus: [] } : undefined, items: def.kind === 'holder' ? [] : undefined, rot: 0 });
+    const model = build ? build() : objectModel({ type, parts: def.kind === 'rig' ? { mobo: null, cpu: null, psu: null, gpus: [] } : undefined, items: def.kind === 'holder' ? [] : undefined, rot: 0 });
     this.thumbScene.add(model);
     const box = new THREE.Box3().setFromObject(model), size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
     const rad = size.length() / 2; let dist = rad / Math.sin(THREE.MathUtils.degToRad(15)) * 1.2;
@@ -884,6 +959,7 @@ export class World {
       if (this.people.userData[key]) continue;
       const p = this.makePerson(vest, false, skin); p.userData.static = true; p.userData.work = true;
       p.position.set(x, 0, z); p.rotation.y = ry; this.people.userData[key] = p; this.people.add(p);
+      this.talkHit(p, key);
       if (p.userData.hair) p.userData.hair.material = mat('npcGrayHair', { color: 0xbfbfbf, roughness: 0.9 });
     }
     want += fam.length;
@@ -892,6 +968,7 @@ export class World {
     while (this.people.children.length < want) {
       const first = !this.people.children.some((c) => !c.userData.static);
       const p = first ? this.makePerson(0x2e6fd6, false, 0xc89a72) : this.makePerson(0xff8a00, tier >= 3);
+      this.talkHit(p, first ? 'deniz' : 'tech');
       const pt = this.randomFloorPoint(); p.position.set(pt.x, 0, pt.z); this.people.add(p);
     }
   }
@@ -982,6 +1059,7 @@ export class World {
     else { const df = (s.frac - this.visFrac + 1) % 1; this.visFrac = (this.visFrac + Math.min(df, dt / 90)) % 1; }
     this.updateDaylight(this.visFrac);
     this.updatePeople(dt); this.updateSmoke(dt); this.updateWeather(dt); this.updatePopups(dt); this.updateInstall(dt); this.updateLoose(dt); this.updateDusty(dt); this.updateLamp(dt); if (this.ghostMat) { this.ghostMat.opacity = 0.1; this.ghostLine.opacity = 0.52 + 0.04 * Math.sin(this.t * 4); }
+    this.updateKeep(dt);
     // Lüfter & LEDs
     const fanSpeed = 28 * dt;
     for (const e of this.entries.values()) {

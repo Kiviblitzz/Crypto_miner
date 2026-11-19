@@ -6,6 +6,7 @@ import { fmtUSD, fmtNum, fmtCoin, fmtHash, fmtDate, fmtWatt, SKILL_XP } from '..
 import { toDay, BTC_HASH, inHeatwave, HALVINGS, BTC_REWARD } from '../data/history.js';
 import { EVENT } from '../data/events.js';
 import { ACH } from '../data/achievements.js';
+import { talkTo, PEOPLE, talkWho, KEEPSAKES, KEEPSAKE, pickKeepsake, keepsakeCount, TALK_REL } from '../data/story.js';
 
 const $ = (s) => document.querySelector(s);
 const h = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
@@ -27,6 +28,18 @@ const SKILL = {
 };
 const skillSvg = (k, size = 22) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${SKILL[k].icon}</svg>`;
 const partSvg = (t, size = 22) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${PART_ICON[t]}</svg>`;
+
+// Gesprächskarte: gezeichnetes Gesicht (kein Emoji), passend zu den Figuren in der Welt
+const FACES = {
+  papa: { bg: '#7a5230', shirt: '#5c3d22', skin: '#e0b089', hair: '#9b9b9b', extra: '<path d="M26.5 37.2q5.5-2.6 11 0q-1.2 2.4-5.5 1.6q-4.3.8-5.5-1.6z" fill="#8a8a8a"/>', top: '<path d="M19.5 27c-.6-9 5-13.5 12.5-13.5S45.1 18 44.5 27c-1.5-5-4.6-7.5-12.5-7.5S21 22 19.5 27z" fill="#9b9b9b"/>' },
+  opa: { bg: '#5b6b4a', shirt: '#46533a', skin: '#ecc4a2', hair: '#e4e4e4', extra: '<g fill="none" stroke="#4a3b2c" stroke-width="1.4"><circle cx="27" cy="29" r="3.6"/><circle cx="37" cy="29" r="3.6"/><path d="M30.6 29h2.8"/></g><path d="M27.5 36.6q4.5-1.8 9 0" stroke="#d8d8d8" stroke-width="2.2" fill="none" stroke-linecap="round"/>', top: '<path d="M19.6 30c-1.4-4 .2-8.4 2.6-9.6c-.6 3 .2 5.2-.4 9.6zM44.4 30c1.4-4-.2-8.4-2.6-9.6c.6 3-.2 5.2.4 9.6z" fill="#e4e4e4"/>' },
+  deniz: { bg: '#2e6fd6', shirt: '#24539e', skin: '#c89a72', hair: '#231811', extra: '', top: '<path d="M19 28c-2-10 4.5-15.5 13-15.5S47 18 45 28c-.8-3.6-2.4-5.6-4.4-6.6c-.6 2-3.4 2.6-5 .8c-1.4 1.8-4.6 1.8-5.6-.2c-1.4 1.6-4.6 1.4-5.2-.6c-2.6 1-4.6 3.2-5.8 6.6z" fill="#231811"/>' },
+  tech: { bg: '#e07a10', shirt: '#b45f0a', skin: '#e0b394', hair: '#3a2a1c', extra: '', top: '<path d="M18.6 26.5a13.4 12 0 0 1 26.8 0z" fill="#ffd400"/><rect x="16.5" y="25.4" width="31" height="3" rx="1.5" fill="#f2c600"/><rect x="30.6" y="14.6" width="2.8" height="8" rx="1.2" fill="#f2c600"/>' },
+};
+function faceSvg(who) {
+  const f = FACES[who] || FACES.tech;
+  return `<svg viewBox="0 0 64 64" width="56" height="56" aria-hidden="true"><circle cx="32" cy="32" r="32" fill="${f.bg}"/><path d="M9 64c2.5-11 11-16.5 23-16.5S52.5 53 55 64z" fill="${f.shirt}"/><rect x="28.5" y="40" width="7" height="9" rx="3" fill="${f.skin}"/><circle cx="19.6" cy="31" r="2.6" fill="${f.skin}"/><circle cx="44.4" cy="31" r="2.6" fill="${f.skin}"/><ellipse cx="32" cy="30" rx="12.4" ry="14" fill="${f.skin}"/>${f.top}<circle cx="27" cy="29.2" r="1.6" fill="#2a1d16"/><circle cx="37" cy="29.2" r="1.6" fill="#2a1d16"/><path d="M24.8 25.4h4.4M34.8 25.4h4.4" stroke="${f.hair}" stroke-width="1.6" stroke-linecap="round"/><path d="M28.4 38.4q3.6 2.6 7.2 0" stroke="#7a3f30" stroke-width="1.6" fill="none" stroke-linecap="round"/>${f.extra}</svg>`;
+}
 
 export class UI {
   constructor(game, world) {
@@ -50,6 +63,7 @@ export class UI {
     };
     world.onInstalled = (uid) => { this.installing = false; this.flushXp(); if (this.inspUid === uid) this.inspect(uid); if (this.afterSnap) { this.toast(this.afterSnap, 'good', 2600); this.afterSnap = null; } };
     world.onLoose = (t) => { this.w.pickupFx(t); if (!this.g.s.loose?.[t]) return; this.toast(`${PNAME[t]} in der Tasche`, 'good', 2200); if (!this.g.pickUp(t)) return; this.lastPick = { t, at: performance.now() }; setTimeout(() => this.goals(), 1300); this.audio?.install?.(); this.goals(); };
+    world.onKeep = (id) => this.pickKeep(id);
     game.on('xp', (k, n, lv) => this.xpPop(k, n, lv));
     world.onIncome = () => { this.bumpWallet(); this.audio?.tick?.(); };
     world.onLamp = (on) => { if (on) this.lampHint?.remove(); this.toast(on ? 'Taschenlampe an' : 'Taschenlampe aus', 'info', 1500); this.keysHint(); };
@@ -329,6 +343,7 @@ export class UI {
   prompt(aim) {
     const el = $('#prompt');
     if (!aim || this.w.mode !== 'play') { el.classList.add('hidden'); return; }
+    if (aim.keep || aim.prop?.action === 'talk') { el.innerHTML = this.promptLife(aim); el.classList.remove('hidden'); return; }
     let html = '';
     if (aim.loose) {
       html = `<kbd>E</kbd>${PNAME[aim.loose]} aufheben`;
@@ -350,6 +365,7 @@ export class UI {
     el.innerHTML = html; el.classList.remove('hidden');
   }
   useProp(p) {
+    if (p.action === 'talk') { this.talk(p.who); return; }
     if (p.action === 'market') { if (!this.g.has('market')) { this.toast(this.g.s.flags.miningStarted ? 'Noch nichts zu verkaufen – lass den PC arbeiten.' : 'Bau erst deinen PC zusammen.', 'info', 3000); return; } this.market(); }
     else if (p.action === 'company') this.company();
     else if (p.action === 'techs') this.techs();
@@ -749,6 +765,39 @@ export class UI {
     const n = h(`<div class="story"><div class="ch">${esc(title)}</div><p>${html}</p><div class="row" style="justify-content:flex-end"><button class="btn primary">${btn}</button></div></div>`);
     n.querySelector('button').onclick = () => this.closeModal();
     this.openModal(n, 'narrow', 'story');
+  }
+
+  // ---------- Lebendige Welt: Gespräche & Fundstücke ----------
+  promptLife(aim) {
+    if (aim.keep) { const k = KEEPSAKE[aim.keep]; return `<kbd>E</kbd>${esc(k?.label || 'Etwas')} aufheben<div class="st">Sieht nach einer Erinnerung aus</div>`; }
+    const s = this.g.s, who = talkWho(s, aim.prop.who), p = PEOPLE[who];
+    const today = s.talk?.last?.[who] === s.day;
+    return `<kbd>E</kbd>Mit ${esc(p.as)} reden<div class="st">${esc(p.role(s))}${today ? ' · heute schon gesprochen' : ''}</div>`;
+  }
+  talk(who0) {
+    const r = talkTo(this.g, who0, this.w.facId); if (!r) return;
+    const heart = '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.7c0 5.6-7.5 10.2-7.5 10.2z"/></svg>';
+    const pips = `<i class="tk-pips" title="Einmal pro Woche zählt ein Gespräch für eure Beziehung">${Array.from({ length: TALK_REL.quarters }, (_, i) => `<b class="${i < r.quarters ? 'on' : ''}"></b>`).join('')}</i>`;
+    const joy = r.relUp ? `<span class="tk-joy up">${heart}${esc(r.person.as)} mag eure Gespräche · Beziehung +1</span>` : r.joy ? `<span class="tk-joy">${heart}${esc(r.name)} freut sich${r.capped ? '' : pips}</span>` : '<span></span>';
+    const n = h(`<div class="story talk"><div class="tk-who"><span class="tk-av">${faceSvg(r.who)}</span><div class="tk-n"><b>${esc(r.name)}</b><small>${esc(r.role)}</small></div></div><p class="tk-line">„${r.line}“</p><div class="tk-foot">${joy}<button class="btn primary">Bis später</button></div></div>`);
+    n.querySelector('button').onclick = () => this.closeModal();
+    this.openModal(n, 'narrow', 'talk');
+    if (r.relUp) this.audio?.cash?.();
+    this.refresh?.();
+  }
+  pickKeep(id) {
+    const k = KEEPSAKE[id]; if (!k || this.g.s.keep?.[id]) return;
+    this.w.keepFx(id);
+    if (!pickKeepsake(this.g, id)) return;
+    this.audio?.install?.(); this.refresh?.();
+    setTimeout(() => this.keepCard(k), 480);
+  }
+  keepCard(k) {
+    const s = this.g.s, n0 = keepsakeCount(s), all = KEEPSAKES.length;
+    let pic = ''; try { pic = this.w.keepThumb?.(k.id) || ''; } catch (e) { pic = ''; }
+    const n = h(`<div class="story keep"><div class="kp-tag">Fundstück ${n0} von ${all}</div>${pic ? `<div class="kp-pic"><img src="${pic}" alt=""></div>` : ''}<div class="ch">${esc(k.name)}</div><p>${k.text}</p><div class="kp-gain"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>${esc(k.gain)}</div>${n0 >= all ? '<div class="kp-all">Alle Erinnerungsstücke gefunden. Schatzsucher!</div>' : ''}<div class="row" style="justify-content:flex-end"><button class="btn primary">Einstecken</button></div></div>`);
+    n.querySelector('button').onclick = () => this.closeModal();
+    this.openModal(n, 'narrow', 'keep');
   }
 
   market(update = false) {

@@ -811,6 +811,94 @@ export function loosePartModel(type, id) {
   else if (type === 'psu') psuBox(root, 0, 0, 0, 0.15, 0.086, 0.16, part.cap);
   return root;
 }
+// Fundstücke (Erinnerungsstücke): kleine, liebevolle Einzelstücke; Unterkante y=0, Vorderseite +Z.
+// display=true kippt flache Dinge zur Kamera (für das Bild auf der Fundkarte).
+export function keepsakeModel(id, display = false) {
+  const root = new THREE.Group(), inner = new THREE.Group(); root.add(inner); const g = inner;
+  if (id === 'gameboy') {
+    const shell = mat('kpGbShell', { color: 0xc9c5ba, roughness: 0.55 }), dark = mat('kpGbDark', { color: 0x3b3d4c, roughness: 0.45 }), pad = mat('kpGbPad', { color: 0x232328, roughness: 0.5 }), btn = mat('kpGbBtn', { color: 0x9b2556, roughness: 0.35 });
+    box(g, 0.09, 0.026, 0.148, shell, 0, 0, 0, 0, 0.009);
+    box(g, 0.074, 0.003, 0.066, dark, 0, 0.025, -0.032, 0, 0.004);
+    const scr = labelMat('kpGbScreen', 128, 112, (c, w, h) => {
+      c.fillStyle = '#9fae3e'; c.fillRect(0, 0, w, h); c.fillStyle = '#4a5a22';
+      c.fillRect(0, 86, w, 26); for (let x = 0; x < w; x += 16) c.fillRect(x + 4, 80, 8, 6);
+      c.fillRect(50, 56, 14, 24); c.fillRect(46, 50, 22, 8); c.fillRect(54, 44, 6, 6); // kleine Figur
+      for (const [x, y] of [[92, 30], [104, 22], [20, 26]]) c.fillRect(x, y, 6, 6);
+      c.font = 'bold 16px monospace'; c.fillText('HI 09999', 8, 18);
+    }, 0.25);
+    plane(g, 0.048, 0.042, scr, 0, 0.0286, -0.032, -Math.PI / 2);
+    box(g, 0.026, 0.005, 0.0085, pad, -0.022, 0.0255, 0.03, 0, 0.002); box(g, 0.0085, 0.005, 0.026, pad, -0.022, 0.0255, 0.03, 0, 0.002);
+    for (const [x, z] of [[0.033, 0.024], [0.019, 0.034]]) cyl(g, 0.0063, 0.0063, 0.006, btn, x, 0.027, z, 16);
+    for (const x of [-0.009, 0.006]) box(g, 0.012, 0.0025, 0.0038, pad, x, 0.0255, 0.058, 0.45, 0.0015);
+    for (let i = 0; i < 5; i++) box(g, 0.0022, 0.0012, 0.016, dark, 0.02 + i * 0.0045, 0.0257, 0.06, 0.5, 0);
+    box(g, 0.058, 0.018, 0.014, mat('kpGbCart', { color: 0x5a5d64, roughness: 0.6 }), 0, 0.004, -0.079, 0, 0.003);
+    box(g, 0.04, 0.0008, 0.01, mat('kpGbCartLbl', { color: 0xc2362f, roughness: 0.6 }), 0, 0.022, -0.079, 0, 0);
+    if (display) inner.rotation.x = 0.95;
+  } else if (id === 'radio') {
+    const wood = mat('kpRadioWood', { color: 0x6b4226, roughness: 0.42, metalness: 0.05 }), ivory = mat('kpIvory', { color: 0xeadfc6, roughness: 0.32 }), foot = mat('kpRadioFoot', { color: 0x2a1c12, roughness: 0.6 });
+    const cloth = labelMat('kpRadioCloth', 128, 96, (c, w, h) => { c.fillStyle = '#c9b48c'; c.fillRect(0, 0, w, h); for (let y = 0; y < h; y += 3) { c.fillStyle = y % 6 ? 'rgba(120,90,50,.18)' : 'rgba(255,240,210,.15)'; c.fillRect(0, y, w, 1.5); } c.strokeStyle = 'rgba(90,60,30,.35)'; c.lineWidth = 3; for (let x = 18; x < w; x += 23) { c.beginPath(); c.moveTo(x, 4); c.lineTo(x, h - 4); c.stroke(); } });
+    const dial = labelMat('kpRadioDial', 192, 96, (c, w, h) => { c.fillStyle = '#f1e6c8'; c.fillRect(0, 0, w, h); c.fillStyle = '#5a4630'; c.font = 'bold 13px Nunito, sans-serif'; ['Oslo', 'Wien', 'Hamburg', 'Lindental'].forEach((t, i) => c.fillText(t, 8 + (i % 2) * 92, 26 + Math.floor(i / 2) * 30)); c.fillStyle = '#7a6a50'; for (let x = 8; x < w - 8; x += 8) c.fillRect(x, h - 22, 1.5, x % 32 ? 6 : 11); c.fillStyle = '#c0392b'; c.fillRect(118, 6, 3, h - 12); c.font = 'bold 11px Nunito, sans-serif'; c.fillStyle = '#5a4630'; c.fillText('UKW · MW · KW', 54, h - 4); });
+    box(g, 0.3, 0.18, 0.14, wood, 0, 0.012, 0, 0, 0.02);
+    for (const [x, z] of [[-0.12, -0.05], [0.12, -0.05], [-0.12, 0.05], [0.12, 0.05]]) cyl(g, 0.008, 0.011, 0.012, foot, x, 0.006, z, 12);
+    plane(g, 0.15, 0.118, cloth, -0.058, 0.102, 0.0705);
+    plane(g, 0.106, 0.054, dial, 0.083, 0.135, 0.0705);
+    box(g, 0.112, 0.004, 0.006, X.brass(), 0.083, 0.106, 0.069, 0, 0.001); box(g, 0.112, 0.004, 0.006, X.brass(), 0.083, 0.162, 0.069, 0, 0.001);
+    box(g, 0.29, 0.005, 0.004, X.brass(), 0, 0.176, 0.069, 0, 0.001);
+    for (const x of [0.058, 0.108]) { cyl(g, 0.0145, 0.0145, 0.014, ivory, x, 0.062, 0.076, 22, 'z'); cyl(g, 0.009, 0.0115, 0.006, ivory, x, 0.062, 0.085, 18, 'z'); }
+    cyl(g, 0.0085, 0.0085, 0.004, mat('kpMagicEye', { color: 0x3cff9a, emissive: 0x29e07c, emissiveIntensity: 1.4, roughness: 0.3 }), 0.083, 0.088, 0.0715, 18, 'z');
+  } else if (id === 'loetkolben') {
+    const wood = mat('kpSolderWood', { color: 0x5c3a22, roughness: 0.62 }), burnt = mat('kpSolderBurnt', { color: 0x22160e, roughness: 0.85 }), steel = X.chrome(), copper = mat('kpCopperTip', { color: 0xb8733e, roughness: 0.35, metalness: 0.9 });
+    const y = 0.013;
+    cyl(g, 0.0125, 0.0115, 0.11, wood, -0.03, y, 0, 18, 'x');
+    for (const x of [-0.07, -0.058, -0.046]) cyl(g, 0.0129, 0.0129, 0.003, burnt, x, y, 0, 18, 'x');
+    cyl(g, 0.0132, 0.0132, 0.016, burnt, 0.018, y, 0, 18, 'x');
+    cyl(g, 0.0095, 0.011, 0.02, steel, 0.035, y, 0, 16, 'x');
+    cyl(g, 0.0042, 0.0042, 0.085, steel, 0.087, y, 0, 10, 'x');
+    cyl(g, 0.0046, 0.0006, 0.024, copper, 0.141, y, 0, 10, 'x');
+    tube(g, [[-0.086, y, 0], [-0.11, 0.007, 0.012], [-0.15, 0.0045, 0.045], [-0.19, 0.0045, 0.036], [-0.215, 0.0045, -0.006], [-0.235, 0.0045, -0.03]], 0.0042, mat('kpCloth', { color: 0x6a2e24, roughness: 0.9 }), 28, 6);
+    if (display) inner.rotation.x = 0.35;
+  } else if (id === 'pruefer') {
+    const yel = mat('kpTesterYel', { color: 0xf0bf1c, roughness: 0.42 }), blk = mat('kpTesterBlk', { color: 0x1e1f23, roughness: 0.5 }), steel = X.chrome();
+    const disp = labelMat('kpTesterDisp', 160, 64, (c, w, h) => { c.fillStyle = '#20242a'; c.fillRect(0, 0, w, h); ['12', '24', '50', '120', '230', '400'].forEach((t, i) => { c.fillStyle = i === 4 ? '#ff5a3c' : '#5d6a52'; c.beginPath(); c.arc(14 + i * 26, 20, 7, 0, 7); c.fill(); c.fillStyle = '#d9d4c4'; c.font = 'bold 13px Arial'; c.textAlign = 'center'; c.fillText(t, 14 + i * 26, 50); }); }, 0.35);
+    const scratch = labelMat('kpTesterName', 256, 48, (c, w, h) => { c.fillStyle = '#f0bf1c'; c.fillRect(0, 0, w, h); c.fillStyle = '#3a2c08'; c.font = 'italic bold 22px Nunito, sans-serif'; c.fillText('H. Brandt, Elektromeister', 6, 32); });
+    box(g, 0.2, 0.026, 0.042, yel, 0, 0, 0, 0, 0.012);
+    box(g, 0.074, 0.003, 0.03, blk, 0.035, 0.0245, 0, 0, 0.002);
+    plane(g, 0.068, 0.025, disp, 0.035, 0.0279, 0, -Math.PI / 2);
+    plane(g, 0.09, 0.016, scratch, -0.05, 0.0262, 0, -Math.PI / 2);
+    cyl(g, 0.0065, 0.0075, 0.03, blk, 0.114, 0.013, 0, 12, 'x'); cyl(g, 0.0018, 0.0018, 0.026, steel, 0.141, 0.013, 0, 8, 'x');
+    const g2 = new THREE.Group(); g2.position.set(0.03, 0, 0.085); g2.rotation.y = 0.32; g.add(g2);
+    box(g2, 0.11, 0.022, 0.032, yel, 0, 0, 0, 0, 0.01); cyl(g2, 0.0055, 0.0065, 0.026, blk, 0.066, 0.011, 0, 12, 'x'); cyl(g2, 0.0016, 0.0016, 0.022, steel, 0.09, 0.011, 0, 8, 'x');
+    tube(g, [[-0.1, 0.012, 0], [-0.13, 0.008, 0.03], [-0.12, 0.006, 0.09], [-0.07, 0.006, 0.12], [-0.03, 0.01, 0.1]], 0.0035, blk, 26, 6);
+    if (display) inner.rotation.x = 0.6;
+  } else if (id === 'usbstick') {
+    const body = mat('kpUsbBody', { color: 0x1d1e23, roughness: 0.42 });
+    const tape = labelMat('kpUsbTape', 256, 112, (c, w, h) => { c.fillStyle = '#efe9d6'; c.fillRect(0, 0, w, h); c.fillStyle = '#1d3f8f'; c.font = 'bold 40px "Comic Sans MS", Nunito, sans-serif'; c.fillText('BTC 2011', 12, 46); c.font = 'bold 24px "Comic Sans MS", Nunito, sans-serif'; c.fillText('NICHT LÖSCHEN!', 12, 90); });
+    g.scale.setScalar(1.3);
+    box(g, 0.052, 0.009, 0.02, body, 0, 0, 0, 0, 0.004);
+    box(g, 0.013, 0.0045, 0.0122, X.chrome(), 0.0325, 0.0022, 0, 0, 0.0005);
+    plane(g, 0.032, 0.0155, tape, -0.004, 0.0092, 0, -Math.PI / 2);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.0085, 0.0014, 6, 20), X.chrome()); ring.rotation.x = Math.PI / 2; ring.position.set(-0.035, 0.0016, 0); g.add(ring);
+    if (display) inner.rotation.x = 0.75;
+  } else if (id === 'polarfoto') {
+    const photo = labelMat('kpAurora', 256, 300, (c, w, h) => {
+      c.fillStyle = '#ece2c6'; c.fillRect(0, 0, w, h);
+      const iw = w - 28, ih = 228, x0 = 14, y0 = 14;
+      const sky = c.createLinearGradient(0, y0, 0, y0 + ih); sky.addColorStop(0, '#061424'); sky.addColorStop(0.6, '#0d2b3b'); sky.addColorStop(1, '#123a44'); c.fillStyle = sky; c.fillRect(x0, y0, iw, ih);
+      c.fillStyle = 'rgba(255,255,255,.8)'; for (let i = 0; i < 40; i++) c.fillRect(x0 + ((i * 53) % iw), y0 + ((i * 37) % 110), 1.5, 1.5);
+      for (let k = 0; k < 3; k++) { const gr = c.createLinearGradient(0, y0 + 20, 0, y0 + 150); gr.addColorStop(0, 'rgba(120,255,170,0)'); gr.addColorStop(0.55, `rgba(90,255,160,${0.5 - k * 0.12})`); gr.addColorStop(1, 'rgba(60,200,140,0)'); c.fillStyle = gr; c.beginPath(); c.moveTo(x0, y0 + 60 + k * 18); c.bezierCurveTo(x0 + 60, y0 + 10 + k * 25, x0 + 140, y0 + 120 - k * 20, x0 + iw, y0 + 40 + k * 14); c.lineTo(x0 + iw, y0 + 150); c.bezierCurveTo(x0 + 150, y0 + 170, x0 + 80, y0 + 110, x0, y0 + 160); c.closePath(); c.fill(); }
+      c.fillStyle = '#05090c'; c.beginPath(); c.moveTo(x0, y0 + 170); c.lineTo(x0 + 40, y0 + 120); c.lineTo(x0 + 80, y0 + 150); c.lineTo(x0 + 130, y0 + 100); c.lineTo(x0 + 190, y0 + 155); c.lineTo(x0 + iw, y0 + 125); c.lineTo(x0 + iw, y0 + 180); c.lineTo(x0, y0 + 180); c.fill();
+      const wat = c.createLinearGradient(0, y0 + 180, 0, y0 + ih); wat.addColorStop(0, '#0e3330'); wat.addColorStop(1, '#071a1c'); c.fillStyle = wat; c.fillRect(x0, y0 + 180, iw, ih - 180);
+      c.fillStyle = 'rgba(110,255,170,.25)'; for (let i = 0; i < 6; i++) c.fillRect(x0 + 30 + i * 30, y0 + 190 + (i % 3) * 9, 22, 2);
+      c.fillStyle = 'rgba(120,90,40,.12)'; c.fillRect(0, 0, w, h); // vergilbt
+      c.fillStyle = '#4a3a28'; c.font = 'italic 24px "Segoe Script", "Comic Sans MS", cursive'; c.fillText('Sogn, 1989', 24, h - 22);
+    });
+    const ph = new THREE.Group(); ph.rotation.y = 0.08; g.add(ph);
+    box(ph, 0.11, 0.0012, 0.129, mat('kpPhotoBack', { color: 0xe3d8bb, roughness: 0.8 }), 0, 0, 0, 0, 0);
+    plane(ph, 0.108, 0.127, photo, 0, 0.0014, 0, -Math.PI / 2);
+    if (display) inner.rotation.x = 1.05;
+  }
+  return root;
+}
 // Einzelnes Bauteil (für die Einbau-Animation), nicht zusammengefügt
 export function rigPartModel(o, only) { return buildRig(o.type, o.parts || {}, only); }
 
