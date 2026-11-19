@@ -40,6 +40,9 @@ export const FACILITIES = [
   },
 ];
 export const FACILITY = Object.fromEntries(FACILITIES.map((f) => [f.id, f]));
+// Hilfen für Bonusziele: Tagesergebnis eines Standorts, Zahl der Mining-Geräte
+const facNet = (g, id) => { const sm = g.summary?.[id]; if (!sm || sm.tripped || !(sm.rev > 0)) return -1; return sm.rev * sm.throttle - Math.max(0, (sm.watt / 1000) * 24 - g.solarKwh(id)) * sm.elec - (FACILITY[id].rent / 30.4) * g.fx('rent', id); };
+const devices = (s, g) => (g?.deviceCount ? g.deviceCount() : 0);
 
 // Kapitel & Ziele (check bekommt den Spielzustand + Hilfsfunktionen)
 export const CHAPTERS = [
@@ -55,6 +58,11 @@ export const CHAPTERS = [
       { id: 'earn', text: 'Schürfe Bitcoin im Wert von 1.000 $', doneText: '1.000 $ geschürft!', check: (s) => s.stats.minedUSD >= 1000, progress: (s) => [s.stats.minedUSD, 1000, 'usd'] },
       { id: 'papa1', text: 'Bezahl Papas Stromrechnung', action: { label: '2.000 $ geben', cost: 2000, flag: 'papa1' }, check: (s) => s.flags.papa1 },
     ],
+    waitText: 'Papa räumt den Hobbykeller über die Feiertage für dich frei – ab Januar gehört er dir.',
+    bonus: [
+      { id: 'b1cool', wait: true, streak: 7, text: 'Halte dein Zimmer eine Woche lang unter 30 °C', check: (s) => (s.fac.kinder.temp || 21) < 30, reward: { rel: { mama: 1 }, text: 'Mama muss nicht mehr heimlich lüften' } },
+      { id: 'b1btc', wait: true, text: 'Halte 2.000 Bitcoin auf einmal', check: (s) => s.wallet.BTC.ex + s.wallet.BTC.cold >= 2000, progress: (s) => [s.wallet.BTC.ex + s.wallet.BTC.cold, 2000, 'coin'], reward: { rel: { opa: 1 }, text: 'Opa sammelt ja auch Briefmarken' } },
+    ],
   },
   {
     title: 'Kapitel 2 – Der Hobbykeller', unlock: 'werkstatt', minDate: '2012-06-01',
@@ -64,31 +72,56 @@ export const CHAPTERS = [
       { id: 'rev30', text: 'Schaff 30 $ pro Tag', check: (s, h) => h.dailyRev() >= 30, progress: (s, h) => [h.dailyRev(), 30, 'usd'] },
       { id: 'debt', text: 'Rette Papas Laden', action: { label: '15.000 $ überweisen', cost: 15000, flag: 'debt' }, check: (s) => s.flags.debt },
     ],
+    waitText: 'Papas Untermieter Zweirad Öztürk zieht erst im Juni 2012 aus der Werkstatt aus.',
+    bonus: [
+      // Bezug zu m1 („bis Ende 2013“): wer zwei Jahre früher zahlt, macht Papa sehr froh
+      { id: 'b2early', until: '2011-12-31', text: 'Rette den Laden noch 2011 – zwei Jahre vor der Frist der Bank', check: (s) => !!s.flags.debt && s.day <= toDay('2011-12-31'), reward: { rel: { papa: 2 }, ach: 'deadline' } },
+      { id: 'b2ltc', text: 'Schürfe 50.000 Litecoin', check: (s) => (s.stats.coins?.LTC || 0) >= 5e4, progress: (s) => [s.stats.coins?.LTC || 0, 5e4, 'coin'], reward: { rel: { deniz: 1 }, xp: { mining: 60 }, text: 'Deniz hatte den richtigen Riecher' } },
+      { id: 'b2cold', text: 'Leg 100 Bitcoin in die Cold-Wallet', check: (s) => s.wallet.BTC.cold >= 100, progress: (s) => [s.wallet.BTC.cold, 100, 'coin'], reward: { rel: { opa: 1 }, text: 'Wie Opas Sparbuch unterm Kopfkissen' } },
+    ],
   },
   {
     title: 'Kapitel 3 – Die Werkstatt', unlock: 'halle', minDate: '2014-06-01',
-    intro: 'Elektro Brandt ist gerettet. Papa überlässt dir die Werkstatt hinterm Laden.',
+    intro: 'Elektro Brandt ist gerettet, und Zweirad Öztürk ist ausgezogen. Papa drückt dir den Schlüssel zur Werkstatt hinterm Laden in die Hand.',
     goals: [
       { id: 'asic', text: 'Kauf deinen ersten ASIC-Miner', check: (s) => s.flags.boughtAsic },
       { id: 'th1', text: 'Schaff 1 TH/s', check: (s, h) => h.algoHash('sha256') >= 1e12, progress: (s, h) => [h.algoHash('sha256'), 1e12, 'hash'] },
       { id: 'gmbh', text: 'Gründe die Hashwerk GmbH', action: { label: 'Gründen · 25.000 $', cost: 25000, flag: 'gmbh' }, check: (s) => s.flags.gmbh },
     ],
+    waitText: 'Die Halle in Lindental-Nord wird erst im Juni 2014 fertig.',
+    bonus: [
+      { id: 'b3top', until: '2014-05-31', text: 'Verkauf Coins, solange Bitcoin über 1.000 $ steht', check: (s) => !!s.stats.sold1000, reward: { rel: { opa: 1 }, xp: { trade: 120 }, text: 'Opa: „Oben verkaufen. Kluger Junge.“' } },
+      { id: 'b3doge', text: 'Schürfe eine Million Dogecoin', check: (s) => (s.stats.coins?.DOGE || 0) >= 1e6, progress: (s) => [s.stats.coins?.DOGE || 0, 1e6, 'coin'], reward: { rel: { deniz: 1 }, text: 'Deniz druckt Hunde-Sticker' } },
+      { id: 'b3solar', unit: 'kWp', text: 'Bau 30 kWp Solar aufs Werkstattdach', check: (s) => (s.fac.werkstatt.solar || 0) >= 30, progress: (s) => [s.fac.werkstatt.solar || 0, 30, 'n'], reward: { rel: { mama: 1 }, mod: [{ key: 'elec', mult: 0.95, fac: 'werkstatt' }], text: '−5 % Strom in der Werkstatt' } },
+    ],
   },
   {
     title: 'Kapitel 4 – Die Lagerhalle', unlock: 'rz', minDate: '2017-06-01',
-    intro: 'Die Hashwerk GmbH zieht ins Gewerbegebiet. Deniz kündigt seinen Job und steigt ein.',
+    intro: 'Die Hashwerk GmbH zieht ins Gewerbegebiet Lindental-Nord. Deniz hat sich im Büro-Container schon den Platz am Fenster gesichert.',
     goals: [
       { id: 'tech', text: 'Stell einen Techniker ein', check: (s) => s.staff.tech > 0 },
       { id: 'ph1', text: 'Schaff 1 PH/s', check: (s, h) => h.algoHash('sha256') >= 1e15, progress: (s, h) => [h.algoHash('sha256'), 1e15, 'hash'] },
       { id: 'nw1m', text: 'Werde Millionär', check: (s, h) => h.netWorth() >= 1e6, progress: (s, h) => [h.netWorth(), 1e6, 'usd'] },
     ],
+    waitText: 'Das Frankfurter Rechenzentrum ist noch bis Juni 2017 an eine Bank vermietet.',
+    bonus: [
+      { id: 'b4plus', streak: 90, text: 'Halte die Halle 90 Tage am Stück im Plus', check: (s, h, g) => facNet(g, 'halle') > 0, reward: { mod: [{ key: 'rent', mult: 0.8, fac: 'halle' }], text: 'Der Vermieter senkt die Hallenmiete um 20 %' } },
+      { id: 'b4cover', unit: 'Geräte', text: 'Volle Techniker-Abdeckung bei mindestens 60 Geräten', check: (s, h, g) => s.staff.tech > 0 && g.techCoverage() >= 1 && devices(s, g) >= 60, progress: (s, h, g) => [devices(s, g), 60, 'n'], reward: { rel: { deniz: 1 }, mod: [{ key: 'fail', mult: 0.95 }], text: '5 % weniger Ausfälle' } },
+      { id: 'b4eth', text: 'Schürfe 500 Ethereum', check: (s) => (s.stats.coins?.ETH || 0) >= 500, progress: (s) => [s.stats.coins?.ETH || 0, 500, 'coin'], reward: { rel: { papa: 1 }, text: 'Papa: „Ether? Klingt nach Narkose.“' } },
+    ],
   },
   {
     title: 'Kapitel 5 – Das Rechenzentrum', unlock: 'fjord', minDate: '2020-06-01',
-    intro: 'Ein echtes Rechenzentrum in Frankfurt. Viktor Kral ruft zum ersten Mal persönlich an.',
+    intro: 'Ein echtes Rechenzentrum in Frankfurt. In der Branche spricht sich herum, dass es Hashwerk gibt – sogar bei MONOLITH in Zug.',
     goals: [
       { id: 'ph20', text: 'Schaff 20 PH/s', check: (s, h) => h.algoHash('sha256') >= 2e16, progress: (s, h) => [h.algoHash('sha256'), 2e16, 'hash'] },
       { id: 'nw10m', text: '10 Mio. $ Vermögen', check: (s, h) => h.netWorth() >= 1e7, progress: (s, h) => [h.netWorth(), 1e7, 'usd'] },
+    ],
+    waitText: 'Das Wasserkraftwerk in Sogn liefert erst ab Juni 2020 Strom für die Fjordhalle.',
+    bonus: [
+      { id: 'b5y18', until: '2019-01-07', text: 'Schließ das Jahr 2018 ohne Verlust ab', check: (s) => { const Y = s.stats.y?.[2018]; return !!Y && Y.nw1 != null && Y.rev - Y.elec - Y.fix >= 0; }, reward: { mod: [{ key: 'elec', mult: 0.95, fac: 'rz' }], text: 'Neuer Stromvertrag: −5 % Strom im RZ' } },
+      { id: 'b5eth', text: 'Halte 1.000 Ethereum', check: (s) => s.wallet.ETH.ex + s.wallet.ETH.cold >= 1000, progress: (s) => [s.wallet.ETH.ex + s.wallet.ETH.cold, 1000, 'coin'], reward: { rel: { deniz: 1 }, xp: { trade: 150 } } },
+      { id: 'b5mw12', text: 'Bau das Rechenzentrum auf 12 MW aus', check: (s) => s.fac.rz.power >= 2, reward: { rel: { opa: 1 }, text: 'Opa: „Zwölf Megawatt. Ich hab mal einen Bauernhof verkabelt.“' } },
     ],
   },
   {
@@ -98,8 +131,32 @@ export const CHAPTERS = [
       { id: 'eh1', text: 'Schaff 1 EH/s', check: (s, h) => h.algoHash('sha256') >= 1e18, progress: (s, h) => [h.algoHash('sha256'), 1e18, 'hash'] },
       { id: 'mono', text: 'Überhol MONOLITH', check: (s, h) => h.algoHash('sha256') > h.monolithHash(), progress: (s, h) => [h.algoHash('sha256'), h.monolithHash(), 'hash'] },
     ],
+    // Kein Wartedatum mehr: die Bonusziele stehen hier direkt unter dem aktuellen Ziel
+    bonus: [
+      { id: 'b6mw60', text: 'Bau die Fjordhalle auf 60 MW aus', check: (s) => s.fac.fjord.power >= 1, reward: { rel: { papa: 1 }, text: 'Papa fliegt zum ersten Mal nach Norwegen' } },
+      { id: 'b6heat', text: 'Lass die Abwärme ganz Sogn heizen', check: (s) => !!s.techs?.heatsale, reward: { rel: { mama: 1 }, text: 'Mama: „Ein ganzes Dorf warm – das ist mein Kind!“' } },
+    ],
   },
 ];
+// Jahresrückblick (1. Januar): Titel je Jahr, danach Endlos-Titel
+export const YEAR_TITLES = {
+  2010: 'Ein PC und eine Idee', 2011: 'Milchkisten und 30 Dollar', 2012: 'Das erste Halving', 2013: 'ASIC-Goldrausch', 2014: 'Die GoxBank-Pleite',
+  2015: 'Der lange Winter', 2016: 'Effizienz oder Ende', 2017: 'Das Krypto-Fieber', 2018: 'Die Eiszeit', 2019: 'Tauwetter', 2020: 'Lockdown und Halving',
+  2021: 'China schaltet ab', 2022: 'Merge, Energiekrise, FXT', 2023: 'Durchatmen', 2024: 'Fonds und das vierte Halving', 2025: '126.000 Dollar', 2026: 'Im Heute angekommen',
+};
+export function yearTitle(y) {
+  if (YEAR_TITLES[y]) return YEAR_TITLES[y];
+  if ((y - 2012) % 4 === 0) return `Das ${(y - 2012) / 4 + 1}. Halving`;
+  return ['Ohne Landkarte', 'Neuland', 'Eigene Wege', 'Weiter, immer weiter', 'Nebel über dem Fjord', 'Das Unbekannte'][(y - 2027) % 6] || 'Ein neues Jahr';
+}
+// Familienzeile im Jahresrückblick: Stimmung je Beziehungsstufe (≤ −2, −1, 0, 1–2, 3–4, 5)
+export const FAMILY_MOOD = {
+  papa: ['Papa spricht kaum noch mit dir.', 'Papa ist ein bisschen enttäuscht.', 'Papa fragt, wann du mal wieder im Laden hilfst.', 'Papa ist stolz auf dich.', 'Papa erzählt jedem Kunden von dir.', 'Papa hat dein Logo ins Schaufenster geklebt.'],
+  mama: ['Mama macht sich große Sorgen um dich.', 'Mama findet, du arbeitest zu viel.', 'Mama hofft, dass du genug schläfst.', 'Mama schickt dir jede Woche Kuchen.', 'Mama strickt dir einen Hashwerk-Schal.', 'Mama zeigt allen Nachbarinnen deine Zeitungsartikel.'],
+  opa: ['Opa brummelt nur noch.', 'Opa hält das alles für Spinnerei.', 'Opa will wissen, was du da eigentlich machst.', 'Opa nickt anerkennend.', 'Opa nennt dich jetzt „Herr Ingenieur“.', 'Opa redet im Skatclub nur noch von dir.'],
+  deniz: ['Deniz meldet sich gar nicht mehr.', 'Deniz ist ein bisschen sauer.', 'Deniz schickt dir Memes, wie immer.', 'Deniz ist richtig gut drauf.', 'Deniz würde für dich durchs Feuer gehen.', 'Deniz nennt Hashwerk nur noch „unser Baby“.'],
+};
+export const moodTier = (v) => (v <= -2 ? 0 : v < 0 ? 1 : v === 0 ? 2 : v <= 2 ? 3 : v <= 4 ? 4 : 5);
 
 // Handy-Nachrichten. when: Datum ODER cond(state, helpers)
 export const MESSAGES = [
@@ -107,7 +164,7 @@ export const MESSAGES = [
   { id: 'm1', date: '2010-10-04', from: 'Papa', text: 'Die Bank will 15.000 $ bis Ende 2013. Sonst ist der Laden weg. Nicht dein Problem, Kind.' },
   { id: 'm2', date: '2010-10-09', from: 'Deniz', text: 'Tipp: Crimson-Karten minen viel schneller als Verdant. Die RHD 5870 ist gerade der Hit.' },
   { id: 'm3', cond: (s, h) => h.maxTemp() > 32, from: 'Mama', text: 'Warum ist es bei dir so warm? Und was brummt da?' },
-  { id: 'm4', date: '2010-11-06', from: 'Deniz', text: '0,39 $ pro Bitcoin!! 😳' },
+  { id: 'm4', date: '2010-11-06', from: 'Deniz', text: '0,39 $ pro Bitcoin!! Ich glaub, ich spinne.' },
   { id: 'm5', cond: (s) => s.flags.papa1, from: 'Papa', text: 'Du hast die Stromrechnung bezahlt?? Na gut. Der Keller gehört dir. Strom zahlst du ab jetzt selbst.' },
   { id: 'm6', date: '2011-04-10', from: 'Deniz', text: 'Die Leute bauen jetzt Rigs in Milchkisten. Sieht wild aus, läuft aber.' },
   { id: 'm7', date: '2011-06-09', from: 'Deniz', text: '30 $!!! Verkaufen?? Oder halten?? Ich dreh durch.' },
@@ -115,13 +172,14 @@ export const MESSAGES = [
   { id: 'm9', cond: (s, h) => h.facilityTripped(), from: 'Opa Heinz', text: 'Sicherung raus? Ich leg dir einen eigenen Stromkreis. Kostet aber.' },
   { id: 'm10', date: '2011-07-15', from: 'Deniz', text: 'Es gibt jetzt FPGA-Boards. Wenig Strom, viel Leistung. Aber teuer.' },
   { id: 'm11', date: '2011-10-08', from: 'Deniz', text: 'Neuer Coin: Litecoin. Da sind Grafikkarten richtig stark. Stell mal um!' },
-  { id: 'm12', cond: (s) => s.flags.debt, from: 'Papa', text: 'Der Laden ist gerettet! Die Werkstatt hinten gehört jetzt dir.' },
+  { id: 'm12', cond: (s) => s.flags.debt && s.day < toDay('2012-06-01'), from: 'Papa', text: 'Der Laden ist gerettet! Und wenn Zweirad Öztürk im Juni 2012 auszieht, gehört die Werkstatt hinten dir.' },
+  { id: 'm12b', cond: (s) => s.flags.debt && s.day >= toDay('2012-06-01') && !s.messages.some((m) => m.id === 'm12'), from: 'Papa', text: 'Der Laden ist gerettet! Zweirad Öztürk ist schon ausgezogen – die Werkstatt hinten gehört dir.' },
   { id: 'm13', date: '2012-11-28', from: 'Deniz', text: 'Halving! Nur noch 25 BTC pro Block. Unsere Erträge halbieren sich.' },
   { id: 'm14', date: '2013-02-01', from: 'Deniz', text: 'Die ersten ASICs sind da. Eine Kiste schafft so viel wie 100 Grafikkarten.' },
   { id: 'm15', date: '2013-11-29', from: 'Mama', text: 'Im Fernsehen reden sie über Bitcoin. Über 1.000 Dollar! Ist das dein Ding?' },
   { id: 'm16', date: '2014-02-10', from: 'Deniz', text: 'GoxBank zahlt nichts mehr aus. Hol deine Coins in die Cold-Wallet!' },
-  { id: 'm17', date: '2014-03-12', from: 'Viktor Kral', text: 'Viktor Kral, MONOLITH Hash AG. Wir kaufen kleine Betriebe. Denken Sie drüber nach.' },
-  { id: 'm18', cond: (s) => s.flags.gmbh, from: 'Deniz', text: 'Hashwerk GmbH! Ich kündige und steig ein. CTO? 😎' },
+  { id: 'm17', cond: (s) => s.day >= toDay('2014-03-12') && s.day <= toDay('2014-05-31') && (s.flags.gmbh || s.unlocked.includes('werkstatt')), from: 'Viktor Kral', text: 'Viktor Kral, MONOLITH Hash AG. Wir kaufen kleine Betriebe. Denken Sie drüber nach.' },
+  { id: 'm18', cond: (s) => s.flags.gmbh, from: 'Deniz', text: 'Hashwerk GmbH! Ich kündige und steig ein. CTO? Sag ja.' },
   { id: 'm19', date: '2015-08-01', from: 'Deniz', text: 'Ethereum ist live! Unsere alten Grafikkarten sind wieder was wert.' },
   { id: 'm20', date: '2016-07-09', from: 'Deniz', text: 'Zweites Halving: 12,5 BTC pro Block. Nur sparsame ASICs lohnen sich noch.' },
   { id: 'm21', date: '2017-12-17', from: 'Opa Heinz', text: 'Mein Friseur hat mich nach Bitcoin gefragt. Mein FRISEUR. Verkauf was, Junge.' },
@@ -141,6 +199,20 @@ export const MESSAGES = [
   { id: 'm34', cond: (s) => s.unlocked.includes('fjord'), from: 'Viktor Kral', text: 'Norwegen also. Mutig. Einholen werden Sie uns trotzdem nie.' },
   { id: 'm35', cond: (s) => s.flags.won, from: 'Deniz', text: 'WIR HABEN MONOLITH ÜBERHOLT. Vom Kinderzimmer bis hier. Wahnsinn.' },
   { id: 'm36', date: '2026-11-19', from: 'Deniz', text: 'Wir sind im Heute angekommen. Ab jetzt weiß keiner, was kommt.' },
+  // ---------- Deniz-Tipps (ab Kapitel 2; tip: true – fallen z. B. bei „keine Tipps“ weg) ----------
+  { id: 't_idle', tip: true, cond: (s) => s.chapter >= 1 && s.stats.idle > 0, from: 'Deniz', text: 'Eins deiner Geräte pausiert – der Strom kostet mehr, als es schürft. Stell es auf einen anderen Coin oder verkauf es, solange es noch was wert ist.' },
+  { id: 't_hot', tip: true, cond: (s, h) => s.chapter >= 1 && h.maxTemp() > 34, from: 'Deniz', text: 'Über 34 Grad bei dir! Ab 38 drosseln die Karten, und heiße Hardware geht schneller kaputt. Im Katalog (B) gibt es Lüfter.' },
+  { id: 't_trip', tip: true, cond: (s) => s.chapter >= 1 && !!s.flags.everTripped, from: 'Deniz', text: 'Im Firmenfenster (C) siehst du, wie viel dein Anschluss schafft. Erst den Strom ausbauen, dann neue Geräte hinstellen.' },
+  { id: 't_halv12', tip: true, date: '2012-10-29', from: 'Deniz', text: 'In einem Monat ist Halving: nur noch halb so viele Bitcoin pro Block. Alte, stromhungrige Karten rechnen sich danach kaum noch.' },
+  { id: 't_halv16', tip: true, date: '2016-06-09', from: 'Deniz', text: 'Noch 30 Tage bis zum zweiten Halving. Verkauf ineffiziente Miner jetzt, solange sie noch Geld bringen.' },
+  { id: 't_halv20', tip: true, date: '2020-04-11', from: 'Deniz', text: 'In 30 Tagen halbiert sich die Belohnung wieder. Rechne nach, welche Miner das überleben – nur die sparsamen.' },
+  { id: 't_halv24', tip: true, date: '2024-03-21', from: 'Deniz', text: 'Viertes Halving in 30 Tagen. Danach zählt jedes Joule pro Terahash.' },
+  { id: 't_halv28', tip: true, date: '2028-03-16', from: 'Deniz', text: 'Fünftes Halving in einem Monat. Ab dann nur noch 1,5625 BTC pro Block.' },
+  { id: 't_dag3', tip: true, date: '2018-11-15', from: 'Deniz', text: 'In einem Monat wächst die Ethereum-DAG über 3 GB. Karten mit 3 GB fallen dann raus – verkaufen oder auf Ethereum Classic stellen.' },
+  { id: 't_merge', tip: true, date: '2022-08-15', from: 'Deniz', text: 'In einem Monat kommt der Merge. Danach ist Ethereum-Mining vorbei – Grafikkarten jetzt verkaufen oder umstellen.' },
+  { id: 't_neg', tip: true, cond: (s) => s.chapter >= 1 && s.cash < 0, from: 'Deniz', text: 'Dein Konto ist im Minus! Die Bank nimmt dafür happige Zinsen. Verkauf ein paar Coins oder schalte unrentable Geräte ab.' },
+  { id: 't_halle', tip: true, cond: (s) => s.unlocked.includes('halle'), from: 'Deniz', text: 'Willkommen in der Halle! Ein 42U-Rack fasst 12 Miner – viel platzsparender als Kisten auf dem Boden.' },
+  { id: 't_fjord', tip: true, cond: (s) => s.unlocked.includes('fjord'), from: 'Deniz', text: 'Fjordhalle! Ein Mining-Container fasst 200 Miner und kühlt sich selbst. Damit füllst du 30 MW.' },
 ];
 
 // Nachrichten-Ticker. effect: optionale Spielwirkung
@@ -236,8 +308,8 @@ export const FEATURES = {
   coins: { title: 'Mehr Coins', key: 'E', text: 'Am Gerät wählst du, was es schürft.' },
   cold: { title: 'Cold-Wallet', key: 'E', text: 'Sicher vor Börsenpleiten. Findest du in der Börse.' },
   map: { title: 'Karte', key: 'K', text: '<kbd>K</kbd> zeigt alle Standorte.' },
-  techs: { title: 'Technik', key: 'T', text: '<kbd>T</kbd>: Verbesserungen entwickeln.' },
-  ranking: { title: 'Rangliste', key: 'L', text: '<kbd>L</kbd>: Vergleich mit den Großen.' },
+  techs: { title: 'Technik', key: 'T', text: '<kbd>T</kbd>: An Opas Werkbank Verbesserungen austüfteln.' },
+  ranking: { title: 'Logbuch', key: 'L', text: '<kbd>L</kbd>: Rangliste, Erfolge und Chronik.' },
   loan: { title: 'Bankkredit', key: 'C', text: 'Die Bank leiht dir Geld. Mit Zinsen.' },
   buycoins: { title: 'Coins kaufen', key: 'E', text: 'In der Börse kannst du jetzt auch kaufen.' },
 };
