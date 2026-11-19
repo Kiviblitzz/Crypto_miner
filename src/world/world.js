@@ -420,10 +420,36 @@ export class World {
       const sc = 0.5;
       const bb = e.group.userData.bbox; p.position.set(e.group.position.x, (bb ? bb.max.y : 0.6) + 0.15, e.group.position.z);
       p.scale.set(sc, sc / 4, 1); p.visible = true; p.userData.life = 0; p.userData.y0 = p.position.y; p.material.opacity = 1;
-      this.coinBurst(p.position, 3);
+      this.coinBurst(p.position, 3); this.onIncome?.();
     }
   }
   pulse(uid) { const e = this.entries.get(uid); if (!e || !this.outline) return; this.outline.selectedObjects = [e.group]; this.outline.pulsePeriod = 0.5; this.outline.visibleEdgeColor.set(0xffc23a); clearTimeout(this.pulseT); this.pulseT = setTimeout(() => { this.outline.pulsePeriod = 0; this.outline.visibleEdgeColor.set(0xffc46b); }, 1500); const bb = e.group.userData.bbox; this.coinBurst(new THREE.Vector3(e.group.position.x, (bb ? bb.max.y : 0.5) + 0.1, e.group.position.z), 6); }
+  // Vorschaubild für den Bau-Katalog: Modell im kleinen Fotostudio rendern (einmal pro Typ)
+  thumbnail(type) {
+    this.thumbs ||= new Map(); if (this.thumbs.has(type)) return this.thumbs.get(type);
+    const W = 240, H = 160, r = this.renderer;
+    if (!this.thumbScene) {
+      const sc = (this.thumbScene = new THREE.Scene()); sc.environment = this.scene.environment;
+      sc.add(new THREE.HemisphereLight(0xfff4e6, 0x3a3530, 0.7));
+      const k = new THREE.DirectionalLight(0xffffff, 1.3); k.position.set(2, 3, 2.5); sc.add(k);
+      this.thumbCam = new THREE.PerspectiveCamera(30, W / H, 0.01, 200);
+      this.thumbRT = new THREE.WebGLRenderTarget(W, H, { samples: 4 });
+    }
+    const def = PLACEABLE[type];
+    const model = objectModel({ type, parts: def.kind === 'rig' ? { mobo: null, cpu: null, psu: null, gpus: [] } : undefined, items: def.kind === 'holder' ? [] : undefined, rot: 0 });
+    this.thumbScene.add(model);
+    const box = new THREE.Box3().setFromObject(model), size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
+    const rad = size.length() / 2, dist = rad / Math.sin(THREE.MathUtils.degToRad(15)) * 0.95;
+    const dir = new THREE.Vector3(1, 0.62, 1.25).normalize();
+    this.thumbCam.position.copy(c).addScaledVector(dir, dist); this.thumbCam.lookAt(c); this.thumbCam.near = dist / 50; this.thumbCam.far = dist * 4; this.thumbCam.updateProjectionMatrix();
+    const prevT = r.getRenderTarget(); r.setRenderTarget(this.thumbRT); r.setClearColor(0x000000, 0); r.clear(); r.render(this.thumbScene, this.thumbCam);
+    const px = new Uint8Array(W * H * 4); r.readRenderTargetPixels(this.thumbRT, 0, 0, W, H, px); r.setRenderTarget(prevT);
+    this.thumbScene.remove(model);
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d'), img = g.createImageData(W, H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const si = ((H - 1 - y) * W + x) * 4, di = (y * W + x) * 4; for (let k = 0; k < 3; k++) { const v = px[si + k] / 255, t = v / (1 + v * 0.6); img.data[di + k] = Math.min(255, Math.pow(t * 1.6, 1 / 2.2) * 255); } img.data[di + 3] = px[si + 3]; }
+    g.putImageData(img, 0, 0);
+    const url = cv.toDataURL('image/png'); this.thumbs.set(type, url); return url;
+  }
   // Kleine Münzen springen aus dem Gerät (Rückmeldung für Einkommen)
   coinBurst(pos, n) {
     if (!this.coinTex) { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'); const gr = g.createRadialGradient(26, 24, 4, 32, 32, 30); gr.addColorStop(0, '#fff3b0'); gr.addColorStop(0.5, '#ffc93a'); gr.addColorStop(1, '#c98a00'); g.fillStyle = gr; g.beginPath(); g.arc(32, 32, 28, 0, 7); g.fill(); g.strokeStyle = 'rgba(120,70,0,.6)'; g.lineWidth = 3; g.stroke(); g.fillStyle = 'rgba(120,70,0,.75)'; g.font = 'bold 34px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('₿', 32, 34); this.coinTex = new THREE.CanvasTexture(c); this.coinTex.colorSpace = THREE.SRGBColorSpace; this.coins = []; }

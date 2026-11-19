@@ -114,7 +114,7 @@ export function buildRoom(def) {
     const rug = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.3), mat('rug', { map: TEX.carpet([1, 1], 18), roughness: 1 })); rug.rotation.x = -Math.PI / 2; rug.position.set(2.0, 0.005, 2.3); rug.receiveShadow = true; g.add(rug);
     // Regal rechts hinten an der Wand
     put('bookshelf', 3.75, 0.16);
-    put('lampion', 2.0, 1.8).position.y = 2.36;
+    put('lampion', 2.0, 1.8).position.y = 2.44;
     put('desklamp', 2.12, 0.12).position.y = 0.74;
     put('fairy', 2.0, 0.09).position.y = 2.42;
     put('radiator', 1.5, 0.1).position.y = 0.12;

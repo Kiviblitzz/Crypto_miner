@@ -35,7 +35,7 @@ const splash = document.getElementById('splash');
 const hasSave = game.hasSave();
 if (hasSave) {
   const b = document.getElementById('btn-continue'); b.classList.remove('hidden');
-  const info = game.saveInfo(); if (info) b.innerHTML = `Weiterspielen <small>${fmtDate(info.day)} · ${fmtUSD(info.cash)}</small>`;
+  const info = game.saveInfo(); if (info) b.innerHTML = `<span class="bi">▶</span><span class="bt">Weiterspielen<small>${fmtDate(info.day)} · ${fmtUSD(info.cash)}</small></span>`;
 }
 let splashOrbit = true;
 document.getElementById('btn-new').onclick = () => {
@@ -99,6 +99,7 @@ function loop(now) {
     if (s.frac >= 1) s.frac = 0.99;
   }
   screenTimer -= dt; if (screenTimer <= 0) { screenTimer = 1.0; world.updateStatus(); world.drawScreens(); if (!splashOrbit) ui.tutorial(); const sm = game.summary[s.current]; if (sm) audio.setLoad(sm.watt, !sm.tripped && !splashOrbit); if (world.aim) ui.prompt(world.aim); }
+  ui.liveWallet();
   world.update();
   requestAnimationFrame(loop);
 }

@@ -24,6 +24,7 @@ export class UI {
     world.onInteract = (uid) => this.openInspector(uid);
     world.onDoor = (door) => this.travel(door);
     world.onProp = (p) => this.useProp(p);
+    world.onIncome = () => { this.bumpWallet(); this.audio?.tick?.(); };
     world.onLamp = (on) => this.toast(on ? 'Taschenlampe an' : 'Taschenlampe aus', 'info', 1500);
     world.onPause = () => this.pause(true);
     world.onCanvasClickInUI = () => this.resume();
@@ -94,6 +95,23 @@ export class UI {
     $('#st-hash').innerHTML = `<div class="l">${ALGO_LABEL[shAlgo]} Hashrate</div><div class="v">${fmtHash(sh, shAlgo)}</div>`;
   }
 
+  // Bitcoin-Bestand im HUD: zählt zwischen den Tagesabrechnungen live mit
+  btcRate() {
+    const g = this.g, s = g.s, p = g.price('BTC') || 1; let r = 0;
+    for (const id of s.unlocked) { const sm = g.summary[id]; if (!sm || sm.tripped) continue; for (const a of sm.per.values()) for (const u of a.units || []) if (u.coin === 'BTC' && u.rev > 0) r += (u.rev * sm.throttle) / p; }
+    return r * (1 - (s.autoSell.BTC || 0));
+  }
+  liveWallet() {
+    const g = this.g, s = g.s, el = $('#st-wallet'); if (!el) return;
+    const on = (!s.feat || s.flags.miningStarted) && !document.getElementById('splash')?.offsetParent;
+    el.style.display = on ? '' : 'none'; if (!on) return;
+    if (this.rateDay !== s.day || !this.rateT || performance.now() - this.rateT > 1000) { this.rate = this.btcRate(); this.rateDay = s.day; this.rateT = performance.now(); }
+    const w = s.wallet.BTC, live = w.ex + w.cold + (this.rate || 0) * (s.frac || 0);
+    const txt = `<div class="v"><span class="cn">₿</span> ${fmtCoin(live)}</div><div class="l">≈ ${fmtUSD(live * g.price('BTC'))}</div>`;
+    if (txt !== this.walletTxt) { el.innerHTML = txt; this.walletTxt = txt; }
+  }
+  bumpWallet() { const el = $('#st-wallet'); if (!el) return; el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
+
   // ---------- Standorte ----------
   sites() {
     const el = $('#sites'); el.innerHTML = '';
@@ -149,6 +167,7 @@ export class UI {
       if (it.kind === 'cooling') s = `Kühlt ${fmtWatt(it.cool)} · verbraucht ${fmtWatt(it.watt)}`;
       if (it.kind === 'holder') s = esc(it.desc);
       const card = h(`<div class="item ${price > g.s.cash || it.hydro ? 'dis' : ''}"><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${fmtUSD(price)}</span></div><div class="s">${s}</div>${price > g.s.cash ? `<div class="miss">Dir fehlen ${fmtUSD(price - g.s.cash)}</div>` : ''}</div>`);
+      try { const url = this.w.thumbnail(it.id); if (url) card.prepend(h(`<div class="thumb"><img alt="" src="${url}"/></div>`)); } catch (e) { /* ohne Vorschau weiter */ }
       card.onclick = () => {
         if (it.hydro) { this.toast('Hydro-Miner nur in Rack oder Container.', 'bad'); return; }
         if (price > g.s.cash) { this.toast('Nicht genug Geld.', 'bad'); return; }

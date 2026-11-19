@@ -110,7 +110,7 @@ export function furniture(type) {
     // Papier-Lampion mit Kabel (Deckenleuchte)
     cyl(g, 0.004, 0.004, 0.32, M.cable(), 0, 0.16, 0, 8);
     cyl(g, 0.03, 0.03, 0.03, X.brass(), 0, 0.0, 0, 16);
-    sph(g, 0.2, M.lampShade(), 0, -0.2, 0, 1, 0.92, 1, 24, 18);
+    sph(g, 0.15, M.lampShade(), 0, -0.15, 0, 1, 0.92, 1, 24, 18);
   } else if (type === 'desklamp') {
     // Schreibtischlampe (Gelenkarm, Messing-Schirm)
     const brass = mat('lampBrass', { color: 0xd9a441, roughness: 0.35, metalness: 0.8 });

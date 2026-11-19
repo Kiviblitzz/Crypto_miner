@@ -7,7 +7,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%2316181d'/><path d='M18 14v36M46 14v36M18 32h28' stroke='%23ffb000' stroke-width='8' stroke-linecap='round'/></svg>" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&family=Fredoka:wght@500;600;700&display=swap" />
   <link rel="stylesheet" href="/src/style.css" />
 </head>
 <body>
@@ -22,6 +22,7 @@
         <div class="stat" id="st-cash"></div>
         <div class="stat" id="st-nw"></div>
         <div class="stat" id="st-profit"></div>
+        <div class="stat" id="st-wallet"></div>
         <div class="stat" id="st-btc"></div>
         <div class="stat" id="st-hash"></div>
       </div>
@@ -47,10 +48,26 @@
   <div id="modal" class="hidden"><div class="modal-card"><button class="modal-x" title="Schließen">✕</button><div class="modal-body"></div></div></div>
   <div id="splash">
     <div class="splash-inner">
-      <div class="logo">HASH<span>WERK</span></div>
+      <div class="logo-wrap">
+        <svg class="logo-coin" viewBox="0 0 120 120" aria-hidden="true">
+          <defs>
+            <radialGradient id="lgCoin" cx="38%" cy="32%" r="75%"><stop offset="0" stop-color="#fff2b8"/><stop offset=".45" stop-color="#ffc83d"/><stop offset="1" stop-color="#d68a00"/></radialGradient>
+            <linearGradient id="lgRim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe08a"/><stop offset="1" stop-color="#a86400"/></linearGradient>
+          </defs>
+          <ellipse cx="60" cy="108" rx="36" ry="7" fill="rgba(0,0,0,.35)"/>
+          <circle cx="60" cy="58" r="48" fill="url(#lgRim)"/>
+          <circle cx="60" cy="56" r="42" fill="url(#lgCoin)"/>
+          <circle cx="60" cy="56" r="34" fill="none" stroke="#c07a00" stroke-width="3" stroke-dasharray="4 5" opacity=".55"/>
+          <path d="M47 36v40M73 36v40M47 56h26" stroke="#8a4f00" stroke-width="10" stroke-linecap="round"/>
+          <path d="M47 34v40M73 34v40M47 54h26" stroke="#fff6d8" stroke-width="10" stroke-linecap="round"/>
+          <path d="M30 34a34 34 0 0 1 18-14" stroke="#fff" stroke-width="5" stroke-linecap="round" fill="none" opacity=".8"/>
+          <g class="logo-pick"><path d="M84 18c14 2 24 10 28 22" stroke="#6b7480" stroke-width="7" stroke-linecap="round" fill="none"/><path d="M98 22l-18 30" stroke="#8a5a2b" stroke-width="7" stroke-linecap="round"/></g>
+        </svg>
+        <div class="logo"><span class="l1">HASH</span><span class="l2">WERK</span></div>
+      </div>
       <div class="splash-btns">
-        <button id="btn-continue" class="btn big hidden">▶ Weiterspielen</button>
-        <button id="btn-new" class="btn big primary">Neues Spiel</button>
+        <button id="btn-continue" class="btn big hidden"><span class="bi">▶</span><span class="bt">Weiterspielen</span></button>
+        <button id="btn-new" class="btn big primary"><span class="bi">✦</span><span class="bt">Neues Spiel</span></button>
       </div>
       <div class="disclaimer">Alle Namen fiktiv · keine Anlageberatung</div>
     </div>

@@ -831,3 +831,65 @@ body.lowfx .featcard, body.lowfx .pause-card, body.lowfx #dock, body.lowfx #spla
 #build .item .miss { margin-top: 6px; font-size: 12px; color: rgba(255,122,114,.85); }
 
 @media (min-width: 721px) { body[data-mode="play"] #sites .site.fix { display: block !important; } }
+/* Bitcoin-Bestand (live) unter dem Kontostand */
+@media (min-width: 721px) {
+  #st-wallet { grid-area: nw; display: flex; align-items: baseline; gap: 8px; margin-top: 2px; }
+  #st-wallet .v { font: 600 16px var(--font-c) !important; color: #ffc640; }
+  #st-wallet .cn { font-weight: 700; }
+  #st-wallet .l { display: inline !important; font: 500 12px var(--font) !important; letter-spacing: 0 !important; text-transform: none !important; color: rgba(230,234,240,.6) !important; }
+  #st-wallet.bump .v { display: inline-block; animation: wbump .35s cubic-bezier(.2,.7,.2,1); }
+  #goals { top: 118px; }
+}
+@keyframes wbump { 40% { transform: scale(1.08); text-shadow: 0 0 14px rgba(255,198,64,.6); } }
+/* Vorschaubilder im Bau-Katalog */
+#build .item .thumb { margin: -4px -6px 8px; height: 120px; border-radius: 10px; background: radial-gradient(ellipse at 50% 70%, rgba(255,255,255,.09), rgba(255,255,255,.02) 70%); display: grid; place-items: center; overflow: hidden; }
+#build .item .thumb img { max-width: 100%; max-height: 100%; filter: drop-shadow(0 8px 10px rgba(0,0,0,.35)); transition: transform .25s cubic-bezier(.2,.7,.2,1); }
+#build .item:hover .thumb img { transform: scale(1.06) translateY(-2px); }
+#build .item.dis .thumb img { filter: grayscale(.6) brightness(.8); }
+
+/* =====================================================================
+   v6 – verspielt & gemütlich: Fredoka für Logo, Knöpfe, Überschriften;
+   Tasten mit Unterkante (zum Drücken), lesbare Unterzeilen
+   ===================================================================== */
+:root { --font-fun: 'Fredoka', 'Nunito', 'Segoe UI Rounded', 'Arial Rounded MT Bold', var(--font); }
+/* Logo */
+.logo-wrap { display: flex; align-items: center; gap: 18px; margin-bottom: 26px; }
+.logo-coin { width: 112px; height: 112px; flex: none; filter: drop-shadow(0 10px 22px rgba(255,170,0,.28)); animation: coinBob 3.6s ease-in-out infinite; }
+.logo-coin .logo-pick { transform-origin: 98px 22px; animation: pickSwing 3.6s ease-in-out infinite; }
+@keyframes coinBob { 0%, 100% { transform: translateY(0) rotate(-4deg); } 50% { transform: translateY(-8px) rotate(3deg); } }
+@keyframes pickSwing { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-14deg); } }
+#splash .logo { font: 700 92px/0.86 var(--font-fun); letter-spacing: 1px; display: flex; flex-direction: column; text-shadow: none; margin: 0; transform: rotate(-2.5deg); }
+#splash .logo .l1, #splash .logo .l2 { display: block; color: #fff8ec; text-shadow: 0 2px 0 #e9dcc6, 0 4px 0 #cdbca0, 0 6px 0 #9c8a6c, 0 10px 18px rgba(0,0,0,.45); }
+#splash .logo .l2 { color: #ffc23a; margin-left: 34px; text-shadow: 0 2px 0 #f0a100, 0 4px 0 #d48700, 0 6px 0 #9a5d00, 0 10px 18px rgba(0,0,0,.45); }
+/* Knöpfe im Titel & Pause: Tasten mit Unterkante */
+#splash .splash-btns { gap: 14px; margin: 6px 0 24px; }
+#splash .splash-btns .btn, #pause .pause-card .btn {
+  display: flex; align-items: center; gap: 14px; min-width: 300px; padding: 14px 26px 14px 18px; border-radius: 22px; text-align: left;
+  font: 600 22px/1.1 var(--font-fun); letter-spacing: .3px; text-transform: none; color: #fff;
+  background: linear-gradient(180deg, #3b4150, #2b303b); box-shadow: 0 6px 0 #171a21, 0 14px 24px rgba(0,0,0,.35) !important;
+  transition: transform .12s cubic-bezier(.2,.7,.2,1), box-shadow .12s, background .2s;
+}
+#splash .splash-btns .btn:hover, #pause .pause-card .btn:hover { transform: translateY(-2px); padding-left: 18px; color: #fff; background: linear-gradient(180deg, #454c5d, #323845); box-shadow: 0 8px 0 #171a21, 0 18px 28px rgba(0,0,0,.4) !important; }
+#splash .splash-btns .btn:active, #pause .pause-card .btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #171a21, 0 6px 12px rgba(0,0,0,.3) !important; }
+#splash .splash-btns .btn.primary, #pause .pause-card .btn.primary { color: #3a2300; background: linear-gradient(180deg, #ffd25c, #ffb000); box-shadow: 0 6px 0 #b86f00, 0 14px 26px rgba(255,160,0,.3) !important; }
+#splash .splash-btns .btn.primary:hover, #pause .pause-card .btn.primary:hover { color: #3a2300; background: linear-gradient(180deg, #ffdb75, #ffbb1f); box-shadow: 0 8px 0 #b86f00, 0 18px 30px rgba(255,160,0,.36) !important; }
+#splash .splash-btns .btn.primary:active, #pause .pause-card .btn.primary:active { box-shadow: 0 2px 0 #b86f00, 0 6px 14px rgba(255,160,0,.25) !important; }
+#splash .btn .bi { width: 40px; height: 40px; flex: none; display: grid; place-items: center; border-radius: 14px; font-size: 18px; background: rgba(255,255,255,.1); }
+#splash .btn.primary .bi { background: rgba(255,255,255,.35); color: #7a4500; }
+#splash .btn .bt { display: flex; flex-direction: column; gap: 3px; }
+#splash .splash-btns .btn small { display: block; margin: 0; font: 500 14px/1.2 var(--font) !important; letter-spacing: 0 !important; text-transform: none !important; color: rgba(255,255,255,.72) !important; }
+#splash .splash-btns .btn.primary small { color: rgba(58,35,0,.75) !important; }
+#splash .disclaimer { margin-top: 20px; font: 500 12px var(--font); color: rgba(255,248,236,.45); }
+#splash .splash-inner { margin-left: max(7vw, 32px); }
+#splash { background: linear-gradient(90deg, rgba(14,10,8,.88) 0%, rgba(14,10,8,.55) 32%, rgba(14,10,8,0) 64%); }
+/* Pause-Menü wie Titel */
+#pause .pause-card .logo.small { font: 700 44px/1 var(--font-fun); color: #fff8ec; text-shadow: 0 3px 0 #9c8a6c, 0 8px 14px rgba(0,0,0,.4); }
+#pause .pause-card .logo.small span { color: #ffc23a; text-shadow: 0 3px 0 #9a5d00, 0 8px 14px rgba(0,0,0,.4); }
+#pause .pause-card { gap: 14px; padding: 30px 32px; border-radius: 28px; }
+/* Verspielte Überschriften & Zahlen im Spiel */
+.modal-body h2, #inspector .insp-h h3, .featcard .fc-h, #milestone .t2 { font-family: var(--font-fun) !important; font-weight: 600 !important; letter-spacing: .2px !important; }
+@media (min-width: 721px) { #st-cash .v { font: 600 38px/1 var(--font-fun) !important; letter-spacing: .3px; } #date { font-family: var(--font-fun) !important; font-weight: 600 !important; } #date .tod { font-family: var(--font-fun) !important; } }
+/* Primär-Knöpfe überall mit Unterkante */
+.btn.primary { box-shadow: 0 3px 0 #b86f00, 0 8px 18px rgba(255,160,0,.22) !important; font-family: var(--font-fun); font-weight: 600; }
+.btn.primary:active { transform: translateY(2px); box-shadow: 0 1px 0 #b86f00 !important; }
+.btn.big.primary { box-shadow: 0 5px 0 #b86f00, 0 12px 22px rgba(255,160,0,.26) !important; }
