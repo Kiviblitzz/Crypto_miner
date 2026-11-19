@@ -302,10 +302,10 @@ function cpuCooler(parent, x, y, z, rotX = 0) {
   const f = fan(g, 0.045, { square: true, n: 7 }); f.position.set(0, 0.088, 0.033);
   g.position.set(x, y, z); g.rotation.x = rotX; return g;
 }
-function psuBox(parent, x, y, z, w = 0.15, h = 0.086, d = 0.16) {
+function psuBox(parent, x, y, z, w = 0.15, h = 0.086, d = 0.16, cap = 750) {
   box(parent, w, h, d, X.caseBlack(), x, y, z);
   const f = fan(parent, 0.05, { n: 9, grill: 'dark' }); f.position.set(x, y + h + 0.001, z); f.rotation.x = -Math.PI / 2;
-  plane(parent, d * 0.6, h * 0.6, stickerMat('psuLbl', 'VOLTAR 750', '80+ GOLD · 230V~|12V ⎓ 62A'), x + w / 2 + 0.0012, y + h / 2, z, 0, Math.PI / 2);
+  plane(parent, d * 0.6, h * 0.6, stickerMat('psuLbl' + cap, `VOLTAR ${cap} W`, `${cap >= 650 ? '80+ BRONZE' : 'STANDARD'} · 230V~|12V ⎓ ${Math.round(cap * 0.85 / 12)}A`), x + w / 2 + 0.0012, y + h / 2, z, 0, Math.PI / 2);
   for (let i = 0; i < 6; i++) box(parent, 0.016, 0.01, 0.004, M.black(), x - w / 2 + 0.025 + (i % 3) * 0.022, y + 0.02 + Math.floor(i / 3) * 0.018, z + d / 2);
   box(parent, 0.026, 0.018, 0.004, M.black(), x - w / 2 + 0.03, y + h * 0.35, z - d / 2 - 0.002);
   box(parent, 0.008, 0.012, 0.004, M.ledRed(), x - w / 2 + 0.06, y + h * 0.4, z - d / 2 - 0.002);
@@ -357,7 +357,7 @@ export function buildRig(type, parts, only = null) {
     const want = (t) => !only || only === t;
     if (parts?.mobo && want('mobo')) mobo(root, 0.3, 0.24, -W / 2 + 0.012, y0 + H * 0.6, 0, true).rotation.set(0, 0, -Math.PI / 2);
     if (parts?.cpu && want('cpu')) cpuCooler(root, -W / 2 + 0.016, y0 + H * 0.78, 0.0, 0).rotation.set(0, 0, -Math.PI / 2);
-    if (parts?.psu && want('psu')) { psuBox(root, 0, y0 + 0.012, -0.1, 0.15, 0.086, 0.16); tube(root, [[-0.04, y0 + 0.11, 0.1], [-0.05, y0 + 0.16, 0.13], [-W / 2 + 0.03, y0 + 0.24, 0.12], [-W / 2 + 0.02, y0 + 0.3, 0.11]], 0.0055, mat('sleeve', { color: 0x7a5236, roughness: 0.8 }), 18, 8); }
+    if (parts?.psu && want('psu')) { psuBox(root, 0, y0 + 0.012, -0.1, 0.15, 0.086, 0.16, PART[parts.psu]?.cap); tube(root, [[-0.04, y0 + 0.11, 0.1], [-0.05, y0 + 0.16, 0.13], [-W / 2 + 0.03, y0 + 0.24, 0.12], [-W / 2 + 0.02, y0 + 0.3, 0.11]], 0.0055, mat('sleeve', { color: 0x7a5236, roughness: 0.8 }), 18, 8); }
     if (want('gpu')) gpus.forEach((gp, i) => {
       if (only && i !== gpus.length - 1) return;
       const m = gpuModel(root, gp.look); m.position.set(-W / 2 + 0.014, y0 + H * 0.5 - i * 0.07, -D / 2 + 0.03);
@@ -375,7 +375,7 @@ export function buildRig(type, parts, only = null) {
     for (const [a, b] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) box(root, 0.03, 0.012, 0.03, mat('crateRim', { color: 0x2a6cc8, roughness: 0.55 }), a * (S / 2 - 0.02), -0.006, b * (S / 2 - 0.02));
     if (parts?.mobo) mobo(root, 0.3, 0.3, 0, Hc + 0.005, 0);
     if (parts?.cpu) cpuCooler(root, -0.05, Hc + 0.008, 0.02);
-    if (parts?.psu) psuBox(root, 0.05, 0.014, 0.02, 0.15, 0.086, 0.16);
+    if (parts?.psu) psuBox(root, 0.05, 0.014, 0.02, 0.15, 0.086, 0.16, PART[parts.psu]?.cap);
     // Holzlatte für die GPUs (angeschraubt)
     const by = Hc + 0.18;
     box(root, S + 0.06, 0.022, 0.032, X.wood(), 0, by, -0.1);
@@ -807,7 +807,7 @@ export function loosePartModel(type, id) {
   if (type === 'mobo') mobo(root, 0.3, 0.24, 0, 0.003, 0);
   else if (type === 'cpu') cpuCooler(root, 0, 0, 0);
   else if (type === 'gpu') { const m = gpuModel(root, part.look); const L = part.look.len, T = 0.016 + 0.016 * part.look.slot; m.rotation.x = -Math.PI / 2; m.position.set(-L / 2, T / 2, 0.056); }
-  else if (type === 'psu') psuBox(root, 0, 0, 0);
+  else if (type === 'psu') psuBox(root, 0, 0, 0, 0.15, 0.086, 0.16, part.cap);
   return root;
 }
 // Einzelnes Bauteil (für die Einbau-Animation), nicht zusammengefügt

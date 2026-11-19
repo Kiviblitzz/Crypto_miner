@@ -1218,3 +1218,21 @@ body:has(#pause:not(.hidden)) #top, body:has(#pause:not(.hidden)) #goals, body:h
 /* Gesperrter Hauptknopf: neutral statt schlammig */
 .btn.primary:disabled { background: rgba(255,236,210,.10) !important; color: var(--dim) !important; box-shadow: inset 0 0 0 1.5px rgba(255,236,210,.12) !important; filter: none !important; opacity: 1 !important; }
 .btn.primary:disabled .bi { background: rgba(255,236,210,.1) !important; color: var(--dim) !important; }
+#build .item .thumb { height: 144px !important; padding: 4px !important; }
+#objmark .om-in { animation-name: omBob2; }
+@keyframes omBob2 { 0%, 100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, -2px); } }
+/* Intro: Kurs als eine Zeile */
+.intro-phone .pc-line { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 8px 10px; border-radius: 12px; background: rgba(0,0,0,.18); font: 600 14px var(--font); color: var(--text2); }
+.intro-phone .pc-line b { font: 700 17px var(--font-fun); color: var(--text); }
+.intro-phone .pc-line .pc-dot { width: 22px; height: 22px; border-radius: 50%; display: inline-grid; place-items: center; background: #f7931a; color: #fff; font: 700 13px var(--font-fun); }
+.intro-phone .pc-line canvas.spark { width: 96px; height: 26px; margin-left: auto; background: none !important; }
+/* Ziel: Zähler statt Punkte, Punkt oben bündig */
+.goal .cnt { margin-left: 10px; font: 700 13px var(--font-fun); color: var(--acc); }
+.goal { align-items: flex-start !important; }
+.goal .ck { margin-top: 5px; }
+/* Börse: Erlös direkt am Knopf */
+.tiles .acts .btn.sellb { display: inline-flex; flex-direction: column; align-items: center; line-height: 1.1; padding-top: 6px; padding-bottom: 6px; }
+.tiles .acts .btn.sellb small { font: 700 11.5px var(--font); opacity: .8; margin-top: 2px; }
+.tiles .fee { font: 600 12px var(--font); color: var(--dim); margin-top: 4px; }
+.skills .sk-learn div + div { margin-top: 1px; }
+.goal .ck { margin-top: 7px !important; }

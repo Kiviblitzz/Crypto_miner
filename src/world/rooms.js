@@ -133,7 +133,7 @@ export function buildRoom(def) {
     put('fairy', 2.0, 0.09).position.y = 2.42;
     put('radiator', 1.5, 0.1).position.y = 0.12;
     B.blocked.push(blk(3.5, 0, 4.0, 0.5));
-    B.lights.push({ pos: [2.0, 2.05, 1.8], color: 0xffdcb0, intensity: 1.7, dist: 8 });
+    B.lights.push({ pos: [2.0, 2.05, 1.8], color: 0xffdcb0, intensity: 1.25, dist: 8 });
     B.lights.push({ pos: [2.32, 1.02, 0.2], color: 0xffb46b, intensity: 1.1, dist: 2.2 }); // Schreibtischlampe
     B.lights.push({ pos: [1.85, 1.25, 0.55], color: 0xcfe0ff, intensity: 1.35, dist: 4 }); // kühles Fensterlicht auf Tisch und PC
     B.outside = 'town';

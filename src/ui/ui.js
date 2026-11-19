@@ -38,6 +38,7 @@ export class UI {
     world.onInteract = (uid) => this.openInspector(uid);
     world.onDoor = (door) => this.travel(door);
     world.onProp = (p) => this.useProp(p);
+    world.onSnap = () => this.audio?.install?.();
     world.onLoose = (t) => { this.w.pickupFx(t); if (!this.g.pickUp(t)) return; this.audio?.install?.(); this.toast(`${PNAME[t]} eingesteckt`, 'good', 2200); this.goals(); };
     game.on('xp', (k, n, lv) => this.xpPop(k, n, lv));
     world.onIncome = () => { this.bumpWallet(); this.audio?.tick?.(); };
@@ -135,7 +136,7 @@ export class UI {
     if (s.chapter === 0 && w.mode === 'play' && !this.paused && s.current === 'kinder') {
       const pc = g.facObjects('kinder').find((o) => o.type === 'tower');
       const spots = w.room?.looseSpots || {}, lying = Object.keys(s.loose || {}).filter((t) => spots[t]);
-      if (pc && !s.flags.miningStarted && lying.length && !(s.inv || []).length) { const cp = w.camera.position, d = (t) => Math.hypot(spots[t][0] - cp.x, spots[t][2] - cp.z) + (w.toScreen(spots[t][0], spots[t][1] + 0.1, spots[t][2]).on ? 0 : 100); const t = lying.sort((a, b) => d(a) - d(b))[0]; pos = [spots[t][0], spots[t][1] + 0.3, spots[t][2]]; label = `${PNAME[t]} aufheben`; aimed = w.aim?.loose === t; }
+      if (pc && !s.flags.miningStarted && lying.length) { const cp = w.camera.position, d = (t) => Math.hypot(spots[t][0] - cp.x, spots[t][2] - cp.z) + (w.toScreen(spots[t][0], spots[t][1] + 0.1, spots[t][2]).on ? 0 : 100); const t = lying.sort((a, b) => d(a) - d(b))[0]; pos = [spots[t][0], spots[t][1] + 0.1, spots[t][2]]; label = `${PNAME[t]} aufheben`; aimed = w.aim?.loose === t; }
       else if (pc && !s.flags.miningStarted) { pos = [pc.x, 0.78, pc.z]; label = g.pcReady(pc) ? 'PC einschalten' : (s.inv || []).length ? 'Teile einbauen' : 'PC zusammenbauen'; aimed = w.aim?.uid === pc.uid; }
       else if (g.has('market') && !(s.stats.sold > 0)) { const pr = w.room?.props?.find((p) => p.action === 'market'); if (pr) { pos = [pr.c[0], pr.c[1] + 0.34, pr.c[2]]; label = 'Börse'; aimed = w.aim?.prop === pr; } }
     }
@@ -250,7 +251,7 @@ export class UI {
     if (!$('#modal').classList.contains('hidden')) { this.modalKind = null; $('#modal').classList.add('hidden'); this.onModalClose?.(); this.onModalClose = null; }
     document.body.classList.remove('show-build', 'show-goals'); this.dock();
     if (this.inspUid) { this.inspUid = null; $('#inspector').classList.add('hidden'); this.w.select(null); }
-    this.w.focusObject?.(null); this.pickType = null; this.showRun = false;
+    this.w.focusObject?.(null); this.pickType = null; this.showRun = false; this.w.ghostPart?.(null);
     if (this.w.mode === 'ui' || this.w.mode === 'play') this.w.setMode('play');
   }
   pause(on) {
@@ -273,7 +274,7 @@ export class UI {
     const box = $('#featcards'); box.innerHTML = '';
     const el = q.length === 1
       ? h(`<div class="featcard"><div class="fc-t">Neu</div><div class="fc-h">${esc(FEATURES[q[0]].title)}</div><div class="fc-b">${FEATURES[q[0]].text}</div></div>`)
-      : h(`<div class="featcard"><div class="fc-t">${q.length} neue Funktionen</div><div class="fc-list">${q.map((f) => `<div><span>${esc(FEATURES[f].title)}</span>${FEATURES[f].key && FEATURES[f].key !== 'E' ? `<kbd>${FEATURES[f].key}</kbd>` : ''}</div>`).join('')}</div></div>`);
+      : h(`<div class="featcard"><div class="fc-t">${q.length} neue Funktionen</div><div class="fc-list">${q.map((f) => `<div><span>${esc(FEATURES[f].title)}</span>${FEATURES[f].key && !['E', 'B', 'M', 'P'].includes(FEATURES[f].key) ? `<kbd>${FEATURES[f].key}</kbd>` : ''}</div>`).join('')}</div></div>`);
     box.append(el); clearTimeout(this.featHide);
     this.featHide = setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 600); }, q.length === 1 ? 6500 : 8000);
     this.speedBar(); this.dock(); this.keysHint(); this.sites(); this.goals();
@@ -347,7 +348,7 @@ export class UI {
     const el = $('#inspector');
     if (uid !== this.inspUid) this.pickType = null;
     this.inspUid = uid;
-    if (!uid) { el.classList.add('hidden'); this.pickType = null; this.showRun = false; this.w.focusObject?.(null); return; }
+    if (!uid) { el.classList.add('hidden'); this.pickType = null; this.showRun = false; this.w.focusObject?.(null); this.w.ghostPart?.(null); return; }
     const o = this.g.findObj(uid); if (!o) { el.classList.add('hidden'); this.inspUid = null; return; }
     el.classList.remove('hidden');
     const def = PLACEABLE[o.type], g = this.g;
@@ -428,6 +429,8 @@ export class UI {
     const steps = [['mobo', 'Mainboard'], ['cpu', 'Prozessor'], ['gpu', 'Grafikkarte'], ['psu', 'Netzteil']];
     const cur = (t) => (t === 'gpu' ? p.gpus[0] : p[t]);
     const running = s.flags.miningStarted;
+    const firstNext = running ? null : steps.map(([t]) => t).find((t) => !cur(t) && s.inv?.includes(t) && !((t === 'cpu' || t === 'gpu') && !p.mobo));
+    setTimeout(() => this.w.ghostPart?.(o.uid, firstNext, s.invIds?.[firstNext]), 0);
     const sec = h(`<div class="pcb ${running ? 'running' : ''}"></div>`);
     if (running) sec.append(h(`<div class="pcb-live"><span class="lab">Schon geschürft</span><b id="pcb-live">₿ 0</b><span class="sub">Dein PC arbeitet jetzt für dich.</span></div>`));
     steps.forEach(([t, lab]) => {
@@ -437,9 +440,10 @@ export class UI {
       const sub = it ? esc(it.name) : carried ? (needMobo ? 'Erst das Mainboard einbauen' : 'In deiner Tasche') : lying ? `Liegt ${spots[t]?.[4] || 'im Zimmer'}` : '–';
       const row = h(`<div class="pcb-step ${st === 'done' ? 'done' : st === 'next' ? 'next' : 'locked'}"><span class="ic">${partSvg(t)}${it ? '<i class="tick"></i>' : ''}</span><div class="tx"><b>${lab}</b><span>${sub}</span></div>${st === 'next' ? '<button class="btn small primary">Einbauen</button>' : ''}</div>`);
       const b = row.querySelector('button');
+      if (b) { row.onmouseenter = b.onfocus = () => this.w.ghostPart?.(o.uid, t, s.invIds?.[t]); row.onmouseleave = b.onblur = () => this.w.ghostPart?.(o.uid, firstNext, s.invIds?.[firstNext]); }
       if (b) b.onclick = () => {
         if (!g.installLoose(o.uid, t)) return;
-        this.inspect(o.uid); this.w.animateInstall?.(o.uid, t); setTimeout(() => this.audio?.install?.(), 260);
+        this.w.ghostPart?.(null); this.inspect(o.uid); this.w.animateInstall?.(o.uid, t);
         this.toast(g.pcReady(o) ? 'Alle Teile sind drin. Schalt deinen PC ein!' : `${lab} eingebaut`, 'good', 2600);
       };
       sec.append(row);
@@ -494,7 +498,6 @@ export class UI {
       if (b) b.onclick = () => {
         if (!g.setPart(o.uid, type, it.id, 0)) { this.toast('Nicht genug Geld.', 'bad'); return; }
         this.pickType = null; this.inspect(o.uid); this.w.animateInstall?.(o.uid, type);
-        setTimeout(() => this.audio?.install?.(), 260);
         this.toast(g.pcReady(o) ? 'Alle Teile sind drin. Schalt deinen PC ein!' : `${names[type]} eingebaut`, 'good', 3000);
       };
       return c;
@@ -601,7 +604,7 @@ export class UI {
       const done = !!s.goals[go.id];
       if (done || shown >= 1) continue; shown++;
       let prog = '';
-      if (!done && go.progress) { const [cur, tgt, kind] = go.progress(s, g.helpers()); if (kind === 'parts') { prog = `<span class="pips">${[0, 1, 2, 3].map((i) => `<i class="${i < cur ? 'on' : ''}"></i>`).join('')}</span>`; } else { const f = (v) => (kind === 'hash' ? fmtHash(v) : fmtUSD(v)); const pc = Math.max(0, Math.min(100, tgt ? (cur / tgt) * 100 : 0)); prog = `<div style="font-size:11px;color:var(--dim)">${f(Math.max(0, cur))} / ${f(tgt)}</div><div class="bar" style="width:180px"><div style="width:${pc}%;background:#ffb000"></div></div>`; } }
+      if (!done && go.progress) { const [cur, tgt, kind] = go.progress(s, g.helpers()); if (kind === 'parts') { prog = `<span class="cnt">${cur} / ${tgt}</span>`; } else { const f = (v) => (kind === 'hash' ? fmtHash(v) : fmtUSD(v)); const pc = Math.max(0, Math.min(100, tgt ? (cur / tgt) * 100 : 0)); prog = `<div style="font-size:11px;color:var(--dim)">${f(Math.max(0, cur))} / ${f(tgt)}</div><div class="bar" style="width:180px"><div style="width:${pc}%;background:#ffb000"></div></div>`; } }
       const gk = s.chapter + ':' + go.id, enter = gk !== this.goalKey; this.goalKey = gk;
       const bag = (s.inv || []).length && !s.flags.miningStarted ? `<div class="bag"><span>In der Tasche</span>${s.inv.map((t) => `<i title="${PNAME[t]}">${partSvg(t, 16)}</i>`).join('')}</div>` : '';
       const row = h(`<div class="goal ${done ? 'done' : ''} ${enter ? 'enter' : ''}"><div class="ck">${done ? '✓' : ''}</div><div>${esc(go.text)}${prog}${bag}</div></div>`);
@@ -681,16 +684,15 @@ export class UI {
     const txt = m0 ? m0.text : MESSAGES.find((m) => m.id === 'm0').text;
     const body = h(`<div class="intro-phone"><div class="ip-date">${fmtDate(s.day)}</div>
       <div class="phone"><div class="ph-top"><div class="av"><svg viewBox="0 0 40 40" width="40" height="40"><circle cx="20" cy="20" r="20" fill="#ffcf8a"/><path d="M6 40c1-8 7-12 14-12s13 4 14 12z" fill="#e2574c"/><circle cx="20" cy="18" r="8.5" fill="#e7b48f"/><path d="M11 17c0-7 5-10 10-10 6 0 9 4 8 9-3-3-7-4-11-3-3 1-5 2-7 4z" fill="#2f241e"/><circle cx="17" cy="19" r="1.1" fill="#2f241e"/><circle cx="23" cy="19" r="1.1" fill="#2f241e"/><path d="M17 22.5q3 2.2 6 0" stroke="#8a4a3a" stroke-width="1.3" fill="none" stroke-linecap="round"/></svg></div><div><b>Deniz</b><span class="on">online</span></div></div>
-        <div class="msg f-Deniz">${esc(txt)}</div>
-        <div class="msg f-Deniz pricecard"><div class="pc-h"><span class="pc-dot">₿</span>Bitcoin · BTC</div><div class="pc-p">${fmtUSD(p)}</div><canvas class="chart" width="900" height="300"></canvas></div>
-        <div class="msg f-Deniz">Deine alten PC-Teile liegen doch noch im Zimmer rum. Bau dir daraus einen Mining-PC!</div>
+        <div class="msg f-Deniz">${esc(txt)}<div class="pc-line"><span class="pc-dot">₿</span><span>Bitcoin</span><b>${fmtUSD(p)}</b><canvas class="spark"></canvas></div></div>
+        <div class="msg f-Deniz">Bau dir aus deinen alten Teilen im Zimmer einen Mining-PC!</div>
         <div class="row ip-act"><button class="btn primary big">Los geht’s</button></div>
       </div></div>`);
     if (m0) m0.read = true;
     body.querySelector('button').onclick = () => this.closeModal();
     this.onModalClose = onClose;
     this.openModal(body, 'narrow', 'intro');
-    requestAnimationFrame(() => this.chart(body.querySelector('canvas'), 'BTC', 120, true));
+    requestAnimationFrame(() => this.chart(body.querySelector('canvas.spark'), 'BTC', 120, true));
   }
   story(title, html, btn = 'Los geht’s') {
     const n = h(`<div class="story"><div class="ch">${esc(title)}</div><p>${html}</p><div class="row" style="justify-content:flex-end"><button class="btn primary">${btn}</button></div></div>`);
@@ -738,7 +740,9 @@ export class UI {
     const pend = c.id === 'BTC' && !s.payoutCold ? this.pendingBtc() : 0;
     const tiles = h('<div class="tiles"></div>'), hold = tile('Du hast', w.ex + pend, 'hold'); tiles.append(hold);
     const r1 = hold.querySelector('.acts');
-    for (const f of [0.25, 0.5, 1]) { const b = h(`<button class="btn ${f === 1 ? 'primary' : ''}">${f === 1 ? 'Alles verkaufen' : f * 100 + ' % verkaufen'}</button>`); b.disabled = w.ex + pend <= 0; b.onclick = () => { if (pend) g.creditPending(c.id, this.pendingBtc()); const u = g.sell(c.id, f); this.audio?.cash(); this.flashCash(u); this.toast(`Verkauft für ${fmtUSD(u)}`, 'good', 2500); this.market(); }; r1.append(b); }
+    const fee = g.s.skills ? g.tradeFee() : 0.005, net = (f) => (w.ex + pend) * f * p * (1 - fee);
+    hold.querySelector('.info').append(h(`<div class="fee">Gebühr ${(fee * 100).toLocaleString('de-DE')} % · Handel senkt sie</div>`));
+    for (const f of [0.25, 0.5, 1]) { const b = h(`<button class="btn sellb ${f === 1 ? 'primary' : ''}"><span>${f === 1 ? 'Alles verkaufen' : f * 100 + ' % verkaufen'}</span><small>+${fmtUSD(net(f))}</small></button>`); b.disabled = w.ex + pend <= 0; b.onclick = () => { if (pend) g.creditPending(c.id, this.pendingBtc()); const u = g.sell(c.id, f); this.audio?.cash(); this.flashCash(u); this.toast(`Verkauft für ${fmtUSD(u)}`, 'good', 2500); this.market(); }; r1.append(b); }
     if (g.has('cold')) { const ct = tile('Cold-Wallet', w.cold, 'cold'); const tc = h(`<button class="btn small">${w.cold > 0 && w.ex === 0 ? 'Auf Börse holen' : 'Einlagern'}</button>`); tc.onclick = () => { g.transfer(c.id, !(w.cold > 0 && w.ex === 0)); this.market(); }; ct.querySelector('.acts').append(tc); tiles.append(ct); }
     det.append(tiles);
     const r2 = h(`<div class="row" style="align-items:center"><span style="font-size:13px">Kaufen für</span><input type="number" min="0" step="100" value="${Math.max(0, Math.round(Math.min(s.cash, 1000)))}"/><span>$</span><button class="btn small primary">Kaufen</button></div>`);
@@ -986,7 +990,7 @@ export class UI {
     const list = body.querySelector('.sk-list');
     for (const k of ['hw', 'mining', 'trade']) {
       const x = s.skills[k] || 0, lv = g.skillLv(k), lo = SKILL_XP[lv - 1], hi = SKILL_XP[lv], pc = hi ? Math.round(((x - lo) / (hi - lo)) * 100) : 100;
-      list.append(h(`<div class="sk"><div class="sk-ic">${skillSvg(k, 26)}</div><div class="sk-main"><div class="sk-top"><b>${SKILL[k].name}</b><span class="sk-lv">Stufe ${lv}</span></div><div class="sk-bar"><div style="width:${pc}%"></div></div><div class="sk-row"><span>${SKILL[k].now(lv)}</span><span>${hi ? `${x} / ${hi} EP` : 'Höchste Stufe'}</span></div><div class="sk-learn">${hi ? `Nächste Stufe: ${SKILL[k].next(lv)} · ` : ''}Lernst du durch: ${SKILL[k].learn}</div></div></div>`));
+      list.append(h(`<div class="sk"><div class="sk-ic">${skillSvg(k, 26)}</div><div class="sk-main"><div class="sk-top"><b>${SKILL[k].name}</b><span class="sk-lv">Stufe ${lv}</span></div><div class="sk-bar"><div style="width:${pc}%"></div></div><div class="sk-row"><span>${SKILL[k].now(lv)}</span><span>${hi ? `${x - lo} / ${hi - lo} EP` : 'Höchste Stufe'}</span></div><div class="sk-learn">${hi ? `<div>Stufe ${lv + 1}: ${SKILL[k].next(lv)}</div>` : ''}<div>Lernst du durch: ${SKILL[k].learn}</div></div></div></div>`));
     }
     this.openModal(body, 'narrow', 'skills');
   }
