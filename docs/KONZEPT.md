@@ -78,16 +78,27 @@ Alle Standorte laufen parallel weiter – das Zimmer bleibt als „Museum" deine
 * **Familie & Personal sichtbar:** du am Schreibtisch, Papa an der Werkbank, Opa im Keller, Deniz und Techniker in den Hallen.
 * **Deko:** Neon-Schild „HODL", Aquarium, Kühlschrank, Arcade-Automat, Sofa, Pflanzen.
 * **Meilensteine:** 1 GH/s … 10 EH/s, „Millionär!", „Milliardär!" mit Fanfare.
-* **Leben in der Halle:** Techniker laufen herum, du sitzt im Kinderzimmer am Schreibtisch,
+* **Leben in der Halle:** Techniker laufen herum, Papa schraubt in der Werkstatt,
   defekte Geräte qualmen, ab 38 °C glüht der Bildschirmrand rot.
 
-## 5. 3D & Steuerung
-* Komplett prozedurale, eigene Modelle (keine Logos): Tower-PC mit Glasseite, Milchkisten-Rig,
-  Alu-Open-Frame, Grafikkarten mit drehenden Lüftern, FPGA-Boards, USB-Sticks, ASICs, 42U-Racks,
-  Schwerlastregale, 40-ft-Container, Ventilatoren, Klimaanlagen, CRAC-Schränke, Möbel.
-* Tag/Nacht-Zyklus, Status-LEDs mit Bloom, Wände blenden zur Kamera hin aus.
-* Maus: Links = wählen/bauen, Rechts = drehen, Mitte = schieben, Rad = Zoom, WASD/Q/E.
-* **Rundgang-Modus (F):** in Ego-Perspektive durch die eigene Farm laufen.
+## 5. 3D & Steuerung (Ego-Perspektive)
+* **Du bist selbst im Spiel:** Ego-Perspektive mit Maus-Einfangen (Pointer Lock), WASD, Rennen und Kollision.
+  Dazu Schritte, eigene Hände im Hoodie, ein Bau-Tablet und eine Taschenlampe (F).
+* **Fadenkreuz-Interaktion (E):**
+  * Gerät anschauen → Inspektor mit Slots, Reparatur, Verkaufen.
+  * Tür → Standort wechseln.
+  * PC-Monitor → Börse, Bett → schlafen bis zum Morgen.
+  * Sicherungskasten → Firma, Werkbank → Technik, NOC-Wand → Rangliste.
+* **Bauen (B):** Katalog wählen, das Teil steht als Geist vor dir und rastet am Boden ein. R dreht es,
+  Klick setzt es, Shift+Klick baut mehrere.
+* **Handmodellierte Modelle:** Alles ist im Code modelliert, ohne fremde Assets und ohne Logos.
+  * Abgerundete Kanten, gebogene Lüfterflügel, Lüfterrahmen mit Streben und Gitter, Lamellenkühler, Heatpipes.
+  * GPUs mit Backplate, Goldkontakten und Slotblech.
+  * Alu-Strebenprofile mit Nuten, verlegte Kabel, Schrauben, Typenschilder mit Barcode und QR-Code.
+  * Figuren mit Gesicht, Möbel mit weichen Polstern.
+  * Drei Detailstufen (LOD) halten große Hallen flüssig.
+* Tag/Nacht-Zyklus, Status-LEDs mit Bloom, Wetter, Polarlicht.
+* **Karte (K):** Imperium-Ansicht aller Standorte aus der Vogelperspektive.
 
 ## 6. Markenrecht
 Fiktive Marken: **Crimson** (rote GPUs), **Verdant** (grüne GPUs), **Silicor**/**Arix** (CPUs),

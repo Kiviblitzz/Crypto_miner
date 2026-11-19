@@ -1,11 +1,13 @@
 # HASHWERK – Vom Kinderzimmer zum Rechenzentrum
 
-Ein 3D-Krypto-Mining-Tycoon im Browser (Three.js). Inspiriert von der Mechanik aus
+Ein 3D-Krypto-Mining-Tycoon in **Ego-Perspektive** im Browser (Three.js). Inspiriert von der Mechanik aus
 „Crypto Miner Tycoon Simulator", aber mit eigener Story, echter 3D-Welt und viel größerem Maßstab:
 Du startest **Oktober 2010 im Kinderzimmer** mit einem alten PC und baust bis in die Gegenwart
 (November 2026) ein Mining-Imperium bis zur **60-MW-Wasserkrafthalle am Fjord** auf.
 
 ![Kinderzimmer](docs/img/02_kinderzimmer.jpg)
+
+![Kinderzimmer – Bett und Schrank](docs/img/13_kinderzimmer_bett.jpg)
 
 | | |
 |---|---|
@@ -17,11 +19,7 @@ Du startest **Oktober 2010 im Kinderzimmer** mit einem alten PC und baust bis in
 
 ![Imperium](docs/img/08_imperium.jpg)
 
-**Eigener Keller** – mit Deko (Neon-Schild, Aquarium, Arcade-Automat) und den ersten Open-Frame-Rigs:
-
-![Keller mit Deko](docs/img/12_keller_deko.jpg)
-
-**Rundgang** – nachts zwischen den Containern der Fjordhalle, mit Polarlicht:
+**Nachts** zwischen den Containern der Fjordhalle, mit Polarlicht:
 
 ![Fjord bei Nacht](docs/img/10_fjord_nacht.jpg)
 
@@ -70,24 +68,41 @@ Ein-Datei-Version neu bauen: `npm run build:single`.
 * **Feedback:** schwebende Ertrags-Einblendungen über laufenden Geräten, Kurs-Alarme bei starken Bewegungen,
   Rangliste mit Hashrate-Kurve gegen das Netz und „Dein Weg" mit allen Meilensteinen.
 * **Wärmebild (H):** zeigt Hitzequellen und Kühlbereiche wie die Overlays im Vorbild.
-* **3D:** Alle Modelle prozedural im Code gebaut (keine fremden Assets, keine Logos), Tag/Nacht,
-  Bloom-LEDs, Wände blenden sich zur Kamera aus, Rundgang-Modus in Ego-Perspektive.
+* **Ego-Perspektive:** Du läufst selbst durch Zimmer, Keller und Hallen. Mit dem Fadenkreuz schaust
+  du Geräte an und öffnest sie mit **E**. Du baust mit dem Tablet direkt vor dir, gehst durch Türen
+  zu anderen Standorten und benutzt Gegenstände: Am PC-Monitor öffnest du die Börse, im Bett schläfst du.
+  Dazu kommen eigene Hände, eine Taschenlampe, Schritte und Kollision.
+* **Handmodellierte 3D-Modelle (alle selbst gebaut, keine fremden Assets, keine Logos):**
+  * Abgerundete und gefaste Kanten überall, gebogene und verdrehte Lüfterflügel.
+  * Lüfterrahmen mit Streben und Drahtgittern, echte Lamellenkühler mit Heatpipes.
+  * Grafikkarten mit Lüfterabdeckung, Backplate, Goldkontakten, Slotblech und Stromsteckern.
+  * Alu-Strebenprofile mit Nuten an den Open-Air-Rigs, verlegte Riser- und Stromkabel.
+  * Mining-Racks mit Switch, Steckdosenleiste und Verkabelung.
+  * Container mit Wellblech, Eckbeschlägen und Verriegelungsstangen, Etiketten mit Barcode und QR-Code.
+  * Figuren mit Gelenken und Gesicht, Möbel mit weichen Polstern.
+* **Grafik und Leistung:** Modelle werden nach Material gebacken und haben drei Detailstufen (LOD),
+  damit auch volle Hallen flüssig laufen. Dazu Tag/Nacht und Bloom-LEDs.
 
 ## Steuerung
 
 | Eingabe | Aktion |
 |---|---|
-| Linksklick | Objekt auswählen / bauen |
-| Doppelklick | Auf Gerät heranzoomen |
-| Rechts ziehen | Kamera drehen |
-| Mitte ziehen | Kamera schieben |
-| Mausrad | Zoom |
-| WASD / Pfeile, Q/E | Kamera bewegen / drehen |
+| Klick ins Bild | Maus einfangen (Ego-Steuerung) |
+| Maus | Umsehen |
+| WASD / Pfeile | Laufen (Shift = rennen) |
+| E / Linksklick | Benutzen: Gerät öffnen, Tür, PC-Monitor, Bett … / beim Bauen: setzen |
+| B | Bauen (Katalog), danach steht das Teil vor dir |
 | R | Beim Bauen drehen |
+| Rechtsklick / X | Bauen abbrechen |
+| Shift + Klick | Mehrfach bauen |
+| Entf (2×) | Angeschautes Gerät verkaufen |
+| M / P / C / T / L / K | Markt, Handy, Firma, Technik, Rangliste, Karte (Imperium) |
 | H | Wärmebild |
-| Shift | Mehrfach bauen |
+| F | Taschenlampe |
 | Leertaste, 1–4 | Pause, Tempo |
-| F | Rundgang (Ego-Perspektive) |
+| ESC | Menü / Fenster schließen |
+
+Auf Touch-Geräten gibt es einen Joystick, Wischen zum Umsehen und Tasten für Benutzen, Bauen und Menü.
 
 ## Projektstruktur
 
@@ -96,7 +111,8 @@ docs/RECHERCHE.md   Recherche zum Vorbild + Echtdaten
 docs/KONZEPT.md     Spielkonzept & Story
 src/data/           Kurs-/Hashrate-Kurven, Coins, Hardware, Standorte, Story
 src/sim/game.js     Simulation (Mining, Strom, Hitze, Defekte, Markt, Ziele)
-src/world/          Three.js: Materialien, Modelle, Räume, Welt/Kamera/Bauen
+src/world/          Three.js: Materialien, Modelle (models.js, furniture.js), Räume, Spieler (player.js),
+                    Hände/Tablet (viewmodel.js), Welt/Interaktion/Bauen (world.js)
 src/ui/             Oberfläche, Sound
 ```
 

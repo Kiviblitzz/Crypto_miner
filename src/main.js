@@ -53,7 +53,7 @@ document.getElementById('btn-continue').onclick = () => {
 window.addEventListener('beforeunload', () => { if (splash.classList.contains('hidden')) game.save(); });
 
 // Tastatur (Hotkeys)
-const HOT = { b: () => ui.toggleBuild(), m: () => ui.market(), p: () => ui.phone(), c: () => ui.company(), t: () => ui.techs(), l: () => ui.ranking(), k: () => ui.toggleMap() };
+const HOT = { g: () => ui.goalActionKey(), b: () => ui.toggleBuild(), m: () => ui.market(), p: () => ui.phone(), c: () => ui.company(), t: () => ui.techs(), l: () => ui.ranking(), k: () => ui.toggleMap() };
 window.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || !splash.classList.contains('hidden')) return;
   const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
@@ -97,7 +97,7 @@ function loop(now) {
     while (s.frac >= 1 && n < 4) { s.frac -= 1; game.advanceDay(); n++; }
     if (s.frac >= 1) s.frac = 0.99;
   }
-  screenTimer -= dt; if (screenTimer <= 0) { screenTimer = 1.0; world.updateStatus(); world.drawScreens(); const sm = game.summary[s.current]; if (sm) audio.setLoad(sm.watt, !sm.tripped && !splashOrbit); if (world.aim) ui.prompt(world.aim); }
+  screenTimer -= dt; if (screenTimer <= 0) { screenTimer = 1.0; world.updateStatus(); world.drawScreens(); if (!splashOrbit) ui.tutorial(); const sm = game.summary[s.current]; if (sm) audio.setLoad(sm.watt, !sm.tripped && !splashOrbit); if (world.aim) ui.prompt(world.aim); }
   world.update();
   requestAnimationFrame(loop);
 }

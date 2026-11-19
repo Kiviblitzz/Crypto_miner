@@ -47,7 +47,7 @@ export const CHAPTERS = [
     title: 'Kapitel 1 – Das Kinderzimmer', unlock: 'keller', minDate: '2011-01-01',
     intro: 'Oktober 2010. Papas Laden steckt in Schulden. Du hast einen alten PC, 300 $ und eine Idee.',
     goals: [
-      { id: 'run', text: 'Starte die Zeit (▶) und lass den PC minen', check: (s) => s.stats.minedUSD > 0.3 },
+      { id: 'run', text: 'Lass deinen PC die ersten Cent minen (Leertaste = Pause)', check: (s) => s.stats.minedUSD > 0.3 },
       { id: 'gpu', text: 'Kauf eine neue Grafikkarte (PC anschauen, E drücken → GPU-Slot)', check: (s) => s.flags.boughtGpu },
       { id: 'earn', text: 'Verdiene insgesamt 1.000 $', check: (s) => s.stats.minedUSD >= 1000, progress: (s) => [s.stats.minedUSD, 1000, 'usd'] },
       { id: 'papa1', text: 'Gib Papa 2.000 $ für die Stromrechnung', action: { label: '2.000 $ geben', cost: 2000, flag: 'papa1' }, check: (s) => s.flags.papa1 },

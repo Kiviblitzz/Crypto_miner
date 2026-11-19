@@ -1,7 +1,7 @@
 // Räume / Standorte – Böden, Wände (mit Ausblendung zur Kamera), Möbel, Licht
 import * as THREE from 'three';
 import { TEX, M, mat, textTexture } from './materials.js';
-import { box, cyl, fan, instance } from './models.js';
+import { box, cyl, fan, instance, X } from './models.js';
 import { furniture } from './furniture.js';
 
 function wallMat(key, tex) { return mat('wall_' + key, { map: tex, roughness: 0.9 }); }
@@ -82,8 +82,13 @@ export function buildRoom(def) {
     });
     windowFrame(S.back, 1.0, 2.0, 0.9, 2.15, 0.15);
     // Tür (rechts, nahe vorne)
-    const door = new THREE.Mesh(new THREE.BoxGeometry(0.88, 2.02, 0.04), mat('door', { color: 0xf4f1ea, roughness: 0.5 })); door.position.set(3.03, 1.01, 0.02); S.right.add(door);
-    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.03, 10, 8), M.alu()); knob.position.set(3.33, 1.0, 0.07); S.right.add(knob);
+    box(S.right, 0.86, 2.02, 0.04, mat('door', { color: 0xf4f1ea, roughness: 0.5 }), 3.03, 0, 0.02);
+    for (const [y, h] of [[0.16, 0.78], [1.1, 0.78]]) box(S.right, 0.6, h, 0.012, mat('doorPanel', { color: 0xe6e1d6, roughness: 0.5 }), 3.03, y, 0.045, 0, 0.004);
+    for (const x of [2.575, 3.475]) box(S.right, 0.06, 2.1, 0.07, M.white(), x, 0, 0.035);
+    box(S.right, 0.96, 0.06, 0.07, M.white(), 3.025, 2.05, 0.035);
+    cyl(S.right, 0.026, 0.026, 0.012, X.chrome(), 3.36, 1.0, 0.046, 20, 'z');
+    box(S.right, 0.13, 0.02, 0.02, X.chrome(), 3.31, 0.99, 0.07, 0, 0.008);
+    cyl(S.right, 0.008, 0.008, 0.03, X.chrome(), 3.36, 1.0, 0.06, 10, 'z');
     // Poster
     poster(S.left, textTexture([{ text: 'SUBNET', font: 'bold 120px Impact, Arial', color: '#ffdd55' }, { text: 'LIVE · TOUR 2010', font: '40px Arial', color: '#fff' }], { bg: '#1b1036', accent: '#ff3d7f', deco: (g, W, H) => { g.fillStyle = '#ff3d7f55'; for (let i = 0; i < 12; i++) { g.beginPath(); g.arc(W / 2, H * 0.62, 30 + i * 22, Math.PI, 0); g.stroke(); } } }), 0.6, 0.85, 1.5, 1.6, 0.085);
     poster(S.right, textTexture([{ text: 'TO THE', font: 'bold 70px Arial' }, { text: 'MOON', font: 'bold 120px Arial', color: '#ffd23f' }, { text: '🚀', font: '120px Arial' }], { bg: '#0b1630', deco: (g, W, H) => { g.fillStyle = '#fff'; for (let i = 0; i < 80; i++) g.fillRect(Math.random() * W, Math.random() * H, 2, 2); } }), 0.6, 0.85, 1.0, 1.6, 0.085);

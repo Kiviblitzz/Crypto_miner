@@ -266,3 +266,11 @@ body[data-mode="map"] #goals, body[data-mode="map"] #build { display: none; }
 
 body.show-build #goals { display: none; }
 body[data-mode="ui"] #keys, body[data-mode="ui"] #prompt { display: none; }
+
+/* Schritt-für-Schritt-Hinweis */
+#tut { position: fixed; top: 132px; left: 50%; transform: translateX(-50%); max-width: min(640px, calc(100vw - 32px)); padding: 9px 16px; border-radius: 12px; background: rgba(10,14,20,.8); border: 1px solid rgba(255,176,0,.45); color: #e8edf4; font-size: 14px; line-height: 1.4; z-index: 4; pointer-events: none; text-align: center; box-shadow: 0 6px 24px rgba(0,0,0,.35); }
+#tut b { color: #ffb000; }
+#tut.pop { animation: tutpop .5s ease-out; }
+@keyframes tutpop { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+body[data-mode="title"] #tut, body[data-mode="map"] #tut { display: none; }
+@media (max-width: 760px) { #tut { top: auto; bottom: 170px; font-size: 13px; } }

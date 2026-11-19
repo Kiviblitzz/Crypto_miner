@@ -44,7 +44,7 @@ export class UI {
     game.on('release', (it, text) => { if (it.type !== 'psu' && it.type !== 'mobo') this.toast(`🆕 ${esc(text)}`, 'info', 6000); this.ticker(); this.lastBuildDay = -99; });
     game.on('update', () => this.onDay());
     game.on('refresh', () => this.refresh());
-    game.on('unlockable', (id) => { this.toast(`🔓 Neuer Standort verfügbar: <b>${FACILITY[id].name}</b> – siehe Ziele unten links`, 'good', 8000); this.goals(); this.sites(); });
+    game.on('unlockable', (id) => { this.toast(`🔓 Neuer Standort verfügbar: <b>${FACILITY[id].name}</b> – geh durch die Tür und drück E`, 'good', 8000); this.goals(); this.sites(); });
     setInterval(() => this.top(), 200);
     this.refresh(); this.ticker();
   }
@@ -222,7 +222,7 @@ export class UI {
       if (!un && !can) continue;
       const sm = g.summary[f.id];
       const c = h(`<div class="card"><h3>${here ? '📍 ' : ''}${esc(f.name)}</h3><div class="sub">${esc(f.place)}</div>${un && sm ? `<div style="font-size:12px;color:#94a0b2">${fmtWatt(sm.watt)} · ${sm.temp.toFixed(1)} °C · ${g.facObjects(f.id).length} Objekte</div>` : ''}</div>`);
-      const b = h(`<button class="btn small ${here ? '' : 'primary'}" style="margin-top:6px">${here ? 'Hierbleiben' : un ? 'Hingehen' : `Übernehmen (${fmtUSD(f.cost)})`}</button>`);
+      const b = h(`<button class="btn small ${here ? '' : 'primary'}" style="margin-top:6px">${here ? 'Hierbleiben' : un ? 'Hingehen' : f.cost ? `Übernehmen (${fmtUSD(f.cost)})` : 'Einziehen'}</button>`);
       b.onclick = () => { this.closeModal(); if (here) return; if (!un) { this.unlock(f.id); return; } this.switchSite(f.id); };
       c.append(b); cards.append(c);
     }
@@ -388,11 +388,38 @@ export class UI {
       let prog = '';
       if (!done && go.progress) { const [cur, tgt, kind] = go.progress(s, g.helpers()); const f = (v) => (kind === 'hash' ? fmtHash(v) : fmtUSD(v)); const pc = Math.max(0, Math.min(100, tgt ? (cur / tgt) * 100 : 0)); prog = `<div style="font-size:11px;color:#94a0b2">${f(Math.max(0, cur))} / ${f(tgt)}</div><div class="bar" style="width:180px"><div style="width:${pc}%;background:#ffb000"></div></div>`; }
       const row = h(`<div class="goal ${done ? 'done' : ''}"><div class="ck">${done ? '✓' : ''}</div><div>${esc(go.text)}${prog}</div></div>`);
-      if (!done && go.action) { const b = h(`<button class="btn small primary">${esc(go.action.label)}</button>`); b.disabled = s.cash < go.action.cost; b.onclick = () => { if (g.goalAction(go)) { this.toast('✔ Erledigt!', 'good'); this.goals(); } }; row.lastElementChild.append(h('<br/>'), b); }
+      if (!done && go.action) { const b = h(`<button class="btn small primary"><b>[G]</b> ${esc(go.action.label)}</button>`); b.disabled = s.cash < go.action.cost; b.onclick = () => { if (g.goalAction(go)) { this.toast('✔ Erledigt!', 'good'); this.goals(); } }; row.lastElementChild.append(h('<br/>'), b); }
       el.append(row);
     }
     const allDone = ch.goals.every((go) => s.goals[go.id]);
     if (allDone && s.day < toDay(ch.minDate)) el.append(h(`<div style="font-size:12px;color:#ffcc33;margin-top:6px">Alle Ziele erfüllt! Nächstes Kapitel ab ${fmtDate(toDay(ch.minDate))}.</div>`));
+  }
+  // Taste G: nächste Ziel-Aktion (z. B. Papa die Stromrechnung geben) – in der Ego-Steuerung ohne Mausklick
+  goalActionKey() {
+    const s = this.g.s, ch = CHAPTERS[s.chapter]; if (!ch) return false;
+    const go = ch.goals.find((x) => !s.goals[x.id] && x.action);
+    if (!go) { this.toast('Gerade gibt es nichts zu bezahlen.', 'info', 2500); return false; }
+    if (s.cash < go.action.cost) { this.toast(`Dafür brauchst du ${fmtUSD(go.action.cost)} (du hast ${fmtUSD(s.cash)}).`, 'bad'); return false; }
+    if (this.g.goalAction(go)) { this.toast(`✔ ${esc(go.action.label)} – erledigt!`, 'good'); this.audio?.cash(); this.goals(); this.top(); return true; }
+    return false;
+  }
+  // Schritt-für-Schritt-Hinweise (oben in der Mitte)
+  tutorial() {
+    const el = $('#tut'); if (!el) return;
+    const g = this.g, s = g.s; let t = '';
+    if (s.chapter === 0) {
+      if (!s.flags.boughtGpu) t = this.inspUid ? '🛒 Wähle im Fenster den <b>GPU-Slot</b> und kauf eine schnellere Grafikkarte.' : '👀 Dein PC steht links neben dem Schreibtischstuhl: hingehen, anschauen und <b>E</b> drücken.';
+      else if (!s.goals.earn) t = '⏩ Mit <b>1–4</b> stellst du das Tempo ein. Verdiene 1.000 $ – achte auf <b>Hitze</b> (<b>B</b> → Ventilator) und Mamas Sicherung (1,8 kW).';
+    }
+    if (!t) {
+      const ch = CHAPTERS[s.chapter], go = ch && ch.goals.find((x) => !s.goals[x.id] && x.action);
+      const rest = ch && ch.goals.filter((x) => !s.goals[x.id] && !x.action).length;
+      if (go && !rest) t = s.cash >= go.action.cost ? `💶 Drück <b>G</b>: ${esc(go.action.label)}.` : `💶 Spare für „${esc(go.action.label)}“ – ${fmtUSD(s.cash)} / ${fmtUSD(go.action.cost)}.`;
+    }
+    if (!t && FACILITIES.some((f) => g.canUnlock(f.id))) t = '🚪 Ein neuer Standort ist frei: Geh zur <b>Tür</b>, schau sie an und drück <b>E</b>.';
+    if (!t && s.chapter === 1 && !s.goals.openrig) t = '🧰 Drück <b>B</b> → Rigs: Stell eine <b>Milchkiste</b> auf. Dann anschauen, <b>E</b> und bestücken (Mainboard, CPU, Netzteil, GPUs).';
+    if (!t) { const ch = CHAPTERS[s.chapter], go = ch && ch.goals.find((x) => !s.goals[x.id]); if (go) t = `🎯 Nächstes Ziel: ${esc(go.text)}`; }
+    if (el.dataset.t !== t) { el.dataset.t = t; el.innerHTML = t; el.classList.toggle('hidden', !t); if (t) { el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); } }
   }
   unlock(id) {
     const f = FACILITY[id];
