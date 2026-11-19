@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Player } from './player.js';
+import { ViewModel } from './viewmodel.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
@@ -54,6 +55,7 @@ export class World {
     });
     document.addEventListener('pointerlockerror', () => { this.lockFailed = true; this.onLockChange?.(false); });
     this.doorGroup = new THREE.Group(); this.scene.add(this.doorGroup);
+    this.scene.add(this.camera); this.vm = new ViewModel(this.camera);
     this.aim = null;
 
     // Licht
@@ -212,6 +214,7 @@ export class World {
     const ghost = objectModel(src);
     ghost.traverse((m) => { if (m.isMesh) { m.material = this.ghostOk; m.castShadow = false; } });
     this.scene.add(ghost);
+    this.vm.setTablet(moveUid ? 'Verschieben: ' + def.name : def.name);
     this.placing = { type, def, ghost, rot: moveUid ? this.game.findObj(moveUid).rot : template ? template.rot : 0, moveUid, template, valid: false, x: 0, z: 0 };
     if (moveUid) { const e = this.entries.get(moveUid); if (e) e.group.visible = false; }
     this.gridHelper.visible = true; this.footprint.visible = true;
@@ -316,6 +319,7 @@ export class World {
       if (k === 'e' && !this.placing) this.primaryAction();
       if ((k === 'x' || k === 'Backspace') && this.placing) this.cancelPlacement();
       if (k === 'h') { const on = this.toggleHeat(); this.onHeat?.(on); }
+      if (k === 'f') { const on = this.vm.toggleLamp(); this.onLamp?.(on); }
     });
     window.addEventListener('keyup', (e) => { this.player.keys[e.key.length === 1 ? e.key.toLowerCase() : e.key] = false; });
     window.addEventListener('blur', () => { this.player.keys = {}; });
@@ -666,6 +670,7 @@ export class World {
         if (this.placing) this.updatePlacement(); else this.updateAim();
       } else this.player.apply();
     }
+    this.vm.update(dt, { moving: this.player.moving && this.mode === 'play', bob: this.player.bob, placing: !!this.placing, visible: this.mode === 'play' || this.mode === 'ui', uiOpen: this.mode === 'ui' });
     // Tag/Nacht
     this.updateDaylight(s.frac);
     this.updatePeople(dt); this.updateSmoke(dt); this.updateWeather(dt); this.updatePopups(dt);

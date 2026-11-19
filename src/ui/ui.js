@@ -24,6 +24,7 @@ export class UI {
     world.onInteract = (uid) => this.openInspector(uid);
     world.onDoor = (door) => this.travel(door);
     world.onProp = (p) => this.useProp(p);
+    world.onLamp = (on) => this.toast(on ? '🔦 Taschenlampe an' : '🔦 Taschenlampe aus', 'info', 1500);
     world.onPause = () => this.pause(true);
     world.onCanvasClickInUI = () => this.resume();
     world.onPlaced = (o) => { const d = PLACEABLE[o.type]; if (d.kind === 'rig' || d.kind === 'holder') this.toast(`✅ ${esc(d.name)} steht. Schau es an und drück <b>[E]</b>, um es zu bestücken.`, 'good', 5000); };
