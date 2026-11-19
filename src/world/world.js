@@ -67,7 +67,9 @@ export class World {
     this.fill = new THREE.AmbientLight(0xffffff, 0.12); this.scene.add(this.fill);
 
     // Postprocessing
-    this.composer = new EffectComposer(r);
+    // Multisampling im Composer: glatte Kanten trotz Nachbearbeitung (Bloom)
+    const rt = new THREE.WebGLRenderTarget(window.innerWidth || 1280, window.innerHeight || 720, { samples: 4, type: THREE.HalfFloatType });
+    this.composer = new EffectComposer(r, rt);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     { const vp = new RenderPass(this.vm.scene, this.camera); vp.clear = false; vp.clearDepth = true; this.composer.addPass(vp); }
     this.bloom = new UnrealBloomPass(new THREE.Vector2(512, 512), 0.45, 0.3, 0.97);
