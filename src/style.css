@@ -1489,3 +1489,13 @@ body:has(#inspector:not(.hidden)) #xpbox { bottom: 78px !important; }
 #goals .goal:has(.bag) .ck { margin-top: 2px; }
 #goals .goal .bag i .tk { width: 13px !important; height: 13px !important; right: -4px !important; bottom: -4px !important; }
 #goals .goal .bag i .tk::after { left: 4.3px !important; top: 2px !important; width: 3.4px !important; height: 6px !important; }
+/* Toasts und EP neben dem Inspektor statt darauf */
+@media (min-width: 721px) {
+  body:has(#inspector:not(.hidden)) #toasts { right: calc(28px + 340px + 16px) !important; }
+  body:has(#inspector:not(.hidden)) #xpbox { right: calc(28px + 340px + 16px) !important; bottom: 78px !important; left: auto !important; top: auto !important; transform: none !important; }
+}
+/* Börse: Kontostand steht im Ticket, HUD-Werte nicht doppelt über der Karte */
+body[data-modal="market"] :is(#st-cash, #st-profit, #st-wallet) { visibility: hidden; }
+.ticket .tk-sum .tot { align-items: baseline; }
+.ticket .tk-sum.empty .tot b, .ticket .tk-sum.empty b { color: var(--dim) !important; }
+.ticket .tk-sum.empty .tot b { font-size: 17px !important; }

@@ -82,7 +82,7 @@ export function buildRoom(def) {
     });
     windowFrame(S.back, 1.0, 2.0, 0.9, 2.15, 0.15);
     // Tür (rechts, nahe vorne)
-    box(S.right, 0.86, 2.046, 0.04, mat('door', { color: 0xf4f1ea, roughness: 0.5 }), 3.03, 0, 0.02, 0, 0.004);
+    box(S.right, 0.86, 2.06, 0.04, mat('door', { color: 0xf4f1ea, roughness: 0.5 }), 3.03, 0, 0.02, 0, 0.004);
     for (const [y, h] of [[0.16, 0.78], [1.1, 0.78]]) box(S.right, 0.6, h, 0.012, mat('doorPanel', { color: 0xe6e1d6, roughness: 0.5 }), 3.03, y, 0.045, 0, 0.004);
     for (const x of [2.575, 3.475]) box(S.right, 0.06, 2.112, 0.07, M.white(), x, 0, 0.035, 0, 0.006);
     box(S.right, 0.96, 0.07, 0.07, M.white(), 3.025, 2.042, 0.035, 0, 0.006);
@@ -183,14 +183,30 @@ export function buildRoom(def) {
       B.blocked.push(blk(5.75, 0, 7.0, z0 + 0.05));
     }
     // Regal mit Kartons
-    box(g, 1.0, 1.6, 0.4, M.steel(), 3.0, 0, 0.2);
-    for (let i = 0; i < 5; i++) box(g, 0.3, 0.25, 0.3, mat('carton', { color: 0xb08a5a, roughness: 0.9 }), 2.65 + (i % 3) * 0.35, 1.6 * (i < 3 ? 0.25 : 0.6), 0.2);
+    { // offenes Steckregal: vier Pfosten, vier Böden, Kartons darauf
+      const post = mat('shelfPost', { color: 0x6f747a, roughness: 0.45, metalness: 0.6 }), board = mat('shelfBoard', { color: 0xa39a8a, roughness: 0.8 });
+      for (const x of [2.515, 3.485]) for (const z of [0.03, 0.37]) box(g, 0.03, 1.62, 0.03, post, x, 0, z, 0, 0.004);
+      for (const y of [0.05, 0.55, 1.05, 1.55]) box(g, 1.0, 0.025, 0.4, board, 3.0, y, 0.2, 0, 0.004);
+      const carton = mat('carton', { color: 0xb08a5a, roughness: 0.9 });
+      for (const [x, y, w2, h2, ry] of [[2.7, 0.075, 0.34, 0.3, 0.04], [3.12, 0.075, 0.4, 0.26, -0.03], [2.68, 0.575, 0.3, 0.25, -0.05], [3.05, 0.575, 0.3, 0.32, 0.06], [2.9, 1.075, 0.42, 0.24, 0.02]]) box(g, w2, h2, 0.3, carton, x, y, 0.2, ry, 0.01);
+    }
     B.blocked.push(blk(2.5, 0, 3.5, 0.5));
     // Rohre an der Decke
     cyl(g, 0.05, 0.05, w, mat('pipe', { color: 0x9aa0a6, roughness: 0.4, metalness: 0.6 }), w / 2, h - 0.15, 0.3, 10, 'x');
     cyl(g, 0.035, 0.035, w, M.copper(), w / 2, h - 0.25, 0.45, 10, 'x');
     for (const x of [2, 5]) { const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 10), M.ledWhite()); bulb.position.set(x, h - 0.2, 2.5); g.add(bulb); B.lights.push({ pos: [x, h - 0.7, 2.5], color: 0xffe2b0, intensity: 3.2, dist: 7 }); }
-    poster(S.left, textTexture([{ text: 'Familie Brandt', font: 'bold 40px Georgia', color: '#333' }, { text: 'Urlaub 1998', font: '30px Georgia', color: '#555' }], { w: 256, h: 256, bg: '#f5efe0' }), 0.4, 0.4, 2.5, 1.5, 0.085);
+    { // gerahmtes Urlaubsfoto
+      const c = document.createElement('canvas'); c.width = 320; c.height = 256; const x = c.getContext('2d');
+      const sky = x.createLinearGradient(0, 0, 0, 130); sky.addColorStop(0, '#7fb6d8'); sky.addColorStop(1, '#d9ecf2'); x.fillStyle = sky; x.fillRect(0, 0, 320, 130);
+      x.fillStyle = '#f2c14e'; x.beginPath(); x.arc(240, 52, 22, 0, Math.PI * 2); x.fill();
+      x.fillStyle = '#3d7fa6'; x.fillRect(0, 118, 320, 44); x.fillStyle = '#e8d3a4'; x.fillRect(0, 158, 320, 54);
+      x.fillStyle = '#2a2a2a'; for (const [px, hh] of [[110, 44], [134, 52], [156, 30]]) { x.beginPath(); x.arc(px, 182 - hh, 7, 0, Math.PI * 2); x.fill(); x.fillRect(px - 6, 186 - hh, 12, hh - 6); }
+      x.fillStyle = '#f5efe0'; x.fillRect(0, 210, 320, 46); x.fillStyle = '#4a3a2c'; x.font = 'bold 22px Nunito, sans-serif'; x.textAlign = 'center'; x.fillText('Urlaub 1998', 160, 242);
+      const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+      poster(S.left, t, 0.4, 0.32, 2.5, 1.5, 0.09);
+      const fr = mat('photoFrame', { color: 0x4a3222, roughness: 0.6 });
+      for (const [w2, h2, px, py] of [[0.46, 0.03, 2.5, 1.66], [0.46, 0.03, 2.5, 1.34], [0.03, 0.35, 2.27, 1.5], [0.03, 0.35, 2.73, 1.5]]) box(S.left, w2, h2, 0.025, fr, px, py - h2 / 2, 0.085, 0, 0.004);
+    }
     // Dartscheibe, altes Fahrrad, Weihnachtskisten
     const dart = new THREE.Mesh(new THREE.CircleGeometry(0.22, 24), mat('dart', { map: textTexture([{ text: '◎', font: 'bold 220px Arial', color: '#c22' }], { w: 256, h: 256, bg: '#1a1a1a' }), roughness: 0.8 })); dart.position.set(5.3, 1.6, 0.085); S.back.add(dart);
     const bike = new THREE.Group(); bike.position.set(6.6, 0, 3.6); bike.rotation.y = Math.PI / 2; g.add(bike);
@@ -454,8 +470,8 @@ export function buildDustyClutter(def) {
   { const f = new THREE.Mesh(new THREE.PlaneGeometry(def.w, def.d), dustFloor); f.rotation.x = -Math.PI / 2; f.position.set(def.w / 2, 0.003, def.d / 2); f.raycast = () => {}; g.add(f); }
   // Altes Zeug auf dem Regal: Farbdosen, Gläser, ein altes Radio
   const can = mat('paintCan', { color: 0x8a8f94, roughness: 0.5, metalness: 0.6 });
-  for (const [x, y, z, r, hh, c] of [[2.65, 1.6, 0.2, 0.08, 0.18, can], [2.85, 1.6, 0.22, 0.07, 0.15, mat('paintCan2', { color: 0x9c3b2e, roughness: 0.6 })], [3.3, 1.6, 0.2, 0.05, 0.12, mat('jar', { color: 0xc9d6c8, roughness: 0.15, transparent: true, opacity: 0.6 })]]) { const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, hh, 16), c); m.position.set(x, y + hh / 2, z); m.castShadow = true; g.add(m); }
-  box3(0.3, 0.16, 0.14, mat('oldRadio', { color: 0x6b4a32, roughness: 0.7 }), 3.1, 1.6, 0.22);
+  for (const [x, y, z, r, hh, c] of [[2.65, 1.575, 0.2, 0.08, 0.18, can], [2.85, 1.575, 0.22, 0.07, 0.15, mat('paintCan2', { color: 0x9c3b2e, roughness: 0.6 })], [3.3, 1.575, 0.2, 0.05, 0.12, mat('jar', { color: 0xc9d6c8, roughness: 0.15, transparent: true, opacity: 0.6 })]]) { const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, hh, 16), c); m.position.set(x, y + hh / 2, z); m.castShadow = true; g.add(m); }
+  box3(0.3, 0.16, 0.14, mat('oldRadio', { color: 0x6b4a32, roughness: 0.7 }), 3.1, 1.575, 0.22);
   // Spinnweben in den Ecken
   const web = new THREE.MeshBasicMaterial({ map: webTexture(), transparent: true, depthWrite: false, side: THREE.DoubleSide, opacity: 0.85 });
   for (const [x, z, ry] of [[0.02, 0.02, 0], [def.w - 0.02, 0.02, -Math.PI / 2], [0.02, def.d - 0.02, Math.PI / 2], [3.4, 0.02, 0]]) {

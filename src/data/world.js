@@ -47,8 +47,8 @@ export const CHAPTERS = [
     title: 'Kapitel 1 – Das Kinderzimmer', unlock: 'keller', minDate: '2011-01-01',
     intro: 'Oktober 2010. Papas Laden steckt in Schulden. Du hast ein leeres PC-Gehäuse, ein paar alte Teile und eine Idee.',
     goals: [
-      { id: 'collect', text: 'Such die PC-Teile im Keller', doneText: 'Alle Teile gefunden! Bring sie hoch zu deinem PC.', check: (s) => s.flags.miningStarted || !s.loose || !Object.keys(s.loose).length, progress: (s) => [4 - Object.keys(s.loose || {}).length, 4, 'parts'] },
-      { id: 'pcbuild', text: 'Bau die Teile in deinen PC ein', doneText: 'Alle Teile eingebaut!', check: (s) => s.flags.miningStarted || !!s.flags.pcBuilt, progress: (s) => { const pc = s.fac.kinder.objects.find((o) => o.type === 'tower'); const p = pc?.parts || {}; return [[p.mobo, p.cpu, p.gpus?.length, p.psu].filter(Boolean).length, 4, 'parts']; } },
+      { id: 'collect', text: 'Such die PC-Teile im Keller', doneText: 'Alle Teile gefunden! Bring sie hoch zu deinem\u00a0PC.', check: (s) => s.flags.miningStarted || !s.loose || !Object.keys(s.loose).length, progress: (s) => [4 - Object.keys(s.loose || {}).length, 4, 'parts'] },
+      { id: 'pcbuild', text: 'Bau die Teile in deinen PC ein', doneText: '', check: (s) => s.flags.miningStarted || !!s.flags.pcBuilt, progress: (s) => { const pc = s.fac.kinder.objects.find((o) => o.type === 'tower'); const p = pc?.parts || {}; return [[p.mobo, p.cpu, p.gpus?.length, p.psu].filter(Boolean).length, 4, 'parts']; } },
       { id: 'look', text: 'Schalte deinen PC ein', doneText: 'Dein PC läuft!', check: (s) => s.flags.miningStarted },
       { id: 'sell', text: 'Verkaufe deine Bitcoin am Monitor', doneText: 'Erste Bitcoin verkauft!', check: (s) => s.stats.sold > 0 },
       { id: 'gpu', text: 'Bau eine zweite Grafikkarte ein', doneText: 'Zweite Grafikkarte läuft!', check: (s) => s.flags.boughtGpu },

@@ -183,7 +183,7 @@ export class World {
     this.room = buildRoom(def); this.scene.add(this.room.root); this.screensDirty = true;
     // Verstaubter Keller, solange er noch nicht ausgebaut ist: Gerümpel, Spinnweben, Staub, schwaches Flackerlicht
     this.dusty = id === 'keller' && this.game.s?.feat && !this.game.s.unlocked.includes('keller');
-    if (this.dusty) { const dc = buildDustyClutter(def); this.room.root.add(dc.group); this.room.blocked.push(...dc.blocked); this.dustPts = dc.group.userData.dust; for (const L of this.room.lights) { L.intensity *= 0.55; L.color = 0xffc98a; } this.room.lights.splice(1); this.room.props = []; } else this.dustPts = null;
+    if (this.dusty) { const dc = buildDustyClutter(def); this.room.root.add(dc.group); this.room.blocked.push(...dc.blocked); this.dustPts = dc.group.userData.dust; for (const L of this.room.lights) { L.intensity *= 0.5; L.dist = 4.5; L.color = 0xffc98a; } this.room.lights.splice(1); this.room.props = []; } else this.dustPts = null;
     this.syncLoose();
     this.outside = buildOutside(this.room.outside, def); this.scene.add(this.outside);
     this.roomLights = this.room.lights.map((L) => { const p = new THREE.PointLight(L.color, L.intensity, L.dist, 1.6); p.position.set(...L.pos); this.scene.add(p); return p; });
@@ -339,12 +339,12 @@ export class World {
       this._lampD = hit ? hit.distance : 6;
     }
     this._lampDs = (this._lampDs ?? this._lampD) + (this._lampD - (this._lampDs ?? this._lampD)) * Math.min(1, dt * 6);
-    vm.lamp.intensity = 11 * Math.max(0.12, Math.min(1, Math.pow(this._lampDs / 3.2, 1.4)));
+    vm.lamp.intensity = 13 * Math.max(0.08, Math.min(1, Math.pow(this._lampDs / 3.2, 1.6)));
   }
   updateDusty(dt) {
     if (!this.dusty) return;
     // dunkler, staubiger Keller: weniger Umgebungslicht, Sonne kaum durch die verdreckten Fenster
-    this.hemi.intensity *= 0.35; this.sun.intensity *= 0.3; this.moon.intensity *= 0.5; this.scene.environmentIntensity *= 0.45;
+    this.hemi.intensity *= 0.15; this.sun.intensity *= 0.25; this.moon.intensity *= 0.4; this.scene.environmentIntensity *= 0.2;
     const L = this.roomLights?.[0]; if (L) { const f = Math.sin(this.t * 23) * Math.sin(this.t * 7.3) > 0.82 ? 0.55 : 1; L.intensity *= f; }
     if (this.dustPts) { const a = this.dustPts.geometry.attributes.position, h = this.def.h; for (let i = 0; i < a.count; i++) { let y = a.getY(i) + Math.sin(this.t * 0.4 + i) * dt * 0.02 - dt * 0.006; if (y < 0.15) y = h - 0.3; a.setY(i, y); a.setX(i, a.getX(i) + Math.cos(this.t * 0.3 + i * 1.7) * dt * 0.01); } a.needsUpdate = true; }
   }

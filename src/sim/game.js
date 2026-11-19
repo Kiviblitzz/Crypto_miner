@@ -651,7 +651,7 @@ export class Game {
   checkGoals() {
     const s = this.s, h = this.helpers();
     const ch = CHAPTERS[s.chapter]; if (!ch) return;
-    for (const g of ch.goals) if (!s.goals[g.id] && g.check(s, h)) { s.goals[g.id] = true; this.toast(g.doneText || `Geschafft: ${g.text}`, 'good'); this.emit('goal', g); }
+    for (const g of ch.goals) if (!s.goals[g.id] && g.check(s, h)) { s.goals[g.id] = true; if (g.doneText !== '') this.toast(g.doneText || `Geschafft: ${g.text}`, 'good'); this.emit('goal', g); }
     const done = ch.goals.every((g) => s.goals[g.id]);
     if (done && s.day >= toDay(ch.minDate)) {
       if (ch.unlock) {
