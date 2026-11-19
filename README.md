@@ -50,7 +50,7 @@ Ein-Datei-Version neu bauen: `npm run build:single`.
   Coins mit Parodie-Namen (Silvercoin, Wuffcoin, Shadow, Aether, Aether Classic, Zeroproof, Corvus,
   Kaskad) – inkl. Merged Mining, RandomX-Wechsel, DAG-Grenzen für 3/4-GB-Karten und Ende des
   GPU-Minings beim Merge.
-* **~90 Hardware-Teile** mit fiktiven Marken (Crimson/Verdant-GPUs, Silicor/Arix-CPUs,
+* **~130 Hardware-Teile** mit fiktiven Marken (Crimson/Verdant-GPUs, Silicor/Arix-CPUs,
   Fieldforge-FPGAs, Swarm/Whirl/Glacier-ASICs), Preise folgen GPU-Boom und Hashprice.
 * **Rig-Bau mit Slots:** Mainboard, CPU, Netzteil, bis zu 12 GPUs – sichtbar im 3D-Modell mit
   drehenden Lüftern. Schnellbau, „Mit bester GPU füllen", Duplizieren.

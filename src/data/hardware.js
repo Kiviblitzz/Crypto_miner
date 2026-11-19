@@ -41,6 +41,13 @@ export const GPUS = [
   gpu('rs7900xtx', 'Crimson RS 7900 XTX', '2022-12', 1000, 300, 24, { kawpow: 50 * M, kheavy: 1600 * M }, { brand: 'crimson', len: 0.29, fans: 3, slot: 3 }),
   gpu('vtx5090', 'Verdant VTX 5090', '2025-01', 2000, 450, 32, { kawpow: 80 * M, kheavy: 3000 * M, equihash: 1500 }, { brand: 'verdant', len: 0.31, fans: 2, slot: 2 }),
   gpu('rs9070xt', 'Crimson RS 9070 XT', '2025-03', 600, 250, 16, { kawpow: 40 * M, kheavy: 1300 * M }, { brand: 'crimson', len: 0.29, fans: 3, slot: 2 }),
+  gpu('gfx1050ti', 'Verdant GFX 1050 Ti', '2016-10', 140, 75, 4, { cn: 300, ethash: 13 * M, equihash: 180 }, { brand: 'verdant', len: 0.18, fans: 1, slot: 2 }),
+  gpu('rs570', 'Crimson RS 570', '2017-04', 170, 120, 8, { cn: 750, ethash: 30 * M, equihash: 260, kawpow: 11 * M }, { brand: 'crimson', len: 0.23, fans: 2, slot: 2 }),
+  gpu('vtx2060', 'Verdant VTX 2060', '2019-01', 350, 125, 6, { cn: 700, ethash: 30 * M, kawpow: 15 * M, kheavy: 500 * M }, { brand: 'verdant', len: 0.23, fans: 2, slot: 2 }),
+  gpu('vtx3060', 'Verdant VTX 3060 (LHR)', '2021-02', 330, 120, 12, { ethash: 36 * M, kawpow: 22 * M, kheavy: 600 * M }, { brand: 'verdant', len: 0.24, fans: 2, slot: 2 }),
+  gpu('vtx4070', 'Verdant VTX 4070', '2023-04', 600, 200, 12, { kawpow: 35 * M, kheavy: 1500 * M }, { brand: 'verdant', len: 0.25, fans: 2, slot: 2 }),
+  gpu('rs7800xt', 'Crimson RS 7800 XT', '2023-09', 500, 250, 16, { kawpow: 35 * M, kheavy: 1200 * M }, { brand: 'crimson', len: 0.27, fans: 3, slot: 2 }),
+  gpu('vtx5070ti', 'Verdant VTX 5070 Ti', '2025-02', 750, 300, 16, { kawpow: 50 * M, kheavy: 2000 * M }, { brand: 'verdant', len: 0.3, fans: 3, slot: 2 }),
 ];
 
 // ---------- CPUs ----------
@@ -59,6 +66,9 @@ export const CPUS = [
   cpu('epoch64', 'Arix Epoch 64-Kern', '2021-03', 7000, 280, { rx: 46000 }),
   cpu('zen7950', 'Arix Zenon 7950', '2022-09', 700, 170, { rx: 25000 }),
   cpu('zen9950', 'Arix Zenon 9950', '2024-08', 650, 170, { rx: 28000 }),
+  cpu('s78700', 'Silicor S7-8700X', '2017-10', 360, 95, { cn: 600, rx: 4500 }),
+  cpu('s99900', 'Silicor S9-9900X', '2018-10', 490, 95, { cn: 700, rx: 5500 }),
+  cpu('s914900', 'Silicor S9-14900X', '2023-10', 590, 253, { rx: 15000 }),
 ];
 
 // ---------- Netzteile ----------
@@ -71,6 +81,7 @@ export const PSUS = [
   psu('psu1600', 'Server-Netzteil 1600 W', '2016-01', 180, 1600),
   psu('psu2400', 'Server-Netzteil 2400 W', '2018-01', 260, 2400),
   psu('psu3300', 'Doppel-Netzteil 3300 W', '2020-06', 420, 3300),
+  psu('psu1000', 'Netzteil 1000 W Titanium', '2015-06', 210, 1000),
 ];
 
 // ---------- Mainboards ----------
@@ -82,6 +93,8 @@ export const MOBOS = [
   mobo('h81', 'MineBoard H81-6', '2015-03', 95, 6),
   mobo('b250_8', 'MineBoard B250-8', '2017-01', 130, 8),
   mobo('b250_12', 'MineBoard B250-12', '2017-06', 200, 12),
+  mobo('x570', 'MineBoard X570-8', '2019-07', 240, 8),
+  mobo('b760', 'MineBoard B760-12', '2023-01', 260, 12),
 ];
 
 export const PARTS = [...GPUS, ...CPUS, ...PSUS, ...MOBOS];
@@ -128,6 +141,14 @@ export const PLACEABLES = [
   { id: 's21hyd', kind: 'device', cat: 'asic', name: 'Swarm S21 XP Hydro', release: '2024-06', price: 9000, watt: 5676, algo: 'sha256', hash: 473 * T, size: [0.5, 0.5], minTier: 3, look: 'hydro', hydro: true, life: 9 },
   { id: 's23hyd', kind: 'device', cat: 'asic', name: 'Swarm S23 Hydro', release: '2025-11', price: 12000, watt: 5510, algo: 'sha256', hash: 580 * T, size: [0.5, 0.5], minTier: 3, look: 'hydro', hydro: true, life: 9 },
   { id: 's23', kind: 'device', cat: 'asic', name: 'Swarm S23', release: '2026-02', price: 7500, watt: 3510, algo: 'sha256', hash: 318 * T, size: [0.5, 0.5], minTier: 0, look: 'asic', life: 9 },
+  { id: 'a6', kind: 'device', cat: 'asic', name: 'Glacier A6', release: '2015-11', price: 500, watt: 1050, algo: 'sha256', hash: 3.5 * T, size: [0.5, 0.5], minTier: 0, look: 'asic', life: 5 },
+  { id: 's9j', kind: 'device', cat: 'asic', name: 'Swarm S9j', release: '2018-08', price: 700, watt: 1350, algo: 'sha256', hash: 14.5 * T, size: [0.5, 0.5], minTier: 0, look: 'asic', life: 6 },
+  { id: 'm31', kind: 'device', cat: 'asic', name: 'Whirl M31S+', release: '2021-03', price: 3500, watt: 3360, algo: 'sha256', hash: 80 * T, size: [0.5, 0.5], minTier: 0, look: 'whirl', life: 7 },
+  { id: 's19j', kind: 'device', cat: 'asic', name: 'Swarm S19j Pro', release: '2021-06', price: 5500, watt: 3068, algo: 'sha256', hash: 100 * T, size: [0.5, 0.5], minTier: 0, look: 'asic', life: 7 },
+  { id: 'm50', kind: 'device', cat: 'asic', name: 'Whirl M50S', release: '2022-09', price: 4500, watt: 3276, algo: 'sha256', hash: 126 * T, size: [0.5, 0.5], minTier: 0, look: 'whirl', life: 8 },
+  { id: 'a1346', kind: 'device', cat: 'asic', name: 'Glacier A1346', release: '2023-03', price: 3200, watt: 3300, algo: 'sha256', hash: 110 * T, size: [0.5, 0.5], minTier: 0, look: 'asic', life: 7 },
+  { id: 'm60', kind: 'device', cat: 'asic', name: 'Whirl M60S', release: '2023-10', price: 5200, watt: 3344, algo: 'sha256', hash: 186 * T, size: [0.5, 0.5], minTier: 0, look: 'whirl', life: 8 },
+  { id: 's21pro', kind: 'device', cat: 'asic', name: 'Swarm S21 Pro', release: '2024-10', price: 5800, watt: 3510, algo: 'sha256', hash: 234 * T, size: [0.5, 0.5], minTier: 0, look: 'asic', life: 8 },
 
   // Halter
   { id: 'shelf', kind: 'holder', cat: 'holder', name: 'Schwerlastregal (8 Plätze)', release: '2000-01', price: 150, size: [1.0, 0.5], slots: 8, minTier: 1, desc: 'Stahlregal für 8 Geräte (ASICs/FPGAs).' },
