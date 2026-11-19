@@ -272,11 +272,12 @@ export class World {
   focusObject(uid) {
     const e = uid && this.entries.get(uid);
     this.focusUid = e ? uid : null;
+    this.room?.root.traverse((m) => { if (m.userData.focusHide) m.visible = !e; });
     if (!e) { this.focus = null; this.updateStatus(); return; }
     const o = e.obj, rot = -(o.rot || 0) * Math.PI / 2, rotV = (x, y, z) => new THREE.Vector3(x, y, z).applyAxisAngle(new THREE.Vector3(0, 1, 0), rot).add(new THREE.Vector3(o.x, 0, o.z));
     const pos = rotV(0.62, 0.6, 0.45), look = rotV(0, 0.26, 0);
     const right = new THREE.Vector3().subVectors(look, pos).cross(new THREE.Vector3(0, 1, 0)).normalize();
-    look.addScaledVector(right, 0.2);
+    look.addScaledVector(right, 0.12);
     const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(pos, look, new THREE.Vector3(0, 1, 0)));
     this.focus = { pos, q, light: rotV(0.32, 0.48, 0.18) };
     if (!this.focusLight) { this.focusLight = new THREE.PointLight(0xffe2b8, 0, 0.9, 1.6); this.scene.add(this.focusLight); }
@@ -298,7 +299,8 @@ export class World {
   updateInstall(dt) {
     const a = this.install; if (!a) return;
     a.t += dt; const k = Math.min(1, a.t / 0.48), c1 = 1.70158, c3 = c1 + 1, eb = 1 + c3 * Math.pow(k - 1, 3) + c1 * Math.pow(k - 1, 2);
-    a.part.position.set((1 - eb) * 0.24, (1 - k) * (1 - k) * 0.03, 0);
+    a.part.position.set(Math.max(0, 1 - eb) * 0.24, (1 - k) * (1 - k) * 0.03, 0);
+    const pk = Math.max(0, Math.min(1, (a.t - 0.36) / 0.2)); a.part.scale.setScalar(1 + 0.03 * Math.sin(pk * Math.PI));
     if (k >= 1 && !a.snapped) { a.snapped = true; this.onSnap?.(a.uid); }
     if (a.t > 0.66) { this.install = null; const e = this.entries.get(a.uid); if (e) e.key = null; this.syncObjects(); if (this.selected === a.uid) this.refreshSelBox(); this.onInstalled?.(a.uid); }
   }
@@ -528,7 +530,7 @@ export class World {
       if (o.userData.prop?.action === 'sleep' && this.game.s.feat && !this.game.s.flags.miningStarted) continue; // vor dem ersten PC gibt es nichts zu verschlafen
       if (o.userData.loose) { aim = { loose: o.userData.loose, dist: h.distance }; break; }
       if (o.userData.door) { aim = { door: o.userData.door, dist: h.distance }; break; }
-      if (o.userData.prop) { aim = { prop: o.userData.prop, dist: h.distance }; break; }
+      if (o.userData.prop) { aim = { prop: o.userData.prop, dist: h.distance }; if (o.userData.prop.action === 'market' && this.bootPending) { this.bootT = this.t; this.bootPending = false; this.screensDirty = true; } break; }
       if (o.userData.uid) { aim = { uid: o.userData.uid, dist: h.distance }; break; }
       if (o.isMesh && o.visible) break; // Wand/Möbel verdeckt
     }
@@ -560,7 +562,7 @@ export class World {
       const per = 3.0 / ([Infinity, 4.0, 1.6, 0.5, 0.12][this.game.s.speed] || 4); // Anteil eines Tages pro Einblendung
       const txt = asCoin ? `+${fmtCoin((rev / px) * per)} ${coin}` : '+' + fmtUSD(rev * per); g.fillStyle = asCoin ? '#ffc640' : '#6fdc9c'; g.fillText(txt, 128, 44, 210); g.shadowColor = 'transparent';
       p.material.map.needsUpdate = true;
-      const bb = e.group.userData.bbox, sc = Math.min(0.6, Math.max(0.22, this.camera.position.distanceTo(e.group.position) * 0.2)); p.position.set(e.group.position.x, (bb ? bb.max.y : 0.6) + 0.15, e.group.position.z);
+      const bb = e.group.userData.bbox, sc = Math.min(0.6, Math.max(0.22, this.camera.position.distanceTo(e.group.position) * 0.2)); p.position.set(e.group.position.x, (bb ? bb.max.y : 0.6) + 0.28, e.group.position.z);
       p.scale.set(sc, sc / 4, 1); p.visible = true; p.userData.life = 0; p.userData.y0 = p.position.y; p.material.opacity = 1;
       this.coinBurst(new THREE.Vector3(e.group.position.x, (bb ? bb.max.y : 0.6) + 0.02, e.group.position.z), 3); this.onIncome?.();
     }

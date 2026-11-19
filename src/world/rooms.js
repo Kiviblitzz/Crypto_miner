@@ -114,7 +114,7 @@ export function buildRoom(def) {
     B.blocked.push(blk(0, 1.5, 1.0, 3.5));
     put('wardrobe', 0.3, 0.5);
     B.blocked.push(blk(0, 0, 0.6, 1.0));
-    put('desk', 2.75, 0.25);
+    put('desk', 2.75, 0.25).traverse((m) => { if (m.isMesh && m.material?.name === 'darkMetal') m.userData.focusHide = true; }); // Tischbeine stören die Nahansicht
     // Monitor mit Mining-Konsole
     const scrC = document.createElement('canvas'); scrC.width = 512; scrC.height = 288; const scr = new THREE.CanvasTexture(scrC); scr.colorSpace = THREE.SRGBColorSpace;
     B.screens.push({ canvas: scrC, tex: scr, kind: 'pc' });
