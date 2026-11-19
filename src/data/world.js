@@ -49,7 +49,7 @@ export const CHAPTERS = [
     goals: [
       { id: 'run', text: 'Starte die Zeit (▶) und lass den PC minen', check: (s) => s.stats.minedUSD > 0.3 },
       { id: 'gpu', text: 'Kauf eine neue Grafikkarte (PC anklicken → GPU-Slot)', check: (s) => s.flags.boughtGpu },
-      { id: 'earn', text: 'Verdiene insgesamt 1.000 $', check: (s) => s.stats.minedUSD >= 1000 },
+      { id: 'earn', text: 'Verdiene insgesamt 1.000 $', check: (s) => s.stats.minedUSD >= 1000, progress: (s) => [s.stats.minedUSD, 1000, 'usd'] },
       { id: 'papa1', text: 'Gib Papa 2.000 $ für die Stromrechnung', action: { label: '2.000 $ geben', cost: 2000, flag: 'papa1' }, check: (s) => s.flags.papa1 },
     ],
   },
@@ -58,7 +58,7 @@ export const CHAPTERS = [
     intro: 'Papa staunt. Der Keller gehört dir – solange die Waschmaschine weiterläuft.',
     goals: [
       { id: 'openrig', text: 'Bau ein Milchkisten- oder Open-Frame-Rig', check: (s, h) => h.countPlaced((o) => ['crate', 'frame6', 'frame8', 'frame12'].includes(o.type)) > 0 },
-      { id: 'rev30', text: 'Erreiche 30 $ Mining-Ertrag pro Tag (Tipp: Scrypt-Coins!)', check: (s, h) => h.dailyRev() >= 30 },
+      { id: 'rev30', text: 'Erreiche 30 $ Mining-Ertrag pro Tag (Tipp: Scrypt-Coins!)', check: (s, h) => h.dailyRev() >= 30, progress: (s, h) => [h.dailyRev(), 30, 'usd'] },
       { id: 'debt', text: 'Tilge die Ladenschulden bei der Bank (15.000 $)', action: { label: '15.000 $ überweisen', cost: 15000, flag: 'debt' }, check: (s) => s.flags.debt },
     ],
   },
@@ -67,7 +67,7 @@ export const CHAPTERS = [
     intro: 'Elektro Brandt ist gerettet. Papa überlässt dir die Werkstatt hinterm Laden.',
     goals: [
       { id: 'asic', text: 'Kauf deinen ersten ASIC-Miner', check: (s) => s.flags.boughtAsic },
-      { id: 'th1', text: 'Erreiche 1 TH/s auf SHA-256', check: (s, h) => h.algoHash('sha256') >= 1e12 },
+      { id: 'th1', text: 'Erreiche 1 TH/s auf SHA-256', check: (s, h) => h.algoHash('sha256') >= 1e12, progress: (s, h) => [h.algoHash('sha256'), 1e12, 'hash'] },
       { id: 'gmbh', text: 'Gründe die Hashwerk GmbH (25.000 $)', action: { label: 'GmbH gründen (25.000 $)', cost: 25000, flag: 'gmbh' }, check: (s) => s.flags.gmbh },
     ],
   },
@@ -76,24 +76,24 @@ export const CHAPTERS = [
     intro: 'Die Hashwerk GmbH zieht ins Gewerbegebiet. Deniz kündigt seinen Job und steigt ein.',
     goals: [
       { id: 'tech', text: 'Stelle deinen ersten Techniker ein (🏢 Firma)', check: (s) => s.staff.tech > 0 },
-      { id: 'ph1', text: 'Erreiche 1 PH/s auf SHA-256', check: (s, h) => h.algoHash('sha256') >= 1e15 },
-      { id: 'nw1m', text: 'Netto-Vermögen 1 Mio. $', check: (s, h) => h.netWorth() >= 1e6 },
+      { id: 'ph1', text: 'Erreiche 1 PH/s auf SHA-256', check: (s, h) => h.algoHash('sha256') >= 1e15, progress: (s, h) => [h.algoHash('sha256'), 1e15, 'hash'] },
+      { id: 'nw1m', text: 'Netto-Vermögen 1 Mio. $', check: (s, h) => h.netWorth() >= 1e6, progress: (s, h) => [h.netWorth(), 1e6, 'usd'] },
     ],
   },
   {
     title: 'Kapitel 5 – Das Rechenzentrum', unlock: 'fjord', minDate: '2020-06-01',
     intro: 'Ein echtes Rechenzentrum in Frankfurt. Viktor Kral ruft zum ersten Mal persönlich an.',
     goals: [
-      { id: 'ph20', text: 'Erreiche 20 PH/s auf SHA-256', check: (s, h) => h.algoHash('sha256') >= 2e16 },
-      { id: 'nw10m', text: 'Netto-Vermögen 10 Mio. $', check: (s, h) => h.netWorth() >= 1e7 },
+      { id: 'ph20', text: 'Erreiche 20 PH/s auf SHA-256', check: (s, h) => h.algoHash('sha256') >= 2e16, progress: (s, h) => [h.algoHash('sha256'), 2e16, 'hash'] },
+      { id: 'nw10m', text: 'Netto-Vermögen 10 Mio. $', check: (s, h) => h.netWorth() >= 1e7, progress: (s, h) => [h.netWorth(), 1e7, 'usd'] },
     ],
   },
   {
     title: 'Kapitel 6 – Die Fjordhalle', unlock: null, minDate: '2020-06-01',
     intro: 'Wasserkraft, Fjordluft, 30 Megawatt. Jetzt geht es gegen MONOLITH.',
     goals: [
-      { id: 'eh1', text: 'Erreiche 1 EH/s auf SHA-256', check: (s, h) => h.algoHash('sha256') >= 1e18 },
-      { id: 'mono', text: 'Überhole MONOLITH Hash AG bei der Hashrate', check: (s, h) => h.algoHash('sha256') > h.monolithHash() },
+      { id: 'eh1', text: 'Erreiche 1 EH/s auf SHA-256', check: (s, h) => h.algoHash('sha256') >= 1e18, progress: (s, h) => [h.algoHash('sha256'), 1e18, 'hash'] },
+      { id: 'mono', text: 'Überhole MONOLITH Hash AG bei der Hashrate', check: (s, h) => h.algoHash('sha256') > h.monolithHash(), progress: (s, h) => [h.algoHash('sha256'), h.monolithHash(), 'hash'] },
     ],
   },
 ];

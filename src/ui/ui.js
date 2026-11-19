@@ -297,7 +297,9 @@ export class UI {
     el.append(h(`<h3>${esc(ch.title)}</h3>`));
     for (const go of ch.goals) {
       const done = !!s.goals[go.id];
-      const row = h(`<div class="goal ${done ? 'done' : ''}"><div class="ck">${done ? '✓' : ''}</div><div>${esc(go.text)}</div></div>`);
+      let prog = '';
+      if (!done && go.progress) { const [cur, tgt, kind] = go.progress(s, g.helpers()); const f = (v) => (kind === 'hash' ? fmtHash(v) : fmtUSD(v)); const pc = Math.max(0, Math.min(100, tgt ? (cur / tgt) * 100 : 0)); prog = `<div style="font-size:11px;color:#94a0b2">${f(Math.max(0, cur))} / ${f(tgt)}</div><div class="bar" style="width:180px"><div style="width:${pc}%;background:#ffb000"></div></div>`; }
+      const row = h(`<div class="goal ${done ? 'done' : ''}"><div class="ck">${done ? '✓' : ''}</div><div>${esc(go.text)}${prog}</div></div>`);
       if (!done && go.action) { const b = h(`<button class="btn small primary">${esc(go.action.label)}</button>`); b.disabled = s.cash < go.action.cost; b.onclick = () => { if (g.goalAction(go)) { this.toast('✔ Erledigt!', 'good'); this.goals(); } }; row.lastElementChild.append(h('<br/>'), b); }
       el.append(row);
     }
