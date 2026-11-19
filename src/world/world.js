@@ -9,6 +9,19 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
+import { OutlinePass } from 'three/examples/jsm/postprocessing/OutlinePass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+
+// Farbgebung: leichte Wärme, etwas Sättigung, weiche Vignette (läuft nach dem Tonemapping)
+const GradeShader = {
+  uniforms: { tDiffuse: { value: null }, vignette: { value: 0.28 }, sat: { value: 1.07 }, warm: { value: 0.018 } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: 'uniform sampler2D tDiffuse; uniform float vignette; uniform float sat; uniform float warm; varying vec2 vUv;\n' +
+    'void main(){ vec4 c = texture2D(tDiffuse, vUv); float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722)); c.rgb = mix(vec3(l), c.rgb, sat);\n' +
+    ' c.rgb += vec3(warm, warm * 0.35, -warm * 0.8); vec2 d = (vUv - 0.5) * vec2(1.0, 0.82); float v = smoothstep(0.78, 0.22, length(d));\n' +
+    ' c.rgb *= mix(1.0 - vignette, 1.0, v); gl_FragColor = c; }',
+};
 import { buildRoom, buildOutside } from './rooms.js';
 import { objectModel } from './models.js';
 import { M, mat } from './materials.js';
@@ -18,11 +31,15 @@ import { fmtHash, fmtUSD, fmtDate } from '../sim/game.js';
 
 const tmpV = new THREE.Vector3();
 
-function iconTexture(emoji, bg) {
-  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
-  g.fillStyle = bg; g.beginPath(); g.arc(64, 64, 56, 0, 7); g.fill(); g.strokeStyle = '#fff'; g.lineWidth = 6; g.stroke();
-  g.font = '64px "Segoe UI Emoji", "Noto Color Emoji", Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(emoji, 64, 70);
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+// Status-Symbole: dunkle Glasscheibe mit farbigem Ring (statt Spielzeug-Weißring)
+function iconTexture(emoji, ring) {
+  const S = 256, c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d');
+  g.shadowColor = 'rgba(0,0,0,0.45)'; g.shadowBlur = 18; g.shadowOffsetY = 4;
+  g.fillStyle = 'rgba(16,19,25,0.82)'; g.beginPath(); g.arc(S / 2, S / 2, 92, 0, Math.PI * 2); g.fill();
+  g.shadowColor = 'transparent'; g.lineWidth = 6; g.strokeStyle = ring; g.globalAlpha = 0.85; g.stroke(); g.globalAlpha = 1;
+  g.font = '104px "Segoe UI Emoji","Noto Color Emoji","Apple Color Emoji",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(emoji, S / 2, S / 2 + 6);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
 }
 
 export class World {
@@ -31,7 +48,7 @@ export class World {
     const r = this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: false });
     r.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
     r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
-    r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 0.92;
+    r.toneMapping = THREE.NeutralToneMapping; r.toneMappingExposure = 0.98;
     r.outputColorSpace = THREE.SRGBColorSpace;
     this.scene = new THREE.Scene();
     const pm = new THREE.PMREMGenerator(r);
@@ -71,15 +88,27 @@ export class World {
     const rt = new THREE.WebGLRenderTarget(window.innerWidth || 1280, window.innerHeight || 720, { samples: 4, type: THREE.HalfFloatType });
     this.composer = new EffectComposer(r, rt);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
+    // Weiche Kontaktschatten (Umgebungsverdeckung) – nur in kleinen Räumen, in großen Hallen zu teuer
+    this.gtao = new GTAOPass(this.scene, this.camera, 1280, 720);
+    this.gtao.updateGtaoMaterial({ radius: 0.38, distanceExponent: 1.2, thickness: 1.0, scale: 1.0, samples: 12 });
+    this.gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6 });
+    this.gtao.blendIntensity = 0.75;
+    this.composer.addPass(this.gtao);
+    // Weiche Kontur um das anvisierte Objekt
+    this.outline = new OutlinePass(new THREE.Vector2(1280, 720), this.scene, this.camera);
+    Object.assign(this.outline, { edgeStrength: 2.6, edgeGlow: 0.35, edgeThickness: 1.6, pulsePeriod: 0 });
+    this.outline.visibleEdgeColor.set(0xfff4d6); this.outline.hiddenEdgeColor.set(0x6a5a3a);
+    this.composer.addPass(this.outline);
     { const vp = new RenderPass(this.vm.scene, this.camera); vp.clear = false; vp.clearDepth = true; this.composer.addPass(vp); }
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(512, 512), 0.28, 0.35, 0.97);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(512, 512), 0.28, 0.55, 1.1);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
+    this.grade = new ShaderPass(GradeShader); this.composer.addPass(this.grade);
     this.quality = 'high';
 
     this.objGroup = new THREE.Group(); this.scene.add(this.objGroup);
     this.entries = new Map(); // uid -> {group, key, sprite}
-    this.icons = { broken: iconTexture('🔥', '#d33'), warn: iconTexture('⚠️', '#e9a400'), power: iconTexture('⚡', '#444'), empty: iconTexture('➕', '#2b6cd6'), sleep: iconTexture('💤', '#5a6475') };
+    this.icons = { broken: iconTexture('🔥', '#ff6b5e'), warn: iconTexture('⚠️', '#ffb000'), power: iconTexture('⚡', '#9aa3af'), empty: iconTexture('➕', '#4cc9f0'), sleep: iconTexture('💤', '#9aa3af') };
     this.raycaster = new THREE.Raycaster(); this.mouse = new THREE.Vector2(); this.floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     this.keys = {}; this.placing = null; this.selected = null; this.hoverUid = null;
     this.selBox = new THREE.Box3Helper(new THREE.Box3(), 0xffffff); this.selBox.material.transparent = true; this.selBox.material.opacity = 0.18; this.selBox.material.depthWrite = false; this.selBox.visible = false; this.scene.add(this.selBox);
@@ -97,8 +126,13 @@ export class World {
 
   setQuality(q) {
     this.quality = q;
-    this.renderer.shadowMap.enabled = q !== 'low';
-    this.renderer.setPixelRatio(q === 'low' ? 1 : Math.min(window.devicePixelRatio, 1.75));
+    const r = this.renderer;
+    r.shadowMap.enabled = q !== 'low';
+    r.setPixelRatio(q === 'low' ? 1 : Math.min(window.devicePixelRatio, 1.75));
+    this.composer.setPixelRatio(r.getPixelRatio());
+    this.bloom.enabled = q === 'high';
+    if (this.gtao) this.gtao.enabled = q === 'high' && (this.def?.tier ?? 0) <= 2;
+    document.body.classList.toggle('lowfx', q === 'low');
     this.scene.traverse((o) => { if (o.material) o.material.needsUpdate = true; });
     this.resize();
   }
@@ -116,6 +150,7 @@ export class World {
     for (const e of this.entries.values()) this.objGroup.remove(e.group);
     this.entries.clear();
     const def = this.def = FACILITY[id]; this.facId = id;
+    if (this.gtao) this.gtao.enabled = def.tier <= 2; // in großen Hallen zu teuer
     this.room = buildRoom(def); this.scene.add(this.room.root);
     this.outside = buildOutside(this.room.outside, def); this.scene.add(this.outside);
     this.roomLights = this.room.lights.map((L) => { const p = new THREE.PointLight(L.color, L.intensity, L.dist, 1.6); p.position.set(...L.pos); this.scene.add(p); return p; });
@@ -337,7 +372,7 @@ export class World {
   }
   // Was liegt unter dem Fadenkreuz?
   updateAim() {
-    if (this.placing) { if (this.aim) { this.aim = null; this.onAim?.(null); } this.selBox.visible = false; return; }
+    if (this.placing) { if (this.aim) { this.aim = null; this.onAim?.(null); } this.selBox.visible = false; this.outline.selectedObjects = []; return; }
     this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
     this.raycaster.far = this.reach() + 1.5;
     const hits = this.raycaster.intersectObjects([...this.objGroup.children, ...this.doorGroup.children, this.room.root], true);
@@ -354,8 +389,8 @@ export class World {
     this.aim = aim;
     if (key !== prev) this.onAim?.(aim);
     const e = aim?.uid && this.entries.get(aim.uid);
-    if (e) { this.selBox.box.setFromObject(e.group); this.selBox.box.expandByScalar(0.03); this.selBox.visible = true; }
-    else if (!this.selected) this.selBox.visible = false;
+    this.outline.selectedObjects = e ? [e.group] : [];
+    if (!this.selected) this.selBox.visible = false;
   }
   pick() { return this.aim?.uid || null; }
   // Alte API (Rundgang) – Ego-Perspektive ist jetzt immer aktiv
@@ -508,6 +543,7 @@ export class World {
 
   // ---------- Imperium-Ansicht: alle Standorte nebeneinander ----------
   showEmpire() {
+    if (this.gtao) this.gtao.enabled = false; if (this.outline) this.outline.selectedObjects = [];
     if (this.empire) return;
     this.cancelPlacement(); this.select(null); this.onHover?.(null);
     if (this.heatGroup) { this.scene.remove(this.heatGroup); this.heatGroup = null; }
@@ -732,7 +768,7 @@ export class World {
     this.scene.background = sky; if (this.scene.fog) this.scene.fog.color.copy(sky);
     this.scene.environmentIntensity = 0.07 + day * 0.4;
     const lampK = 0.75 + (1 - day) * 0.6;
-    this.renderer.toneMappingExposure = 0.92 + (1 - day) * 0.25;
+    this.renderer.toneMappingExposure = 0.98 + (1 - day) * 0.25;
     this.roomLights?.forEach((l, i) => (l.intensity = this.room.lights[i].intensity * lampK));
   }
 

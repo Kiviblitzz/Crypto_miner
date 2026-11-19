@@ -592,3 +592,220 @@ select, input[type=number] { border: none; border-radius: var(--r-sm); backgroun
 #splash .splash-btns .btn small { display: block; font: 500 13px var(--font); letter-spacing: .3px; text-transform: none; color: rgba(220,226,235,.55); margin-top: 2px; }
 #splash .logo { margin-bottom: 18px; }
 .disclaimer { margin-top: 28px; font-size: 11px; }
+
+/* ===== v5 Soft Premium (Art-Direction-Review) ===== */
+/* =====================================================================
+   v5 „Soft Premium“-Feinschliff – ans ENDE von style.css (nach v4)
+   Radien 6/10/14/20/26 + Pille · Glas statt Platten · Lichtkante statt Rahmen
+   · geschichtete Schatten · Satzschreibung statt Versalien
+   ===================================================================== */
+:root {
+  /* Radien (gleiche Namen wie v4 → v4-Regeln übernehmen die neue Skala) */
+  --r-xs: 6px;   /* Tastenkappen, Mini-Chips */
+  --r-sm: 10px;  /* Buttons, Slots, Eingaben */
+  --r-md: 14px;  /* Karten, Listenzeilen, Toasts */
+  --r-lg: 20px;  /* Panels: Inspektor, Freischalt-Karte */
+  --r-xl: 26px;  /* Fenster: Modal, Bau-Katalog, Pause */
+  --r-pill: 999px;
+  --r: var(--r-md);
+  /* Glas & Flächenstufen */
+  --glass: rgba(20, 23, 30, 0.70);
+  --glass-strong: rgba(17, 20, 26, 0.84);
+  --blur: blur(22px) saturate(140%);
+  --surface-1: rgba(255, 255, 255, 0.04);
+  --surface-2: rgba(255, 255, 255, 0.075);
+  --surface-3: rgba(255, 255, 255, 0.11);
+  --stroke: rgba(255, 255, 255, 0.07);
+  --line: rgba(255, 255, 255, 0.06);
+  /* Lichtkante: 1px Glanz oben + Haarlinie rundum (ersetzt harte 1px-Rahmen) */
+  --hl: inset 0 1px 0 rgba(255, 255, 255, 0.07), inset 0 0 0 1px rgba(255, 255, 255, 0.045);
+  /* Schatten: Kontakt + Umgebung */
+  --sh-1: 0 1px 2px rgba(0, 0, 0, 0.22), 0 4px 12px rgba(0, 0, 0, 0.16);
+  --sh-2: 0 2px 6px rgba(0, 0, 0, 0.22), 0 12px 32px rgba(0, 0, 0, 0.28);
+  --sh-3: 0 8px 24px rgba(0, 0, 0, 0.28), 0 32px 80px rgba(0, 0, 0, 0.45);
+  /* Farben: Amber bleibt, Zustandsfarben weicher */
+  --acc: #ffb000;
+  --acc-soft: rgba(255, 176, 0, 0.14);
+  --acc-line: rgba(255, 176, 0, 0.42);
+  --acc-glow: 0 6px 20px rgba(255, 176, 0, 0.26);
+  --acc2: #4cc9f0; --good: #6fdc9c; --bad: #ff7a72; --warn: #ffd166;
+  --text: #eef1f5; --dim: #9aa3af;
+  /* Typo: Barlow = Text & Buttons, Barlow Condensed = Zahlen & Überschriften */
+  --fs-xs: 12px; --fs-sm: 13px; --fs-md: 15px; --fs-lg: 17px; --fs-xl: 20px; --fs-2xl: 24px;
+  --track-eyebrow: 0.07em;   /* nur für winzige Kicker-Zeilen */
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+html, body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+/* ---------- Buttons: primär = Amber-Pille · sekundär = Glas · ghost = nur Text ---------- */
+.btn {
+  border: 0; border-radius: var(--r-sm); background: var(--surface-2); color: var(--text);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  font: 600 14px/1.2 var(--font); letter-spacing: 0.1px; text-transform: none; padding: 9px 16px;
+  transition: background-color .18s var(--ease), box-shadow .18s var(--ease), color .18s, transform .12s var(--ease);
+}
+.btn:hover { background: var(--surface-3); }
+.btn:active { transform: translateY(1px) scale(0.99); }
+.btn:focus-visible { outline: 2px solid var(--acc-line); outline-offset: 2px; }
+.btn.primary {
+  border-radius: var(--r-pill); color: #1a1300;
+  background: linear-gradient(180deg, #ffc640 0%, #ffb000 55%, #f4a300 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), var(--acc-glow);
+}
+.btn.primary:hover { background: linear-gradient(180deg, #ffd060 0%, #ffbb1f 55%, #ffad0a 100%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 8px 26px rgba(255, 176, 0, 0.34); }
+.btn.ghost { background: transparent; box-shadow: none; color: var(--dim); }
+.btn.ghost:hover { background: var(--surface-1); color: var(--text); }
+.btn.small { padding: 6px 12px; font-size: var(--fs-sm); border-radius: 8px; }
+.btn.small.primary { border-radius: var(--r-pill); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 3px 10px rgba(255, 176, 0, 0.2); }
+.btn.big { font: 600 var(--fs-lg)/1.1 var(--font); text-transform: none; letter-spacing: 0.2px; padding: 13px 28px; border-radius: var(--r-pill); }
+.btn.good { background: rgba(111, 220, 156, 0.13); color: #9aeabb; }
+.btn.good:hover { background: rgba(111, 220, 156, 0.22); }
+.btn.danger { background: rgba(255, 122, 114, 0.13); color: #ffaaa4; }
+.btn.danger:hover { background: rgba(255, 122, 114, 0.22); }
+.btn:disabled, .btn:disabled:hover { opacity: 0.38; filter: saturate(0.4); box-shadow: none; transform: none; }
+
+/* ---------- Tastenkappe: weich, plastisch, ohne weißen Rahmen ---------- */
+kbd {
+  min-width: 22px; height: 22px; padding: 0 6px; margin: 0 0.25em; vertical-align: 1px;
+  border: 0; border-radius: var(--r-xs); color: #fff; text-shadow: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.12));
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 1px 3px rgba(0, 0, 0, 0.3);
+  font: 600 11.5px/1 var(--font);
+}
+#keys kbd { margin: 0 6px 0 0; }
+
+/* ---------- Glasflächen (Lichtkante + geschichteter Schatten statt Rahmen) ---------- */
+.panel, #inspector, .featcard, .toast, #tip {
+  background: var(--glass); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+  border: 0; box-shadow: var(--hl), var(--sh-2);
+}
+.panel, #inspector, .featcard { border-radius: var(--r-lg); }
+#inspector { padding: 18px 18px 16px; }
+.toast, .toast.good, .toast.bad, .toast.msg { box-shadow: var(--hl), var(--sh-2); }
+
+/* Inspektor-Innenleben */
+.kv { gap: 5px 12px; font-size: 13.5px; }
+.kv .k { color: var(--dim); }
+.kv .v { font-weight: 600; }
+.sec { position: relative; border-top: 0; margin-top: 14px; padding-top: 14px; }
+.sec::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.09) 15%, rgba(255, 255, 255, 0.09) 85%, transparent); }
+.sec h4 { margin-bottom: 8px; }
+.slot { background: var(--surface-1); box-shadow: inset 0 0 0 1px var(--stroke); padding: 9px 12px; margin-bottom: 6px; transition: background-color .18s var(--ease), box-shadow .18s var(--ease); }
+.slot:not(.filled) { background: transparent; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.10); color: var(--dim); }
+.slot:hover { background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--acc-line); }
+.slot .lab { font-size: 11.5px; color: var(--dim); }
+.badge { border-radius: var(--r-pill); padding: 3px 9px; font: 600 11px var(--font); }
+.badge.ok { background: rgba(111, 220, 156, 0.15); color: #9aeabb; }
+.badge.bad { background: rgba(255, 122, 114, 0.15); color: #ffaaa4; }
+.badge.warn { background: rgba(255, 209, 102, 0.15); color: #ffd98a; }
+.badge.idle { background: rgba(255, 255, 255, 0.08); color: #cfd5de; }
+select, input[type=number] { border: 0; border-radius: var(--r-sm); background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--stroke); padding: 8px 10px; }
+.modal-card, #inspector, #build .items { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.18) transparent; }
+
+/* ---------- Fenster (Modal) ---------- */
+#modal { background: rgba(6, 8, 12, 0.42); -webkit-backdrop-filter: blur(10px) saturate(115%); backdrop-filter: blur(10px) saturate(115%); }
+.modal-card {
+  background: var(--glass-strong); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+  border-radius: var(--r-xl); box-shadow: var(--hl), var(--sh-3); padding: 28px 32px;
+}
+.modal-x { top: 16px; right: 16px; width: 34px; height: 34px; border: 0; border-radius: 50%; background: var(--surface-2); color: var(--dim); transition: background-color .18s, color .18s; }
+.modal-x:hover { background: var(--surface-3); color: #fff; }
+.insp-x { width: 30px; height: 30px; }
+.grid2 { gap: 24px; }
+.cards { gap: 12px; }
+.card { background: var(--surface-1); box-shadow: inset 0 0 0 1px var(--stroke); padding: 14px 16px; }
+.card.lock { opacity: 0.5; filter: saturate(0.5); }
+.coin { transition: background-color .18s var(--ease); }
+.coin:hover { background: var(--surface-1); }
+.coin.on { background: var(--acc-soft); box-shadow: inset 0 0 0 1px rgba(255, 176, 0, 0.25); }
+.picker-row { background: var(--surface-1); box-shadow: inset 0 0 0 1px var(--stroke); padding: 10px 14px; }
+.picker-row.cur { background: rgba(76, 201, 240, 0.07); box-shadow: inset 0 0 0 1px rgba(76, 201, 240, 0.4); }
+canvas.chart, canvas.nwchart, .pricecard canvas.chart { border: 0; border-radius: var(--r-md); background: rgba(0, 0, 0, 0.22); box-shadow: inset 0 0 0 1px var(--stroke); }
+.tbl th { font: 600 11px var(--font); letter-spacing: var(--track-eyebrow); border-bottom: 1px solid var(--stroke); }
+.tbl td { border-bottom-color: rgba(255, 255, 255, 0.035); }
+.tbl tr.me td { background: rgba(255, 176, 0, 0.1); }
+.tbl tr.me td:first-child { border-radius: var(--r-sm) 0 0 var(--r-sm); }
+.tbl tr.me td:last-child { border-radius: 0 var(--r-sm) var(--r-sm) 0; }
+
+/* Handy im Fenster: kein Rahmen im Rahmen, Blasen statt Kästen, Ungelesen = Punkt statt Amber-Ring */
+.modal-card .phone { background: none; box-shadow: none; border-radius: 0; padding: 0; max-width: none; }
+.phone .ph-top { border-bottom: 0; padding: 0 2px 10px; }
+.msg { position: relative; background: var(--surface-2); border-radius: 18px 18px 18px 6px; padding: 10px 14px; margin: 8px 0; }
+.msg .fr { font: 600 12px var(--font); margin-bottom: 2px; }
+.msg.unread { box-shadow: none; background: rgba(255, 176, 0, 0.08); }
+.msg.unread::after { content: ''; position: absolute; top: 13px; right: -16px; width: 8px; height: 8px; border-radius: 50%; background: var(--acc); box-shadow: 0 0 10px rgba(255, 176, 0, 0.6); }
+.intro-phone .ip-date { font: 600 13px var(--font); text-transform: none; letter-spacing: 0.02em; }
+
+/* ---------- Meldungen ---------- */
+.toast { position: relative; border-radius: var(--r-md); padding: 10px 16px 10px 32px; }
+.toast::before { content: ''; position: absolute; left: 15px; top: 17px; width: 7px; height: 7px; border-radius: 50%; background: var(--acc2); }
+.toast.good::before { background: var(--good); } .toast.bad::before { background: var(--bad); } .toast.msg::before { background: var(--acc); }
+.featcard .fc-t { display: flex; align-items: center; gap: 8px; letter-spacing: 0.02em; }
+.featcard .fc-t::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--acc); box-shadow: 0 0 8px rgba(255, 176, 0, 0.8); }
+#tip { border-radius: var(--r-sm); padding: 8px 12px; }
+#clickhint { border-radius: var(--r-pill); background: rgba(14, 17, 22, 0.62); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); box-shadow: var(--hl); padding: 10px 20px; }
+#milestone .t1 { font: 700 12px var(--font); letter-spacing: 0.3em; }
+#milestone .t2 { text-shadow: 0 8px 40px rgba(255, 176, 0, 0.32); }
+.story .ch { font: 600 12px var(--font); letter-spacing: var(--track-eyebrow); }
+
+/* ---------- Titel & Pause: große Pillen statt nackter Versal-Wörter ----------
+   Ersetzt das v4-Textmenü (#splash .splash-btns .btn / #pause .pause-card .btn, Versalien 34px).
+   Das !important nur, weil v4 „.splash-btns .btn, .pause-card .btn { box-shadow:none !important }“ setzt –
+   wer die v4-Zeile löscht, kann es entfernen. */
+.logo { letter-spacing: 2px; text-shadow: 0 10px 40px rgba(0, 0, 0, 0.35); }
+.tagline { font: 500 var(--fs-lg)/1.3 var(--font); text-transform: none; letter-spacing: 0.2px; color: rgba(220, 226, 235, 0.72); margin: 12px 0 22px; }
+.intro { line-height: 1.6; max-width: 46ch; color: rgba(225, 230, 236, 0.8); }
+.splash-btns { gap: 10px; margin: 30px 0 24px; }
+#splash .splash-btns .btn, #pause .pause-card .btn {
+  min-width: 260px; padding: 15px 30px; border-radius: var(--r-pill); text-align: left; color: #fff;
+  font: 600 var(--fs-lg)/1 var(--font); text-transform: none; letter-spacing: 0.2px;
+  background: var(--surface-2); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  box-shadow: var(--hl) !important;
+}
+#splash .splash-btns .btn:hover, #pause .pause-card .btn:hover { background: var(--surface-3); color: #fff; padding-left: 30px; transform: translateY(-1px); }
+#splash .splash-btns .btn.primary, #pause .pause-card .btn.primary {
+  color: #1a1300; background: linear-gradient(180deg, #ffc640, #ffb000 55%, #f4a300);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), var(--acc-glow) !important;
+}
+#splash .splash-btns .btn.primary:hover, #pause .pause-card .btn.primary:hover { color: #1a1300; background: linear-gradient(180deg, #ffd060, #ffbb1f 55%, #ffad0a); }
+#splash .splash-btns .btn small { color: rgba(26, 19, 0, 0.6); }
+.pause-card {
+  background: var(--glass); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+  border-radius: var(--r-xl); box-shadow: var(--hl), var(--sh-3); padding: 30px 32px 28px; gap: 12px;
+}
+.pause-card .logo.small { font-size: 44px; }
+.ptitle { font: 500 var(--fs-sm) var(--font); text-transform: none; letter-spacing: 0.02em; }
+
+/* ---------- Desktop-HUD-Fenster ---------- */
+@media (min-width: 721px) {
+  /* Lesbarkeit: weiche Vignette auch in den unteren Ecken (Raum-Info, Tasten) */
+  #hud::before { background:
+    radial-gradient(ellipse 560px 340px at 0 0, rgba(0, 0, 0, 0.42), transparent 70%),
+    radial-gradient(ellipse 480px 260px at 100% 0, rgba(0, 0, 0, 0.36), transparent 70%),
+    radial-gradient(ellipse 420px 160px at 0 100%, rgba(0, 0, 0, 0.34), transparent 72%),
+    radial-gradient(ellipse 560px 160px at 100% 100%, rgba(0, 0, 0, 0.34), transparent 72%); }
+  body[data-mode="ui"] #dock { box-shadow: var(--hl), var(--sh-2); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
+  #dock button { transition: background-color .18s var(--ease), color .18s; }
+  #dock button:hover { background: rgba(255, 255, 255, 0.07); }
+  #dock .key { margin-left: 8px; padding: 1px 5px; border-radius: 4px; background: rgba(255, 255, 255, 0.07); color: rgba(255, 255, 255, 0.45); font: 600 10px var(--font); }
+  /* Bau-Katalog: Glasfenster + Abdunkelung dahinter (HUD verschwindet statt sich zu überlagern) */
+  #build {
+    border-radius: var(--r-xl); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+    box-shadow: var(--hl), var(--sh-3), 0 0 0 100vmax rgba(6, 8, 12, 0.5);
+  }
+  body.show-build #toasts { z-index: 33; }
+  #build .cats { gap: 4px; padding: 16px 10px; }
+  #build .cats button { padding: 10px 14px; transition: background-color .18s var(--ease), color .18s; }
+  #build .cats button:hover { background: var(--surface-1); color: #fff; }
+  #build .cats button.on { background: var(--acc-soft); color: var(--acc); }
+  #build .item { box-shadow: inset 0 0 0 1px var(--stroke); padding: 14px 16px; transition: background-color .18s var(--ease), box-shadow .18s var(--ease), transform .18s var(--ease); }
+  #build .item:hover { background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--acc-line), var(--sh-1); transform: translateY(-1px); }
+  #build .item.dis .p { color: rgba(255, 122, 114, 0.85); }
+}
+
+/* Schwache GPUs: Unschärfe aus (JS in setQuality: document.body.classList.toggle('lowfx', q === 'low')) */
+body.lowfx { --glass: rgba(20, 23, 30, 0.94); --glass-strong: rgba(17, 20, 26, 0.97); }
+body.lowfx .panel, body.lowfx #inspector, body.lowfx .modal-card, body.lowfx #modal, body.lowfx #build, body.lowfx .toast,
+body.lowfx .featcard, body.lowfx .pause-card, body.lowfx #dock, body.lowfx #splash .splash-btns .btn, body.lowfx #pause .pause-card .btn, body.lowfx #goals .goal {
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+}

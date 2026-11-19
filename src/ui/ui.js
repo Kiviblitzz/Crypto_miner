@@ -568,7 +568,7 @@ export class UI {
     const g = this.g, s = g.s, ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
     ctx.clearRect(0, 0, W, H);
     const start = Math.max(COIN[id].start, s.day - range, toDay('2010-07-17')), end = s.day;
-    if (end - start < 2) { ctx.fillStyle = '#94a0b2'; ctx.font = '28px sans-serif'; ctx.fillText('Noch keine Kursdaten', 40, 60); return; }
+    if (end - start < 2) { ctx.fillStyle = '#94a0b2'; ctx.font = '500 28px Barlow, sans-serif'; ctx.fillText('Noch keine Kursdaten', 40, 60); return; }
     const n = 300, pts = [];
     for (let i = 0; i <= n; i++) { const d = Math.round(start + (end - start) * (i / n)); pts.push([d, g.price(id, d)]); }
     const vals = pts.map((p) => p[1]).filter((v) => v > 0);
@@ -576,7 +576,7 @@ export class UI {
     const tf = (v) => (logScale ? Math.log10(Math.max(v, 1e-9)) : v);
     const mn = Math.min(...vals.map(tf)), mx = Math.max(...vals.map(tf));
     const pad = mini ? 10 : 60, x = (i) => pad + (i / n) * (W - pad * (mini ? 2 : 1.4)), y = (v) => H - (mini ? 14 : 40) - ((tf(v) - mn) / (mx - mn || 1)) * (H - (mini ? 28 : 80));
-    ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.fillStyle = '#7d8aa0'; ctx.font = '22px sans-serif'; ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.fillStyle = '#7d8aa0'; ctx.font = '500 22px Barlow, sans-serif'; ctx.lineWidth = 1;
     if (!mini) for (let k = 0; k <= 4; k++) { const v = mn + ((mx - mn) * k) / 4; const yy = H - 40 - (k / 4) * (H - 80); ctx.beginPath(); ctx.moveTo(pad, yy); ctx.lineTo(W - 20, yy); ctx.stroke(); ctx.fillText(fmtUSD(logScale ? Math.pow(10, v) : v), 4, yy - 4); }
     if (!mini) { ctx.fillText(fmtDate(start), pad, H - 8); ctx.fillText(fmtDate(end), W - 190, H - 8); }
     const grad = ctx.createLinearGradient(0, 0, 0, H); grad.addColorStop(0, COIN[id].color + '66'); grad.addColorStop(1, COIN[id].color + '00');

@@ -115,7 +115,7 @@ export function buildRoom(def) {
     // Regal rechts hinten an der Wand
     put('bookshelf', 3.75, 0.16);
     B.blocked.push(blk(3.5, 0, 4.0, 0.5));
-    B.lights.push({ pos: [2.0, 2.4, 1.8], color: 0xffd7a0, intensity: 3.5, dist: 8 });
+    B.lights.push({ pos: [2.0, 1.9, 1.8], color: 0xffd7a0, intensity: 3.5, dist: 8 });
     B.outside = 'town';
     B.doors = [{ c: [3.98, 1.0, 3.03], s: [0.14, 2.0, 0.85], label: 'Zimmertür' }];
     B.spawn = { x: 3.3, z: 3.0, look: [1.6, 0.9] };
@@ -147,7 +147,7 @@ export function buildRoom(def) {
     // Rohre an der Decke
     cyl(g, 0.05, 0.05, w, mat('pipe', { color: 0x9aa0a6, roughness: 0.4, metalness: 0.6 }), w / 2, h - 0.15, 0.3, 10, 'x');
     cyl(g, 0.035, 0.035, w, M.copper(), w / 2, h - 0.25, 0.45, 10, 'x');
-    for (const x of [2, 5]) { const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 10), M.ledWhite()); bulb.position.set(x, h - 0.2, 2.5); g.add(bulb); B.lights.push({ pos: [x, h - 0.3, 2.5], color: 0xffe2b0, intensity: 3.2, dist: 7 }); }
+    for (const x of [2, 5]) { const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 10), M.ledWhite()); bulb.position.set(x, h - 0.2, 2.5); g.add(bulb); B.lights.push({ pos: [x, h - 0.7, 2.5], color: 0xffe2b0, intensity: 3.2, dist: 7 }); }
     poster(S.left, textTexture([{ text: 'Familie Brandt', font: 'bold 40px Georgia', color: '#333' }, { text: 'Urlaub 1998', font: '30px Georgia', color: '#555' }], { w: 256, h: 256, bg: '#f5efe0' }), 0.4, 0.4, 2.5, 1.5, 0.085);
     // Dartscheibe, altes Fahrrad, Weihnachtskisten
     const dart = new THREE.Mesh(new THREE.CircleGeometry(0.22, 24), mat('dart', { map: textTexture([{ text: '◎', font: 'bold 220px Arial', color: '#c22' }], { w: 256, h: 256, bg: '#1a1a1a' }), roughness: 0.8 })); dart.position.set(5.3, 1.6, 0.085); S.back.add(dart);
