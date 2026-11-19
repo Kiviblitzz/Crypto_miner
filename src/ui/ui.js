@@ -423,6 +423,8 @@ export class UI {
         const nx = f.power[fs.power + 1];
         if (nx) { const b = h(`<button class="btn small">⚡ ${esc(nx.label)}: ${fmtNum(nx.kw, 0)} kW (${fmtUSD(nx.cost)})</button>`); b.disabled = s.cash < nx.cost; b.onclick = () => { if (g.upgradePower(f.id)) { this.toast('Stromanschluss ausgebaut!', 'good'); this.company(); this.sites(); } }; c.append(b); }
         else c.append(h('<div style="font-size:12px;color:#94a0b2">Maximaler Anschluss erreicht.</div>'));
+        const step = g.solarStep(f.id);
+        if (step) { const cost = step * g.solarPricePerKwp(); const sb = h(`<button class="btn small">☀️ +${step} kWp Solar (${fmtUSD(cost)})${fs.solar ? ` · jetzt ${fs.solar} kWp ≈ ${Math.round(g.solarKwh(f.id))} kWh/Tag` : ''}</button>`); sb.disabled = s.cash < cost; sb.onclick = () => { if (g.buildSolar(f.id)) { this.toast(`☀️ Solaranlage erweitert (${f.short})`, 'good'); this.company(); } }; c.append(sb); }
         if (s.current !== f.id) { const go = h('<button class="btn small" style="margin-left:6px">Hingehen</button>'); go.onclick = () => { this.closeModal(); this.switchSite(f.id); }; c.append(go); }
       } else if (can) { const b = h(`<button class="btn primary small">Übernehmen (${fmtUSD(f.cost)})</button>`); b.onclick = () => { this.closeModal(); this.unlock(f.id); }; c.append(b); }
       else { const ci = CHAPTERS.findIndex((ch) => ch.unlock === f.id); c.append(h(`<div style="font-size:12px;color:#94a0b2">Wird frei nach „${esc(CHAPTERS[ci]?.title || '')}" (frühestens ${fmtDate(toDay(CHAPTERS[ci]?.minDate || '2010-01-01'))}).</div>`)); }
