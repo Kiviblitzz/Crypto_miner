@@ -17,6 +17,10 @@ Du startest **Oktober 2010 im Kinderzimmer** mit einem alten PC und baust bis in
 
 ![Imperium](docs/img/08_imperium.jpg)
 
+**Rundgang** – nachts zwischen den Containern der Fjordhalle, mit Polarlicht:
+
+![Fjord bei Nacht](docs/img/10_fjord_nacht.jpg)
+
 Recherche: [docs/RECHERCHE.md](docs/RECHERCHE.md) · Konzept & Story: [docs/KONZEPT.md](docs/KONZEPT.md)
 
 ## Spielen
@@ -56,6 +60,9 @@ Ein-Datei-Version neu bauen: `npm run build:single`.
   Rivale Viktor Kral (MONOLITH Hash AG) muss überholt werden. Nachrichten aufs Handy, News-Ticker.
 * **Imperium-Ansicht (🗺️):** alle Standorte nebeneinander als Dioramen – vom Kinderzimmer bis zur Fjordhalle.
 * **Technik (🔬):** 9 Technologien wie Undervolting, eigene ASIC-Firmware, Immersionskühlung, Abwärme-Verkauf.
+* **Wetter & Welt:** echte Hitzewellen (2015–2025) heizen die Räume auf, Schnee im Winter, Polarlicht am Fjord.
+* **Bankkredit:** schneller wachsen mit historischen Zinsen – mit dem Risiko von 2022.
+* **Wärmebild (H):** zeigt Hitzequellen und Kühlbereiche wie die Overlays im Vorbild.
 * **3D:** Alle Modelle prozedural im Code gebaut (keine fremden Assets, keine Logos), Tag/Nacht,
   Bloom-LEDs, Wände blenden sich zur Kamera aus, Rundgang-Modus in Ego-Perspektive.
 

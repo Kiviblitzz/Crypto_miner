@@ -125,6 +125,7 @@ export class World {
     } else { this.transition = null; this.camera.position.copy(endPos); }
     this.camera.near = span > 30 ? 0.2 : 0.05; this.camera.updateProjectionMatrix();
     if (this.people) { this.scene.remove(this.people); this.people = null; }
+    this.buildWeather();
     this.scene.fog = def.style === 'fjord' ? new THREE.Fog(0xb8c8d8, 250, 900) : new THREE.Fog(0x9fb8d0, 60 + span * 3, 260 + span * 6);
     this.syncObjects();
   }
@@ -299,6 +300,56 @@ export class World {
     this.onFP?.(false);
   }
   fpClick() { const uid = this.pick(true); if (uid) { this.fp.unlock(); this.select(uid); } }
+
+  // ---------- Wetter: Schnee & Polarlicht ----------
+  buildWeather() {
+    if (this.weather) { this.scene.remove(this.weather); this.weather = null; }
+    const def = this.def, g = (this.weather = new THREE.Group()); this.scene.add(g);
+    const span = Math.max(def.w, def.d) + 40, n = def.style === 'fjord' ? 5000 : 1800;
+    const pos = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      let x, z; do { x = def.w / 2 + (Math.random() - 0.5) * span * 1.6; z = def.d / 2 + (Math.random() - 0.5) * span * 1.6; } while (x > -1 && x < def.w + 1 && z > -1 && z < def.d + 1);
+      pos[i * 3] = x; pos[i * 3 + 1] = Math.random() * 30; pos[i * 3 + 2] = z;
+    }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const c = document.createElement('canvas'); c.width = c.height = 32; const cx = c.getContext('2d'); const gr = cx.createRadialGradient(16, 16, 1, 16, 16, 15); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); cx.fillStyle = gr; cx.fillRect(0, 0, 32, 32);
+    this.snow = new THREE.Points(geo, new THREE.PointsMaterial({ size: def.style === 'fjord' ? 0.35 : 0.12, map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, opacity: 0.9 }));
+    g.add(this.snow);
+    if (def.style === 'fjord') {
+      const mat = new THREE.ShaderMaterial({
+        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+        uniforms: { t: { value: 0 }, k: { value: 0 } },
+        vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+        fragmentShader: `varying vec2 vUv; uniform float t; uniform float k;
+          void main(){
+            float x = vUv.x * 6.0;
+            float band = sin(x * 1.3 + t * 0.25) * 0.12 + sin(x * 3.1 - t * 0.4) * 0.05 + 0.45;
+            float d = abs(vUv.y - band);
+            float a = (1.0 - smoothstep(0.0, 0.28, d)) * (0.55 + 0.45 * sin(x * 7.0 + t * 0.8));
+            a *= smoothstep(0.0, 0.15, vUv.x) * (1.0 - smoothstep(0.85, 1.0, vUv.x));
+            vec3 col = mix(vec3(0.1, 1.0, 0.55), vec3(0.6, 0.3, 1.0), smoothstep(band, band + 0.3, vUv.y));
+            gl_FragColor = vec4(col * a * k, a * k);
+          }`,
+      });
+      const pl = new THREE.Mesh(new THREE.PlaneGeometry(1100, 220, 1, 1), mat); pl.position.set(def.w / 2, 150, -600); pl.rotation.x = 0.2; pl.frustumCulled = false;
+      g.add(pl); this.aurora = mat;
+    } else this.aurora = null;
+  }
+  updateWeather(dt) {
+    if (!this.weather) return;
+    const d = new Date(this.game.s.day * 86400000), m = d.getUTCMonth();
+    const fj = this.def.style === 'fjord';
+    const winter = fj ? (m >= 9 || m <= 3) : (m === 11 || m <= 1);
+    const snowing = winter && !this.empire && (fj || Math.sin(this.game.s.day * 0.7) > 0.1);
+    this.snow.visible = snowing;
+    if (snowing) {
+      const p = this.snow.geometry.attributes.position, arr = p.array;
+      for (let i = 0; i < arr.length; i += 3) { arr[i + 1] -= dt * (1.2 + (i % 7) * 0.1); if (arr[i + 1] < 0) arr[i + 1] = 30; }
+      this.snow.position.x = Math.sin(this.t * 0.3) * 0.4;
+      p.needsUpdate = true;
+    }
+    if (this.aurora) { const hour = this.game.s.frac * 24; const night = hour > 19.5 || hour < 5 ? 1 : hour > 18.5 ? hour - 18.5 : hour < 6 ? 6 - hour : 0; this.aurora.uniforms.t.value = this.t; this.aurora.uniforms.k.value = night * (this.empire ? 0 : 1); }
+  }
 
   // ---------- Wärmebild (wie die Overlays im Vorbild) ----------
   heatTex(hot) {
@@ -504,7 +555,7 @@ export class World {
     }
     // Tag/Nacht
     this.updateDaylight(s.frac);
-    this.updatePeople(dt); this.updateSmoke(dt);
+    this.updatePeople(dt); this.updateSmoke(dt); this.updateWeather(dt);
     // Lüfter & LEDs
     const fanSpeed = 28 * dt;
     for (const e of this.entries.values()) {
