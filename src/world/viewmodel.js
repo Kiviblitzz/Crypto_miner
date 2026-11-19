@@ -33,7 +33,7 @@ export class ViewModel {
     const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.236, 0.146), new THREE.MeshBasicMaterial({ map: this.tabTex, toneMapped: false })); scr.position.z = 0.0085; this.tablet.add(scr);
     this.tablet.visible = false; this.left.visible = false;
     // Taschenlampe (beleuchtet die Welt, hängt an der Kamera)
-    this.lamp = new THREE.SpotLight(0xfff2d8, 0, 26, 0.42, 0.45, 1.4);
+    this.lamp = new THREE.SpotLight(0xfff2d8, 0, 22, 0.46, 0.65, 1.4);
     this.lamp.position.set(0.12, -0.08, 0); camera.add(this.lamp); camera.add(this.lamp.target); this.lamp.target.position.set(0.05, -0.1, -3);
     this.lampOn = false;
     this.t = 0; this.raise = 0;
@@ -83,7 +83,7 @@ export class ViewModel {
     g.fillStyle = '#c9b8a3'; g.font = '700 15px Nunito, sans-serif'; g.fillText('Klick = setzen · R = drehen', 14, 148);
     this.tabTex.needsUpdate = true;
   }
-  toggleLamp() { this.lampOn = !this.lampOn; this.lamp.intensity = this.lampOn ? 26 : 0; return this.lampOn; }
+  toggleLamp() { this.lampOn = !this.lampOn; this.lamp.intensity = this.lampOn ? 15 : 0; return this.lampOn; }
   update(dt, { moving, bob, placing, visible, uiOpen }) {
     this.t += dt;
     this.root.visible = visible;

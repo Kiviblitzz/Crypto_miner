@@ -1,6 +1,8 @@
 // Historische Stützpunkte (gerundet). Quellen: siehe docs/RECHERCHE.md
 // Alle Werte werden log-linear zwischen den Stützpunkten interpoliert.
 
+import { BTC_DAILY_FIRST, BTC_DAILY_PRICE, BTC_DAILY_HASH_GH } from './btc_daily.js';
+
 export const DAY_MS = 86400000;
 export const toDay = (s) => {
   const [y, m, d] = s.split('-').map(Number);
@@ -34,7 +36,8 @@ export function steps(points) {
 }
 
 // ---------- BITCOIN ----------
-export const BTC_PRICE = curve([
+// Stützpunkte nur noch für die Zeit nach dem Ende der echten Tagesdaten (siehe btc_daily.js)
+const BTC_PRICE_PTS = curve([
   ['2010-07-17', 0.05], ['2010-08-15', 0.07], ['2010-10-01', 0.062], ['2010-10-20', 0.10], ['2010-11-06', 0.39], ['2010-12-15', 0.25],
   ['2011-01-15', 0.40], ['2011-02-09', 1.0], ['2011-03-15', 0.86], ['2011-04-15', 1.5], ['2011-05-15', 7], ['2011-06-08', 30],
   ['2011-06-20', 15], ['2011-07-15', 14], ['2011-08-15', 9], ['2011-09-15', 5], ['2011-10-15', 3.2], ['2011-11-18', 2.1],
@@ -68,8 +71,8 @@ export const BTC_PRICE = curve([
   ['2026-09-30', 83640], ['2026-10-31', 77300], ['2026-11-19', 64100],
 ]);
 
-// Netz-Hashrate in H/s (aus Difficulty × 2^32 / 600)
-export const BTC_HASH = curve([
+// Netz-Hashrate in H/s (aus Difficulty × 2^32 / 600) – Stützpunkte für die Zeit nach den Tagesdaten
+const BTC_HASH_PTS = curve([
   ['2010-01-01', 8.4e6], ['2010-05-15', 8.2e7], ['2010-07-01', 3.2e8], ['2010-07-25', 1.3e9], ['2010-08-15', 3.7e9], ['2010-09-15', 5.1e9],
   ['2010-10-01', 9.9e9], ['2010-10-15', 3.2e10], ['2010-11-15', 5.8e10], ['2010-12-15', 8.8e10], ['2011-01-15', 1.04e11], ['2011-02-15', 1.6e11],
   ['2011-03-15', 4.8e11], ['2011-04-15', 6.6e11], ['2011-05-15', 1.7e12], ['2011-06-15', 6.3e12], ['2011-07-15', 1.1e13], ['2011-08-15', 1.35e13],
@@ -83,6 +86,24 @@ export const BTC_HASH = curve([
   ['2024-12-31', 8.0e20], ['2025-04-13', 9.5e20], ['2025-08-15', 1.0e21], ['2025-11-26', 1.15e21], ['2026-01-24', 7.3e20], ['2026-03-15', 8.5e20],
   ['2026-06-15', 9.0e20], ['2026-11-15', 9.3e20],
 ]);
+
+// Echte Tageswerte (Kurs, Netz-Hashrate); danach weich an die Stützpunkte angeschlossen
+const D0 = toDay(BTC_DAILY_FIRST), DN = D0 + BTC_DAILY_PRICE.length - 1;
+function daily(arr, scale, tail) {
+  const lastV = arr[arr.length - 1] * scale, tailAtEnd = tail(DN);
+  const f = (day) => {
+    const d = Math.round(day);
+    if (d <= D0) return arr[0] * scale;
+    if (d <= DN) return arr[d - D0] * scale;
+    // nach Datenende: Stützpunkt-Kurve, deren Abweichung am Übergang über 60 Tage ausgeblendet wird
+    const k = Math.max(0, 1 - (d - DN) / 60);
+    return tail(d) * Math.pow(lastV / tailAtEnd, k);
+  };
+  f.firstDay = D0; f.lastDay = Math.max(DN, tail.lastDay); f.dailyEnd = DN;
+  return f;
+}
+export const BTC_PRICE = daily(BTC_DAILY_PRICE, 1, BTC_PRICE_PTS);
+export const BTC_HASH = daily(BTC_DAILY_HASH_GH, 1e9, BTC_HASH_PTS);
 
 export const HALVINGS = ['2012-11-28', '2016-07-09', '2020-05-11', '2024-04-20', '2028-04-15', '2032-04-15'].map(toDay);
 export const BTC_REWARD = steps([

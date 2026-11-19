@@ -139,8 +139,6 @@ export function buildRoom(def) {
     B.outside = 'town';
     B.doors = [{ c: [3.98, 1.0, 3.03], s: [0.14, 2.0, 0.85], label: 'Zimmertür' }];
     B.spawn = { x: 3.3, z: 3.0, look: [1.6, 0.9] };
-    // Plätze für herumliegende alte PC-Teile (Start)
-    B.looseSpots = { mobo: [0.52, 0.58, 2.7, 0.35, 'auf dem Bett'], cpu: [2.28, 0.745, 0.36, 0.5, 'auf dem Schreibtisch'], gpu: [1.6, 0.012, 1.85, 0.7, 'auf dem Teppich'], psu: [1.1, 0.0, 1.3, 0.3, 'vor dem Schrank'] };
     B.props = [{ c: [2.6, 1.08, 0.13], s: [0.55, 0.4, 0.12], label: 'PC-Monitor', hint: 'Börse', action: 'market' }, { c: [0.5, 0.45, 2.5], s: [1.0, 0.5, 2.0], label: 'Bett', hint: 'Schlafen', action: 'sleep' }];
   } else if (def.style === 'basement') {
     S = shell(def, {
@@ -183,6 +181,8 @@ export function buildRoom(def) {
     B.outside = 'garden';
     B.doors = [{ c: [6.4, 1.2, 1.0], s: [1.2, 2.4, 2.0], label: 'Kellertreppe' }];
     B.spawn = { x: 5.2, z: 2.7, look: [2.0, 2.6] };
+    // Alte PC-Teile im verstaubten Keller (Start)
+    B.looseSpots = { mobo: [2.0, 0.405, 3.6, 0.4, 'auf einem Karton'], cpu: [0.32, 0.852, 1.3, 0.3, 'auf der Waschmaschine'], gpu: [1.3, 0.305, 4.45, 0.9, 'auf der Holzkiste'], psu: [4.25, 0.0, 0.48, -0.2, 'neben dem Regal'] };
     { const fb = new THREE.Group(); fb.position.set(5.3, 1.3, 0.09); S.back.add(fb); box(fb, 0.5, 0.7, 0.12, mat('fusebox', { color: 0xd8d4c8, roughness: 0.6 }), 0, 0, 0); for (let i = 0; i < 6; i++) box(fb, 0.05, 0.1, 0.02, M.black(), -0.15 + i * 0.06, 0.45, 0.07); box(fb, 0.03, 0.03, 0.01, M.ledGreen(), 0.18, 0.6, 0.07); }
     B.props = [{ c: [5.3, 1.65, 0.15], s: [0.55, 0.75, 0.2], label: 'Sicherungskasten', hint: 'Firma', action: 'company' }];
   } else if (def.style === 'workshop') {
@@ -360,4 +360,57 @@ export function buildOutside(kind, def) {
     for (let i = 0; i < 2; i++) cyl(g, 1.2, 1.2, 160, mat('penstock', { color: 0x6b737d, metalness: 0.7, roughness: 0.4 }), w + 30 + i * 4, 40, -40, 12).rotation.set(0.9, 0, 0);
   }
   return g;
+}
+
+
+// ---------- Verstaubter Keller (bevor er zum Hobbykeller wird) ----------
+function webTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d');
+  g.strokeStyle = 'rgba(235,230,220,.55)'; g.lineWidth = 1.4;
+  for (let a = 0; a <= 8; a++) { const t = (a / 8) * Math.PI / 2; g.beginPath(); g.moveTo(0, 0); g.lineTo(Math.cos(t) * 250, Math.sin(t) * 250); g.stroke(); }
+  for (let r = 22; r < 250; r += 22 + r * 0.08) { g.beginPath(); for (let a = 0; a <= 8; a++) { const t = (a / 8) * Math.PI / 2, rr = r * (0.92 + 0.08 * Math.sin(a * 2.3)); const x = Math.cos(t) * rr, y = Math.sin(t) * rr; if (a) g.quadraticCurveTo(Math.cos(t - 0.1) * rr * 0.93, Math.sin(t - 0.1) * rr * 0.93, x, y); else g.moveTo(x, y); } g.stroke(); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+export function buildDustyClutter(def) {
+  const g = new THREE.Group(), blocked = [], h = def.h;
+  const carton = mat('cartonDusty', { color: 0xa88a62, roughness: 0.95 }), tape = mat('cartonTape', { color: 0xcdb98e, roughness: 0.7 });
+  const wood = mat('crateWood', { color: 0x8a6a48, roughness: 0.9 }), sheet = mat('dustSheet', { color: 0xd8d2c6, roughness: 1 });
+  const box3 = (w, hh, d, m, x, y, z, ry = 0) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, hh, d), m); b.position.set(x, y + hh / 2, z); b.rotation.y = ry; b.castShadow = b.receiveShadow = true; g.add(b); return b; };
+  const kart = (x, z, w, hh, d, ry = 0, y = 0) => { box3(w, hh, d, carton, x, y, z, ry); box3(w * 1.002, 0.004, 0.06, tape, x, y + hh, z, ry); blocked.push(blk(x - w / 2 - 0.05, z - d / 2 - 0.05, x + w / 2 + 0.05, z + d / 2 + 0.05)); };
+  // Kartons (auf einem liegt das Mainboard), ein Stapel am Regal
+  kart(2.0, 3.6, 0.5, 0.4, 0.4, 0.15); kart(2.6, 3.8, 0.44, 0.32, 0.38, -0.3); kart(1.5, 3.9, 0.4, 0.55, 0.42, 0.1);
+  kart(3.95, 0.32, 0.5, 0.36, 0.42, 0.05); box3(0.42, 0.3, 0.36, carton, 3.95, 0.36, 0.32, -0.12);
+  // Holzkiste (darauf die Grafikkarte)
+  box3(0.55, 0.3, 0.42, wood, 1.3, 0, 4.45, 0.08); for (const dy of [0.08, 0.2]) box3(0.56, 0.03, 0.43, mat('crateSlat', { color: 0x6f5238, roughness: 0.9 }), 1.3, dy, 4.45, 0.08);
+  blocked.push(blk(0.95, 4.15, 1.65, 4.75));
+  // Abgedeckter alter Sessel
+  const chair = new THREE.Group(); chair.position.set(3.35, 0, 4.25); chair.rotation.y = -0.5; g.add(chair);
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.45, 0.7), sheet); seat.position.y = 0.225; chair.add(seat);
+  const back = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.5, 0.18), sheet); back.position.set(0, 0.68, -0.28); back.rotation.x = -0.12; chair.add(back);
+  for (const sx of [-1, 1]) { const arm = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.2, 0.62), sheet); arm.position.set(sx * 0.33, 0.55, 0); chair.add(arm); }
+  const drape = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.52, 0.12, 16, 1, true), sheet); drape.position.y = 0.05; drape.scale.z = 0.85; chair.add(drape);
+  chair.traverse((m) => { if (m.isMesh) { m.castShadow = m.receiveShadow = true; } });
+  blocked.push(blk(2.85, 3.8, 3.85, 4.75));
+  // Schmutzschleier unten an den Wänden und staubige Flecken am Boden
+  const grime = (() => { const c = document.createElement('canvas'); c.width = 8; c.height = 128; const x = c.getContext('2d'); const gr = x.createLinearGradient(0, 0, 0, 128); gr.addColorStop(0, 'rgba(40,30,20,0)'); gr.addColorStop(1, 'rgba(40,30,20,.55)'); x.fillStyle = gr; x.fillRect(0, 0, 8, 128); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false }); })();
+  for (const [x, z, w, ry] of [[def.w / 2, 0.012, def.w, 0], [0.012, def.d / 2, def.d, Math.PI / 2], [def.w - 0.012, def.d / 2, def.d, -Math.PI / 2], [def.w / 2, def.d - 0.012, def.w, Math.PI]]) { const p = new THREE.Mesh(new THREE.PlaneGeometry(w, 0.9), grime); p.position.set(x, 0.45, z); p.rotation.y = ry; p.raycast = () => {}; g.add(p); }
+  const dustFloor = (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d'); for (let i = 0; i < 70; i++) { const px = Math.random() * 256, py = Math.random() * 256, r = 10 + Math.random() * 46; const gr = x.createRadialGradient(px, py, 0, px, py, r); gr.addColorStop(0, 'rgba(200,190,170,.22)'); gr.addColorStop(1, 'rgba(200,190,170,0)'); x.fillStyle = gr; x.fillRect(0, 0, 256, 256); } const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }); })();
+  { const f = new THREE.Mesh(new THREE.PlaneGeometry(def.w, def.d), dustFloor); f.rotation.x = -Math.PI / 2; f.position.set(def.w / 2, 0.003, def.d / 2); f.raycast = () => {}; g.add(f); }
+  // Altes Zeug auf dem Regal: Farbdosen, Gläser, ein altes Radio
+  const can = mat('paintCan', { color: 0x8a8f94, roughness: 0.5, metalness: 0.6 });
+  for (const [x, y, z, r, hh, c] of [[2.65, 1.6, 0.2, 0.08, 0.18, can], [2.85, 1.6, 0.22, 0.07, 0.15, mat('paintCan2', { color: 0x9c3b2e, roughness: 0.6 })], [3.3, 1.6, 0.2, 0.05, 0.12, mat('jar', { color: 0xc9d6c8, roughness: 0.15, transparent: true, opacity: 0.6 })]]) { const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, hh, 16), c); m.position.set(x, y + hh / 2, z); m.castShadow = true; g.add(m); }
+  box3(0.3, 0.16, 0.14, mat('oldRadio', { color: 0x6b4a32, roughness: 0.7 }), 3.1, 1.6, 0.22);
+  // Spinnweben in den Ecken
+  const web = new THREE.MeshBasicMaterial({ map: webTexture(), transparent: true, depthWrite: false, side: THREE.DoubleSide, opacity: 0.85 });
+  for (const [x, z, ry] of [[0.02, 0.02, 0], [def.w - 0.02, 0.02, -Math.PI / 2], [0.02, def.d - 0.02, Math.PI / 2], [3.4, 0.02, 0]]) {
+    const pl = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.6), web); pl.position.set(x + (ry === 0 ? 0.3 : ry < 0 ? -0.0 : 0), h - 0.3, z + (ry === 0 ? 0 : 0.3)); pl.rotation.y = ry; pl.raycast = () => {}; g.add(pl);
+  }
+  // Schwebender Staub
+  const n = 260, pos = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) pos.set([0.3 + Math.random() * (def.w - 0.6), 0.2 + Math.random() * (h - 0.4), 0.3 + Math.random() * (def.d - 0.6)], i * 3);
+  const dg = new THREE.BufferGeometry(); dg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const dc = document.createElement('canvas'); dc.width = dc.height = 32; const dg2 = dc.getContext('2d'); const rg = dg2.createRadialGradient(16, 16, 0, 16, 16, 16); rg.addColorStop(0, 'rgba(255,240,215,1)'); rg.addColorStop(1, 'rgba(255,240,215,0)'); dg2.fillStyle = rg; dg2.fillRect(0, 0, 32, 32);
+  const dust = new THREE.Points(dg, new THREE.PointsMaterial({ map: new THREE.CanvasTexture(dc), color: 0xffe4c0, size: 0.018, transparent: true, opacity: 0.6, depthWrite: false, blending: THREE.AdditiveBlending }));
+  dust.raycast = () => {}; g.add(dust); g.userData.dust = dust;
+  return { group: g, blocked };
 }

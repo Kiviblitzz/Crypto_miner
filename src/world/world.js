@@ -23,7 +23,7 @@ const GradeShader = {
     ' vec2 d = (vUv - 0.5) * vec2(1.0, 0.82); float v = smoothstep(0.78, 0.22, length(d));\n' +
     ' c.rgb *= mix(1.0 - vignette, 1.0, v); gl_FragColor = c; }',
 };
-import { buildRoom, buildOutside } from './rooms.js';
+import { buildRoom, buildOutside, buildDustyClutter } from './rooms.js';
 import { objectModel, rigPartModel, loosePartModel } from './models.js';
 import { nightMats, nightGround } from './rooms.js';
 const NIGHT_GRASS = new THREE.Color(0x1d2a1f), NIGHT_FACADE = new THREE.Color(0x4a5068);
@@ -180,7 +180,11 @@ export class World {
     this.entries.clear();
     const def = this.def = FACILITY[id]; this.facId = id;
     if (this.gtao) this.gtao.enabled = def.tier <= 2; // in großen Hallen zu teuer
-    this.room = buildRoom(def); this.scene.add(this.room.root); this.screensDirty = true; this.syncLoose();
+    this.room = buildRoom(def); this.scene.add(this.room.root); this.screensDirty = true;
+    // Verstaubter Keller, solange er noch nicht ausgebaut ist: Gerümpel, Spinnweben, Staub, schwaches Flackerlicht
+    this.dusty = id === 'keller' && this.game.s?.feat && !this.game.s.unlocked.includes('keller');
+    if (this.dusty) { const dc = buildDustyClutter(def); this.room.root.add(dc.group); this.room.blocked.push(...dc.blocked); this.dustPts = dc.group.userData.dust; for (const L of this.room.lights) { L.intensity *= 0.55; L.color = 0xffc98a; } this.room.lights.splice(1); this.room.props = []; } else this.dustPts = null;
+    this.syncLoose();
     this.outside = buildOutside(this.room.outside, def); this.scene.add(this.outside);
     this.roomLights = this.room.lights.map((L) => { const p = new THREE.PointLight(L.color, L.intensity, L.dist, 1.6); p.position.set(...L.pos); this.scene.add(p); return p; });
     if (this.gridHelper) this.scene.remove(this.gridHelper);
@@ -324,6 +328,13 @@ export class World {
     const cam = this.camera; cam.updateMatrixWorld(); const cs = new THREE.Vector3(x, y, z).applyMatrix4(cam.matrixWorldInverse), v = new THREE.Vector3(x, y, z).project(cam);
     const sx = (v.x + 1) / 2 * innerWidth, sy = (1 - v.y) / 2 * innerHeight, front = cs.z < -0.1;
     return { x: sx, y: sy, front, on: front && sx > 40 && sx < innerWidth - 40 && sy > 60 && sy < innerHeight - 40, side: cs.x < 0 ? -1 : 1, dist: cam.position.distanceTo(new THREE.Vector3(x, y, z)) };
+  }
+  updateDusty(dt) {
+    if (!this.dusty) return;
+    // dunkler, staubiger Keller: weniger Umgebungslicht, Sonne kaum durch die verdreckten Fenster
+    this.hemi.intensity *= 0.35; this.sun.intensity *= 0.3; this.moon.intensity *= 0.5; this.scene.environmentIntensity *= 0.45;
+    const L = this.roomLights?.[0]; if (L) { const f = Math.sin(this.t * 23) * Math.sin(this.t * 7.3) > 0.82 ? 0.55 : 1; L.intensity *= f; }
+    if (this.dustPts) { const a = this.dustPts.geometry.attributes.position, h = this.def.h; for (let i = 0; i < a.count; i++) { let y = a.getY(i) + Math.sin(this.t * 0.4 + i) * dt * 0.02 - dt * 0.006; if (y < 0.15) y = h - 0.3; a.setY(i, y); a.setX(i, a.getX(i) + Math.cos(this.t * 0.3 + i * 1.7) * dt * 0.01); } a.needsUpdate = true; }
   }
   // Herumliegende Teile im Zimmer (leuchten, bis man sie aufhebt)
   syncLoose() {
@@ -957,7 +968,7 @@ export class World {
     if (this.mode === 'title' || this.visFrac == null) this.visFrac = s.frac;
     else { const df = (s.frac - this.visFrac + 1) % 1; this.visFrac = (this.visFrac + Math.min(df, dt / 90)) % 1; }
     this.updateDaylight(this.visFrac);
-    this.updatePeople(dt); this.updateSmoke(dt); this.updateWeather(dt); this.updatePopups(dt); this.updateInstall(dt); this.updateLoose(dt); if (this.ghostMat) { this.ghostMat.opacity = 0.1; this.ghostLine.opacity = 0.38 + 0.06 * Math.sin(this.t * 4); }
+    this.updatePeople(dt); this.updateSmoke(dt); this.updateWeather(dt); this.updatePopups(dt); this.updateInstall(dt); this.updateLoose(dt); this.updateDusty(dt); if (this.ghostMat) { this.ghostMat.opacity = 0.1; this.ghostLine.opacity = 0.38 + 0.06 * Math.sin(this.t * 4); }
     // Lüfter & LEDs
     const fanSpeed = 28 * dt;
     for (const e of this.entries.values()) {

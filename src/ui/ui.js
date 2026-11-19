@@ -43,7 +43,8 @@ export class UI {
       const t = this.objTarget, g = this.g; if (!t) return;
       const lt = Object.keys(g.s.loose || {}).find((k) => t.label === PNAME[k]); if (lt) { world.onLoose(lt); return; }
       const pc = g.facObjects(g.s.current).find((o) => o.type === 'tower'); if (pc && t.label === 'Dein PC') { this.openInspector(pc.uid); return; }
-      const pr = world.room?.props?.find((p) => p.action === 'market'); if (pr && t.label === 'Börse') this.useProp(pr);
+      const pr = world.room?.props?.find((p) => p.action === 'market'); if (pr && t.label === 'Börse') { this.useProp(pr); return; }
+      if ((t.label === 'Keller' || t.label === 'Hoch in dein Zimmer') && world.room?.doors?.[0]) this.travel(world.room.doors[0]);
     };
     world.onInstalled = (uid) => { this.installing = false; if (this.inspUid === uid) this.inspect(uid); if (this.afterSnap) { this.toast(this.afterSnap, 'good', 2600); this.afterSnap = null; } };
     world.onLoose = (t) => { this.w.pickupFx(t); if (!this.g.pickUp(t)) return; this.lastPick = { t, at: performance.now() }; setTimeout(() => this.goals(), 1300); this.audio?.install?.(); this.toast(`${PNAME[t]} in der Tasche`, 'good', 2200); this.goals(); };
@@ -152,11 +153,13 @@ export class UI {
   objMarker() {
     const el = $('#objmark'); if (!el) return;
     const g = this.g, s = g.s, w = this.w; let pos = null, label = '', aimed = false;
-    if (s.chapter === 0 && w.mode === 'play' && !this.paused && s.current === 'kinder') {
-      const pc = g.facObjects('kinder').find((o) => o.type === 'tower');
+    const inKeller = w.facId === 'keller' && this.visiting, door = w.room?.doors?.[0];
+    if (s.chapter === 0 && w.mode === 'play' && !this.paused && !s.flags.miningStarted && door && ((w.facId === 'kinder' && Object.keys(s.loose || {}).length) || (inKeller && !Object.keys(s.loose || {}).length))) { pos = [door.c[0] - 0.1, 1.55, door.c[2]]; label = inKeller ? 'Hoch in dein Zimmer' : 'Keller'; aimed = w.aim?.door === door; }
+    else if (s.chapter === 0 && w.mode === 'play' && !this.paused && (w.facId === 'kinder' || inKeller)) {
+      const pc = w.facId === 'kinder' ? g.facObjects('kinder').find((o) => o.type === 'tower') : { x: 0, z: 0, uid: -1 };
       const spots = w.room?.looseSpots || {}, lying = Object.keys(s.loose || {}).filter((t) => spots[t]);
       if (pc && !s.flags.miningStarted && lying.length) { const cp = w.camera.position, d = (t) => Math.hypot(spots[t][0] - cp.x, spots[t][2] - cp.z) + (w.toScreen(spots[t][0], spots[t][1] + 0.1, spots[t][2]).on ? 0 : 100); const keep = lying.includes(this.markLoose) && w.toScreen(spots[this.markLoose][0], spots[this.markLoose][1] + 0.1, spots[this.markLoose][2]).on; const t = keep ? this.markLoose : lying.sort((a, b) => d(a) - d(b))[0]; this.markLoose = w.markLoose = t; pos = [spots[t][0], spots[t][1] + 0.1, spots[t][2]]; label = PNAME[t]; aimed = w.aim?.loose === t; }
-      else if (pc && !s.flags.miningStarted) { pos = [pc.x, 0.78, pc.z]; label = 'Dein PC'; aimed = w.aim?.uid === pc.uid; }
+      else if (pc && pc.uid !== -1 && !s.flags.miningStarted) { pos = [pc.x, 0.78, pc.z]; label = 'Dein PC'; aimed = w.aim?.uid === pc.uid; }
       else if (g.has('market') && !(s.stats.sold > 0)) { const pr = w.room?.props?.find((p) => p.action === 'market'); if (pr) { pos = [pr.c[0], pr.c[1] + 0.16, pr.c[2]]; label = 'Börse'; aimed = w.aim?.prop === pr; } }
     }
     const sp = pos && w.toScreen(...pos);
@@ -324,7 +327,8 @@ export class UI {
     if (aim.loose) {
       html = `<kbd>E</kbd>${PNAME[aim.loose]} aufheben`;
     } else if (aim.door) {
-      html = `<kbd>E</kbd>${esc(aim.door.label)}`;
+      const g0 = this.g, search = g0.s.feat && !g0.s.unlocked.includes('keller') && !g0.s.flags.miningStarted;
+      html = `<kbd>E</kbd>${search && this.w.facId === 'keller' ? 'Hoch in dein Zimmer' : search && Object.keys(g0.s.loose || {}).length ? 'Runter in den Keller' : esc(aim.door.label)}`;
     } else if (aim.prop) {
       html = aim.prop.action === 'market' && !this.g.has('market') ? `Monitor · ${this.g.s.flags.miningStarted ? 'Miner läuft' : 'aus'}` : `<kbd>E</kbd>${esc(aim.prop.hint)}`;
     } else {
@@ -353,8 +357,21 @@ export class UI {
       this.toast('Guten Morgen!', 'good', 2500);
     }
   }
+  // Am Anfang: runter in den verstaubten Keller zum Suchen und wieder hoch
+  searchTrip(down) {
+    this.fade(); this.resume();
+    setTimeout(() => {
+      this.w.loadFacility(down ? 'keller' : this.g.s.current); this.visiting = down ? 'keller' : null;
+      document.body.classList.toggle('visiting', !!down); this.w.setMode('play'); this.goals(); this.sites();
+      if (down) this.toast(this.w.vm?.lampOn ? 'Ganz schön staubig hier unten …' : 'Ganz schön dunkel hier unten. <kbd>F</kbd> schaltet die Taschenlampe an.', 'info', 4500);
+    }, 160);
+  }
   travel(door) {
     const g = this.g;
+    if (g.s.feat && !g.s.unlocked.includes('keller') && !g.s.flags.miningStarted) {
+      if (this.w.facId === 'keller') { this.searchTrip(false); return; }
+      if (Object.keys(g.s.loose || {}).length) { this.searchTrip(true); return; }
+    }
     if (!FACILITIES.some((f) => f.id !== g.s.current && (g.s.unlocked.includes(f.id) || g.canUnlock(f.id)))) { this.toast('Die Tür bleibt erst mal zu.', 'info', 2200); return; }
     const body = h(`<div><h2>${esc(door.label)}</h2><p style="color:var(--dim);margin-top:-6px">Wohin willst du?</p><div class="cards"></div></div>`);
     const cards = body.querySelector('.cards');
@@ -465,7 +482,7 @@ export class UI {
       const id = cur(t), snapping = this.installing && this.installingType === t, it = id ? PART[id] : null, carried = s.inv?.includes(t), lying = s.loose?.[t];
       const needMobo = !it && carried && (t === 'cpu' || t === 'gpu') && !p.mobo;
       const st = it ? 'done' : carried ? (needMobo ? 'wait' : t === firstNext ? 'next' : 'ready') : 'lying';
-      const sub = snapping ? 'rastet ein …' : it ? esc(it.name) : carried ? (needMobo ? 'Erst das Mainboard einbauen' : 'In deiner Tasche') : lying ? `Liegt ${spots[t]?.[4] || 'im Zimmer'}` : '–';
+      const sub = snapping ? 'rastet ein …' : it ? esc(it.name) : carried ? (needMobo ? 'Erst das Mainboard einbauen' : 'In deiner Tasche') : lying ? `Liegt noch im Keller` : '–';
       const row = h(`<div class="pcb-step ${st === 'done' ? 'done' : st === 'next' ? 'next' : st === 'ready' ? 'ready' : 'locked'}"><span class="ic">${partSvg(t)}${it && !snapping ? '<i class="tick"></i>' : ''}</span><div class="tx"><b>${lab}</b><span>${sub}</span></div>${st === 'next' || st === 'ready' ? `<button class="btn small ${st === 'next' ? 'primary' : ''}" ${this.installing ? 'disabled' : ''}>Einbauen</button>` : ''}</div>`);
       const b = row.querySelector('button');
       if (b) { row.onmouseenter = b.onfocus = () => this.w.ghostPart?.(o.uid, t, s.invIds?.[t]); row.onmouseleave = b.onblur = () => this.w.ghostPart?.(o.uid, firstNext, s.invIds?.[firstNext]); }
@@ -712,8 +729,8 @@ export class UI {
     const body = h(`<div class="intro-phone"><div class="ip-date">${fmtDate(s.day)}</div>
       <div class="phone"><div class="ph-top"><div class="av"><svg viewBox="0 0 40 40" width="40" height="40"><circle cx="20" cy="20" r="20" fill="#ffcf8a"/><path d="M6 40c1-8 7-12 14-12s13 4 14 12z" fill="#e2574c"/><circle cx="20" cy="18" r="8.5" fill="#e7b48f"/><path d="M11 17c0-7 5-10 10-10 6 0 9 4 8 9-3-3-7-4-11-3-3 1-5 2-7 4z" fill="#2f241e"/><circle cx="17" cy="19" r="1.1" fill="#2f241e"/><circle cx="23" cy="19" r="1.1" fill="#2f241e"/><path d="M17 22.5q3 2.2 6 0" stroke="#8a4a3a" stroke-width="1.3" fill="none" stroke-linecap="round"/></svg></div><div><b>Deniz</b><span class="on">online</span></div></div>
         <div class="msg f-Deniz">${esc(txt)}</div>
-        <div class="msg f-Deniz">Deine alten PC-Teile liegen doch noch im Zimmer. Schau eins an und drück <kbd>E</kbd>.<div class="pc-line"><span class="pc-dot">₿</span><span>Bitcoin gerade</span><b>${fmtUSD(p)}</b><canvas class="spark"></canvas></div></div>
-        <div class="row ip-act"><button class="btn primary big">Teile suchen</button></div>
+        <div class="msg f-Deniz">Deine alten PC-Teile liegen doch noch irgendwo im Keller. Geh runter und such sie zusammen!<div class="pc-line"><span class="pc-dot">₿</span><span>Bitcoin gerade</span><b>${fmtUSD(p)}</b><canvas class="spark"></canvas></div></div>
+        <div class="row ip-act"><button class="btn primary big">Ab in den Keller</button></div>
       </div></div>`);
     if (m0) m0.read = true;
     body.querySelector('button').onclick = () => this.closeModal();
@@ -1006,7 +1023,7 @@ export class UI {
     const body = h(`<div><h2>Menü</h2><div class="row"><button class="btn primary" data-a="save">Speichern</button><button class="btn" data-a="load">Laden</button><button class="btn danger" data-a="new">Neues Spiel</button></div>
       <div class="sec"><h4>Grafik</h4><div class="row"><button class="btn small ${this.w.quality === 'high' ? 'primary' : ''}" data-q="high">Hoch</button><button class="btn small ${this.w.quality === 'medium' ? 'primary' : ''}" data-q="medium">Mittel</button><button class="btn small ${this.w.quality === 'low' ? 'primary' : ''}" data-q="low">Niedrig</button></div></div>
       <div class="sec"><h4>Ton</h4><div class="row"><button class="btn small" data-a="mute">${this.audio?.muted ? 'Ton an' : 'Ton aus'}</button></div></div>
-      <div class="sec"><div style="font-size:12px;color:var(--dim)">Fan-Projekt · alle Namen fiktiv · keine Anlageberatung</div></div></div>`);
+      <div class="sec"><div style="font-size:12px;color:var(--dim)">Fan-Projekt · alle Namen fiktiv · keine Anlageberatung<br/>Bitcoin-Kurse und Hashrate: Coin Metrics Community Data (CC BY-NC 4.0)</div></div></div>`);
     body.querySelector('[data-a=save]').onclick = () => { this.toast(g.save() ? 'Gespeichert' : 'Speichern fehlgeschlagen', 'good', 2000); };
     body.querySelector('[data-a=load]').onclick = () => { if (g.load()) { this.closeModal(); this.switchSite(g.s.current); this.speedBar(); this.toast('Spielstand geladen', 'good'); } else this.toast('Kein Spielstand gefunden', 'bad'); };
     const nb = body.querySelector('[data-a=new]');

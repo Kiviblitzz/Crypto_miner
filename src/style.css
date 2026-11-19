@@ -1423,3 +1423,4 @@ body:has(#inspector:not(.hidden)) #xpbox { right: 28px; left: auto; top: auto; b
 .pause-set .ps-t, .pause-set .ps-s { min-height: 40px; padding-inline: 12px !important; border-radius: 12px !important; background: rgba(255,236,210,.07) !important; box-sizing: border-box; }
 .pause-set .ps-t { justify-content: flex-start !important; }
 #splash .disclaimer { color: #f0e2cf !important; text-shadow: 0 1px 3px rgba(0,0,0,.75) !important; }
+body.visiting #sites { display: none !important; }

@@ -83,12 +83,14 @@ export class Game {
   price(id, day = this.s.day) {
     const c = COIN[id]; if (day < c.start) return 0;
     if (day > LAST_DATA_DAY && this.s.endless) return c.price(LAST_DATA_DAY) * this.s.endless[id].p;
+    if (id === 'BTC' && day <= c.price.dailyEnd) return c.price(day); // echte Tageskurse, kein künstliches Rauschen
     const vol = id === 'BTC' ? 0.045 : 0.07;
     return c.price(day) * Math.exp(noise(day, id.charCodeAt(0) + id.charCodeAt(1)) * vol);
   }
   netHash(id, day = this.s.day) {
     const c = COIN[id]; if (day < c.start) return Infinity;
     if (day > LAST_DATA_DAY && this.s.endless) return c.hash(LAST_DATA_DAY) * this.s.endless[id].h;
+    if (id === 'BTC' && day <= c.hash.dailyEnd) return c.hash(day); // echte Netz-Hashrate
     return c.hash(day) * Math.exp(noise(day, 99 + id.charCodeAt(0)) * 0.03);
   }
   coinActive(id, day = this.s.day) { const c = COIN[id]; return day >= c.start && (!c.end || day < c.end); }
