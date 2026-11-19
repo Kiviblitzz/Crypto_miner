@@ -56,12 +56,13 @@ export class UI {
     const p = g.dailyProfit();
     const btc = g.price('BTC'), btc7 = g.price('BTC', s.day - 7) || btc;
     const ch = ((btc / btc7 - 1) * 100);
-    const sh = g.algoHash('sha256');
+    let sh = g.algoHash('sha256'), shAlgo = 'sha256';
+    if (!sh) { for (const a of ['scrypt', 'ethash', 'kawpow', 'kheavy', 'equihash', 'rx', 'cn']) { const v = g.algoHash(a); if (v) { sh = v; shAlgo = a; break; } } }
     $('#st-cash').innerHTML = `<div class="l">Kontostand</div><div class="v ${s.cash < 0 ? 'neg' : ''}">${fmtUSD(s.cash)}</div>`;
     $('#st-nw').innerHTML = `<div class="l">Vermögen</div><div class="v">${fmtUSD(g.netWorthFast())}</div>`;
     $('#st-profit').innerHTML = `<div class="l">Gewinn / Tag</div><div class="v ${p.net >= 0 ? 'pos' : 'neg'}">${p.net >= 0 ? '+' : ''}${fmtUSD(p.net)}</div>`;
     $('#st-btc').innerHTML = `<div class="l">Bitcoin</div><div class="v">${fmtUSD(btc)} <small class="${ch >= 0 ? 'pos' : 'neg'}">${ch >= 0 ? '▲' : '▼'}${Math.abs(ch).toFixed(1)}%</small></div>`;
-    $('#st-hash').innerHTML = `<div class="l">SHA-256 Hashrate</div><div class="v">${fmtHash(sh)}</div>`;
+    $('#st-hash').innerHTML = `<div class="l">${ALGO_LABEL[shAlgo]} Hashrate</div><div class="v">${fmtHash(sh, shAlgo)}</div>`;
   }
 
   // ---------- Standorte ----------
@@ -136,7 +137,10 @@ export class UI {
       sel.append(h(`<option value="auto">Auto (profitabelster Coin)</option>`));
       for (const cn of COINS) { if (!g.coinActive(cn.id)) continue; const r = hashProf ? g.revenueFor(hashProf.hash, cn.id, hashProf.vram) : 0; if (!r && cn.id !== o.coin) continue; sel.append(h(`<option value="${cn.id}">${cn.name} (${cn.id}) – ${fmtUSD(r)}/Tag</option>`)); }
       sel.value = o.coin; sel.onchange = () => { o.coin = sel.value; g.dayUpdate(true); };
-      sec.append(sel); c.append(sec);
+      sec.append(sel);
+      const ms = h(`<select style="margin-top:6px"><option value="auto">Betrieb: Auto (nur wenn profitabel)</option><option value="on">Betrieb: Immer an</option><option value="off">Betrieb: Aus</option></select>`);
+      ms.value = o.mode || 'auto'; ms.onchange = () => { o.mode = ms.value; g.dayUpdate(true); this.w.updateStatus(); this.inspectStats(); };
+      sec.append(ms); c.append(sec);
     }
     if (def.kind === 'rig') c.append(this.rigSlots(o));
     if (def.kind === 'holder') c.append(this.holderUI(o));
@@ -162,16 +166,17 @@ export class UI {
     const g = this.g, def = PLACEABLE[o.type], facId = g.facOf(uid), sm = g.summary[facId]; if (!sm) return;
     const a = sm.per.get(uid) || g.analyze(o);
     const badge = $('#insp-badge');
-    const st = sm.tripped ? ['bad', 'Kein Strom'] : a.status === 'broken' ? ['bad', 'Defekt'] : a.status === 'partial' ? ['warn', 'Teilweise defekt'] : a.status === 'psu' ? ['bad', 'Netzteil zu schwach'] : a.status === 'incomplete' ? ['warn', 'Unvollständig'] : a.status === 'empty' ? ['idle', 'Leer'] : def.kind === 'decor' ? ['idle', 'Deko'] : ['ok', sm.throttle < 1 ? 'Läuft (gedrosselt)' : 'Läuft'];
+    const st = sm.tripped ? ['bad', 'Kein Strom'] : a.status === 'broken' ? ['bad', 'Defekt'] : a.status === 'partial' ? ['warn', 'Teilweise defekt'] : a.status === 'psu' ? ['bad', 'Netzteil zu schwach'] : a.status === 'incomplete' ? ['warn', 'Unvollständig'] : a.status === 'empty' ? ['idle', 'Leer'] : a.status === 'idle' ? ['idle', 'Pausiert (unrentabel)'] : a.status === 'off' ? ['idle', 'Aus'] : def.kind === 'decor' ? ['idle', 'Deko'] : ['ok', sm.throttle < 1 ? 'Läuft (gedrosselt)' : 'Läuft'];
     if (badge) badge.innerHTML = `<span class="badge ${st[0]}">${st[1]}</span>`;
     let rev = 0, hs = [];
-    for (const u of a.units) { rev += u.rev * sm.throttle; if (u.coin) hs.push(`${fmtHash(u.h * sm.throttle, u.algo)} → ${COIN[u.coin].name}`); else if (Object.keys(u.hash).length) hs.push('kein lohnender Coin'); if (u.note) hs.push(`<span class="neg">${u.note}</span>`); }
+    for (const u of a.units) { rev += u.rev * sm.throttle; if (u.idle) hs.push(`<span style="color:#94a0b2">pausiert – wäre ${fmtUSD(u.potential)}/Tag mit ${u.coin ? COIN[u.coin].name : '–'}</span>`); else if (u.coin) hs.push(`${fmtHash(u.h * sm.throttle, u.algo)} → ${COIN[u.coin].name}`); else if (Object.keys(u.hash).length) hs.push('kein lohnender Coin'); if (u.note) hs.push(`<span class="neg">${u.note}</span>`); }
     const cost = (a.watt / 1000) * 24 * sm.elec;
     const rows = [];
     if (a.note) rows.push(['Hinweis', `<span class="neg">${esc(a.note)}</span>`]);
     if (hs.length) rows.push(['Leistung', hs.join('<br/>')]);
     if (def.kind !== 'decor') rows.push(['Verbrauch', fmtWatt(a.watt)]);
-    if (def.kind === 'cooling') rows.push(['Kühlleistung', fmtWatt(def.cool)]);
+    if (def.kind === 'cooling') { rows.push(['Kühlleistung', fmtWatt(def.cool)]); rows.push(['Auslastung (Thermostat)', `${Math.round((a.util ?? 1) * 100)} %`]); }
+    if (sm.elec === 0) rows.push(['Strom', '<span class="pos">zahlen (noch) deine Eltern 😇</span>']);
     if (a.units.length) { rows.push(['Ertrag / Tag', `<span class="pos">${fmtUSD(rev)}</span>`]); rows.push(['Strom / Tag', `<span class="neg">−${fmtUSD(cost)}</span>`]); rows.push(['Gewinn / Tag', `<b class="${rev - cost >= 0 ? 'pos' : 'neg'}">${fmtUSD(rev - cost)}</b>`]); }
     else if (def.kind === 'cooling') rows.push(['Strom / Tag', `<span class="neg">−${fmtUSD(cost)}</span>`]);
     rows.push(['Wiederverkauf', fmtUSD(g.objectValue(o))]);
@@ -389,7 +394,7 @@ export class UI {
       const fs = s.fac[f.id], sm = g.summary[f.id];
       const c = h(`<div class="card ${!un && !can ? 'lock' : ''}"><h3>${un ? '' : can ? '🔓 ' : '🔒 '}${esc(f.name)}</h3><div class="sub">${esc(f.place)} · ${f.w}×${f.d} m</div>
         <div class="kv" style="margin:4px 0"><div class="k">Anschluss</div><div class="v">${fmtNum(f.power[fs.power].kw, 1)} kW</div>
-        <div class="k">Strompreis</div><div class="v">${fmtUSD(g.elecPrice(f.id))}/kWh</div>
+        <div class="k">Strompreis</div><div class="v">${g.elecPrice(f.id) ? fmtUSD(g.elecPrice(f.id)) + '/kWh' : 'zahlen die Eltern'}</div>
         <div class="k">Miete</div><div class="v">${f.rent ? fmtUSD(f.rent) + '/Monat' : 'keine'}</div>
         ${un ? `<div class="k">Last</div><div class="v">${fmtWatt(sm.watt)}</div><div class="k">Temperatur</div><div class="v ${sm.temp > 38 ? 'neg' : ''}">${sm.temp.toFixed(1)} °C</div><div class="k">Geräte</div><div class="v">${fs.objects.length}</div>` : ''}</div></div>`);
       if (un) {
@@ -468,7 +473,7 @@ export class UI {
     let line = '';
     if (a && a.units.length) { const rev = a.units.reduce((x, u) => x + u.rev, 0) * sm.throttle; const cost = a.watt / 1000 * 24 * sm.elec; line = `${fmtWatt(a.watt)} · <span class="${rev - cost >= 0 ? 'pos' : 'neg'}">${fmtUSD(rev - cost)}/Tag</span>`; }
     else if (def.kind === 'cooling') line = `kühlt ${fmtWatt(def.cool)}`;
-    if (a?.status && a.status !== 'ok') line += `<br/><span class="neg">${{ broken: 'Defekt', partial: 'Teilweise defekt', psu: 'Netzteil überlastet', incomplete: 'Unvollständig', empty: 'Leer' }[a.status] || ''}</span>`;
+    if (a?.status && a.status !== 'ok') line += `<br/><span class="neg">${{ broken: 'Defekt', partial: 'Teilweise defekt', psu: 'Netzteil überlastet', incomplete: 'Unvollständig', empty: 'Leer', idle: 'Pausiert (unrentabel)', off: 'Aus' }[a.status] || ''}</span>`;
     if (o.items) line += `<br/>${o.items.length}/${def.slots} belegt`;
     el.innerHTML = `<b>${esc(def.name)}</b><br/>${line}`;
     el.style.left = pos[0] + 'px'; el.style.top = pos[1] + 'px';

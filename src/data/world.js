@@ -11,7 +11,7 @@ export const FACILITIES = [
   {
     id: 'keller', tier: 1, name: 'Hobbykeller', short: 'Keller', place: 'Lindental, Elternhaus', w: 7, d: 5, h: 2.4,
     power: [{ kw: 4.5, label: 'Hausanschluss' }, { kw: 11, cost: 1500, label: 'Starkstrom 16 A (Opa)' }, { kw: 22, cost: 4000, label: 'Starkstrom 32 A (Opa)' }],
-    elec: 'household', elecMult: 1.0, rent: 0, cost: 0, baseCool: 1600, ambient: -3, grid: 0.5,
+    elec: 'household', elecMult: 0.8, rent: 0, cost: 0, baseCool: 1600, ambient: -3, grid: 0.5,
     style: 'basement', desc: 'Kühl, staubig, mit Waschmaschine. Perfekt für die ersten Open-Frame-Rigs.',
   },
   {
@@ -105,7 +105,7 @@ export const MESSAGES = [
   { id: 'm2', date: '2010-10-09', from: 'Deniz', text: 'Tipp: Grafikkarten von Crimson sind viel schneller bei SHA-256 als die Verdant-Karten. Die RHD 5870 ist gerade der Hit.' },
   { id: 'm3', cond: (s, h) => h.maxTemp() > 32, from: 'Mama', text: 'Schatz, warum ist es in deinem Zimmer so warm? Mach mal das Fenster auf! Und was brummt da so?' },
   { id: 'm4', date: '2010-11-06', from: 'Deniz', text: '0,39 $ pro Bitcoin!! Hab gerade nachgerechnet, was wir schon gemined haben. 😳' },
-  { id: 'm5', cond: (s) => s.flags.papa1, from: 'Papa', text: 'Du hast... die ganze Stromrechnung bezahlt? Mit „Internetgeld"? Na gut. Der Keller gehört dir. Aber die Waschmaschine bleibt!' },
+  { id: 'm5', cond: (s) => s.flags.papa1, from: 'Papa', text: 'Du hast... die ganze Stromrechnung bezahlt? Mit „Internetgeld"? Na gut. Der Keller gehört dir – ich rechne ihn über den Gewerbezähler vom Laden ab, der ist billiger. Aber: Ab jetzt zahlst du deinen Strom selbst! Und die Waschmaschine bleibt.' },
   { id: 'm6', date: '2011-04-10', from: 'Deniz', text: 'Die Leute stapeln jetzt Karten in Milchkisten, ohne Gehäuse – wegen der Hitze. Sieht wild aus, funktioniert aber!' },
   { id: 'm7', date: '2011-06-09', from: 'Deniz', text: '30 $!!! Verkaufen?? Oder halten?? Ich dreh durch.' },
   { id: 'm8', date: '2011-06-20', from: 'Deniz', text: 'GoxBank wurde gehackt, der Kurs stürzt ab. Lass bloß nicht alles auf der Börse liegen…' },

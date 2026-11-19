@@ -67,6 +67,7 @@ export class Game {
   coinAlgo(id, day = this.s.day) { return COIN[id].algo(day); }
   elecPrice(facId, day = this.s.day) {
     const f = FACILITY[facId];
+    if (facId === 'kinder' && !this.s.flags.papa1) return 0; // Mama zahlt – noch.
     if (f.elec === 'fixed') return f.elecFixed * (day > toDay('2022-03-01') && day < toDay('2023-06-01') ? 1.6 : 1);
     return POWER_HOUSEHOLD(day) * f.elecMult;
   }
@@ -286,8 +287,9 @@ export class Game {
 
   // ---------- Geräte-Analyse ----------
   // Liefert pro Objekt: {watt, units:[{hash, vram, coin, rev, algo}], cool, heat, status}
-  analyze(o, day = this.s.day) {
+  analyze(o, day = this.s.day, elec = null) {
     const def = PLACEABLE[o.type];
+    if (o.mode === 'off' && def.kind !== 'decor') return { watt: 0, cool: 0, heat: 0, units: [], status: 'off', note: 'Ausgeschaltet' };
     const r = { watt: 0, cool: 0, heat: 0, units: [], status: 'ok', note: '' };
     if (def.kind === 'rig') {
       const p = o.parts;
@@ -334,6 +336,18 @@ export class Game {
       u.h = coin ? (u.hash[u.algo] || 0) : 0;
       if (coin && !this.dagOk(u.vram, coin, day)) u.note = 'Zu wenig VRAM für DAG';
     }
+    // Auto-Betrieb: unrentable Einheiten pausieren
+    if (elec != null && (o.mode || 'auto') === 'auto' && r.units.length) {
+      let idle = 0;
+      for (const u of r.units) {
+        const cost = (u.w / 1000) * 24 * elec * (def.selfCooled ? 1.06 : 1);
+        if (u.rev < cost) { u.idle = true; r.watt -= u.w * (def.selfCooled ? 1.06 : 1); u.potential = u.rev; u.rev = 0; u.h = 0; idle++; }
+      }
+      if (idle) {
+        r.watt = Math.max(0, r.watt); r.heat = def.selfCooled ? r.watt * 0.03 : r.watt;
+        if (idle === r.units.length && (r.status === 'ok' || r.status === 'partial')) { r.status = 'idle'; r.note = 'Pausiert: Strom teurer als Ertrag'; }
+      }
+    }
     return r;
   }
 
@@ -341,11 +355,18 @@ export class Game {
   facSummary(facId, day = this.s.day) {
     const f = this.s.fac[facId], fd = FACILITY[facId];
     let watt = 0, heat = 0, cool = fd.baseCool, rev = 0; const per = new Map(); const hashByAlgo = {};
+    const elecP = this.elecPrice(facId, day);
+    let coolCap = 0, coolW = 0; const coolers = [];
     for (const o of f.objects) {
-      const a = this.analyze(o, day); per.set(o.uid, a);
-      watt += a.watt; heat += a.heat; cool += a.cool;
+      const a = this.analyze(o, day, elecP); per.set(o.uid, a);
+      if (PLACEABLE[o.type].kind === 'cooling') { coolCap += a.cool; coolW += a.watt; coolers.push(a); continue; }
+      watt += a.watt; heat += a.heat;
       for (const u of a.units) { rev += u.rev; if (u.algo) hashByAlgo[u.algo] = (hashByAlgo[u.algo] || 0) + u.h; }
     }
+    // Thermostat: Kühlgeräte laufen nur so stark wie nötig
+    const util = coolCap ? Math.min(1, Math.max(0.05, (heat - fd.baseCool * 0.6) / coolCap)) : 0;
+    for (const a of coolers) { a.watt *= util; a.heat = a.watt; a.util = util; }
+    watt += coolW * util; heat += coolW * util; cool += coolCap;
     const capKw = fd.power[f.power].kw;
     const ambient = 21 + fd.ambient + seasonOffset(day) * (fd.style === 'basement' ? 0.4 : 1);
     const temp = ambient + 12 * (heat / Math.max(1, cool));
@@ -385,7 +406,7 @@ export class Game {
       const f = s.fac[id], sm = this.facSummary(id, day);
       const wasTripped = f.tripped;
       f.tripped = sm.tripped; f.temp = sm.temp;
-      if (sm.tripped && !wasTripped) { this.toast(`⚡ Sicherung raus in „${FACILITY[id].name}"! Last ${(sm.watt / 1000).toFixed(1)} kW > ${sm.capKw} kW`, 'bad'); s.flags.everTripped = true; }
+      if (sm.tripped && !wasTripped) { this.toast(`⚡ Sicherung raus in „${FACILITY[id].name}"! Last ${(sm.watt / 1000).toFixed(1)} kW > ${sm.capKw} kW – Geräte ausschalten, verkaufen oder Anschluss ausbauen (🏢 Firma).`, 'bad', 9000); s.flags.everTripped = true; }
       if (!sm.tripped && wasTripped) this.toast(`✅ Strom in „${FACILITY[id].name}" wieder da`, 'good');
       if (sm.tripped) continue;
       elecCost += (sm.watt / 1000) * 24 * sm.elec;
@@ -399,8 +420,8 @@ export class Game {
           netOwn[c] = (netOwn[c] || 0) + u.h * sm.throttle;
           if (c === 'SLV' && day >= COIN.WUF.mergedFrom) { const w = (u.h * sm.throttle) / (this.netHash('WUF', day) + (s.lastNet.WUF || 0)) * COIN.WUF.emission(day); minedByCoin.WUF = (minedByCoin.WUF || 0) + w; netOwn.WUF = (netOwn.WUF || 0) + u.h * sm.throttle; }
         }
-        // Defekte
-        this.wear(o, sm.temp, day);
+        // Defekte (nur laufende Geräte verschleißen)
+        if (a.watt > 0) this.wear(o, sm.temp, day);
       }
     }
     s.lastNet = netOwn;
@@ -420,7 +441,12 @@ export class Game {
     for (const id of s.unlocked) fixed += FACILITY[id].rent / 30.4;
     fixed += s.staff.tech * this.techSalary(day) / 30.4;
     s.cash -= fixed;
-    if (s.cash < 0) s.cash *= 1.0004; // Dispozinsen
+    if (s.cash < 0) {
+      // Automatisch Coins von der Börse verkaufen, um das Minus auszugleichen
+      let need = -s.cash + 50;
+      for (const c of COINS) { const w = s.wallet[c.id], p = this.price(c.id, day); if (need <= 0 || !p || w.ex <= 0) continue; const n = Math.min(w.ex, need / (p * 0.995)); w.ex -= n; s.cash += n * p * 0.995; need -= n * p * 0.995; }
+      if (s.cash < 0) { s.cash *= 1.0004; if (!s.flags.warnedNeg || day - s.flags.warnedNeg > 30) { s.flags.warnedNeg = day; this.toast('🏦 Dein Konto ist im Minus! Verkaufe Hardware oder schalte unrentable Geräte ab.', 'bad', 8000); } }
+    }
     // Techniker reparieren
     this.techRepairs(day);
     // News & Ereignisse

@@ -61,7 +61,7 @@ export class World {
 
     this.objGroup = new THREE.Group(); this.scene.add(this.objGroup);
     this.entries = new Map(); // uid -> {group, key, sprite}
-    this.icons = { broken: iconTexture('🔥', '#d33'), warn: iconTexture('⚠️', '#e9a400'), power: iconTexture('⚡', '#444'), empty: iconTexture('➕', '#2b6cd6') };
+    this.icons = { broken: iconTexture('🔥', '#d33'), warn: iconTexture('⚠️', '#e9a400'), power: iconTexture('⚡', '#444'), empty: iconTexture('➕', '#2b6cd6'), sleep: iconTexture('💤', '#5a6475') };
     this.raycaster = new THREE.Raycaster(); this.mouse = new THREE.Vector2(); this.floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     this.keys = {}; this.placing = null; this.selected = null; this.hoverUid = null;
     this.selBox = new THREE.Box3Helper(new THREE.Box3(), 0x35d0ff); this.selBox.visible = false; this.scene.add(this.selBox);
@@ -160,6 +160,7 @@ export class World {
       else if (a?.status === 'broken' || a?.status === 'partial') icon = 'broken';
       else if (a?.status === 'incomplete' || a?.status === 'psu') icon = 'warn';
       else if (a?.status === 'empty') icon = 'empty';
+      else if (a?.status === 'idle' || a?.status === 'off') icon = 'sleep';
       e.running = !sm.tripped && a && a.watt > 0;
       e.sprite.visible = !!icon;
       if (icon) { e.sprite.material.map = this.icons[icon]; const bb = e.group.userData.bbox; e.sprite.position.set(0, (bb ? bb.max.y : 1) + 0.25 * Math.max(1, span / 12), 0); e.sprite.scale.set(sc, sc, sc); }
