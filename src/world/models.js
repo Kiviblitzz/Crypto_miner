@@ -8,9 +8,9 @@ import { M, mat } from './materials.js';
 import { PLACEABLE, PART } from '../data/hardware.js';
 
 // Detailstufe beim Bauen (lo = Fernansicht: einfache Quader, keine Schrauben)
-export const Q = { lo: false };
+export const Q = { lo: false, mid: false };
 const gcache = new Map();
-const cached = (k, fn) => { const key = k + (Q.lo ? '|lo' : ''); let g = gcache.get(key); if (!g) { g = fn(); gcache.set(key, g); } return g; };
+const cached = (k, fn) => { const key = k + (Q.lo ? '|lo' : Q.mid ? '|mid' : ''); let g = gcache.get(key); if (!g) { g = fn(); gcache.set(key, g); } return g; };
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 
 // ---------- Zusatz-Materialien ----------
@@ -46,7 +46,7 @@ function boxGeo(w, h, d, r = -1) {
     const mn = Math.min(w, h, d), mx = Math.max(w, h, d);
     const rad = r >= 0 ? Math.min(r, mn / 2 - 1e-4) : Math.min(mn * 0.22, 0.01 + mx * 0.012, 0.04);
     if (Q.lo || rad < 0.0012) return new THREE.BoxGeometry(w, h, d);
-    const seg = r >= 0 && rad > 0.02 ? 4 : r >= 0 ? 3 : mx > 0.25 ? 2 : 1;
+    const seg = r >= 0 ? (rad >= 0.03 ? 4 : rad >= 0.012 ? 3 : rad >= 0.006 ? 2 : 1) : mx > 0.25 ? 2 : 1;
     return new RoundedBoxGeometry(w, h, d, seg, rad);
   });
 }
@@ -76,7 +76,7 @@ export function lathe(parent, pts, material, x = 0, y = 0, z = 0, seg = 28) {
 // Verlegtes Kabel / Schlauch entlang Stützpunkten
 export function tube(parent, pts, r, material, seg = 20, radial = 7) {
   const curve = new THREE.CatmullRomCurve3(pts.map(V3));
-  const m = new THREE.Mesh(new THREE.TubeGeometry(curve, Q.lo ? Math.max(3, seg >> 2) : seg, r, Q.lo ? 4 : radial, false), material); parent.add(m); return m;
+  const m = new THREE.Mesh(new THREE.TubeGeometry(curve, Q.lo ? Math.max(3, seg >> 2) : Q.mid ? Math.max(4, seg >> 1) : seg, r, Q.lo || Q.mid ? 4 : radial, false), material); parent.add(m); return m;
 }
 // Stab zwischen zwei Punkten
 export function rod(parent, a, b, r, material, seg = 8) {
@@ -88,7 +88,7 @@ export function plane(parent, w, h, material, x, y, z, rx = 0, ry = 0) { const m
 function disc(parent, r, material, x, y, z, axis = 'z') { const m = new THREE.Mesh(cached(`disc|${r}`, () => new THREE.CircleGeometry(r, Q.lo ? 12 : 28)), material); m.position.set(x, y, z); if (axis === 'y') m.rotation.x = -Math.PI / 2; if (axis === '-z') m.rotation.y = Math.PI; if (axis === 'x') m.rotation.y = Math.PI / 2; if (axis === '-x') m.rotation.y = -Math.PI / 2; parent.add(m); return m; }
 // Schraube (Linsenkopf) – nur in der Nahansicht
 export function screw(parent, x, y, z, axis = 'z', r = 0.0035) {
-  if (Q.lo) return;
+  if (Q.lo || Q.mid) return;
   const m = new THREE.Mesh(cached(`screw|${r}`, () => { const g = new THREE.SphereGeometry(r, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2); g.scale(1, 0.45, 1); return g; }), X.chrome());
   m.position.set(x, y, z);
   const rot = { z: [Math.PI / 2, 0, 0], '-z': [-Math.PI / 2, 0, 0], x: [0, 0, -Math.PI / 2], '-x': [0, 0, Math.PI / 2], y: [0, 0, 0], '-y': [Math.PI, 0, 0] }[axis];
@@ -128,21 +128,21 @@ const stickerMat = (key, title, sub, color = '#1b1d22') => labelMat(key, 256, 12
 function ringGeo(rIn, rOut, depth) {
   return cached(`ring|${rIn}|${rOut}|${depth}`, () => {
     const h = depth / 2, b = Math.min((rOut - rIn) * 0.35, h * 0.5);
-    const g = new THREE.LatheGeometry([[rIn, -h], [rOut - b, -h], [rOut, -h + b], [rOut, h - b], [rOut - b, h], [rIn, h], [rIn, -h]].map(([a, c]) => new THREE.Vector2(a, c)), Q.lo ? 16 : 40);
+    const g = new THREE.LatheGeometry([[rIn, -h], [rOut - b, -h], [rOut, -h + b], [rOut, h - b], [rOut - b, h], [rIn, h], [rIn, -h]].map(([a, c]) => new THREE.Vector2(a, c)), Q.lo ? 12 : 28);
     g.rotateX(Math.PI / 2); return g;
   });
 }
 function hubGeo(hr, depth) {
   return cached(`hub|${hr}|${depth}`, () => {
     const h = depth * 0.5, bz = Math.min(depth * 0.3, hr * 0.35);
-    const g = new THREE.LatheGeometry([[0, -h], [hr, -h], [hr, h], [hr * 0.93, h + bz * 0.55], [hr * 0.62, h + bz * 0.92], [0, h + bz]].map(([a, c]) => new THREE.Vector2(a, c)), Q.lo ? 10 : 28);
+    const g = new THREE.LatheGeometry([[0, -h], [hr, -h], [hr, h], [hr * 0.93, h + bz * 0.55], [hr * 0.62, h + bz * 0.92], [0, h + bz]].map(([a, c]) => new THREE.Vector2(a, c)), Q.lo ? 8 : 16);
     g.rotateX(Math.PI / 2); return g;
   });
 }
 // Gebogene, verdrehte Flügel (alle n Flügel in einer Geometrie)
 function bladeGeo(r, n, depth, hubR, wide = 1) {
   return cached(`blade|${r}|${n}|${depth}|${hubR}|${wide}`, () => {
-    const U = Q.lo ? 2 : 7, Vn = Q.lo ? 1 : 4, tip = r * 0.96;
+    const U = Q.lo ? 2 : r < 0.04 ? 4 : 6, Vn = Q.lo ? 1 : r < 0.04 ? 2 : 3, tip = r * 0.96;
     const pos = [], idx = [];
     for (let b = 0; b < n; b++) {
       const a0 = (b / n) * Math.PI * 2, base = pos.length / 3;
@@ -172,23 +172,28 @@ function squareFrameGeo(s, r, depth) {
     sh.moveTo(-h + c, -h); sh.lineTo(h - c, -h); sh.quadraticCurveTo(h, -h, h, -h + c); sh.lineTo(h, h - c); sh.quadraticCurveTo(h, h, h - c, h);
     sh.lineTo(-h + c, h); sh.quadraticCurveTo(-h, h, -h, h - c); sh.lineTo(-h, -h + c); sh.quadraticCurveTo(-h, -h, -h + c, -h);
     const hole = new THREE.Path(); hole.absarc(0, 0, r, 0, Math.PI * 2, true); sh.holes.push(hole);
-    if (!Q.lo) for (const [sx, sy] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) { const p = new THREE.Path(); p.absarc(sx * (h - c * 0.85), sy * (h - c * 0.85), s * 0.027, 0, Math.PI * 2, true); sh.holes.push(p); }
     const bev = Math.min(depth * 0.15, s * 0.015), dd = Math.max(0.0005, depth - bev * 2);
-    const g = new THREE.ExtrudeGeometry(sh, { depth: dd, bevelEnabled: !Q.lo, bevelThickness: bev, bevelSize: bev * 0.8, bevelSegments: 2, curveSegments: Q.lo ? 8 : 24 });
+    const g = new THREE.ExtrudeGeometry(sh, { depth: dd, bevelEnabled: !Q.lo, bevelThickness: bev, bevelSize: bev * 0.8, bevelSegments: 1, curveSegments: Q.lo || s < 0.09 ? 6 : 10 });
     g.translate(0, 0, -dd / 2); return g;
   });
 }
 function addGrill(g, r, z, material = X.wire()) {
   if (Q.lo) { const gm = new THREE.Mesh(cached(`gc|${r}`, () => new THREE.CircleGeometry(r, 16)), M.grill()); gm.position.z = z; g.add(gm); return; }
   const wr = Math.max(0.0009, r * 0.016);
-  for (const f of [0.28, 0.5, 0.72, 0.94]) { const t = new THREE.Mesh(torusGeo(r * f, wr, 36, 4), material); t.position.z = z; g.add(t); }
+  for (const f of r < 0.04 ? [0.5, 0.95] : [0.36, 0.66, 0.95]) { const t = new THREE.Mesh(torusGeo(r * f, wr, r < 0.04 ? 16 : 26, 3), material); t.position.z = z; g.add(t); }
   for (let i = 0; i < 4; i++) { const b = new THREE.Mesh(cylGeo(wr, wr, r * 1.9, 5), material); b.rotation.z = (i * Math.PI) / 4; b.position.z = z; g.add(b); }
-  const c = new THREE.Mesh(cylGeo(r * 0.2, r * 0.2, wr * 2, 18), material); c.rotation.x = Math.PI / 2; c.position.z = z; g.add(c);
+  const c = new THREE.Mesh(cylGeo(r * 0.2, r * 0.2, wr * 2, 12), material); c.rotation.x = Math.PI / 2; c.position.z = z; g.add(c);
 }
 // Lüfter: Achse = lokale Z. Gibt Gruppe zurück; Rotor ist als spin markiert
 export function fan(parent, r, { blade = M.fanBlade(), frame = M.black(), n = 7, square = false, grill = false, depth = 0.012, frameless = false, wide = 1, hub = null } = {}) {
   const g = new THREE.Group(); parent.add(g);
   const hubR = r * 0.34;
+  if (Q.lo || Q.mid) {
+    // Fernansicht: Rahmen-Fläche + Gitter-Scheibe
+    if (square) { const pl = new THREE.Mesh(planeGeo(r * 2.15, r * 2.15), frame); pl.position.z = -depth * 0.3; g.add(pl); }
+    const d = new THREE.Mesh(cached(`gc|${r}`, () => new THREE.CircleGeometry(r, 12)), grill ? M.grill() : blade); d.position.z = depth * 0.3; g.add(d);
+    return g;
+  }
   if (square) {
     const s = r * 2.15;
     g.add(new THREE.Mesh(squareFrameGeo(s, r * 1.03, depth), frame));
@@ -214,7 +219,7 @@ function gpuFaceGeo(L, H, n, r) {
     sh.moveTo(x0 + c, y0); sh.lineTo(x1 - c * 2, y0); sh.lineTo(x1, y0 + c * 2); sh.lineTo(x1, y1 - c); sh.quadraticCurveTo(x1, y1, x1 - c, y1);
     sh.lineTo(x0 + c, y1); sh.quadraticCurveTo(x0, y1, x0, y1 - c); sh.lineTo(x0, y0 + c); sh.quadraticCurveTo(x0, y0, x0 + c, y0);
     for (let i = 0; i < n; i++) { const p = new THREE.Path(); p.absarc((L / n) * (i + 0.5), H / 2 + 0.002, r * 1.06, 0, Math.PI * 2, true); sh.holes.push(p); }
-    const g = new THREE.ExtrudeGeometry(sh, { depth: 0.004, bevelEnabled: !Q.lo, bevelThickness: 0.0012, bevelSize: 0.001, bevelSegments: 2, curveSegments: Q.lo ? 10 : 28 });
+    const g = new THREE.ExtrudeGeometry(sh, { depth: 0.004, bevelEnabled: !Q.lo, bevelThickness: 0.0012, bevelSize: 0.001, bevelSegments: 1, curveSegments: Q.lo ? 6 : 14 });
     g.translate(0, 0, -0.0052); return g;
   });
 }
@@ -247,7 +252,7 @@ export function gpuModel(parent, look) {
   for (let i = 0; i < n; i++) {
     const cx = (L / n) * (i + 0.5), cy = H / 2 + 0.002;
     const f = fan(g, r, { n: 9, depth: 0.008, frameless: true, wide: 1.15 }); f.position.set(cx, cy, zF - 0.007);
-    const ring = new THREE.Mesh(torusGeo(r * 1.06, 0.0012, 40, 4), accent); ring.position.set(cx, cy, zF + 0.0002); g.add(ring);
+    const ring = new THREE.Mesh(torusGeo(r * 1.06, 0.0012, 28, 3), accent); ring.position.set(cx, cy, zF + 0.0002); g.add(ring);
   }
   // Oberkante: Logo-Leiste, Heatpipes, Stromstecker
   boxC(g, L * 0.62, 0.005, T * 0.4, shroud, L * 0.62, H - 0.0005, zF - T * 0.2);
@@ -532,8 +537,8 @@ export function buildHolder(type, items = []) {
     const levels = [0.12, 0.6, 1.08, 1.56];
     for (const y of levels) { box(root, W - 0.05, 0.012, D - 0.05, M.perforated(), 0, y - 0.012, 0); box(root, W - 0.04, 0.03, 0.02, rk, 0, y - 0.03, D / 2 - 0.03); }
     // Switch oben
-    box(root, W - 0.08, 0.044, 0.3, X.caseBlack(), 0, H - 0.075, 0.3);
-    if (!Q.lo) for (let i = 0; i < 12; i++) { box(root, 0.014, 0.012, 0.004, M.black(), -0.2 + i * 0.036, H - 0.06, 0.45); box(root, 0.004, 0.003, 0.002, i % 3 ? M.ledGreen() : M.ledAmber(), -0.2 + i * 0.036, H - 0.045, 0.452); }
+    box(root, W - 0.08, 0.044, 0.3, X.caseBlack(), 0, H - 0.075, -0.33);
+    if (!Q.lo) for (let i = 0; i < 12; i++) { box(root, 0.014, 0.012, 0.004, M.black(), -0.2 + i * 0.036, H - 0.06, -0.482); box(root, 0.004, 0.003, 0.002, i % 3 ? M.ledGreen() : M.ledAmber(), -0.2 + i * 0.036, H - 0.045, -0.484); }
     // PDU an der Rückseite
     box(root, 0.06, H - 0.3, 0.05, X.caseBlack(), W / 2 - 0.07, 0.15, -D / 2 + 0.06);
     if (!Q.lo) for (let i = 0; i < 12; i++) box(root, 0.04, 0.03, 0.004, M.black(), W / 2 - 0.07, 0.25 + i * 0.13, -D / 2 + 0.086);
@@ -545,7 +550,7 @@ export function buildHolder(type, items = []) {
       box(root, 0.025, 0.012, 0.006, i % 2 ? M.ledGreen() : M.ledGreen2(), x, levels[lv] - 0.024, D / 2 - 0.018);
       if (!Q.lo && d.look !== 'hydro') {
         tube(root, [[x, levels[lv] + 0.15, -0.21], [x + 0.03, levels[lv] + 0.2, -0.32], [W / 2 - 0.1, levels[lv] + 0.12, -D / 2 + 0.12], [W / 2 - 0.07, 0.26 + ((lv * 3 + col) % 12) * 0.13, -D / 2 + 0.09]], 0.005, M.black(), 14, 5);
-        tube(root, [[x + 0.02, levels[lv] + 0.18, -0.21], [x, levels[lv] + 0.3, -0.36], [0.05, H - 0.2, -0.2], [0.0, H - 0.07, 0.15]], 0.0025, (lv + col) % 2 ? M.cableBlue() : M.cableYellow(), 16, 5);
+        tube(root, [[x + 0.02, levels[lv] + 0.18, -0.21], [x * 0.8, levels[lv] + 0.26, -0.4], [-0.2 + ((lv * 3 + col) % 12) * 0.036, H - 0.25, -0.5], [-0.2 + ((lv * 3 + col) % 12) * 0.036, H - 0.055, -0.49]], 0.0025, (lv + col) % 2 ? M.cableBlue() : M.cableYellow(), 16, 5);
       }
     });
     if (items.length) box(root, 0.08, 0.03, 0.006, M.ledBlue(), 0.2, H - 0.25, D / 2 + 0.012);
@@ -555,7 +560,8 @@ export function buildHolder(type, items = []) {
     const corr = mat('containerCorr', { color: 0x2b6669, roughness: 0.5, metalness: 0.5 });
     box(root, L, H, W, shell, 0, 0.1, 0);
     // Wellblech-Rippen
-    for (let x = -L / 2 + 0.2; x < L / 2 - 0.1; x += 0.3) { box(root, 0.12, H - 0.25, 0.04, corr, x, 0.22, W / 2); box(root, 0.12, H - 0.25, 0.04, corr, x, 0.22, -W / 2); }
+    for (let x = -L / 2 + 0.2; x < L / 2 - 0.1; x += 0.3) { box(root, 0.12, H - 0.25, 0.04, corr, x, 0.22, W / 2, 0, 0); box(root, 0.12, H - 0.25, 0.04, corr, x, 0.22, -W / 2, 0, 0); }
+    for (let z = -W / 2 + 0.25; z < W / 2 - 0.15; z += 0.3) box(root, 0.04, H - 0.25, 0.12, corr, -L / 2, 0.22, z, 0, 0);
     // Rahmen + Eckbeschläge mit Langlöchern
     for (const z of [-W / 2, W / 2]) { box(root, L, 0.16, 0.12, M.darkMetal(), 0, 0.02, z); box(root, L, 0.12, 0.12, M.darkMetal(), 0, H - 0.04, z); }
     for (const x of [-L / 2 + 0.1, L / 2 - 0.1]) for (const z of [-W / 2 + 0.08, W / 2 - 0.08]) for (const y of [0, H - 0.08]) {
@@ -746,7 +752,7 @@ export function buildDecor(type) {
 
 // ---------- Baking & Instanzen (mit LOD) ----------
 const templates = new Map();
-const LOD_DIST = 9;
+const LOD_DIST = 5;
 function bake(root) {
   root.updateMatrixWorld(true);
   const buckets = new Map(); const spins = [];
@@ -778,18 +784,19 @@ function fromTemplate(t) {
   for (const { obj, m } of t.spins) { const c = obj.clone(true); m.decompose(c.position, c.quaternion, c.scale); g.add(c); g.userData.fans.push(c); }
   return g;
 }
-export function instance(key, builder, { lod = true } = {}) {
+export function instance(key, builder, { lod = true, dist = LOD_DIST } = {}) {
   let t = templates.get(key);
   if (!t) {
-    Q.lo = false; const hi = bake(builder());
-    let lo = null; if (lod) { Q.lo = true; try { lo = bake(builder()); } finally { Q.lo = false; } }
-    t = { hi, lo }; templates.set(key, t);
+    Q.lo = Q.mid = false; const hi = bake(builder());
+    let lo = null, mid = null;
+    if (lod) { try { Q.mid = true; mid = bake(builder()); Q.mid = false; Q.lo = true; lo = bake(builder()); } finally { Q.lo = Q.mid = false; } }
+    t = { hi, mid, lo }; templates.set(key, t);
   }
   const hi = fromTemplate(t.hi);
   if (!t.lo) { hi.userData.bbox = t.hi.bbox; return hi; }
-  const lo = fromTemplate(t.lo);
-  const l = new THREE.LOD(); l.addLevel(hi, 0); l.addLevel(lo, LOD_DIST);
-  l.userData.fans = [...hi.userData.fans, ...lo.userData.fans]; l.userData.bbox = t.hi.bbox;
+  const mid = fromTemplate(t.mid), lo = fromTemplate(t.lo);
+  const l = new THREE.LOD(); l.addLevel(hi, 0); l.addLevel(mid, dist); l.addLevel(lo, dist * 2.8);
+  l.userData.fans = [...hi.userData.fans, ...mid.userData.fans, ...lo.userData.fans]; l.userData.bbox = t.hi.bbox;
   return l;
 }
 
@@ -801,7 +808,7 @@ export function objectModel(o) {
     return instance(key, () => buildRig(o.type, p));
   }
   if (def.kind === 'device') return instance(`dev:${def.look}`, () => buildDevice(def.look));
-  if (def.kind === 'holder') { const items = o.items || []; const key = `hold:${o.type}:${o.type === 'container' ? (items.length ? (PLACEABLE[items[0].id]?.hydro ? 'h' : 'a') : 'e') : items.map((i) => i.id).join(',')}`; return instance(key, () => buildHolder(o.type, items)); }
+  if (def.kind === 'holder') { const items = o.items || []; const key = `hold:${o.type}:${o.type === 'container' ? (items.length ? (PLACEABLE[items[0].id]?.hydro ? 'h' : 'a') : 'e') : items.map((i) => i.id).join(',')}`; return instance(key, () => buildHolder(o.type, items), { dist: o.type === 'container' ? 12 : 4 }); }
   if (def.kind === 'cooling') return instance(`cool:${o.type}`, () => buildCooling(o.type));
   return instance(`decor:${o.type}`, () => buildDecor(o.type));
 }

@@ -93,8 +93,8 @@ export class ViewModel {
     const sway = Math.sin(this.t * 1.6) * 0.004, walkX = moving ? Math.sin(bob * 0.5) * 0.012 : 0, walkY = moving ? Math.abs(Math.cos(bob * 0.5)) * 0.012 : 0;
     const low = uiOpen ? 0.12 : 0;
     // Rechte Hand: ruhig unten rechts, beim Bauen zum Tablet
-    this.right.position.set(0.205 + walkX, -0.2 + sway + walkY - low + this.raise * 0.02, -0.34);
-    this.right.rotation.set(0.26 + this.raise * 0.2, -0.2 - this.raise * 0.2, 0.12);
+    this.right.position.set(0.205 + walkX, -0.212 + sway + walkY - low + this.raise * 0.02, -0.34);
+    this.right.rotation.set(0.18 + this.raise * 0.2, -0.22 - this.raise * 0.2, 0.14);
     this.left.visible = this.tablet.visible = this.raise > 0.05;
     this.left.position.set(-0.2 + walkX, -0.255 + sway + walkY + this.raise * 0.03, -0.4);
     this.left.rotation.set(0.35, 0.25, -0.1);
