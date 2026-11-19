@@ -431,7 +431,7 @@ export class World {
   }
   updateKeep(dt) {
     if (!this.keepGroup) return;
-    this.keepGroup.visible = this.mode !== 'title';
+    this.keepGroup.visible = this.mode !== 'title' && !this.empire;
     const cam = this.camera, fwd = cam.getWorldDirection(this._kf ||= new THREE.Vector3()), d = (this._kd ||= new THREE.Vector3()), lamp = !!this.vm?.lampOn;
     for (const [id, g] of Object.entries(this.keepItems || {})) {
       const u = g.userData;
