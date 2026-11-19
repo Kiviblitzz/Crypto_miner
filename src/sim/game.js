@@ -732,6 +732,8 @@ export class Game {
   }
   // Aktuelles Endlosziel: das erste offene, das schon dran ist
   endlessGoal() { const s = this.s, eg = s.egoals; if (!eg) return null; for (const goal of ENDLESS_GOALS) { if (eg.done[goal.id]) continue; const st = (eg.st[goal.id] ||= {}); if (!goal.ready || goal.ready(s, this, st)) return goal; } return null; }
+  // Nächste Investition (Ziel mit Kaufknopf), auch wenn ein anderes Endlosziel gerade dran ist – Investitionen der Reihe nach
+  endlessInvest() { const s = this.s, eg = s.egoals; if (!eg) return null; for (const goal of ENDLESS_GOALS) { if (!goal.action || eg.done[goal.id]) continue; const st = (eg.st[goal.id] ||= {}); return !goal.ready || goal.ready(s, this, st) ? goal : null; } return null; }
   finishEndlessGoal(goal) {
     const s = this.s; if (s.egoals.done[goal.id]) return;
     s.egoals.done[goal.id] = s.day; this.logStory('eg:' + goal.id, `Endlosziel: ${typeof goal.text === 'function' ? goal.text(s, this, s.egoals.st[goal.id] || {}) : goal.text}`);
@@ -739,7 +741,7 @@ export class Game {
     this.emit('egoal', goal.id);
   }
   endlessAction(id) {
-    const goal = EGOAL[id], s = this.s; if (!goal?.action || s.egoals.done[id] || this.endlessGoal() !== goal || !this.canAfford(goal.action.cost)) return false;
+    const goal = EGOAL[id], s = this.s; if (!goal?.action || s.egoals.done[id] || !s.flags.won || (this.endlessGoal() !== goal && this.endlessInvest() !== goal) || !this.canAfford(goal.action.cost)) return false;
     s.cash -= goal.action.cost; s.stats.invested = (s.stats.invested || 0) + goal.action.cost; if (goal.fx) this.applyFx(goal.fx);
     this.finishEndlessGoal(goal); this.dayUpdate(true); return true;
   }

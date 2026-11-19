@@ -122,22 +122,26 @@ function fmtProg(cur, tgt, kind) {
   const f = { hash: fmtHash, usd: fmtUSD, watt: fmtWatt, btc: (v) => `${fmtCoin(v)} BTC`, days: (v) => `${Math.round(v)} Tage`, count: (v) => String(Math.round(v)) }[kind] || String;
   return [`${f(Math.max(0, cur))} / ${f(tgt)}`, Math.max(0, Math.min(100, tgt ? (cur / tgt) * 100 : 0))];
 }
-export function endlessGoals(ui, el) {
-  const g = ui.g, s = g.s; if (!s.egoals) { el.append(h('<div class="goal"><div class="ck"></div><div>Endlosmodus · wachs weiter</div></div>')); return; }
-  const nDone = ENDLESS_GOALS.filter((x) => s.egoals.done[x.id]).length;
-  const go = g.endlessGoal();
-  if (!go) { el.append(h(`<div class="goal egoal done-all"><div class="ck">✓</div><div>Alle Endlosziele geschafft<div class="eg-sub">Hashwerk ist Legende. Spiel weiter, so lange du magst.</div></div></div>`)); return; }
-  const st = s.egoals.st[go.id] ||= {};
+function egoalRow(ui, go, kicker) {
+  const g = ui.g, s = g.s, st = (s.egoals.st[go.id] ||= {});
   const txt = typeof go.text === 'function' ? go.text(s, g, st) : go.text;
   const sub = go.sub ? go.sub(s, g, st) : '';
   let prog = '';
   if (go.progress) { const [a, pc] = fmtProg(...go.progress(s, g, st)); prog = `<div class="eg-prog">${esc(a)}</div>${pc != null ? `<div class="bar" style="width:180px"><div style="width:${pc}%;background:#ffb000"></div></div>` : ''}`; }
-  const row = h(`<div class="goal egoal"><div class="ck"></div><div><div class="eg-k">Endlosziel ${nDone + 1} von ${ENDLESS_GOALS.length}</div>${esc(txt)}${prog}${sub ? `<div class="eg-sub">${esc(sub)}</div>` : ''}</div></div>`);
-  if (go.action) { const b = h(`<button class="btn small primary"><kbd>G</kbd>${esc(go.action.label)}</button>`); b.disabled = !g.canAfford(go.action.cost); b.onclick = () => egoalKey(ui); row.lastElementChild.append(h('<br/>'), b); }
-  el.append(row);
+  const row = h(`<div class="goal egoal${go.action ? ' invest' : ''}"><div class="ck"></div><div><div class="eg-k">${esc(kicker)}</div>${esc(txt)}${prog}${sub ? `<div class="eg-sub">${esc(sub)}</div>` : ''}</div></div>`);
+  if (go.action) { const b = h(`<button class="btn small primary"><kbd>G</kbd>${esc(go.action.label)}</button>`); b.disabled = !g.canAfford(go.action.cost); b.onclick = () => egoalKey(ui, go); row.lastElementChild.append(h('<br/>'), b); }
+  return row;
 }
-export function egoalKey(ui) {
-  const g = ui.g, go = g.endlessGoal?.();
+export function endlessGoals(ui, el) {
+  const g = ui.g, s = g.s; if (!s.egoals) { el.append(h('<div class="goal"><div class="ck"></div><div>Endlosmodus · wachs weiter</div></div>')); return; }
+  const nDone = ENDLESS_GOALS.filter((x) => s.egoals.done[x.id]).length;
+  const go = g.endlessGoal(), inv = g.endlessInvest();
+  if (!go) { el.append(h(`<div class="goal egoal done-all"><div class="ck">✓</div><div>Alle Endlosziele geschafft<div class="eg-sub">Hashwerk ist Legende. Spiel weiter, so lange du magst.</div></div></div>`)); return; }
+  el.append(egoalRow(ui, go, `Endlosziel ${nDone + 1} von ${ENDLESS_GOALS.length}`));
+  if (inv && inv !== go) el.append(egoalRow(ui, inv, 'Investition'));
+}
+export function egoalKey(ui, pick = null) {
+  const g = ui.g, cur = g.endlessGoal?.(), go = pick || (cur?.action ? cur : g.endlessInvest?.());
   if (!go?.action) { ui.toast('Nichts zu bezahlen.', 'info', 2000); return false; }
   if (!g.canAfford(go.action.cost)) { ui.toast(`Du brauchst ${fmtUSD(go.action.cost)}.`, 'bad'); return false; }
   if (g.endlessAction(go.id)) { ui.audio?.cash?.(); ui.goals(); ui.top?.(); return true; }
@@ -150,7 +154,7 @@ export function egoalDone(ui, id) {
   ui.goals?.();
   if (go.card === 'stiftung') return setTimeout(() => stiftungCard(ui), 300);
   if (go.card === 'kral') return setTimeout(() => kralCard(ui), 300);
-  ui.milestone('Endlosziel geschafft', txt);
+  ui.milestone(go.action ? 'Investition' : 'Endlosziel geschafft', txt);
 }
 function stiftungCard(ui) {
   const s = ui.g.s, r = s.rel || {}, age = new Date(s.day * 864e5).getUTCFullYear() - 1938;

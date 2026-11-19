@@ -72,7 +72,7 @@ export const ENDLESS_GOALS = [
   },
   {
     id: 'allplus', text: 'Alle Standorte gleichzeitig im Plus',
-    sub: (s, g) => `Jeder Standort mit Miete verdient mehr, als Strom und Miete kosten (${rentSites(g).map((id) => ({ werkstatt: 'Werkstatt', halle: 'Halle', rz: 'RZ', fjord: 'Fjord' })[id] || id).join(', ')})`,
+    sub: (s, g) => `Jeder Standort mit Miete verdient mehr, als Strom und Miete kosten (${rentSites(g).map((id) => ({ werkstatt: 'Werkstatt', halle: 'Halle', rz: 'RZ', fjord: 'Fjord' })[id] || id).join(', ')}) · Tipp: Solar aufs Dach, sparsamste Miner`,
     ready: (s, g) => rentSites(g).length >= 2,
     check: (s, g) => { const r = rentSites(g); return r.length >= 2 && r.every((id) => siteNet(g, id) > 0); },
     progress: (s, g) => { const r = rentSites(g); return [r.filter((id) => siteNet(g, id) > 0).length, r.length, 'count']; },
