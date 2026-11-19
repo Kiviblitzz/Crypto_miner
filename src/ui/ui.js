@@ -3,7 +3,7 @@ import { COINS, COIN, ALGO_LABEL } from '../data/coins.js';
 import { PLACEABLE, PART, CATEGORIES, PLACEABLES, PARTS } from '../data/hardware.js';
 import { FACILITIES, FACILITY, CHAPTERS, TECHS } from '../data/world.js';
 import { fmtUSD, fmtNum, fmtCoin, fmtHash, fmtDate, fmtWatt } from '../sim/game.js';
-import { toDay, BTC_HASH, inHeatwave } from '../data/history.js';
+import { toDay, BTC_HASH, inHeatwave, HALVINGS, BTC_REWARD } from '../data/history.js';
 
 const $ = (s) => document.querySelector(s);
 const h = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
@@ -366,6 +366,7 @@ export class UI {
     det.append(h(`<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">${c.name} <span style="color:#94a0b2">${c.id}</span></h3><div style="font-size:22px;font-weight:800">${fmtUSD(p)}</div></div>`));
     const hp = g.coinActive(c.id) ? g.revPerHash(c.id) : 0; const hpUnit = c.algo(s.day) === 'sha256' ? [1e12, 'TH/s'] : c.algo(s.day) === 'scrypt' ? [1e9, 'GH/s'] : c.algo(s.day) === 'kheavy' ? [1e12, 'TH/s'] : c.algo(s.day) === 'equihash' ? [1e3, 'kSol/s'] : ['rx', 'cn'].includes(c.algo(s.day)) ? [1e3, 'kH/s'] : [1e6, 'MH/s'];
     det.append(h(`<div style="color:#94a0b2;font-size:12px;margin:4px 0 8px">${esc(c.desc)} · Algo: ${ALGO_LABEL[c.algo(s.day)]} · Netz: ${s.day >= c.start ? fmtHash(g.netHash(c.id), c.algo(s.day)) : '—'}${hp ? ` · Hashprice: <b style="color:#e8edf4">${fmtUSD(hp * hpUnit[0])} pro ${hpUnit[1]} und Tag</b>` : ''}${c.end && s.day >= c.end ? ' · <b class="neg">Mining beendet</b>' : ''}</div>`));
+    if (c.id === 'BTC') { const nh = HALVINGS.find((d) => d > s.day); if (nh) det.append(h(`<div style="font-size:13px;margin:-2px 0 8px">⏳ Nächstes Halving: <b>${fmtDate(nh)}</b> (in ${(nh - s.day).toLocaleString('de-DE')} Tagen) – Blockbelohnung ${String(BTC_REWARD(s.day)).replace('.', ',')} → ${String(BTC_REWARD(nh)).replace('.', ',')} BTC</div>`)); }
     const cv = h('<canvas class="chart" width="1200" height="520"></canvas>'); det.append(cv);
     const range = h(`<div class="row" style="margin-top:6px"></div>`);
     for (const [l, d] of [['30 T', 30], ['1 J', 365], ['5 J', 1825], ['Alles', 99999]]) { const b = h(`<button class="btn small ${this.range === d ? 'primary' : ''}">${l}</button>`); b.onclick = () => { this.range = d; this.market(); }; range.append(b); }
