@@ -1,11 +1,11 @@
 // DOM-Oberfläche: Topbar, Standorte, Baumenü, Inspektor, Ziele, Dock, Modals (Markt, Handy, Firma, Rangliste, Menü)
 import { COINS, COIN, ALGO_LABEL } from '../data/coins.js';
 import { PLACEABLE, PART, CATEGORIES, PLACEABLES, PARTS } from '../data/hardware.js';
-import { FACILITIES, FACILITY, CHAPTERS, TECHS, FEATURES, MESSAGES } from '../data/world.js';
-import { fmtUSD, fmtNum, fmtCoin, fmtHash, fmtDate, fmtWatt, SKILL_XP } from '../sim/game.js';
+import { FACILITIES, FACILITY, CHAPTERS, TECHS, FEATURES, MESSAGES, yearTitle, FAMILY_MOOD, moodTier } from '../data/world.js';
+import { fmtUSD, fmtNum, fmtCoin, fmtHash, fmtDate, fmtWatt, SKILL_XP, SKILL_PCT, TRADE_FEES } from '../sim/game.js';
 import { toDay, BTC_HASH, inHeatwave, HALVINGS, BTC_REWARD } from '../data/history.js';
 import { EVENT } from '../data/events.js';
-import { ACH } from '../data/achievements.js';
+import { ACH, ACHIEVEMENTS } from '../data/achievements.js';
 import { talkTo, PEOPLE, talkWho, KEEPSAKES, KEEPSAKE, pickKeepsake, keepsakeCount, TALK_REL } from '../data/story.js';
 
 const $ = (s) => document.querySelector(s);
@@ -13,7 +13,6 @@ const h = (html) => { const t = document.createElement('template'); t.innerHTML 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const SPEEDS = [{ l: 'II', v: 0, t: 'Pause (Leertaste)' }, { l: '1×', v: 1, t: '1 Tag = 4 Sekunden (Taste 1)' }, { l: '2×', v: 2, t: '1 Tag = 1,6 Sekunden (Taste 2)' }, { l: '3×', v: 3, t: '2 Tage pro Sekunde (Taste 3)' }, { l: '4×', v: 4, t: '8 Tage pro Sekunde (Taste 4)' }];
 const pctDE = (x) => (x * 100).toPrecision(3).replace('.', ',');
-const FACE = { Deniz: '', Mama: '', Papa: '‍', 'Opa Heinz': '', 'Viktor Kral': '' };
 
 const PART_ICON = {
       mobo: '<rect x="3" y="3" width="18" height="18" rx="3"/><rect x="8" y="8" width="6" height="6" rx="1"/><path d="M17.5 7v4M17.5 14v3M6 17.5h4"/>',
@@ -22,12 +21,19 @@ const PART_ICON = {
       psu: '<rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="10" cy="12" r="4"/><path d="M10 9.5v5M7.5 12h5M17.5 9v6"/>' };
 const PNAME = { mobo: 'Mainboard', cpu: 'Prozessor', gpu: 'Grafikkarte', psu: 'Netzteil' };
 const SKILL = {
-  hw: { name: 'Schrauben', learn: 'Teile einbauen, Geräte aufstellen', short: 'Einbauen', icon: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5a1.8 1.8 0 0 0 2.5 2.5l5.8-5.8a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>', now: (lv) => (lv > 1 ? `−${4 * (lv - 1)} % auf Hardware` : 'Noch kein Bonus'), next: (lv) => `−${4 * lv} % auf Hardware` },
-  mining: { name: 'Mining', learn: 'Jeder Tag, an dem dein PC schürft', short: 'Schürfen', icon: '<path d="M3.5 9.5C7.5 4.5 13.5 3.2 19.5 5.5" stroke-width="2.4"/><path d="M11.2 6.2 18.8 20" stroke-width="2.2"/><circle cx="11.2" cy="6.2" r="1.3" fill="currentColor"/>', now: (lv) => (lv > 1 ? `+${4 * (lv - 1)} % Mining-Ertrag` : 'Noch kein Bonus'), next: (lv) => `+${4 * lv} % Mining-Ertrag` },
-  trade: { name: 'Handel', learn: 'Coins verkaufen', short: 'Verkaufen', icon: '<circle cx="9" cy="9" r="5.5"/><path d="M14.6 8.8a5.5 5.5 0 1 1-5.8 5.8"/><path d="M9 6.8v4.4M7.2 9h3.6"/>', now: (lv) => `${[4, 3, 2, 1, 0.5][lv - 1].toLocaleString('de-DE')} % Börsengebühr`, next: (lv) => `${[3, 2, 1, 0.5][lv - 1]?.toLocaleString('de-DE') ?? '–'} % Börsengebühr` },
+  hw: { name: 'Schrauben', learn: 'Teile einbauen, Geräte aufstellen', short: 'Einbauen', icon: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5a1.8 1.8 0 0 0 2.5 2.5l5.8-5.8a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>', now: (lv) => (lv > 1 ? `−${SKILL_PCT * (lv - 1)} % auf Hardware` : 'Noch kein Bonus'), next: (lv) => `−${SKILL_PCT * lv} % auf Hardware` },
+  mining: { name: 'Mining', learn: 'Jeder Tag, an dem dein PC schürft', short: 'Schürfen', icon: '<path d="M3.5 9.5C7.5 4.5 13.5 3.2 19.5 5.5" stroke-width="2.4"/><path d="M11.2 6.2 18.8 20" stroke-width="2.2"/><circle cx="11.2" cy="6.2" r="1.3" fill="currentColor"/>', now: (lv) => (lv > 1 ? `+${SKILL_PCT * (lv - 1)} % Mining-Ertrag` : 'Noch kein Bonus'), next: (lv) => `+${SKILL_PCT * lv} % Mining-Ertrag` },
+  trade: { name: 'Handel', learn: 'Coins verkaufen', short: 'Verkaufen', icon: '<circle cx="9" cy="9" r="5.5"/><path d="M14.6 8.8a5.5 5.5 0 1 1-5.8 5.8"/><path d="M9 6.8v4.4M7.2 9h3.6"/>', now: (lv) => `${((TRADE_FEES[lv - 1] ?? 0.005) * 100).toLocaleString('de-DE')} % Börsengebühr`, next: (lv) => `${TRADE_FEES[lv] != null ? (TRADE_FEES[lv] * 100).toLocaleString('de-DE') : '–'} % Börsengebühr` },
 };
 const skillSvg = (k, size = 22) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${SKILL[k].icon}</svg>`;
 const partSvg = (t, size = 22) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${PART_ICON[t]}</svg>`;
+const TECH_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5a1.8 1.8 0 0 0 2.5 2.5l5.8-5.8a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg>';
+const ACH_SVG = {
+  got: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3.5h8l-1.2 5.2M8 3.5l1.2 5.2"/><circle cx="12" cy="14.5" r="5.5" fill="currentColor" fill-opacity=".18"/><path d="M12 11.8l.9 1.8 2 .3-1.45 1.4.35 2-1.8-.95-1.8.95.35-2-1.45-1.4 2-.3z" fill="currentColor"/></svg>',
+  lock: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="10.5" width="13" height="9.5" rx="2.2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg>',
+  secret: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.2 9.3a2.9 2.9 0 1 1 4.1 2.6c-.8.4-1.3 1-1.3 1.9v.6"/><circle cx="12" cy="17.6" r=".6" fill="currentColor"/></svg>',
+};
+const MONTH_RE = /^(Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)\s+\d{4}:\s*/;
 
 // Gesprächskarte: gezeichnetes Gesicht (kein Emoji), passend zu den Figuren in der Welt
 const FACES = {
@@ -79,6 +85,7 @@ export class UI {
     // Einstellungen in der Pause: Ton, Mausempfindlichkeit (pro Gerät gemerkt)
     const pref = (() => { try { return JSON.parse(localStorage.getItem('hashwerk_prefs') || '{}'); } catch (e) { return {}; } })();
     const savePref = () => { try { localStorage.setItem('hashwerk_prefs', JSON.stringify(pref)); } catch (e) { /* egal */ } };
+    this.pref = pref; this.savePref = savePref; // auch für weitere Schalter (Jahresrückblick)
     const snd = $('#ps-sound'), sens = $('#ps-sens');
     const applySnd = () => { const on = pref.sound !== false; snd.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/>${on ? '<path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>' : '<path d="M16 9.5l5 5M21 9.5l-5 5"/>'}</svg><span>${on ? 'Ton an' : 'Ton aus'}</span>`; snd.setAttribute('aria-pressed', on); snd.title = on ? 'Ton ist an – klicken zum Ausschalten' : 'Ton ist aus – klicken zum Einschalten'; snd.classList.toggle('off', !on); this.audio?.setMuted?.(!on); };
     snd.onclick = () => { pref.sound = pref.sound === false; savePref(); applySnd(); };
@@ -87,7 +94,7 @@ export class UI {
     setTimeout(() => { applySnd(); applySens(); }, 0);
     $('#clickhint').onclick = () => this.w.requestLock();
     game.on('toast', (t, k, ms) => this.toast(t, k, ms));
-    const showMsg = (m) => { if (document.querySelector('#featcards .featcard') || document.getElementById('lvup') || this.lvBusy) { setTimeout(() => showMsg(m), 1200); return; } this.toast(`${FACE[m.from] || ''} <b>${esc(m.from)}:</b> ${esc(m.text)}`, 'msg', 7000); this.dock(); };
+    const showMsg = (m) => { if (document.querySelector('#featcards .featcard') || document.getElementById('lvup') || this.lvBusy) { setTimeout(() => showMsg(m), 1200); return; } this.toast(`<b>${m.tip ? 'Tipp von ' : ''}${esc(m.from)}:</b> ${esc(m.text)}`, 'msg', m.tip ? 10000 : 7000); this.dock(); };
     this.flushMsgs = (base = 3000) => { const q = this.msgQ || []; this.msgQ = []; q.forEach((m, i) => setTimeout(() => showMsg(m), base + i * 2500)); };
     game.on('message', (m) => { if (this.inspUid || this.w.focus) { (this.msgQ ||= []).push(m); this.dock(); return; } showMsg(m); });
     game.on('news', () => this.ticker());
@@ -95,13 +102,14 @@ export class UI {
     game.on('milestone', (t, sub) => this.milestone(t, sub));
     game.on('won', () => this.ending());
     game.on('event', () => { this.evSnooze = null; this.tryEvent(); });
-    game.on('achievement', (id) => { const a = ACH[id]; if (a) setTimeout(() => this.milestone('Erfolg', `${a.name} – ${a.desc}`), 600); });
+    game.on('achievement', (id) => { const a = ACH[id]; if (a) setTimeout(() => this.milestone(a.name, a.desc, 'Erfolg'), 600); });
     game.on('offer', (usd) => this.offer(usd));
     game.on('release', (it, text) => { if (it.type !== 'psu' && it.type !== 'mobo') this.toast(`${esc(text)}`, 'info', 6000); this.ticker(); this.lastBuildDay = -99; });
     game.on('update', () => this.onDay());
     game.on('refresh', () => this.refresh());
     game.on('goal', () => { this.audio?.cash(); });
     game.on('unlockable', (id) => { this.milestone('Kapitel geschafft', `${FACILITY[id].short} ist frei`); this.toast(`<b>${FACILITY[id].short}</b> ist frei`, 'good', 8000); this.goals(); this.sites(); });
+    this.initProgress(); // Jahresrückblick, Erfolge im Logbuch, Bonusziele
     setInterval(() => { this.top(); this.buildAfford(); }, 200);
     this.refresh(); this.ticker();
   }
@@ -141,7 +149,7 @@ export class UI {
     const g = this.g, s = g.s;
     const vf = this.w.visFrac ?? s.frac, day = vf > 0.27 && vf < 0.79;
     const icon = day ? '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.2" fill="currentColor"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg>' : '<svg viewBox="0 0 24 24" width="18" height="18"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5z" fill="currentColor"/></svg>';
-    $('#date').innerHTML = `${fmtDate(s.day, true)}<span class="tod" title="${day ? 'Tag' : 'Nacht'}">${icon}</span>${inHeatwave(s.day) ? '<span title="Hitzewelle: +6 °C Umgebung" style="margin-left:6px"></span>' : ''}`;
+    $('#date').innerHTML = `${fmtDate(s.day, true)}<span class="tod" title="${day ? 'Tag' : 'Nacht'}">${icon}</span>${inHeatwave(s.day) ? '<span class="hw-ic" title="Hitzewelle: +6 °C Umgebung"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 4.5a2 2 0 0 1 4 0v9.2a4 4 0 1 1-4 0z"/><circle cx="12" cy="16.8" r="1.6" fill="currentColor"/><path d="M12 9v6"/></svg></span>' : ''}`;
     const p = g.dailyProfit();
     const btc = g.price('BTC'), btc7 = g.price('BTC', s.day - 7) || btc;
     const ch = ((btc / btc7 - 1) * 100);
@@ -250,7 +258,7 @@ export class UI {
     if (!force && el.childElementCount) return;
     this.lastBuildDay = g.s.day;
     el.innerHTML = '';
-    const hwLv = g.skillLv ? g.skillLv('hw') : 1; const head = h(`<div class="bhead"><h2>Bauen${hwLv > 1 ? `<span class="disc">Schrauben −${4 * (hwLv - 1)} %</span>` : ''}</h2><button class="modal-x" title="Schließen (B)">✕</button></div>`); head.querySelector('button').onclick = () => this.resume(); el.append(head);
+    const hwLv = g.skillLv ? g.skillLv('hw') : 1; const head = h(`<div class="bhead"><h2>Bauen${hwLv > 1 ? `<span class="disc">Schrauben −${SKILL_PCT * (hwLv - 1)} %</span>` : ''}</h2><button class="modal-x" title="Schließen (B)">✕</button></div>`); head.querySelector('button').onclick = () => this.resume(); el.append(head);
     const cats = h('<div class="cats"></div>');
     const catOk = (c) => (c.id !== 'rigs' || g.has('rigs')) && g.shopList(c.id, fac).length > 0;
     if (!CATEGORIES.some((c) => c.id === this.cat && catOk(c))) this.cat = (CATEGORIES.find(catOk) || CATEGORIES[0]).id;
@@ -679,7 +687,7 @@ export class UI {
       el.append(row);
     }
     const allDone = ch.goals.every((go) => s.goals[go.id]);
-    if (allDone && s.day < toDay(ch.minDate)) el.append(h(`<div class="goal"><div class="ck"></div><div>Weiter ab ${fmtDate(toDay(ch.minDate))}</div></div>`));
+    this.goalsBonus(el, ch, allDone && s.day < toDay(ch.minDate), !allDone && g.saving(ch));
   }
   // Taste G: nächste Ziel-Aktion (z. B. Papa die Stromrechnung geben) – in der Ego-Steuerung ohne Mausklick
   goalActionKey() {
@@ -730,11 +738,11 @@ export class UI {
     el.innerHTML = '';
     const btns = [
       ['', 'Bauen', 'B', () => this.toggleBuild()], ['', 'Börse', 'M', () => this.market()], ['', 'Handy', 'P', () => this.phone(), unread], ['', 'Firma', 'C', () => this.company()],
-      ['', 'Technik', 'T', () => this.techs(), techN], ['', 'Rangliste', 'L', () => this.ranking()], ['', 'Fähigkeiten', 'J', () => this.skills()], ['', this.w.empire ? 'Zurück' : 'Karte', 'K', () => this.toggleMap()], ['', 'Menü', 'ESC', () => this.menu()],
+      ['', 'Technik', 'T', () => this.techs(), techN], ['', 'Logbuch', 'L', () => this.ranking(), this.achNew || 0], ['', 'Fähigkeiten', 'J', () => this.skills()], ['', this.w.empire ? 'Zurück' : 'Karte', 'K', () => this.toggleMap()], ['', 'Menü', 'ESC', () => this.menu()],
     ];
     const need = { B: 'build', M: 'market', P: 'phone', C: 'company', T: 'techs', L: 'ranking', K: 'map', J: 'skills' };
     const act = document.body.classList.contains('show-build') ? 'B' : this.w.empire ? 'K' : ({ market: 'M', phone: 'P', intro: 'P', company: 'C', techs: 'T', ranking: 'L', menu: 'ESC', skills: 'J' })[this.modalKind] || (this.paused ? 'ESC' : null);
-    for (const [ic, l, key, fn, b] of btns.filter((x) => !need[x[2]] || g.has(need[x[2]]))) { const e = h(`<button class="${act === key ? 'on' : ''}" title="${l} (${key})"><span class="ic">${ic}</span>${l}<span class="key">${key}</span>${b ? `<span class="bdg">${b}</span>` : ''}</button>`); e.onclick = fn; el.append(e); }
+    for (const [ic, l, key, fn, b] of btns.filter((x) => !need[x[2]] || g.has(need[x[2]]))) { const e = h(`<button class="${act === key ? 'on' : ''}" title="${l} (${key})">${ic}${l}<span class="key">${key}</span>${b ? `<span class="bdg">${b}</span>` : ''}</button>`); e.onclick = fn; el.append(e); }
   }
   toggleMap() {
     if (this.w.empire) { this.w.hideEmpire(); this.pause(false); this.w.setMode('play'); }
@@ -944,7 +952,7 @@ export class UI {
     const oe = g.s.ev?.open && EVENT[g.s.ev.open.id];
     if (oe) { const card = h(`<div class="msg decide"><div class="fr">${esc(oe.from || '')}<span>Entscheidung offen · noch ${Math.max(0, g.s.ev.open.until - g.s.day)} Tage</span></div><b>${esc(g.evText(oe, 'title'))}</b><div class="row" style="margin-top:8px"><button class="btn small primary">Jetzt entscheiden</button></div></div>`); card.querySelector('button').onclick = () => { this.evSnooze = null; this.closeModal(); this.eventCard(); }; ph.append(card); }
     if (!msgs.length) ph.append(h('<div class="empty">Keine Nachrichten.</div>'));
-    for (const m of msgs) { if (m.old) continue; ph.append(h(`<div class="msg f-${m.from.split(' ')[0]} ${m.read ? '' : 'unread'}"><div class="fr">${FACE[m.from] || ''} ${esc(m.from)}<span>${fmtDate(m.day)}</span></div>${esc(m.text)}</div>`)); }
+    for (const m of msgs) { if (m.old) continue; const tip = MESSAGES.find((x) => x.id === m.id)?.tip; ph.append(h(`<div class="msg f-${m.from.split(' ')[0]} ${m.read ? '' : 'unread'} ${tip ? 'tip' : ''}"><div class="fr">${esc(m.from)}${tip ? '<em class="tip-tag">Tipp</em>' : ''}<span>${fmtDate(m.day)}</span></div>${esc(m.text)}</div>`)); }
     msgs.forEach((m) => (m.read = true));
     this.openModal(body, 'narrow', 'phone'); this.dock();
   }
@@ -1048,31 +1056,34 @@ export class UI {
 
   techs() {
     const g = this.g, s = g.s;
-    const body = h(`<div><h2>Technik</h2><div class="cards"></div></div>`);
+    const bench = Math.max(...s.unlocked.map((id) => FACILITY[id].tier)) <= 1;
+    const body = h(`<div><h2>${bench ? 'Opas Werkbank' : 'Technik'}</h2>${bench ? '<p class="tech-note">Opa Heinz tüftelt mit dir an Verbesserungen. Größere Ideen brauchen größere Standorte.</p>' : ''}<div class="cards"></div></div>`);
     const cards = body.querySelector('.cards');
     for (const t of TECHS) {
       const own = (s.techs || {})[t.id], av = g.techAvailable(t);
-      const c = h(`<div class="card ${!av && !own ? 'lock' : ''}"><h3>${t.icon} ${esc(t.name)}</h3><div class="sub">${own ? `Erforscht am ${fmtDate(own)}` : av ? `Kosten: <b style="color:#ffb000">${fmtUSD(t.cost)}</b>` : `ab ${fmtDate(toDay(t.date))}${t.minTier ? ` · braucht Standort „${FACILITIES.find((f) => f.tier === t.minTier).name}"` : ''}`}</div><div style="font-size:13px">${esc(t.desc)}</div></div>`);
+      const c = h(`<div class="card ${!av && !own ? 'lock' : ''}"><h3><span class="tech-ic">${TECH_SVG}</span>${esc(t.name)}</h3><div class="sub">${own ? `Erforscht am ${fmtDate(own)}` : av ? `Kosten: <b style="color:#ffb000">${fmtUSD(t.cost)}</b>` : `ab ${fmtDate(toDay(t.date))}${t.minTier ? ` · braucht Standort „${FACILITIES.find((f) => f.tier === t.minTier).name}"` : ''}`}</div><div style="font-size:13px">${esc(t.desc)}</div></div>`);
       if (!own && av) { const b = h(`<button class="btn primary small" style="margin-top:8px">Erforschen</button>`); b.disabled = s.cash < t.cost; b.onclick = () => { if (g.buyTech(t.id)) { this.audio?.fanfare(); this.toast(`${esc(t.name)} erforscht!`, 'good'); this.techs(); this.dock(); } }; c.append(b); }
       cards.append(c);
     }
     this.openModal(body, '', 'techs');
   }
 
-  ranking() {
+  ranking(tab = this.logTab || 'rank') {
+    this.logTab = tab;
+    if (tab !== 'rank') { if (tab === 'ach') { this.achNew = 0; this.dock(); } this.openModal(this.logShell(tab, tab === 'ach' ? this.achPane() : this.chronPane()), 'narrow logbook-card', 'ranking'); return; }
     const g = this.g, s = g.s, day = s.day;
     const net = g.netHash('BTC');
     const mine = g.algoHash('sha256');
     const entries = [
       ['GigaWatt Mining (USA)', toDay('2014-01-01'), 0.006], ['Sibir Energo (RU)', toDay('2016-01-01'), 0.0035], ['TexaHash Inc.', toDay('2019-01-01'), 0.0045],
-      ['Nordlicht Hash (IS)', toDay('2014-06-01'), 0.0025], ['Pacific Rigs (CA)', toDay('2017-01-01'), 0.002], ['Hobby-Miner „ArtForz"', toDay('2010-06-01'), 0.03, toDay('2013-01-01')],
+      ['Nordlicht Hash (IS)', toDay('2014-06-01'), 0.0025], ['Pacific Rigs (CA)', toDay('2017-01-01'), 0.002], ['GPU-Farm „Nachtfalter" (US)', toDay('2010-06-01'), 0.03, toDay('2013-01-01')],
       ['Uni-Cluster Tokio', toDay('2010-09-01'), 0.012, toDay('2014-01-01')], ['Desert Hash (AE)', toDay('2021-06-01'), 0.003], ['Andes Mining (PY)', toDay('2022-01-01'), 0.0018],
     ].filter((e) => day >= e[1] && (!e[3] || day < e[3])).map((e) => ({ name: e[0], h: net * e[2] * (0.85 + 0.3 * Math.abs(Math.sin(e[1] + day / 200))) }));
     const mono = g.monolithHash(); if (mono) entries.push({ name: 'MONOLITH Hash AG', h: mono, rival: true });
     entries.push({ name: 'Hashwerk (Du)', h: mine, me: true });
     entries.sort((a, b) => b.h - a.h);
     const rank = entries.findIndex((e) => e.me) + 1;
-    const body = h(`<div><h2>Rangliste der Bitcoin-Miner</h2><p style="color:var(--dim);margin-top:-6px">Netz-Hashrate: <b style="color:#fff">${fmtHash(net)}</b> · Dein Anteil: <b style="color:#ffb000">${pctDE(mine / net)} %</b> · Platz <b>${rank}</b> von ${entries.length}</p>
+    const body = h(`<div><h3 class="lb-sub">Rangliste der Bitcoin-Miner</h3><p style="color:var(--dim);margin-top:-2px">Netz-Hashrate: <b style="color:#fff">${fmtHash(net)}</b> · Dein Anteil: <b style="color:#ffb000">${pctDE(mine / net)} %</b> · Platz <b>${rank}</b> von ${entries.length}</p>
       <table class="tbl"><tr><th>#</th><th>Miner</th><th>Hashrate</th><th>Anteil</th></tr>${entries.map((e, i) => `<tr class="${e.me ? 'me' : ''} ${e.rival ? 'rival' : ''}"><td>${i + 1}</td><td>${esc(e.name)}</td><td>${fmtHash(e.h)}</td><td>${pctDE(e.h / net)} %</td></tr>`).join('')}</table>
       <div class="sec"><h4>Deine Hashrate (SHA-256, log)</h4><canvas class="nwchart" width="1000" height="240"></canvas></div>
       <div class="sec"><h4>Dein Weg</h4><div class="path"></div></div></div>`);
@@ -1093,7 +1104,137 @@ export class UI {
       ctx.beginPath(); hist.forEach((p, i) => (i ? ctx.lineTo(x(i), y(p.h)) : ctx.moveTo(x(i), y(p.h)))); ctx.strokeStyle = '#ffb000'; ctx.lineWidth = 3; ctx.stroke();
       ctx.fillStyle = '#ffb000'; ctx.fillText('Du', W - 50, y(hist[hist.length - 1].h) - 8); ctx.fillStyle = '#c9b8a3'; ctx.fillText('Netz', W - 60, y(net[net.length - 1]) - 8);
     });
-    this.openModal(body, 'narrow', 'ranking');
+    this.openModal(this.logShell('rank', body), 'narrow logbook-card', 'ranking');
+  }
+
+  // ---------- Logbuch: Reiter Rangliste · Erfolge · Chronik ----------
+  logShell(tab, pane) {
+    const s = this.g.s, n = ACHIEVEMENTS.filter((a) => s.ach?.[a.id]).length;
+    const box = h('<div class="logbook"><div class="lb-head"><h2>Logbuch</h2><div class="lb-tabs" role="tablist"></div></div></div>');
+    const tabs = box.querySelector('.lb-tabs');
+    for (const [k, l] of [['rank', 'Rangliste'], ['ach', `Erfolge <small>${n}/${ACHIEVEMENTS.length}</small>`], ['log', 'Chronik']]) {
+      const b = h(`<button class="lb-tab ${tab === k ? 'on' : ''}" role="tab" aria-selected="${tab === k}">${l}${k === 'ach' && this.achNew && tab !== 'ach' ? '<i class="lb-dot"></i>' : ''}</button>`);
+      b.onclick = () => { if (tab !== k) this.ranking(k); };
+      tabs.append(b);
+    }
+    pane.classList.add('lb-pane'); box.append(pane); return box;
+  }
+  achPane() {
+    const s = this.g.s, got = s.ach || {}, n = ACHIEVEMENTS.filter((a) => got[a.id]).length;
+    const pane = h(`<div class="ach-pane"><div class="ach-sum"><span><b>${n}</b> von ${ACHIEVEMENTS.length} Erfolgen</span><div class="ach-bar"><div style="width:${Math.round((n / ACHIEVEMENTS.length) * 100)}%"></div></div></div><div class="ach-grid"></div></div>`);
+    const grid = pane.querySelector('.ach-grid');
+    for (const a of ACHIEVEMENTS) {
+      const d = got[a.id], secret = a.hidden && !d;
+      grid.append(h(`<div class="ach ${d ? 'got' : 'lock'} ${secret ? 'secret' : ''}"><div class="ach-ic">${ACH_SVG[d ? 'got' : secret ? 'secret' : 'lock']}</div><div class="ach-tx"><b>${secret ? '???' : esc(a.name)}</b><span>${secret ? 'Versteckter Erfolg' : esc(a.desc)}</span>${d ? `<em>${fmtDate(d)}</em>` : ''}</div></div>`));
+    }
+    return pane;
+  }
+  chronPane() {
+    const g = this.g, log = [...(g.s.ev?.log || [])].sort((a, b) => b.d - a.d);
+    const pane = h('<div class="chron"></div>');
+    if (!log.length) { pane.append(h('<div class="empty">Noch keine Einträge. Deine Entscheidungen und Bonusziele landen hier.</div>')); return pane; }
+    let yr = null;
+    for (const e of log) {
+      const y = g.yearOf(e.d), bonus = String(e.id).startsWith('bonus:');
+      if (y !== yr) { yr = y; pane.append(h(`<div class="cr-y"><b>${y}</b><span>${esc(yearTitle(y))}</span></div>`)); }
+      const t = String(e.t || '').replace(MONTH_RE, '').replace(/^Bonus:\s*/, '');
+      pane.append(h(`<div class="cr-r ${bonus ? 'bonus' : ''}"><span class="cr-d">${fmtDate(e.d)}</span><span class="cr-t">${bonus ? '<em>Bonus</em>' : ''}${esc(t)}</span></div>`));
+    }
+    return pane;
+  }
+
+  // ---------- Bonusziele in der Zielleiste ----------
+  // Wartephase (alle Ziele erfüllt, Datum noch nicht erreicht): Begründung + bis zu 2 offene Bonusziele.
+  // Sonst nur ein Bonusziel mit Frist (oder im letzten Kapitel, das kein Wartedatum hat).
+  goalsBonus(el, ch, wait, saving = false) {
+    const g = this.g, s = g.s;
+    const open = (ch.bonus || []).filter((b) => !s.bonus?.[b.id] && !(b.until && s.day > toDay(b.until)) && (!b.from || b.from(s)));
+    if (saving && s.flags.miningStarted) { for (const b of open.slice(0, 2)) el.append(this.bonusRow(b)); return; } // Sparphase: Zeit für Bonusziele
+    if (wait) {
+      el.append(h(`<div class="goal wait"><div class="ck"></div><div><div class="gw-t">Weiter ab ${fmtDate(toDay(ch.minDate))}</div>${ch.waitText ? `<div class="gw-x">${esc(ch.waitText)}</div>` : ''}</div></div>`));
+      for (const b of open.slice(0, 2)) el.append(this.bonusRow(b));
+    } else if (s.flags.miningStarted) { const b = open.find((x) => !x.wait && (x.until || !ch.unlock)); if (b) el.append(this.bonusRow(b)); }
+  }
+  bonusRow(b) {
+    const g = this.g, pr = g.bonusProgress(b), rw = g.rewardText(b.reward);
+    let prog = '';
+    if (pr) {
+      const [cur, tgt, kind] = pr;
+      const f = (v) => (kind === 'usd' ? fmtUSD(v) : kind === 'hash' ? fmtHash(v) : kind === 'coin' ? fmtCoin(v) : Math.round(v).toLocaleString('de-DE'));
+      if (kind === 'jth') prog = Number.isFinite(cur) ? `<span class="gb-p">jetzt ${Math.round(cur).toLocaleString('de-DE')} J/TH</span>` : ''; // weniger ist besser
+      else prog = `<span class="gb-p">${f(Math.max(0, Math.min(cur, tgt)))} / ${f(tgt)}${kind === 'days' ? ' Tage' : b.unit ? ' ' + esc(b.unit) : ''}</span>`;
+    }
+    return h(`<div class="goal bonus"><div class="ck"></div><div><div class="gb-l"><span class="gb-tag">Bonus</span><span class="gb-x">${esc(b.text)}</span>${prog}</div>${rw || b.until ? `<div class="gb-r">${rw ? `<span class="gb-rw">${esc(rw)}</span>` : ''}${b.until ? `<span class="gb-u">bis ${fmtDate(toDay(b.until))}</span>` : ''}</div>` : ''}</div></div>`);
+  }
+
+  // ---------- Jahresrückblick (am 1. Januar, abschaltbar im Pausenmenü) ----------
+  initProgress() {
+    const g = this.g;
+    g.on('year', (y) => { if (this.pref?.year === false) return; (this.yearQ ||= []).push(y); this.tryYear(); });
+    g.on('achievement', (id) => { if (ACH[id]) { this.achNew = (this.achNew || 0) + 1; this.dock(); } });
+    setInterval(() => { if (this.yearQ?.length) this.tryYear(); }, 1000);
+    const snd = $('#ps-sound');
+    if (snd && !$('#ps-year')) {
+      const b = h('<button id="ps-year" class="ps-t"></button>'); snd.after(b);
+      const apply = () => { const on = this.pref?.year !== false; b.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5.5" width="16" height="14.5" rx="2.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>${on ? '<path d="M9 14.5l2 2 4-4"/>' : '<path d="M10 13l4 4M14 13l-4 4"/>'}</svg><span>Jahresrückblick ${on ? 'an' : 'aus'}</span>`; b.classList.toggle('off', !on); b.setAttribute('aria-pressed', on); b.title = on ? 'Am 1. Januar erscheint ein Rückblick aufs alte Jahr – klicken zum Ausschalten' : 'Kein Jahresrückblick – klicken zum Einschalten'; };
+      b.onclick = () => { if (!this.pref) return; this.pref.year = this.pref.year === false; this.savePref?.(); apply(); };
+      apply();
+    }
+  }
+  // wie tryEvent: nie über ein anderes Fenster legen, sondern warten
+  tryYear() {
+    if (!this.yearQ?.length) return;
+    if (this.modalKind || this.inspUid || this.w.focus || this.w.empire || this.paused || document.getElementById('lvup') || !$('#splash').classList.contains('hidden') || document.body.classList.contains('show-build')) return;
+    const y = this.yearQ.shift();
+    if (!this.yearReview(y) && this.yearQ.length) this.tryYear();
+  }
+  yearReview(y) {
+    const g = this.g, s = g.s, Y = s.stats?.y?.[y]; if (!Y || Y.nw1 == null) return false;
+    const log = (s.ev?.log || []).filter((e) => g.yearOf(e.d) === y);
+    if (!(Y.rev > 0) && !log.length) return false; // z. B. allererstes Jahr ohne Mining: nichts zu erzählen
+    const gain = Y.rev - Y.elec - Y.fix, nw = Y.nw0 > 0 ? Y.nw1 / Y.nw0 : 0;
+    const nwTxt = !nw ? '' : nw >= 2 ? `×${fmtNum(nw, nw >= 10 ? 0 : 1)}` : `${nw >= 1 ? '+' : '−'}${Math.round(Math.abs(nw - 1) * 100)} %`;
+    const hs = (v, a) => (v > 0 ? `${fmtHash(v, a)}${a !== 'sha256' ? ` <small>${esc(ALGO_LABEL[a] || a)}</small>` : ''}` : '0');
+    const cell = (l, v, cls = '') => `<div class="yr-c"><span>${l}</span><b class="${cls}">${v}</b></div>`;
+    const rows = [['Hashrate', `${hs(Y.h0, Y.a0)} → <b>${hs(Y.h1, Y.a1)}</b>`], ['Vermögen', `${fmtUSD(Y.nw0)} → <b>${fmtUSD(Y.nw1)}</b>${nwTxt ? ` <small class="${nw >= 1 ? 'pos' : 'neg'}">${nwTxt}</small>` : ''}`]];
+    if (Y.p0 && Y.p1) rows.push(['Bitcoin-Kurs', `${fmtUSD(Y.p0)} → <b>${fmtUSD(Y.p1)}</b>`]);
+    if (Y.trips) rows.push(['Sicherung', `${Y.trips}× rausgeflogen`]);
+    const dec = this.keyDecision(log), fam = this.familyLine();
+    const w0 = s.stats.btc2010 || 0, wi = w0 > 0 && y >= 2011 ? `Die <b>${fmtCoin(w0)} BTC</b> aus deinem ersten Winter wären heute <b>${fmtUSD(w0 * g.price('BTC'))}</b> wert.` : '';
+    const partial = Y.d0 > toDay(`${y}-01-01`) + 1;
+    const body = h(`<div class="story yr"><div class="ch">Jahresrückblick${partial ? ` · ab ${fmtDate(Y.d0)}` : ''}</div>
+      <div class="yr-t"><b>${y}</b><span>${esc(yearTitle(y))}</span></div>
+      <div class="yr-grid">${cell('Ertrag', fmtUSD(Y.rev), 'pos')}${cell('Strom', Y.elec > 0 ? '−' + fmtUSD(Y.elec) : 'zahlt Mama')}${cell(Y.fix < 0 ? 'Feste Einnahmen' : 'Fixkosten', Y.fix > 0 ? '−' + fmtUSD(Y.fix) : Y.fix < 0 ? '+' + fmtUSD(-Y.fix) : '–', Y.fix < 0 ? 'pos' : '')}${cell('Gewinn', `${gain >= 0 ? '+' : ''}${fmtUSD(gain)}`, gain >= 0 ? 'pos' : 'neg')}</div>
+      <div class="yr-rows">${rows.map(([l, v]) => `<div class="yr-r"><span>${l}</span><span>${v}</span></div>`).join('')}</div>
+      ${dec ? `<div class="yr-p"><span class="yr-k">Wichtigste Entscheidung</span>${esc(dec)}</div>` : ''}
+      <div class="yr-p"><span class="yr-k">Familie</span>${esc(fam)}</div>
+      ${wi ? `<div class="yr-p"><span class="yr-k">Was wäre wenn</span>${wi}</div>` : ''}
+      <div class="row yr-act"><span class="yr-off">Abschalten: Pause · Jahresrückblick</span><button class="btn primary">Auf ins Jahr ${y + 1}</button></div></div>`);
+    body.querySelector('button').onclick = () => this.closeModal();
+    this.audio?.message?.();
+    this.openModal(body, 'narrow yr-card', 'year');
+    return true;
+  }
+  // „Wichtigste Entscheidung“: echte Wahl mit mehreren Antworten vor Zufalls-/Jahresereignissen, bei Gleichstand die spätere
+  keyDecision(log) {
+    let best = null, bw = -99;
+    for (const e of log) {
+      if (String(e.id).startsWith('bonus:')) continue;
+      const ev = EVENT[e.id], ch = ev?.choices?.[e.i];
+      const w = !ev ? -1 : ((ev.choices || []).length > 1 ? 2 : 0) + (ch?.cost ? 1 : 0) - (ev.when?.chance != null || ev.when?.yearly ? 2 : 0);
+      if (w >= bw) { bw = w; best = e; }
+    }
+    return best ? String(best.t || '').replace(MONTH_RE, '') : '';
+  }
+  familyLine() {
+    const s = this.g.s, r = s.rel || {}, away = s.flags.denizLeft && !s.flags.denizReturned;
+    const vals = ['papa', 'mama', 'opa', 'deniz'].filter((k) => !(k === 'deniz' && away)).map((k) => [k, r[k] || 0]);
+    const tail = away ? ' Deniz arbeitet jetzt bei MONOLITH.' : '';
+    if (!vals.some(([, v]) => v)) return 'Bei Brandts ist alles beim Alten: Papa im Laden, Mama im Garten, Opa am Radio.' + tail;
+    const hi = vals.reduce((a, b) => (b[1] > a[1] ? b : a)), lo = vals.reduce((a, b) => (b[1] < a[1] ? b : a));
+    let t = hi[1] > 0 ? FAMILY_MOOD[hi[0]][moodTier(hi[1])] : '';
+    if (lo[1] < 0 && lo[0] !== hi[0]) t += (t ? ' ' : '') + FAMILY_MOOD[lo[0]][moodTier(lo[1])];
+    return (t || FAMILY_MOOD[hi[0]][moodTier(hi[1])]) + tail;
   }
 
   menu() {
@@ -1166,12 +1307,16 @@ export class UI {
     }
     this.openModal(body, 'narrow', 'skills');
   }
-  milestone(title, sub) {
+  milestone(title, sub, kicker = 'Meilenstein') {
+    if (performance.now() < (this.msBusy || 0)) { (this.msQ ||= []).push([title, sub, kicker]); this.msPump(); return; } // nacheinander statt übereinander
+    this.msBusy = performance.now() + 3200;
     document.getElementById('milestone')?.remove();
-    const el = h(`<div id="milestone"><div class="t1">MEILENSTEIN</div><div class="t2">${esc(title)}</div><div class="t3">${esc(sub || '')}</div></div>`);
+    const el = h(`<div id="milestone"><div class="t1">${esc(kicker.toUpperCase())}</div><div class="t2">${esc(title)}</div><div class="t3">${esc(sub || '')}</div></div>`);
     document.body.append(el); setTimeout(() => el.remove(), 4300);
     this.audio?.fanfare();
+    if (this.msQ?.length) this.msPump();
   }
+  msPump() { if (this.msT) return; this.msT = setTimeout(() => { this.msT = null; const q = this.msQ?.shift(); if (q) this.milestone(...q); }, Math.max(150, (this.msBusy || 0) - performance.now() + 150)); }
   nwChart(cv) {
     const hist = this.g.s.stats.history; const ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
     ctx.clearRect(0, 0, W, H); if (hist.length < 3) { ctx.fillStyle = '#c9b8a3'; ctx.font = '600 26px Nunito, sans-serif'; ctx.fillText('Noch zu wenig Daten – spiel ein paar Wochen.', 30, 60); return; }

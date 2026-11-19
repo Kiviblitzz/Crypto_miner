@@ -4,8 +4,10 @@ import { PLACEABLE, PART, PLACEABLES, PARTS, GPUS } from '../data/hardware.js';
 import { FACILITIES, FACILITY, CHAPTERS, MESSAGES, NEWS, START_DAY, TECHS } from '../data/world.js';
 import { EVENTS, EVENT } from '../data/events.js';
 import { ACHIEVEMENTS } from '../data/achievements.js';
-import { BTC_HASH, POWER_HOUSEHOLD, GPU_BOOM, MONOLITH_SHARE, DAG_AET, DAG_AEC, seasonOffset, noise, toDay, BTC_PRICE, curve } from '../data/history.js';
-export const SKILL_XP = [0, 100, 300, 700, 1500]; // Erfahrung für Stufe 1–5
+import { BTC_HASH, POWER_HOUSEHOLD, GPU_BOOM, MONOLITH_SHARE, DAG_AET, DAG_AEC, seasonOffset, noise, toDay, BTC_PRICE, curve, HALVINGS } from '../data/history.js';
+export const SKILL_XP = [0, 150, 500, 1200, 2500, 4500, 7500, 12000, 18000, 26000]; // Erfahrung für Stufe 1–10
+export const SKILL_PCT = 2; // Schrauben: −2 % Hardwarepreis, Mining: +2 % Ertrag je Stufe über 1
+export const TRADE_FEES = [0.04, 0.035, 0.03, 0.025, 0.02, 0.016, 0.013, 0.01, 0.0075, 0.005]; // Börsengebühr je Handel-Stufe
 
 const LAST_DATA_DAY = BTC_PRICE.lastDay;
 export const SAVE_KEY = 'hashwerk-save-v1';
@@ -39,6 +41,7 @@ export class Game {
       ev: { done: {}, open: null, log: [], later: [], last: 0 }, rel: { papa: 0, mama: 0, opa: 0, deniz: 0 }, mods: [], ach: {},
     };
     for (const c of COINS) s.autoSell[c.id] = 0;
+    this.initProgress(s);
     const m0 = MESSAGES.find((m) => m.id === 'm0'); if (m0) s.messages.push({ id: 'm0', day: START_DAY, from: m0.from, text: m0.text, read: true }); // Start-Nachricht (im Intro gezeigt)
     this.s = s;
     this.cache = {};
@@ -75,13 +78,14 @@ export class Game {
       s.ev ||= { done: {}, open: null, log: [], later: [], last: 0 }; s.ev.done ||= {}; s.ev.log ||= []; s.ev.later ||= [];
       s.rel ||= { papa: 0, mama: 0, opa: 0, deniz: 0 }; s.mods ||= []; s.ach ||= {}; s.flags ||= {}; s.stats ||= { minedUSD: 0, sold: 0, spentHW: 0, elec: 0, history: [] };
       s.keep ||= {}; s.talk ||= { last: {}, week: {}, joy: {}, got: {}, seen: {}, line: {} };
+      this.initProgress(s);
       this.s = s; this.cache = {}; this.dayUpdate(true); return true;
     } catch (e) { console.warn(e); return false; }
   }
 
   // ---------- Technologien ----------
   fx(key, facId = null) { let m = 1; const u = this.s.techs || {}; for (const t of TECHS) if (u[t.id] && t.fx[key]) m *= t.fx[key];
-    for (const md of this.s.mods || []) if (md.key === key && (!md.fac || md.fac === facId) && this.s.day < md.until) m *= md.mult; if (key === 'rev' && this.s.skills) m *= 1 + 0.04 * (this.skillLv('mining') - 1); return m; }
+    for (const md of this.s.mods || []) if (md.key === key && (!md.fac || md.fac === facId) && this.s.day < md.until) m *= md.mult; if (key === 'rev' && this.s.skills) m *= 1 + (SKILL_PCT / 100) * (this.skillLv('mining') - 1); return m; }
   techAvailable(t) { return this.s.day >= toDay(t.date) && (!t.minTier || Math.max(...this.s.unlocked.map((id) => FACILITY[id].tier)) >= t.minTier); }
   buyTech(id) { const t = TECHS.find((x) => x.id === id); if (!t || (this.s.techs ||= {})[id] || !this.techAvailable(t) || !this.canAfford(t.cost)) return false; this.s.cash -= t.cost; this.s.techs[id] = this.s.day;
     if (id === 'ico') { const usd = Math.min(30e6, 600000 + this.netWorthFast() * 0.25); const p = this.price('ETH') || 1; this.s.wallet.ETH.ex += usd / p; this.toast(`ICO ausverkauft: ${fmtUSD(usd)} in Ethereum`, 'good', 9000); }
@@ -159,7 +163,7 @@ export class Game {
       const ratio = Math.min(2.6, Math.max(0.06, Math.pow(h1 / h0, 0.55)));
       p *= ratio * Math.max(0.35, 1 - 0.1 * years);
     } else p *= Math.pow(1.02, Math.max(0, (day - toDay('2010-01-01')) / 365));
-    if (this.s?.skills) p *= 1 - 0.04 * (this.skillLv('hw') - 1);
+    if (this.s?.skills) p *= 1 - (SKILL_PCT / 100) * (this.skillLv('hw') - 1);
     if (this.s?.mods?.length) p *= this.fx('price') * this.fx('price:' + (item.kind === 'device' ? 'asic' : item.type || item.kind));
     return Math.max(1, Math.round(p));
   }
@@ -203,6 +207,7 @@ export class Game {
     if (s.chapter >= 1 && s.day >= toDay('2011-06-20')) this.grant('cold');
     if (s.unlocked.length >= 2) this.grant('map');
     if (s.chapter >= 2) { this.grant('techs'); this.grant('ranking'); this.grant('loan'); this.grant('buycoins'); this.grant('coins'); this.grant('cold'); this.grant('heat'); }
+    if (s.chapter >= 1) { this.grant('techs'); this.grant('ranking'); } // Opas Werkbank und das Logbuch schon im Keller
   }
   startMining(uid) { const o = this.findObj(uid); if (!o || (o.parts && !this.pcReady(o))) return false; o.mode = 'auto'; const first = !this.s.flags.miningStarted; if (first) { this.s.mineDay0 = this.s.day; this.s.mineFrac0 = this.s.frac || 0; } this.s.flags.miningStarted = true; this.s.flags.seenPc = true; if (first) this.addXp('mining', 40); this.checkGoals(); this.dayUpdate(true); this.emit('objects', this.facOf(uid)); return true; }
   // Zentraler Geld-Check: nur kaufen, was wirklich bezahlt werden kann (kein Kauf bei Minus-Konto)
@@ -244,7 +249,7 @@ export class Game {
     this.grant('skills'); const after = this.skillLv(k); if (!quiet || after > before) this.emit('xp', k, Math.round(n), after > before ? after : 0);
   }
   creditPending(coin, n) { const s = this.s; if (!(n > 0)) return; s.wallet[coin].ex += n; s.accr = { day: s.day, f: s.frac }; }
-  tradeFee() { return [0.04, 0.03, 0.02, 0.01, 0.005][this.skillLv('trade') - 1] ?? 0.005; }
+  tradeFee() { return TRADE_FEES[this.skillLv('trade') - 1] ?? 0.005; }
   // ---------- Herumliegende Teile ----------
   pickUp(type) { const s = this.s; if (!s.loose?.[type]) return false; s.inv.push(type); s.invIds = { ...(s.invIds || {}), [type]: s.loose[type] }; delete s.loose[type]; this.checkGoals(); this.emit('loose'); return true; }
   installLoose(uid, type) {
@@ -570,7 +575,8 @@ export class Game {
     this.checkMessages(); this.checkGoals(); this.checkEvents();
     if (day % 7 === 0) this.checkAchievements();
     if (day % 30 === 0) s.mods = s.mods.filter((m) => m.until > day);
-    if (day === toDay('2021-05-26') && !s.flags.offerMade && s.unlocked.length >= 4) { s.flags.offerMade = true; this.emit('offer', Math.max(40e6, Math.round(this.netWorthFast() * 1.4 / 1e6) * 1e6)); }
+    if (day >= toDay('2021-05-26') && day <= toDay('2021-12-31') && !s.flags.offerMade && s.flags.gmbh) { s.flags.offerMade = true; this.emit('offer', Math.max(40e6, Math.round(this.netWorthFast() * 1.4 / 1e6) * 1e6)); }
+    this.progressDay(day, minedUSD, elecCost, fixed); // Jahreswerte, Erfolge, Bonus-Serien
     // Statistik
     const d = new Date(day * 86400000);
     if (d.getUTCDay() === 1 || s.stats.history.length === 0) {
@@ -647,6 +653,7 @@ export class Game {
       algoHash: (a) => this.algoHash(a), netWorth: () => this.netWorth(), monolithHash: () => this.monolithHash(), dailyRev: () => this.dailyProfit().rev,
       maxTemp: () => Math.max(...this.s.unlocked.map((id) => this.s.fac[id].temp || 21)),
       facilityTripped: () => this.s.unlocked.some((id) => this.s.fac[id].tripped),
+      firmValue: () => this.firmValue(), // Bargeld + Hardware − Kredit, ohne Coins
     };
   }
   checkMessages() {
@@ -739,6 +746,7 @@ export class Game {
     const s = this.s, h = this.helpers();
     const ch = CHAPTERS[s.chapter]; if (!ch) return;
     for (const g of ch.goals) if (!s.goals[g.id] && g.check(s, h)) { s.goals[g.id] = true; if (g.doneText !== '') this.toast(g.doneText || `Geschafft: ${g.text}`, 'good'); this.emit('goal', g); }
+    this.checkBonus(ch);
     const done = ch.goals.every((g) => s.goals[g.id]);
     if (done && s.day >= toDay(ch.minDate)) {
       if (ch.unlock) {
@@ -772,6 +780,78 @@ export class Game {
     this.s.cash -= next.cost; f.power++; this.dayUpdate(true); return true;
   }
   hireTech(n) { if (FACILITY[this.s.unlocked[this.s.unlocked.length - 1]].tier < 3 && !this.s.flags.gmbh) return false; if (n > 0 && !this.canAfford(n * this.techSalary())) return false; this.s.staff.tech = Math.max(0, this.s.staff.tech + n); this.dayUpdate(true); return true; }
+
+  // ---------- Fortschritt: Bonusziele, Jahreswerte, Statistiken für Erfolge ----------
+  initProgress(s) {
+    s.stats.y ||= {}; s.stats.trips ||= 0; s.stats.halv ||= 0; s.stats.tmax ||= 0; s.bonus ||= {}; s.streak ||= {};
+  }
+  inWait(ch) { return !!ch && ch.goals.every((go) => this.s.goals[go.id]) && this.s.day < toDay(ch.minDate); }
+  // Sparphase: es fehlt nur noch eine Zahlung (z. B. Papas Stromrechnung), für die das Geld noch nicht reicht
+  saving(ch) { const open = ch ? ch.goals.filter((go) => !this.s.goals[go.id]) : []; return open.length > 0 && open.every((go) => go.action && !this.canPayGoal(go)); }
+  idlePhase(ch) { return this.inWait(ch) || this.saving(ch); }
+  bonusOpen(ch, b) { const s = this.s; return !s.bonus?.[b.id] && !(b.until && s.day > toDay(b.until)) && (!b.from || b.from(s)) && (!b.wait || this.idlePhase(ch)); }
+  checkBonus(ch = CHAPTERS[this.s.chapter]) {
+    const s = this.s; if (!ch?.bonus || !s.bonus) return; const h = this.helpers();
+    for (const b of ch.bonus) { if (!this.bonusOpen(ch, b)) continue; if (b.streak ? (s.streak[b.id] || 0) >= b.streak : b.check(s, h, this)) this.grantBonus(b); }
+  }
+  // Serien („N Tage am Stück“) zählen einmal pro Tag
+  bonusStreaks() {
+    const s = this.s, ch = CHAPTERS[s.chapter]; if (!ch?.bonus) return; const h = this.helpers();
+    for (const b of ch.bonus) { if (!b.streak || s.bonus[b.id]) continue; s.streak[b.id] = this.bonusOpen(ch, b) && b.check(s, h, this) ? (s.streak[b.id] || 0) + 1 : 0; }
+  }
+  bonusProgress(b) { const s = this.s; if (b.streak) return [s.streak?.[b.id] || 0, b.streak, 'days']; return b.progress ? b.progress(s, this.helpers(), this) : null; }
+  grantBonus(b) {
+    const s = this.s; s.bonus[b.id] = s.day || 1;
+    const r = b.reward || {}, txt = this.rewardText(r);
+    this.applyFx(r);
+    s.ev.log.push({ d: s.day, id: 'bonus:' + b.id, i: 0, t: `Bonus: ${b.text}` }); if (s.ev.log.length > 300) s.ev.log.shift();
+    this.emit('milestone', 'Bonus', txt ? `${b.text} · ${txt}` : b.text); this.emit('bonus', b);
+  }
+  rewardText(r = {}) {
+    const NAME = { papa: 'Papa', mama: 'Mama', opa: 'Opa', deniz: 'Deniz' }, out = [];
+    if (r.cash) out.push(`+${fmtUSD(r.cash)}`);
+    for (const [k, n] of Object.entries(r.rel || {})) out.push(`${NAME[k] || k} ${n > 0 ? '+' : '−'}${Math.abs(n)}`);
+    if (r.text) out.push(r.text);
+    return out.join(' · ');
+  }
+  firmValue() { return this.s.cash + this.hardwareValue() - (this.s.loan || 0); }
+  // Effizienz der laufenden Flotte eines Algorithmus in J/TH (bzw. J pro 10^12 Hash); Infinity ohne Leistung
+  fleetJTH(algo = 'sha256') { let w = 0, hs = 0; for (const id of this.s.unlocked) { const sm = this.summary?.[id]; if (!sm || sm.tripped) continue; for (const a of sm.per.values()) for (const u of a.units || []) if (u.algo === algo && u.h > 0 && !u.idle) { w += u.w || 0; hs += u.h; } } return hs > 0 ? (w / hs) * 1e12 : Infinity; }
+  coinValue() { let ex = 0, cold = 0; for (const c of COINS) { const w = this.s.wallet[c.id], p = this.price(c.id); ex += w.ex * p; cold += w.cold * p; } return { ex, cold, all: ex + cold, coldShare: ex + cold > 0 ? cold / (ex + cold) : 0 }; }
+  deviceCount() { let n = 0; for (const id of this.s.unlocked) for (const o of this.s.fac[id].objects) { const k = PLACEABLE[o.type]?.kind; if (k === 'holder') n += o.items.length; else if (k === 'rig' || k === 'device') n++; } return n; }
+  // Leitwert Hashrate: SHA-256, sonst der erste andere Algorithmus mit Leistung (wie oben in der Leiste)
+  mainHash() { for (const a of ['sha256', 'scrypt', 'ethash', 'kawpow', 'kheavy', 'equihash', 'rx', 'cn']) { const v = this.algoHash(a); if (v > 0) return [v, a]; } return [0, 'sha256']; }
+  yearOf(day) { return new Date(day * 86400000).getUTCFullYear(); }
+  progressDay(day, mined = 0, elec = 0, fixed = 0) {
+    const s = this.s, st = s.stats; this.initProgress(s);
+    const D = day - 1, y = this.yearOf(D);
+    let Y = st.y[y];
+    if (!Y) { const [h0, a0] = this.mainHash(); Y = st.y[y] = { d0: D, rev: 0, elec: 0, fix: 0, nw0: Math.round(this.netWorthFast()), h0, a0, p0: this.price('BTC', D) }; }
+    Y.rev += Number.isFinite(mined) ? mined : 0; Y.elec += Number.isFinite(elec) ? elec : 0; Y.fix += Number.isFinite(fixed) ? fixed : 0;
+    // Sicherungen, Höchsttemperatur, Leerlauf (für Erfolge und Tipps)
+    st.tp ||= {}; let idle = 0;
+    for (const id of s.unlocked) {
+      const f = s.fac[id]; if (f.tripped && !st.tp[id]) { st.trips++; Y.trips = (Y.trips || 0) + 1; } st.tp[id] = !!f.tripped;
+      if (Number.isFinite(f.temp)) st.tmax = Math.max(st.tmax || 0, f.temp);
+      const sm = this.summary?.[id]; if (sm && !sm.tripped) for (const a of sm.per.values()) if (a.status === 'idle') idle++;
+    }
+    st.idle = idle;
+    if (HALVINGS.includes(day) && mined > 0) st.halv++;
+    if (s.flags.boughtAsic && !st.asicDay) st.asicDay = day;
+    if (s.flags.won && !st.wonDay) st.wonDay = day;
+    if (s.cash < 0 && !st.neg1) st.neg1 = day;
+    if (day <= toDay('2011-03-31')) st.btc2010 = st.coins?.BTC || 0; // „erster Winter“ für den Was-wäre-wenn-Vergleich
+    if ((st.sold || 0) > (st.soldPrev ?? st.sold) + 0.01) { const p = Math.max(this.price('BTC', D), this.price('BTC', day)); st.soldMaxP = Math.max(st.soldMaxP || 0, p); if (p >= 1000) st.sold1000 ||= day; }
+    st.soldPrev = st.sold || 0;
+    this.bonusStreaks(); this.checkBonus();
+    // Jahreswechsel: Abschluss des alten Jahres + Rückblick
+    if (this.yearOf(day) !== y) {
+      const [h1, a1] = this.mainHash();
+      Object.assign(Y, { nw1: Math.round(this.netWorthFast()), h1, a1, btc: s.wallet.BTC.ex + s.wallet.BTC.cold, cash: Math.round(s.cash), p1: this.price('BTC', day), rel: { ...s.rel } });
+      this.emit('year', y);
+    }
+    this.checkAchievements();
+  }
 
   // ---------- Solaranlage (Green Mining wie im Vorbild) ----------
   solarStep(facId) { return { kinder: 0, keller: 6, werkstatt: 30, halle: 250, rz: 400, fjord: 0 }[facId] || 0; }
