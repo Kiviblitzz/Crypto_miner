@@ -41,6 +41,9 @@ document.getElementById('btn-continue').onclick = () => {
   if (game.load()) { splash.classList.add('hidden'); splashOrbit = false; ui.switchSite(game.s.current); ui.speedBar(); ui.ticker(); ui.toast('Willkommen zurück!', 'good'); }
 };
 
+// Beim Verlassen speichern
+window.addEventListener('beforeunload', () => { if (splash.classList.contains('hidden')) game.save(); });
+
 // Tastatur
 window.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || !splash.classList.contains('hidden')) return;

@@ -516,6 +516,14 @@ export class UI {
     const g = this.g;
     const body = h(`<div><h2>⚙️ Menü</h2><div class="row"><button class="btn primary" data-a="save">💾 Speichern</button><button class="btn" data-a="load">📂 Laden</button><button class="btn danger" data-a="new">Neues Spiel</button></div>
       <div class="sec"><h4>Grafik</h4><div class="row"><button class="btn small ${this.w.quality === 'high' ? 'primary' : ''}" data-q="high">Hoch (Bloom + Schatten)</button><button class="btn small ${this.w.quality === 'medium' ? 'primary' : ''}" data-q="medium">Mittel</button><button class="btn small ${this.w.quality === 'low' ? 'primary' : ''}" data-q="low">Niedrig</button></div></div>
+      <div class="sec"><h4>Spielhilfe</h4><div style="font-size:13px;line-height:1.65">
+        <b>Ertrag:</b> Deine Hashrate geteilt durch die Netz-Hashrate mal die Coins pro Tag – mit echten Kursen und Hashraten von 2010 bis heute.<br/>
+        <b>Rigs:</b> Rahmen kaufen (links), anklicken, dann Mainboard, CPU, Netzteil und GPUs in die Slots setzen. „Basis-Teile" und „Füllen" sparen Klicks.<br/>
+        <b>Coins:</b> „Auto" wählt täglich den profitabelsten Coin. Neue Coins erscheinen an ihrem echten Startdatum, Aether endet mit dem Merge 2022.<br/>
+        <b>Strom:</b> Jeder Standort hat eine Anschlussleistung. Zu viel Last → Sicherung fliegt. Ausbau unter 🏢 Firma. Unrentable Geräte pausieren automatisch.<br/>
+        <b>Hitze:</b> Über 38 °C wird gedrosselt und mehr kaputt. Ventilatoren und Klimageräte helfen; H zeigt das Wärmebild.<br/>
+        <b>Wallet:</b> Ein Teil der Coins wird sofort verkauft (einstellbar), der Rest bleibt liegen. Börsen können pleitegehen – die Cold-Wallet ist sicher.<br/>
+        <b>Wachstum:</b> Kapitelziele unten links schalten neue Standorte frei. 🗺️ Imperium zeigt alles nebeneinander.</div></div>
       <div class="sec"><h4>Ton</h4><div class="row"><button class="btn small" data-a="mute">${this.audio?.muted ? '🔇 Ton an' : '🔊 Ton aus'}</button></div></div>
       <div class="sec"><h4>Steuerung</h4><div style="font-size:13px;line-height:1.8">Links = auswählen/bauen · Rechts ziehen = drehen · Mitte ziehen = schieben · Mausrad = Zoom<br/>WASD/Pfeile = Kamera bewegen · Q/E = drehen · R = beim Bauen drehen · Shift = mehrfach bauen<br/>Leertaste = Pause · 1–4 = Tempo · H = Wärmebild · F = Rundgang · ESC = abbrechen</div></div>
       <div class="sec"><h4>Über</h4><div style="font-size:12px;color:#94a0b2">HASHWERK ist ein Fan-Projekt. Alle Marken- und Produktnamen sind fiktiv, die 3D-Modelle prozedural erzeugt. Kurse und Hashraten sind gerundete historische Werte bis November 2026 – danach simuliert. Kein Finanzrat.</div></div></div>`);
