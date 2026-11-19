@@ -543,7 +543,7 @@ export class Game {
     for (const o of f.objects) { const a = sm.per.get(o.uid), def = PLACEABLE[o.type]; if (!a) continue; if (def.kind === 'cooling') { w += a.status === 'off' ? 0 : def.watt; continue; } w += a.watt; for (const u of a.units) if (u.idle || u.part) w += u.w * (u.idle ? 1 : 1 - u.part) * (def.selfCooled ? 1.06 : 1); }
     const cap = fd.power[f.power].kw * this.fx('cap', facId) * 1000; this.capWarned ||= {};
     if (w <= cap) { delete this.capWarned[facId]; return; }
-    if (this.capWarned[facId] && w < this.capWarned[facId] * 1.1) return;
+    if (this.capWarned[facId] && w < this.capWarned[facId] * 1.5) return; // erst bei deutlich mehr Last erneut warnen
     this.capWarned[facId] = w;
     this.toast(`Volllast ${fmtWatt(w)} – mehr als der Anschluss (${fmtWatt(cap)}). Im Auto-Betrieb laufen nur so viele Geräte, wie Strom da ist.`, 'info', 7000);
   }
