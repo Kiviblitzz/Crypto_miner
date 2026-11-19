@@ -16,7 +16,7 @@ const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 // ---------- Zusatz-Materialien ----------
 export const X = {
   gold: () => mat('gold', { color: 0xd8a640, roughness: 0.28, metalness: 1 }),
-  caseBlack: () => mat('caseBlack', { color: 0x2b2420, roughness: 0.55, metalness: 0.15 }),
+  caseBlack: () => mat('caseBlack', { color: 0x4a3c33, roughness: 0.5, metalness: 0.12 }),
   wire: () => mat('grillWire', { color: 0xc4c8ce, roughness: 0.3, metalness: 0.9 }),
   wireDark: () => mat('grillWireDark', { color: 0x2a2c31, roughness: 0.45, metalness: 0.6 }),
   ram: () => mat('ramSpreader', { color: 0x8d1c26, roughness: 0.35, metalness: 0.7 }),
@@ -319,11 +319,12 @@ function riser(root, x, y, z, gx, gy, gz) {
   box(root, 0.026, 0.008, 0.006, M.black(), x, y + 0.003, z + 0.007);
   tube(root, [[x - 0.006, y + 0.008, z], [x - 0.01, y + 0.05, z + 0.02], [gx, (y + gy) / 2, gz - 0.03], [gx, gy - 0.03, gz]], 0.0025, M.cableBlue(), 16, 5);
 }
-export function buildRig(type, parts) {
+export function buildRig(type, parts, only = null) {
   const root = new THREE.Group();
   const gpus = (parts?.gpus || []).map((id) => PART[id]).filter(Boolean);
   if (type === 'tower') {
     const W = 0.22, H = 0.47, D = 0.46, y0 = 0.02, sh = X.caseBlack();
+    if (!only) {
     for (const [a, b] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) cyl(root, 0.017, 0.02, y0, M.rubber(), a * (W / 2 - 0.03), y0 / 2, b * (D / 2 - 0.05), 18);
     box(root, W, 0.012, D, sh, 0, y0, 0);
     box(root, W, 0.012, D, sh, 0, y0 + H - 0.012, 0);
@@ -343,9 +344,6 @@ export function buildRig(type, parts) {
     boxC(root, 0.008, 0.016, D - 0.02, sh, W / 2, y0 + H - 0.008, -0.005); boxC(root, 0.008, 0.016, D - 0.02, sh, W / 2, y0 + 0.008, -0.005);
     boxC(root, 0.008, H, 0.016, sh, W / 2, y0 + H / 2, -D / 2 + 0.008); boxC(root, 0.008, H, 0.014, sh, W / 2, y0 + H / 2, D / 2 - 0.017);
     for (const [a, b] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) cyl(root, 0.007, 0.007, 0.01, X.chrome(), W / 2 + 0.006, y0 + H / 2 + a * (H / 2 - 0.03), -0.005 + b * (D / 2 - 0.04), 14, 'x');
-    // Netzteil-Abdeckung innen
-    box(root, W - 0.02, 0.1, D - 0.03, sh, 0.0, y0 + 0.012, 0.0);
-    plane(root, 0.12, 0.03, labelMat('hwLogo', 256, 64, (c, w, h) => { c.fillStyle = '#16181c'; c.fillRect(0, 0, w, h); c.fillStyle = '#ffb000'; c.font = 'bold 40px Arial'; c.textAlign = 'center'; c.fillText('HASHWERK', w / 2, 46); }, 0.8), W / 2 - 0.0096, y0 + 0.07, 0.08, 0, Math.PI / 2);
     // Rückseite: Lüfter, I/O-Blende, Slotbleche, Netzteil-Buchse
     const fb = fan(root, 0.055, { n: 7, square: true }); fb.position.set(0.02, y0 + H * 0.8, -D / 2 - 0.004); fb.rotation.y = Math.PI;
     const fr = fan(root, 0.06, { n: 7, square: true }); fr.position.set(0, y0 + H * 0.62, D / 2 - 0.02);
@@ -355,14 +353,17 @@ export function buildRig(type, parts) {
     for (let i = 0; i < 5; i++) boxC(root, W * 0.55, 0.012, 0.003, X.chrome(), 0.0, y0 + H * 0.52 - i * 0.022, -D / 2 - 0.0005, 0);
     box(root, 0.03, 0.022, 0.006, M.black(), 0.05, y0 + 0.04, -D / 2 - 0.003);
     box(root, 0.008, 0.008, 0.004, M.ledBlue(), W / 2 - 0.04, y0 + H - 0.04, D / 2 + 0.014);
-    if (parts?.mobo) mobo(root, 0.3, 0.24, -W / 2 + 0.012, y0 + H * 0.6, 0, true).rotation.set(0, 0, -Math.PI / 2);
-    if (parts?.cpu) cpuCooler(root, -W / 2 + 0.016, y0 + H * 0.78, 0.0, 0).rotation.set(0, 0, -Math.PI / 2);
-    if (parts?.psu) { psuBox(root, 0, y0 + 0.012, -0.1, 0.15, 0.086, 0.16); tube(root, [[-0.04, y0 + 0.11, 0.1], [-0.05, y0 + 0.16, 0.13], [-W / 2 + 0.03, y0 + 0.24, 0.12], [-W / 2 + 0.02, y0 + 0.3, 0.11]], 0.009, M.black(), 18, 8); }
-    gpus.forEach((gp, i) => {
+    }
+    const want = (t) => !only || only === t;
+    if (parts?.mobo && want('mobo')) mobo(root, 0.3, 0.24, -W / 2 + 0.012, y0 + H * 0.6, 0, true).rotation.set(0, 0, -Math.PI / 2);
+    if (parts?.cpu && want('cpu')) cpuCooler(root, -W / 2 + 0.016, y0 + H * 0.78, 0.0, 0).rotation.set(0, 0, -Math.PI / 2);
+    if (parts?.psu && want('psu')) { psuBox(root, 0, y0 + 0.012, -0.1, 0.15, 0.086, 0.16); tube(root, [[-0.04, y0 + 0.11, 0.1], [-0.05, y0 + 0.16, 0.13], [-W / 2 + 0.03, y0 + 0.24, 0.12], [-W / 2 + 0.02, y0 + 0.3, 0.11]], 0.0055, mat('sleeve', { color: 0x7a5236, roughness: 0.8 }), 18, 8); }
+    if (want('gpu')) gpus.forEach((gp, i) => {
+      if (only && i !== gpus.length - 1) return;
       const m = gpuModel(root, gp.look); m.position.set(-W / 2 + 0.014, y0 + H * 0.5 - i * 0.07, -D / 2 + 0.03);
       m.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, 1), new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0)));
       const gy = y0 + H * 0.5 - i * 0.07, zc = -D / 2 + 0.03 + gp.look.len - 0.04;
-      if (parts?.psu) tube(root, [[0.05, y0 + 0.11, 0.05 - i * 0.02], [0.07, y0 + 0.16, 0.06], [0.06, gy - 0.01, zc + 0.02], [0.03, gy - 0.008, zc]], 0.005, M.black(), 16, 6);
+      if (parts?.psu) tube(root, [[0.05, y0 + 0.11, 0.05 - i * 0.02], [0.07, y0 + 0.16, 0.06], [0.06, gy - 0.01, zc + 0.02], [0.03, gy - 0.008, zc]], 0.0038, mat('sleeve', { color: 0x7a5236, roughness: 0.8 }), 16, 6);
     });
   } else if (type === 'crate') {
     // Milchkiste mit Griffmulden und Rand
@@ -799,6 +800,18 @@ export function instance(key, builder, { lod = true, dist = LOD_DIST } = {}) {
   l.userData.fans = [...hi.userData.fans, ...mid.userData.fans, ...lo.userData.fans]; l.userData.bbox = t.hi.bbox;
   return l;
 }
+
+// Herumliegendes Einzelteil (Start: alte Teile im Zimmer)
+export function loosePartModel(type, id) {
+  const root = new THREE.Group(), part = PART[id];
+  if (type === 'mobo') mobo(root, 0.3, 0.24, 0, 0.003, 0);
+  else if (type === 'cpu') cpuCooler(root, 0, 0, 0);
+  else if (type === 'gpu') { const m = gpuModel(root, part.look); const L = part.look.len, T = 0.016 + 0.016 * part.look.slot; m.rotation.x = -Math.PI / 2; m.position.set(-L / 2, T / 2, 0.056); }
+  else if (type === 'psu') psuBox(root, 0, 0, 0);
+  return root;
+}
+// Einzelnes Bauteil (für die Einbau-Animation), nicht zusammengefügt
+export function rigPartModel(o, only) { return buildRig(o.type, o.parts || {}, only); }
 
 // Modell für ein Spielobjekt bauen
 export function objectModel(o) {

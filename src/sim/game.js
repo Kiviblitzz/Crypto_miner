@@ -3,6 +3,7 @@ import { COINS, COIN } from '../data/coins.js';
 import { PLACEABLE, PART, PLACEABLES, PARTS, GPUS } from '../data/hardware.js';
 import { FACILITIES, FACILITY, CHAPTERS, MESSAGES, NEWS, START_DAY, TECHS } from '../data/world.js';
 import { BTC_HASH, POWER_HOUSEHOLD, GPU_BOOM, MONOLITH_SHARE, DAG_AET, DAG_AEC, seasonOffset, noise, toDay, BTC_PRICE, curve } from '../data/history.js';
+export const SKILL_XP = [0, 100, 300, 700, 1500]; // Erfahrung für Stufe 1–5
 
 const LAST_DATA_DAY = BTC_PRICE.lastDay;
 export const SAVE_KEY = 'hashwerk-save-v1';
@@ -22,7 +23,7 @@ export class Game {
 
   newGame() {
     const s = {
-      version: 1, day: START_DAY, frac: 0.35, cash: 400, nextUid: 1,
+      version: 1, day: START_DAY, frac: 0.35, cash: 300, nextUid: 1,
       wallet: Object.fromEntries(COINS.map((c) => [c.id, { ex: 0, cold: 0 }])),
       autoSell: Object.fromEntries(COINS.map((c) => [c.id, DEFAULT_AUTOSELL])),
       payoutCold: false,
@@ -39,6 +40,9 @@ export class Game {
     this.s = s;
     this.cache = {};
     // Start: leeres Gehäuse – den ersten Mining-PC baut der Spieler selbst zusammen
+    // Alte Teile liegen im Zimmer herum – einsammeln und einbauen
+    s.loose = { mobo: 'h55', cpu: 'cel33', gpu: 'rhd4850', psu: 'psu400' }; s.inv = [];
+    s.skills = { hw: 0, mining: 0, trade: 0 };
     const pc = this.addObject('kinder', 'tower', 1.75, 0.75, 0, { mobo: null, cpu: null, psu: null, gpus: [] }, true);
     pc.mode = 'off'; // Einschalten erst, wenn alle Teile drin sind
     while (s.newsIdx < NEWS.length && NEWS[s.newsIdx].day < s.day) s.newsIdx++;
@@ -69,7 +73,7 @@ export class Game {
   }
 
   // ---------- Technologien ----------
-  fx(key) { let m = 1; const u = this.s.techs || {}; for (const t of TECHS) if (u[t.id] && t.fx[key]) m *= t.fx[key]; return m; }
+  fx(key) { let m = 1; const u = this.s.techs || {}; for (const t of TECHS) if (u[t.id] && t.fx[key]) m *= t.fx[key]; if (key === 'rev' && this.s.skills) m *= 1 + 0.04 * (this.skillLv('mining') - 1); return m; }
   techAvailable(t) { return this.s.day >= toDay(t.date) && (!t.minTier || Math.max(...this.s.unlocked.map((id) => FACILITY[id].tier)) >= t.minTier); }
   buyTech(id) { const t = TECHS.find((x) => x.id === id); if (!t || (this.s.techs ||= {})[id] || !this.techAvailable(t) || !this.canAfford(t.cost)) return false; this.s.cash -= t.cost; this.s.techs[id] = this.s.day;
     if (id === 'ico') { const usd = Math.min(30e6, 600000 + this.netWorthFast() * 0.25); const p = this.price('ETH') || 1; this.s.wallet.ETH.ex += usd / p; this.toast(`ICO ausverkauft: ${fmtUSD(usd)} in Ethereum`, 'good', 9000); }
@@ -145,6 +149,7 @@ export class Game {
       const ratio = Math.min(2.6, Math.max(0.06, Math.pow(h1 / h0, 0.55)));
       p *= ratio * Math.max(0.35, 1 - 0.1 * years);
     } else p *= Math.pow(1.02, Math.max(0, (day - toDay('2010-01-01')) / 365));
+    if (this.s?.skills) p *= 1 - 0.04 * (this.skillLv('hw') - 1);
     return Math.max(1, Math.round(p));
   }
   available(item, day = this.s.day) {
@@ -188,7 +193,7 @@ export class Game {
     if (s.unlocked.length >= 2) this.grant('map');
     if (s.chapter >= 2) { this.grant('techs'); this.grant('ranking'); this.grant('loan'); this.grant('buycoins'); this.grant('coins'); this.grant('cold'); this.grant('heat'); }
   }
-  startMining(uid) { const o = this.findObj(uid); if (!o || (o.parts && !this.pcReady(o))) return false; o.mode = 'auto'; this.s.flags.miningStarted = true; this.s.flags.seenPc = true; this.checkGoals(); this.dayUpdate(true); this.emit('objects', this.facOf(uid)); return true; }
+  startMining(uid) { const o = this.findObj(uid); if (!o || (o.parts && !this.pcReady(o))) return false; o.mode = 'auto'; const first = !this.s.flags.miningStarted; if (first) { this.s.mineDay0 = this.s.day; this.s.mineFrac0 = this.s.frac || 0; } this.s.flags.miningStarted = true; this.s.flags.seenPc = true; if (first) this.addXp('mining', 40); this.checkGoals(); this.dayUpdate(true); this.emit('objects', this.facOf(uid)); return true; }
   // Zentraler Geld-Check: nur kaufen, was wirklich bezahlt werden kann (kein Kauf bei Minus-Konto)
   canAfford(usd) { return Number.isFinite(usd) && usd >= 0 && Number.isFinite(this.s.cash) && this.s.cash >= usd; }
   addObject(facId, type, x, z, rot, parts, free = false) {
@@ -196,7 +201,7 @@ export class Game {
     const o = { uid: this.s.nextUid++, type, x, z, rot, coin: 'auto', broken: false, bought: this.s.day };
     if (def.kind === 'rig') o.parts = parts || { mobo: null, cpu: null, psu: null, gpus: [] };
     if (def.kind === 'holder') o.items = [];
-    if (!free) { const p = this.itemPrice(def); if (!this.canAfford(p)) return null; this.s.cash -= p; this.s.stats.spentHW += p; }
+    if (!free) { const p = this.itemPrice(def); if (!this.canAfford(p)) return null; this.s.cash -= p; this.s.stats.spentHW += p; if (this.s.skills) this.addXp('hw', 15); }
     this.s.fac[facId].objects.push(o);
     if (def.kind === 'device' && def.look !== 'fpga' && def.look !== 'usb') this.s.flags.boughtAsic = true;
     this.dayUpdate(true);
@@ -221,6 +226,24 @@ export class Game {
   }
   partIds(o) { const p = o.parts; return [p.mobo, p.cpu, p.psu, ...p.gpus].filter(Boolean); }
   // Erster PC-Zusammenbau: welche Teile fehlen noch, und wie viel Geld muss für sie übrig bleiben?
+  // ---------- Fähigkeiten: lernen durch Tun ----------
+  skillLv(k) { const x = this.s.skills?.[k] || 0; return SKILL_XP.filter((t) => x >= t).length; }
+  addXp(k, n, quiet = false) {
+    const s = this.s; if (!s.skills) return; const before = this.skillLv(k); s.skills[k] = (s.skills[k] || 0) + Math.round(n);
+    this.grant('skills'); const after = this.skillLv(k); if (!quiet || after > before) this.emit('xp', k, Math.round(n), after > before ? after : 0);
+  }
+  creditPending(coin, n) { const s = this.s; if (!(n > 0)) return; s.wallet[coin].ex += n; s.accr = { day: s.day, f: s.frac }; }
+  tradeFee() { return [0.04, 0.03, 0.02, 0.01, 0.005][this.skillLv('trade') - 1] ?? 0.005; }
+  // ---------- Herumliegende Teile ----------
+  pickUp(type) { const s = this.s; if (!s.loose?.[type]) return false; s.inv.push(type); s.invIds = { ...(s.invIds || {}), [type]: s.loose[type] }; delete s.loose[type]; this.checkGoals(); this.emit('loose'); return true; }
+  installLoose(uid, type) {
+    const s = this.s, o = this.findObj(uid); if (!o?.parts || !s.inv?.includes(type)) return false;
+    if ((type === 'cpu' || type === 'gpu') && !o.parts.mobo) return false;
+    const id = s.invIds[type]; if (type === 'gpu') o.parts.gpus.push(id); else o.parts[type] = id;
+    s.inv = s.inv.filter((t) => t !== type);
+    if (this.pcReady(o)) s.flags.pcBuilt = true;
+    this.addXp('hw', 25); this.dayUpdate(true); this.emit('objects', this.facOf(uid)); return true;
+  }
   pcMissing(o) { const p = o.parts; return ['mobo', 'cpu', 'gpu', 'psu'].filter((t) => (t === 'gpu' ? !p.gpus.length : !p[t])); }
   pcReady(o) { return o?.parts && this.pcMissing(o).length === 0; }
   buildReserve(o, type) { if (this.s.flags.miningStarted || !o?.parts) return 0; let r = 0; for (const t of this.pcMissing(o)) if (t !== type) { const l = this.partList(t); if (l.length) r += Math.min(...l.map((x) => this.itemPrice(x))); } return r; }
@@ -238,7 +261,7 @@ export class Game {
     if (slot === 'gpu') {
       if (partId) o.parts.gpus[gpuIndex] = partId; else o.parts.gpus.splice(gpuIndex, 1);
       o.parts.gpus = o.parts.gpus.filter(Boolean);
-      if (partId && this.s.flags.miningStarted) this.s.flags.boughtGpu = true;
+      if (partId && this.s.flags.miningStarted) { this.s.flags.boughtGpu = true; this.addXp('hw', 20); }
     } else {
       o.parts[slot] = partId;
       if (slot === 'mobo') { const cap = this.rigGpuCap(o); if (o.parts.gpus.length > cap) { for (const g of o.parts.gpus.slice(cap)) this.s.cash += Math.round(this.itemPrice(PART[g]) * 0.5); o.parts.gpus = o.parts.gpus.slice(0, cap); } }
@@ -451,7 +474,8 @@ export class Game {
     if (s.day > LAST_DATA_DAY) this.endlessStep();
     this.checkFeatures();
     const day = s.day;
-    const minedByCoin = {};
+    // Gutschrift nur für den Teil des Tages, der noch nicht gutgeschrieben ist (erster Tag ab dem Einschalten, vorab verkaufte Anteile)
+    const D = day - 1, minedByCoin = {}, startK = Math.max(0, 1 - Math.max(s.mineDay0 === D ? s.mineFrac0 || 0 : 0, s.accr?.day === D ? s.accr.f : 0));
     let elecCost = 0;
     const netOwn = {};
     for (const id of s.unlocked) {
@@ -467,7 +491,7 @@ export class Game {
         for (const u of a.units) {
           if (!u.coin || !u.rev) continue;
           const c = u.coin;
-          const coins = (u.h * sm.throttle) / (this.netHash(c, day) + (s.lastNet[c] || 0)) * COIN[c].emission(day) * this.fx('rev');
+          const coins = (u.h * sm.throttle) / (this.netHash(c, day) + (s.lastNet[c] || 0)) * COIN[c].emission(day) * this.fx('rev') * startK;
           minedByCoin[c] = (minedByCoin[c] || 0) + coins;
           netOwn[c] = (netOwn[c] || 0) + u.h * sm.throttle;
           if (c === 'LTC' && day >= COIN.DOGE.mergedFrom) { const w = (u.h * sm.throttle) / (this.netHash('DOGE', day) + (s.lastNet.DOGE || 0)) * COIN.DOGE.emission(day); minedByCoin.DOGE = (minedByCoin.DOGE || 0) + w; netOwn.DOGE = (netOwn.DOGE || 0) + u.h * sm.throttle; }
@@ -483,12 +507,13 @@ export class Game {
     for (const [c, n] of Object.entries(minedByCoin)) {
       const p = this.price(c, day); minedUSD += n * p; s.stats.coins[c] = (s.stats.coins[c] || 0) + n;
       const sell = n * s.autoSell[c];
-      sold += sell * p;
+      sold += sell * p * (s.skills ? 1 - this.tradeFee() : 1);
       const keep = n - sell;
       if (s.payoutCold) s.wallet[c].cold += keep; else s.wallet[c].ex += keep;
     }
     s.cash += sold - elecCost;
     s.stats.minedUSD += minedUSD; s.stats.sold += sold; s.stats.elec += elecCost;
+    if (minedUSD > 0 && s.skills) this.addXp('mining', 6, true);
     // Fixkosten
     let fixed = 0;
     for (const id of s.unlocked) fixed += FACILITY[id].rent / 30.4;
@@ -674,7 +699,7 @@ export class Game {
   // ---------- Wallet ----------
   sell(coin, frac) {
     const w = this.s.wallet[coin]; const n = w.ex * frac; if (n <= 0) return 0;
-    const usd = n * this.price(coin) * 0.995; w.ex -= n; this.s.cash += usd; this.s.stats.sold += usd; this.dayUpdate(true); return usd;
+    const usd = n * this.price(coin) * (1 - (this.s.skills ? this.tradeFee() : 0.005)); w.ex -= n; this.s.cash += usd; this.s.stats.sold += usd; if (this.s.skills) this.addXp('trade', 15 + Math.min(60, usd / 10)); this.dayUpdate(true); return usd;
   }
   buy(coin, usd) {
     usd = Math.min(+usd || 0, this.s.cash); if (!(usd > 0) || !this.canAfford(usd)) return 0;

@@ -34,6 +34,8 @@ world.onPlace = (type, x, z, rot, template) => {
 const splash = document.getElementById('splash');
 const hasSave = game.hasSave();
 if (hasSave) {
+  // Hintergrund im Titel: das eigene Zimmer aus dem Spielstand
+  try { if (game.load()) { world.syncObjects(); world.syncLoose(); } } catch (e) { /* neuer Stand bleibt */ }
   const b = document.getElementById('btn-continue'); b.classList.remove('hidden'); b.classList.add('primary'); document.getElementById('btn-new').classList.remove('primary');
   const info = game.saveInfo(); if (info) b.innerHTML = `<span class="bi"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span><span class="bt">Weiterspielen<small>${fmtDate(info.day)} · ${fmtUSD(info.cash)}</small></span>`;
 }
@@ -41,7 +43,7 @@ let splashOrbit = true;
 document.getElementById('btn-new').onclick = () => {
   game.newGame(); splash.classList.add('hidden'); splashOrbit = false;
   world.setMode('ui');
-  ui.switchSite('kinder'); ui.speedBar(); ui.ticker();
+  ui.switchSite('kinder'); world.syncLoose(); ui.speedBar(); ui.ticker();
   ui.introPhone(() => { ui.setSpeed(1); ui.keysHint(); ui.tutorial(); });
 };
 document.getElementById('btn-continue').onclick = () => {
@@ -52,7 +54,7 @@ document.getElementById('btn-continue').onclick = () => {
 window.addEventListener('beforeunload', () => { if (splash.classList.contains('hidden')) game.save(); });
 
 // Tastatur (Hotkeys)
-const HOT = { g: () => ui.goalActionKey(), b: () => ui.toggleBuild(), m: () => ui.market(), p: () => ui.phone(), c: () => ui.company(), t: () => ui.techs(), l: () => ui.ranking(), k: () => ui.toggleMap() };
+const HOT = { j: () => ui.skills(), g: () => ui.goalActionKey(), b: () => ui.toggleBuild(), m: () => ui.market(), p: () => ui.phone(), c: () => ui.company(), t: () => ui.techs(), l: () => ui.ranking(), k: () => ui.toggleMap() };
 window.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || !splash.classList.contains('hidden')) return;
   const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
@@ -68,8 +70,8 @@ window.addEventListener('keydown', (e) => {
   if (HOT[k] && (world.mode === 'play' || world.mode === 'ui' || ui.paused || world.mode === 'map')) {
     if (world.mode === 'map' && k !== 'k') return;
     if (k === 'b' && world.mode === 'ui' && document.body.classList.contains('show-build')) { ui.resume(); return; }
-    if (k !== 'b' && k !== 'k' && ui.modalKind && ui.modalKind === { m: 'market', p: 'phone', c: 'company', t: 'techs', l: 'ranking' }[k]) { ui.resume(); return; }
-    const NEED = { b: 'build', m: 'market', p: 'phone', c: 'company', t: 'techs', l: 'ranking', k: 'map' };
+    if (k !== 'b' && k !== 'k' && ui.modalKind && ui.modalKind === { m: 'market', p: 'phone', c: 'company', t: 'techs', l: 'ranking', j: 'skills' }[k]) { ui.resume(); return; }
+    const NEED = { b: 'build', m: 'market', p: 'phone', c: 'company', t: 'techs', l: 'ranking', k: 'map', j: 'skills' };
     if (NEED[k] && !game.has(NEED[k])) { ui.toast('Noch nicht freigeschaltet.', 'info', 1800); return; }
     HOT[k](); return;
   }
@@ -92,14 +94,14 @@ function loop(now) {
     world.camera.position.set(3.3, 1.6, 3.05);
     world.controls.target.set(2.6 + Math.sin(t) * 0.7, 1.05 + Math.sin(t * 0.7) * 0.12, 0.4 + Math.cos(t) * 0.3);
     s.frac = 0.83;
-  } else if (s.speed && document.getElementById('modal').classList.contains('hidden') && !ui.paused) {
+  } else if (s.speed && document.getElementById('modal').classList.contains('hidden') && !ui.paused && (s.flags.miningStarted || !s.feat)) { // Zeit steht, bis der erste PC läuft
     s.frac += dt / SEC_PER_DAY[s.speed];
     let n = 0;
     while (s.frac >= 1 && n < 4) { s.frac -= 1; game.advanceDay(); n++; }
     if (s.frac >= 1) s.frac = 0.99;
   }
   screenTimer -= dt; if (world.screensDirty) { world.screensDirty = false; screenTimer = 0; } if (screenTimer <= 0) { screenTimer = 1.0; world.updateStatus(); world.drawScreens(); if (!splashOrbit) ui.tutorial(); const sm = game.summary[s.current]; if (sm) audio.setLoad(sm.watt, !sm.tripped && !splashOrbit); if (world.aim) ui.prompt(world.aim); }
-  ui.liveWallet();
+  ui.liveWallet(); ui.objMarker();
   world.update();
   requestAnimationFrame(loop);
 }

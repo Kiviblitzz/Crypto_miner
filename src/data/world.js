@@ -45,9 +45,10 @@ export const FACILITY = Object.fromEntries(FACILITIES.map((f) => [f.id, f]));
 export const CHAPTERS = [
   {
     title: 'Kapitel 1 – Das Kinderzimmer', unlock: 'keller', minDate: '2011-01-01',
-    intro: 'Oktober 2010. Papas Laden steckt in Schulden. Du hast ein leeres PC-Gehäuse, 400 $ Erspartes und eine Idee.',
+    intro: 'Oktober 2010. Papas Laden steckt in Schulden. Du hast ein leeres PC-Gehäuse, ein paar alte Teile und eine Idee.',
     goals: [
-      { id: 'pcbuild', text: 'Bau deinen Mining-PC zusammen', check: (s) => s.flags.miningStarted || !!s.flags.pcBuilt, progress: (s) => { const pc = s.fac.kinder.objects.find((o) => o.type === 'tower'); const p = pc?.parts || {}; return [[p.mobo, p.cpu, p.gpus?.length, p.psu].filter(Boolean).length, 4, 'parts']; } },
+      { id: 'collect', text: 'Sammle die PC-Teile im Zimmer ein', check: (s) => s.flags.miningStarted || !s.loose || !Object.keys(s.loose).length, progress: (s) => [4 - Object.keys(s.loose || {}).length, 4, 'parts'] },
+      { id: 'pcbuild', text: 'Bau die Teile in deinen PC ein', check: (s) => s.flags.miningStarted || !!s.flags.pcBuilt, progress: (s) => { const pc = s.fac.kinder.objects.find((o) => o.type === 'tower'); const p = pc?.parts || {}; return [[p.mobo, p.cpu, p.gpus?.length, p.psu].filter(Boolean).length, 4, 'parts']; } },
       { id: 'look', text: 'Schalte deinen PC ein', check: (s) => s.flags.miningStarted },
       { id: 'sell', text: 'Verkaufe deine Bitcoin am Monitor', check: (s) => s.stats.sold > 0 },
       { id: 'gpu', text: 'Bau eine zweite Grafikkarte ein', check: (s) => s.flags.boughtGpu },
@@ -223,7 +224,8 @@ export const TECHS = [
 // Funktionen, die nach und nach freigeschaltet werden (mit kurzer Erklärung)
 export const FEATURES = {
   phone: { title: 'Handy', key: 'P', text: 'Nachrichten liest du mit <kbd>P</kbd>.' },
-  market: { title: 'Börse', key: 'E', text: 'Am <b>Monitor</b> verkaufst du Bitcoin für Dollar.' },
+  skills: { title: 'Fähigkeiten', key: 'J', text: 'Was du tust, lernst du. <kbd>J</kbd> zeigt deine Fähigkeiten.' },
+  market: { title: 'Börse', key: 'M', text: 'Am <b>Monitor</b> verkaufst du Bitcoin für Dollar.' },
   build: { title: 'Bauen', key: 'B', text: '<kbd>B</kbd> öffnet den Katalog. Klick stellt hin.' },
   speed2: { title: 'Zeitraffer', key: '2', text: '<kbd>1</kbd> <kbd>2</kbd> Tempo, <kbd>Leertaste</kbd> Pause.' },
   heat: { title: 'Wärmebild', key: 'H', text: '<kbd>H</kbd> zeigt, wo es zu heiß wird.' },

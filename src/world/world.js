@@ -24,12 +24,12 @@ const GradeShader = {
     ' c.rgb *= mix(1.0 - vignette, 1.0, v); gl_FragColor = c; }',
 };
 import { buildRoom, buildOutside } from './rooms.js';
-import { objectModel } from './models.js';
+import { objectModel, rigPartModel, loosePartModel } from './models.js';
 import { nightMats, nightGround } from './rooms.js';
 const NIGHT_GRASS = new THREE.Color(0x1d2a1f), NIGHT_FACADE = new THREE.Color(0x4a5068);
 import { M, mat } from './materials.js';
 import { FACILITY } from '../data/world.js';
-import { PLACEABLE } from '../data/hardware.js';
+import { PLACEABLE, PART } from '../data/hardware.js';
 import { fmtHash, fmtUSD, fmtDate, fmtCoin } from '../sim/game.js';
 
 const tmpV = new THREE.Vector3();
@@ -122,6 +122,11 @@ export class World {
     Object.assign(this.outline, { edgeStrength: 1.8, edgeGlow: 0, edgeThickness: 1, pulsePeriod: 0 });
     this.outline.visibleEdgeColor.set(0xffdda0); this.outline.hiddenEdgeColor.set(0x4a4030);
     this.composer.addPass(this.outline);
+    // Leuchten für herumliegende Teile (nur am Anfang aktiv)
+    this.glow = new OutlinePass(new THREE.Vector2(1280, 720), this.scene, this.camera);
+    Object.assign(this.glow, { edgeStrength: 4.5, edgeGlow: 1.2, edgeThickness: 2.2, pulsePeriod: 1.8, enabled: false });
+    this.glow.visibleEdgeColor.set(0xffb547); this.glow.hiddenEdgeColor.set(0x5a3a10);
+    this.composer.addPass(this.glow);
     { const vp = new RenderPass(this.vm.scene, this.camera); vp.clear = false; vp.clearDepth = true; this.composer.addPass(vp); }
     this.bloom = new UnrealBloomPass(new THREE.Vector2(512, 512), 0.28, 0.55, 1.1);
     this.composer.addPass(this.bloom);
@@ -144,6 +149,7 @@ export class World {
     this.bindInput();
     window.addEventListener('resize', () => this.resize()); this.resize();
     game.on('objects', (fac) => { if (fac === this.facId) this.syncObjects(); });
+    game.on('loose', () => this.syncLoose());
     game.on('update', () => this.spawnIncome());
   }
 
@@ -174,7 +180,7 @@ export class World {
     this.entries.clear();
     const def = this.def = FACILITY[id]; this.facId = id;
     if (this.gtao) this.gtao.enabled = def.tier <= 2; // in großen Hallen zu teuer
-    this.room = buildRoom(def); this.scene.add(this.room.root); this.screensDirty = true;
+    this.room = buildRoom(def); this.scene.add(this.room.root); this.screensDirty = true; this.syncLoose();
     this.outside = buildOutside(this.room.outside, def); this.scene.add(this.outside);
     this.roomLights = this.room.lights.map((L) => { const p = new THREE.PointLight(L.color, L.intensity, L.dist, 1.6); p.position.set(...L.pos); this.scene.add(p); return p; });
     if (this.gridHelper) this.scene.remove(this.gridHelper);
@@ -223,6 +229,7 @@ export class World {
       seen.add(o.uid);
       let e = this.entries.get(o.uid);
       const key = this.objKey(o);
+      if (e && e.key === '__anim' && this.install?.uid === o.uid) { e.obj = o; continue; }
       if (e && e.key !== key) { this.objGroup.remove(e.group); e = null; }
       if (!e) {
         const g = objectModel(o); g.traverse((m) => { m.userData.uid = o.uid; });
@@ -246,11 +253,13 @@ export class World {
       else if (a?.status === 'broken' || a?.status === 'partial') icon = 'broken';
       else if (a?.status === 'incomplete' || a?.status === 'psu') icon = 'warn';
       else if (a?.status === 'empty') icon = 'empty';
+      else if (e.obj.type === 'tower' && e.obj.parts && !this.game.s.flags.miningStarted) icon = null; // dafür gibt es den Zielhinweis am Objekt
       else if (a?.status === 'off' && e.obj.parts && !this.game.pcReady(e.obj)) icon = 'empty';
       else if (a?.status === 'idle' || a?.status === 'off') icon = 'sleep';
       e.running = !sm.tripped && a && a.watt > 0;
+      if (e.obj.type === 'tower') { if (!e.light) { e.light = new THREE.PointLight(0xffa860, 0, 0.7, 2); e.light.position.set(0, 0.34, 0); e.group.add(e.light); } e.light.intensity = e.running ? 0.7 : 0; }
       e.sprite.visible = !!icon && this.mode !== 'title' && !(this.focus && this.focusUid === uid);
-      if (icon) { e.sprite.material.map = this.icons[icon]; const bb = e.group.userData.bbox; e.sprite.position.set(0, (bb ? bb.max.y : 1) + 0.22, 0); e.sprite.scale.set(sc, sc, sc); }
+      if (icon) { e.sprite.material.map = this.icons[icon]; const bb = e.group.userData.bbox; e.sprite.position.set(0, (bb ? bb.max.y : 1) + (e.obj.type === 'tower' ? 0.1 : 0.22), 0); e.sprite.scale.set(sc, sc, sc); }
     }
     if (this.selected) this.refreshSelBox();
     this.syncPeople();
@@ -265,13 +274,88 @@ export class World {
     this.focusUid = e ? uid : null;
     if (!e) { this.focus = null; this.updateStatus(); return; }
     const o = e.obj, rot = -(o.rot || 0) * Math.PI / 2, rotV = (x, y, z) => new THREE.Vector3(x, y, z).applyAxisAngle(new THREE.Vector3(0, 1, 0), rot).add(new THREE.Vector3(o.x, 0, o.z));
-    const pos = rotV(0.78, 0.62, 0.42), look = rotV(0, 0.27, 0);
+    const pos = rotV(0.8, 0.5, 0.3), look = rotV(0, 0.26, 0);
     const right = new THREE.Vector3().subVectors(look, pos).cross(new THREE.Vector3(0, 1, 0)).normalize();
-    look.addScaledVector(right, 0.17);
+    look.addScaledVector(right, 0.16);
     const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(pos, look, new THREE.Vector3(0, 1, 0)));
     this.focus = { pos, q, light: rotV(0.02, 0.36, 0) };
     if (!this.focusLight) { this.focusLight = new THREE.PointLight(0xffe2b8, 0, 0.9, 1.6); this.scene.add(this.focusLight); }
     if (e.sprite) e.sprite.visible = false;
+  }
+  // Einbau-Animation: das neue Teil gleitet von der offenen Seite ins Gehäuse und rastet ein
+  animateInstall(uid, type) {
+    const e = this.entries.get(uid), o = e?.obj; if (!e || !o?.parts) return;
+    const p = o.parts, without = { ...p, gpus: [...(p.gpus || [])] };
+    if (type === 'gpu') without.gpus.pop(); else without[type] = null;
+    const base = objectModel({ ...o, parts: without }); base.traverse((m) => { m.userData.uid = uid; });
+    const part = rigPartModel(o, type); part.traverse((m) => { m.castShadow = true; m.userData.uid = uid; });
+    base.add(part); base.add(e.sprite);
+    this.objGroup.remove(e.group); e.group = base; e.key = '__anim'; this.objGroup.add(base);
+    base.position.set(o.x, 0, o.z); base.rotation.y = -o.rot * Math.PI / 2;
+    this.install = { uid, part, t: 0 }; this.updateInstall(0);
+    if (this.outline && this.selected === uid) this.outline.selectedObjects = [base];
+  }
+  updateInstall(dt) {
+    const a = this.install; if (!a) return;
+    a.t += dt; const k = Math.min(1, a.t / 0.38), c1 = 1.70158, c3 = c1 + 1, eb = 1 + c3 * Math.pow(k - 1, 3) + c1 * Math.pow(k - 1, 2);
+    a.part.position.set((1 - eb) * 0.08, (1 - k) * (1 - k) * 0.03, 0);
+    if (a.t > 0.55) { this.install = null; const e = this.entries.get(a.uid); if (e) e.key = null; this.syncObjects(); if (this.selected === a.uid) this.refreshSelBox(); this.onInstalled?.(a.uid); }
+  }
+  // Weltpunkt → Bildschirmposition (für Hinweise am Objekt)
+  toScreen(x, y, z) {
+    const cam = this.camera; cam.updateMatrixWorld(); const cs = new THREE.Vector3(x, y, z).applyMatrix4(cam.matrixWorldInverse), v = new THREE.Vector3(x, y, z).project(cam);
+    const sx = (v.x + 1) / 2 * innerWidth, sy = (1 - v.y) / 2 * innerHeight, front = cs.z < -0.1;
+    return { x: sx, y: sy, front, on: front && sx > 40 && sx < innerWidth - 40 && sy > 60 && sy < innerHeight - 40, side: cs.x < 0 ? -1 : 1, dist: cam.position.distanceTo(new THREE.Vector3(x, y, z)) };
+  }
+  // Herumliegende Teile im Zimmer (leuchten, bis man sie aufhebt)
+  syncLoose() {
+    if (!this.looseGroup) { this.looseGroup = new THREE.Group(); this.scene.add(this.looseGroup); }
+    const s = this.game.s, spots = this.room?.looseSpots, want = spots && s?.loose ? Object.keys(s.loose).filter((t) => spots[t]) : [];
+    this.looseItems ||= {};
+    for (const [t, g] of Object.entries(this.looseItems)) if (!want.includes(t) && !g.userData.flying) { this.looseGroup.remove(g); delete this.looseItems[t]; }
+    for (const t of want) {
+      if (this.looseItems[t]) continue;
+      const [x, y, z, ry] = spots[t], g = loosePartModel(t, s.loose[t]);
+      g.position.set(x, y, z); g.rotation.y = ry; g.traverse((m) => { m.userData.loose = t; if (m.isMesh) { m.castShadow = true; } });
+      const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.haloTex(), color: 0xffb547, transparent: true, opacity: 0.5, depthWrite: false, blending: THREE.AdditiveBlending }));
+      halo.scale.set(0.55, 0.55, 1); halo.position.y = 0.06; halo.userData.halo = true; g.add(halo); g.userData.y0 = y;
+      this.looseGroup.add(g); this.looseItems[t] = g;
+    }
+    const left = Object.values(this.looseItems).filter((g) => !g.userData.flying);
+    this.glow.selectedObjects = left; this.glow.enabled = left.length > 0;
+  }
+  haloTex() {
+    if (this._halo) return this._halo; const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+    const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64); gr.addColorStop(0, 'rgba(255,220,150,.9)'); gr.addColorStop(0.35, 'rgba(255,180,70,.35)'); gr.addColorStop(1, 'rgba(255,160,40,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+    this._halo = new THREE.CanvasTexture(c); this._halo.colorSpace = THREE.SRGBColorSpace; return this._halo;
+  }
+  // Aufheben: das Teil fliegt kurz zur Kamera und verschwindet
+  pickupFx(t) {
+    const g = this.looseItems?.[t]; if (!g) return; g.userData.flying = 0.001; this.syncLoose();
+  }
+  updateLoose(dt) {
+    if (!this.looseItems) return;
+    for (const [t, g] of Object.entries(this.looseItems)) {
+      const h = g.children.find((c) => c.userData.halo); if (h) h.material.opacity = 0.32 + 0.22 * Math.sin(this.t * 3.2 + g.position.x * 3);
+      if (g.userData.flying) {
+        const f = (g.userData.flying += dt), k = Math.min(1, f / 0.42), tgt = this.camera.position.clone().add(new THREE.Vector3(0, -0.25, 0));
+        g.position.lerp(tgt, k * 0.35); g.scale.setScalar(Math.max(0.05, 1 - k)); g.rotation.y += dt * 6;
+        if (k >= 1) { this.looseGroup.remove(g); delete this.looseItems[t]; }
+      }
+    }
+  }
+  // Erstes Einschalten: Lüfter laufen hoch, der Monitor bootet den Miner
+  powerOn(uid) {
+    const e = this.entries.get(uid); if (e) e.spinK = 0;
+    this.bootT = this.t; this.screensDirty = true; this.pulse(uid); const e2 = this.entries.get(uid), bb = e2?.group.userData.bbox; if (e2 && !this.focus) this.coinBurst(new THREE.Vector3(e2.group.position.x, (bb ? bb.max.y : 0.5) + 0.1, e2.group.position.z), 6);
+  }
+  // Kamera zum Monitor (Miner bootet)
+  focusMonitor() {
+    const pr = this.room?.props?.find((p) => p.action === 'market'); if (!pr) return;
+    const pos = new THREE.Vector3(pr.c[0] - 0.12, pr.c[1] + 0.08, pr.c[2] + 0.95), look = new THREE.Vector3(pr.c[0] + 0.2, pr.c[1] - 0.03, pr.c[2]);
+    const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(pos, look, new THREE.Vector3(0, 1, 0)));
+    this.focus = { pos, q, light: new THREE.Vector3(pr.c[0], pr.c[1], pr.c[2] + 0.35) }; this.focusUid = null;
+    if (!this.focusLight) { this.focusLight = new THREE.PointLight(0xffe2b8, 0, 0.9, 1.6); this.scene.add(this.focusLight); }
   }
   select(uid) {
     this.selected = uid; this.refreshSelBox();
@@ -353,6 +437,7 @@ export class World {
     this.controls.enabled = m === 'map';
     if (m === 'play') this.requestLock();
     else if (document.pointerLockElement) { this.expectUnlock = true; document.exitPointerLock(); }
+    if (this.looseGroup) { this.looseGroup.visible = m !== 'title'; this.glow.enabled = m !== 'title' && this.glow.selectedObjects.length > 0; }
     if (m !== 'play') { this.aim = null; this.onAim?.(null); if (!this.selected) this.selBox.visible = false; this.popups?.forEach((p) => (p.visible = false)); }
     this.onModeChange?.(m);
   }
@@ -405,7 +490,8 @@ export class World {
   primaryAction() {
     if (this.placing) { this.confirmPlacement(); return; }
     const a = this.aim; if (!a) return;
-    if (a.door) this.onDoor?.(a.door);
+    if (a.loose) this.onLoose?.(a.loose);
+    else if (a.door) this.onDoor?.(a.door);
     else if (a.prop) this.onProp?.(a.prop);
     else if (a.uid) this.onInteract?.(a.uid);
   }
@@ -414,21 +500,22 @@ export class World {
     if (this.placing) { if (this.aim) { this.aim = null; this.onAim?.(null); } this.selBox.visible = false; this.outline.selectedObjects = []; return; }
     this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
     this.raycaster.far = this.reach() + 1.5;
-    const hits = this.raycaster.intersectObjects([...this.objGroup.children, ...this.doorGroup.children, this.room.root], true);
+    const hits = this.raycaster.intersectObjects([...this.objGroup.children, ...this.doorGroup.children, ...(this.looseGroup?.children || []), this.room.root], true);
     this.raycaster.far = Infinity;
     let aim = null;
     for (const h of hits) {
       const o = h.object; if (o.isSprite) continue;
+      if (o.userData.loose) { aim = { loose: o.userData.loose, dist: h.distance }; break; }
       if (o.userData.door) { aim = { door: o.userData.door, dist: h.distance }; break; }
       if (o.userData.prop) { aim = { prop: o.userData.prop, dist: h.distance }; break; }
       if (o.userData.uid) { aim = { uid: o.userData.uid, dist: h.distance }; break; }
       if (o.isMesh && o.visible) break; // Wand/Möbel verdeckt
     }
-    const key = aim ? (aim.uid || (aim.door || aim.prop).label) : null, prev = this.aim ? (this.aim.uid || (this.aim.door || this.aim.prop)?.label) : null;
+    const akey = (a) => (a ? a.uid || (a.loose && 'loose:' + a.loose) || (a.door || a.prop)?.label : null), key = akey(aim), prev = akey(this.aim);
     this.aim = aim;
     if (key !== prev) this.onAim?.(aim);
-    const e = aim?.uid && this.entries.get(aim.uid);
-    this.outline.selectedObjects = e ? [e.group] : [];
+    const e = aim?.uid && this.entries.get(aim.uid), lp = aim?.loose && this.looseItems?.[aim.loose];
+    this.outline.selectedObjects = e ? [e.group] : lp ? [lp] : [];
     if (!this.selected) this.selBox.visible = false;
   }
   pick() { return this.aim?.uid || null; }
@@ -437,7 +524,7 @@ export class World {
 
   // ---------- Schwebende Ertrags-Einblendungen ----------
   spawnIncome() {
-    if (this.empire || this.mode === 'title' || !this.game.s.speed || document.body.classList.contains('show-build')) return;
+    if (this.empire || this.mode !== 'play' || this.focus || !this.game.s.speed || document.body.classList.contains('show-build')) return;
     const now = this.t; if (this.lastIncome && now - this.lastIncome < 1.1) return; this.lastIncome = now;
     const sm = this.game.summary[this.facId]; if (!sm || sm.tripped) return;
     this.popups ||= [];
@@ -458,7 +545,7 @@ export class World {
       this.coinBurst(p.position, 3); this.onIncome?.();
     }
   }
-  pulse(uid) { const e = this.entries.get(uid); if (!e || !this.outline) return; this.outline.selectedObjects = [e.group]; this.outline.pulsePeriod = 0.5; this.outline.visibleEdgeColor.set(0xffc23a); clearTimeout(this.pulseT); this.pulseT = setTimeout(() => { this.outline.pulsePeriod = 0; this.outline.visibleEdgeColor.set(0xffdda0); }, 1500); const bb = e.group.userData.bbox; this.coinBurst(new THREE.Vector3(e.group.position.x, (bb ? bb.max.y : 0.5) + 0.1, e.group.position.z), 6); }
+  pulse(uid) { const e = this.entries.get(uid); if (!e || !this.outline) return; this.outline.selectedObjects = [e.group]; this.outline.pulsePeriod = 0.5; this.outline.visibleEdgeColor.set(0xffc23a); clearTimeout(this.pulseT); this.pulseT = setTimeout(() => { this.outline.pulsePeriod = 0; this.outline.visibleEdgeColor.set(0xffdda0); }, 1500); }
   // Vorschaubild für den Bau-Katalog: Modell im kleinen Fotostudio rendern (einmal pro Typ)
   thumbnail(type) {
     this.thumbs ||= new Map(); if (this.thumbs.has(type)) return this.thumbs.get(type);
@@ -830,11 +917,12 @@ export class World {
       } else this.player.apply();
       // Weiche Fahrt zur Nahansicht und zurück
       this.focusK = Math.max(0, Math.min(1, (this.focusK || 0) + (this.focus && this.mode === 'ui' ? dt : -dt) / 0.6));
-      if (this.focusK > 0 && (this.focus || this.lastFocus)) {
-        const f = this.focus || this.lastFocus, k = this.focusK * this.focusK * (3 - 2 * this.focusK);
-        this.camera.position.lerp(f.pos, k); this.camera.quaternion.slerp(f.q, k); this.lastFocus = f;
-        if (this.focusLight) { this.focusLight.position.copy(f.light); this.focusLight.intensity = 1.4 * k; }
-      } else if (this.focusLight) this.focusLight.intensity = 0;
+      if (this.focusK > 0 && (this.focus || this.fc)) {
+        const f = this.focus, k = this.focusK * this.focusK * (3 - 2 * this.focusK);
+        if (f) { if (!this.fc) this.fc = { pos: f.pos.clone(), q: f.q.clone(), light: f.light.clone() }; const a = 1 - Math.exp(-dt * 3.2); this.fc.pos.lerp(f.pos, a); this.fc.q.slerp(f.q, a); this.fc.light.lerp(f.light, a); }
+        this.camera.position.lerp(this.fc.pos, k); this.camera.quaternion.slerp(this.fc.q, k);
+        if (this.focusLight) { this.focusLight.position.copy(this.fc.light); this.focusLight.intensity = 0.9 * k; }
+      } else { this.fc = null; if (this.focusLight) this.focusLight.intensity = 0; }
     }
     this.vm.update(dt, { moving: this.player.moving && this.mode === 'play', bob: this.player.bob, placing: !!this.placing, visible: this.mode === 'play' || this.mode === 'ui', uiOpen: this.mode === 'ui' });
     // Tag/Nacht
@@ -842,17 +930,18 @@ export class World {
     if (this.mode === 'title' || this.visFrac == null) this.visFrac = s.frac;
     else { const df = (s.frac - this.visFrac + 1) % 1; this.visFrac = (this.visFrac + Math.min(df, dt / 90)) % 1; }
     this.updateDaylight(this.visFrac);
-    this.updatePeople(dt); this.updateSmoke(dt); this.updateWeather(dt); this.updatePopups(dt);
+    this.updatePeople(dt); this.updateSmoke(dt); this.updateWeather(dt); this.updatePopups(dt); this.updateInstall(dt); this.updateLoose(dt);
     // Lüfter & LEDs
     const fanSpeed = 28 * dt;
     for (const e of this.entries.values()) {
       if (!e.group.userData.fans.length) continue;
       const def = PLACEABLE[e.obj.type];
-      if (e.running && !this.game.s.paused) { const spd = def.kind === 'cooling' ? fanSpeed * 0.5 : fanSpeed; for (const f of e.group.userData.fans) f.rotateZ(spd); }
+      const run = e.running && !this.game.s.paused; e.spinK = run ? Math.min(1, (e.spinK ?? 1) + dt / 1.4) : Math.max(0, (e.spinK ?? 0) - dt / 2.5);
+      if (e.spinK > 0) { const spd = (def.kind === 'cooling' ? fanSpeed * 0.5 : fanSpeed) * e.spinK * e.spinK; for (const f of e.group.userData.fans) f.rotateZ(spd); }
     }
     const blink = (Math.sin(this.t * 7) > 0.2) ? 3.5 : 0.6, blink2 = (Math.sin(this.t * 5.3 + 1) > -0.3) ? 3 : 0.4;
     M.ledGreen().emissiveIntensity = blink; M.ledGreen2().emissiveIntensity = blink2; M.ledAmber().emissiveIntensity = blink2 * 0.9;
-    M.rgb().emissive.setHSL((this.t * 0.08) % 1, 1, 0.5);
+    M.rgb().emissive.setHSL(0.07 + 0.05 * Math.sin(this.t * 0.6), 0.95, 0.55);
     // Rendern
     if (this.quality === 'low') { const r = this.renderer; r.render(this.scene, this.camera); if (this.vm.root.visible) { r.autoClear = false; r.clearDepth(); r.render(this.vm.scene, this.camera); r.autoClear = true; } } else this.composer.render();
   }
@@ -906,6 +995,12 @@ export class World {
         g.fillText('miner v2.' + (s.day % 7) + ' – ' + fmtDate(s.day), 14, 34);
         g.font = '21px monospace';
         const lines = [];
+        if (this.bootT != null && this.t - this.bootT < 5.5) {
+          const pc = this.game.facObjects(this.facId).find((o) => o.type === 'tower'), gpu = pc?.parts?.gpus?.[0], a = pc && sm?.per.get(pc.uid);
+          const boot = ['Starte Miner ...', `GPU gefunden: ${gpu ? PART[gpu].name : '-'}`, 'Verbinde mit dem Bitcoin-Netz ...', `Schürfe! ${a?.units?.[0]?.h ? fmtHash(a.units[0].h, 'sha256') : ''}`];
+          boot.slice(0, 1 + Math.floor((this.t - this.bootT) / 1.1)).forEach((l, k) => g.fillText(l, 14, 76 + k * 34));
+          sc.tex.needsUpdate = true; continue;
+        }
         let i = 0;
         for (const o of this.game.facObjects(this.facId)) { const a = sm?.per.get(o.uid); if (!a || !a.units.length) continue; const u = a.units[0]; lines.push(`RIG${i++}: ${u.h ? fmtHash(u.h, u.algo) : 'idle'} ${u.coin || ''}`); if (lines.length >= 4) break; }
         lines.push(`BTC ${fmtUSD(this.game.price('BTC'))}  T ${sm ? sm.temp.toFixed(1) : '--'}C`);

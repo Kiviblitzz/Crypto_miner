@@ -2,7 +2,7 @@
 import { COINS, COIN, ALGO_LABEL } from '../data/coins.js';
 import { PLACEABLE, PART, CATEGORIES, PLACEABLES, PARTS } from '../data/hardware.js';
 import { FACILITIES, FACILITY, CHAPTERS, TECHS, FEATURES, MESSAGES } from '../data/world.js';
-import { fmtUSD, fmtNum, fmtCoin, fmtHash, fmtDate, fmtWatt } from '../sim/game.js';
+import { fmtUSD, fmtNum, fmtCoin, fmtHash, fmtDate, fmtWatt, SKILL_XP } from '../sim/game.js';
 import { toDay, BTC_HASH, inHeatwave, HALVINGS, BTC_REWARD } from '../data/history.js';
 
 const $ = (s) => document.querySelector(s);
@@ -11,6 +11,20 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 const SPEEDS = [{ l: 'II', v: 0, t: 'Pause (Leertaste)' }, { l: '1×', v: 1, t: '1 Tag = 4 Sekunden (Taste 1)' }, { l: '2×', v: 2, t: '1 Tag = 1,6 Sekunden (Taste 2)' }, { l: '3×', v: 3, t: '2 Tage pro Sekunde (Taste 3)' }, { l: '4×', v: 4, t: '8 Tage pro Sekunde (Taste 4)' }];
 const pctDE = (x) => (x * 100).toPrecision(3).replace('.', ',');
 const FACE = { Deniz: '', Mama: '', Papa: '‍', 'Opa Heinz': '', 'Viktor Kral': '' };
+
+const PART_ICON = {
+      mobo: '<rect x="3" y="3" width="18" height="18" rx="3"/><rect x="8" y="8" width="6" height="6" rx="1"/><path d="M17.5 7v4M17.5 14v3M6 17.5h4"/>',
+      cpu: '<rect x="6" y="6" width="12" height="12" rx="2"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/><path d="M9 2.5v3M12 2.5v3M15 2.5v3M9 18.5v3M12 18.5v3M15 18.5v3M2.5 9h3M2.5 15h3M18.5 9h3M18.5 15h3"/>',
+      gpu: '<rect x="2" y="6" width="20" height="11" rx="2.5"/><circle cx="9" cy="11.5" r="3"/><circle cx="16.5" cy="11.5" r="2"/><path d="M5 17v3M8.5 17v3"/>',
+      psu: '<rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="10" cy="12" r="4"/><path d="M10 9.5v5M7.5 12h5M17.5 9v6"/>' };
+const PNAME = { mobo: 'Mainboard', cpu: 'Prozessor', gpu: 'Grafikkarte', psu: 'Netzteil' };
+const SKILL = {
+  hw: { name: 'Schrauben', learn: 'Teile einbauen, Geräte aufstellen', icon: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5a1.8 1.8 0 0 0 2.5 2.5l5.8-5.8a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>', now: (lv) => (lv > 1 ? `Hardware ${4 * (lv - 1)} % günstiger` : 'Noch kein Bonus'), next: (lv) => `Hardware ${4 * lv} % günstiger` },
+  mining: { name: 'Mining', learn: 'Jeder Tag, an dem dein PC schürft', icon: '<path d="M14.5 4.5c2.8-.6 5.4.7 6.5 3-2.2-.9-4.4-.8-6.2.2"/><path d="M14.5 4.5c-2.6 1.3-4 3.7-4 6.3 1-1.8 2.7-3 4.8-3.6"/><path d="M12.6 9.8 3.5 19a1.6 1.6 0 0 0 2.3 2.3l9.2-9.2"/>', now: (lv) => (lv > 1 ? `+${4 * (lv - 1)} % Ertrag` : 'Noch kein Bonus'), next: (lv) => `+${4 * lv} % Ertrag` },
+  trade: { name: 'Handel', learn: 'Coins verkaufen', icon: '<circle cx="9" cy="9" r="5.5"/><path d="M14.6 8.8a5.5 5.5 0 1 1-5.8 5.8"/><path d="M9 6.8v4.4M7.2 9h3.6"/>', now: (lv) => `Gebühr ${[4, 3, 2, 1, 0.5][lv - 1].toLocaleString('de-DE')} %`, next: (lv) => `Gebühr ${[3, 2, 1, 0.5][lv - 1]?.toLocaleString('de-DE') ?? '–'} %` },
+};
+const skillSvg = (k, size = 22) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${SKILL[k].icon}</svg>`;
+const partSvg = (t, size = 22) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${PART_ICON[t]}</svg>`;
 
 export class UI {
   constructor(game, world) {
@@ -24,6 +38,8 @@ export class UI {
     world.onInteract = (uid) => this.openInspector(uid);
     world.onDoor = (door) => this.travel(door);
     world.onProp = (p) => this.useProp(p);
+    world.onLoose = (t) => { this.w.pickupFx(t); if (!this.g.pickUp(t)) return; this.audio?.install?.(); this.toast(`${PNAME[t]} eingesteckt`, 'good', 2200); this.goals(); };
+    game.on('xp', (k, n, lv) => this.xpPop(k, n, lv));
     world.onIncome = () => { this.bumpWallet(); this.audio?.tick?.(); };
     world.onLamp = (on) => this.toast(on ? 'Taschenlampe an' : 'Taschenlampe aus', 'info', 1500);
     world.onPause = () => this.pause(true);
@@ -112,13 +128,39 @@ export class UI {
     for (const id of s.unlocked) { const sm = g.summary[id]; if (!sm || sm.tripped) continue; for (const a of sm.per.values()) for (const u of a.units || []) if (u.coin === 'BTC' && u.rev > 0) r += (u.rev * sm.throttle) / p; }
     return r * (1 - (s.autoSell.BTC || 0));
   }
+  // Zielhinweis direkt am Objekt: wo der nächste Handgriff wartet
+  objMarker() {
+    const el = $('#objmark'); if (!el) return;
+    const g = this.g, s = g.s, w = this.w; let pos = null, label = '', aimed = false;
+    if (s.chapter === 0 && w.mode === 'play' && !this.paused && s.current === 'kinder') {
+      const pc = g.facObjects('kinder').find((o) => o.type === 'tower');
+      const spots = w.room?.looseSpots || {}, lying = Object.keys(s.loose || {}).filter((t) => spots[t]);
+      if (pc && !s.flags.miningStarted && lying.length && !(s.inv || []).length) { const cp = w.camera.position, d = (t) => Math.hypot(spots[t][0] - cp.x, spots[t][2] - cp.z) + (w.toScreen(spots[t][0], spots[t][1] + 0.1, spots[t][2]).on ? 0 : 100); const t = lying.sort((a, b) => d(a) - d(b))[0]; pos = [spots[t][0], spots[t][1] + 0.3, spots[t][2]]; label = `${PNAME[t]} aufheben`; aimed = w.aim?.loose === t; }
+      else if (pc && !s.flags.miningStarted) { pos = [pc.x, 0.78, pc.z]; label = g.pcReady(pc) ? 'PC einschalten' : (s.inv || []).length ? 'Teile einbauen' : 'PC zusammenbauen'; aimed = w.aim?.uid === pc.uid; }
+      else if (g.has('market') && !(s.stats.sold > 0)) { const pr = w.room?.props?.find((p) => p.action === 'market'); if (pr) { pos = [pr.c[0], pr.c[1] + 0.34, pr.c[2]]; label = 'Börse'; aimed = w.aim?.prop === pr; } }
+    }
+    const sp = pos && w.toScreen(...pos);
+    if (!sp || aimed) { el.classList.add('hidden'); return; }
+    el.classList.remove('hidden'); el.classList.toggle('edge', !sp.on); el.classList.toggle('left', !sp.on && sp.side < 0);
+    const ex = sp.side < 0 ? 150 : innerWidth - 150, ey = Math.min(innerHeight - 140, Math.max(200, sp.front ? sp.y : innerHeight * 0.55));
+    el.style.transform = sp.on ? `translate(${Math.round(sp.x)}px, ${Math.round(sp.y)}px)` : `translate(${ex}px, ${Math.round(ey)}px)`;
+    const t = el.querySelector('.om-t'); if (t.textContent !== label) t.textContent = label;
+  }
+  // Heute schon geschürft, aber noch nicht gutgeschrieben
+  pendingBtc() {
+    const s = this.g.s; if (!s.flags.miningStarted) return 0;
+    if (!this.rate || this.rateDay !== s.day) { this.rate = this.btcRate(); this.rateDay = s.day; }
+    const f0 = s.mineDay0 === s.day ? s.mineFrac0 || 0 : 0, fa = s.accr?.day === s.day ? s.accr.f : 0;
+    return (this.rate || 0) * Math.max(0, (s.frac || 0) - Math.max(f0, fa));
+  }
   liveWallet() {
     const g = this.g, s = g.s, el = $('#st-wallet'); if (!el) return;
     const on = (!s.feat || s.flags.miningStarted) && !document.getElementById('splash')?.offsetParent;
     el.style.display = on ? '' : 'none'; document.body.classList.toggle('has-wallet', on); if (!on) return;
     if (this.rateDay !== s.day || !this.rateT || performance.now() - this.rateT > 1000) { this.rate = this.btcRate(); this.rateDay = s.day; this.rateT = performance.now(); }
-    const w = s.wallet.BTC, live = w.ex + w.cold + (this.rate || 0) * (s.frac || 0);
+    const w = s.wallet.BTC, live = w.ex + w.cold + this.pendingBtc();
     const txt = `<div class="v"><span class="cn">₿</span> ${fmtCoin(live)}</div><div class="l">≈ ${fmtUSD(live * g.price('BTC'))}</div>`;
+    const pl = document.getElementById('pcb-live'); if (pl) { const t2 = '₿ ' + fmtCoin(live); if (pl.textContent !== t2) pl.textContent = t2; }
     if (txt !== this.walletTxt) { el.innerHTML = txt; this.walletTxt = txt; }
   }
   bumpWallet() { const el = $('#st-wallet'); if (!el) return; el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
@@ -208,7 +250,7 @@ export class UI {
     if (!$('#modal').classList.contains('hidden')) { this.modalKind = null; $('#modal').classList.add('hidden'); this.onModalClose?.(); this.onModalClose = null; }
     document.body.classList.remove('show-build', 'show-goals'); this.dock();
     if (this.inspUid) { this.inspUid = null; $('#inspector').classList.add('hidden'); this.w.select(null); }
-    this.w.focusObject?.(null);
+    this.w.focusObject?.(null); this.pickType = null; this.showRun = false;
     if (this.w.mode === 'ui' || this.w.mode === 'play') this.w.setMode('play');
   }
   pause(on) {
@@ -252,7 +294,9 @@ export class UI {
     const el = $('#prompt');
     if (!aim || this.w.mode !== 'play') { el.classList.add('hidden'); return; }
     let html = '';
-    if (aim.door) {
+    if (aim.loose) {
+      html = `<kbd>E</kbd>${PNAME[aim.loose]} aufheben`;
+    } else if (aim.door) {
       html = `<kbd>E</kbd>${esc(aim.door.label)}`;
     } else if (aim.prop) {
       html = `<kbd>E</kbd>${esc(aim.prop.hint)}`;
@@ -301,8 +345,9 @@ export class UI {
   // ---------- Inspektor ----------
   inspect(uid, keep = false) {
     const el = $('#inspector');
+    if (uid !== this.inspUid) this.pickType = null;
     this.inspUid = uid;
-    if (!uid) { el.classList.add('hidden'); this.w.focusObject?.(null); return; }
+    if (!uid) { el.classList.add('hidden'); this.pickType = null; this.showRun = false; this.w.focusObject?.(null); return; }
     const o = this.g.findObj(uid); if (!o) { el.classList.add('hidden'); this.inspUid = null; return; }
     el.classList.remove('hidden');
     const def = PLACEABLE[o.type], g = this.g;
@@ -311,7 +356,7 @@ export class UI {
     el.querySelector('.insp-x').onclick = () => this.resume();
     this.inspectStats();
     const c = $('#insp-ctrl');
-    if (!g.s.flags.miningStarted && def.kind === 'rig' && o.parts) { c.append(this.pcBuild(o)); return; }
+    if (def.kind === 'rig' && o.parts && o.type === 'tower' && g.s.chapter === 0 && (!g.s.flags.miningStarted || this.showRun)) { c.append(this.pcBuild(o)); return; }
     if ((def.kind === 'rig' || def.kind === 'device' || def.kind === 'holder') && g.has('coins')) {
       const a = g.summary[g.facOf(uid)]?.per.get(uid);
       const sec = h(`<div class="sec"><h4>Coin</h4></div>`);
@@ -351,6 +396,7 @@ export class UI {
     const a = sm.per.get(uid) || g.analyze(o);
     const badge = $('#insp-badge');
     const st = sm.tripped ? ['bad', 'Kein Strom'] : a.status === 'broken' ? ['bad', 'Defekt'] : a.status === 'partial' ? ['warn', 'Teilweise defekt'] : a.status === 'psu' ? ['bad', 'Netzteil zu schwach'] : a.status === 'incomplete' ? ['warn', 'Unvollständig'] : a.status === 'empty' ? ['idle', 'Leer'] : a.status === 'idle' ? ['idle', 'Pausiert (unrentabel)'] : a.status === 'off' ? ['idle', 'Aus'] : def.kind === 'decor' ? ['idle', 'Deko'] : ['ok', sm.throttle < 1 ? 'Läuft (gedrosselt)' : 'Läuft'];
+    if (this.showRun && g.s.flags.miningStarted && o.type === 'tower') { if (badge) badge.innerHTML = `<span class="badge ok"><i></i>Läuft</span>`; const se = $('#insp-stats'); if (se) se.innerHTML = ''; return; }
     if (!g.s.flags.miningStarted && def.kind === 'rig' && o.parts) { const n = 4 - g.pcMissing(o).length; if (badge) badge.innerHTML = `<span class="badge ${n === 4 ? 'ok' : 'idle'}"><i></i>${n} / 4 Teile</span>`; const se = $('#insp-stats'); if (se) se.innerHTML = ''; return; }
     if (badge) badge.innerHTML = `<span class="badge ${st[0]}"><i></i>${st[1]}</span>`;
     let rev = 0, hs = [];
@@ -371,86 +417,103 @@ export class UI {
     if (def.kind !== 'decor' && a.watt > 0) rows.push(['Verbrauch', fmtWatt(a.watt)]);
     if (def.kind === 'cooling') { rows.push(['Kühlleistung', fmtWatt(def.cool)]); rows.push(['Auslastung', `${Math.round((a.util ?? 1) * 100)} %`]); }
     if (sm.elec === 0 && g.s.flags.miningStarted) rows.push(['Strom', '<span class="pos">zahlt Mama</span>']);
-    if (a.units.length) { rows.push(['Ertrag / Tag', `<span class="pos">${fmtUSD(rev)}</span>`]); rows.push(['Strom / Tag', `<span class="neg">−${fmtUSD(cost)}</span>`]); rows.push(['Gewinn / Tag', `<b class="${rev - cost >= 0 ? 'pos' : 'neg'}">${fmtUSD(rev - cost)}</b>`]); }
+    if (a.units.length) { rows.push(['Ertrag / Tag', `<span class="pos">${fmtUSD(rev)}</span>`]); if (cost > 0.005) rows.push(['Strom / Tag', `<span class="neg">−${fmtUSD(cost)}</span>`]); if (cost > 0.005) rows.push(['Gewinn / Tag', `<b class="${rev - cost >= 0 ? 'pos' : 'neg'}">${fmtUSD(rev - cost)}</b>`]); }
     else if (def.kind === 'cooling') rows.push(['Strom / Tag', `<span class="neg">−${fmtUSD(cost)}</span>`]);
     const el = $('#insp-stats'); if (el) el.innerHTML = `<div class="kv">${rows.map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join('')}</div>`;
   }
   // Erster Mining-PC: Schritt für Schritt zusammenbauen
   pcBuild(o) {
-    const g = this.g, p = o.parts, ICON = {
-      mobo: '<rect x="3" y="3" width="18" height="18" rx="3"/><rect x="8" y="8" width="6" height="6" rx="1"/><path d="M17.5 7v4M17.5 14v3M6 17.5h4"/>',
-      cpu: '<rect x="6" y="6" width="12" height="12" rx="2"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/><path d="M9 2.5v3M12 2.5v3M15 2.5v3M9 18.5v3M12 18.5v3M15 18.5v3M2.5 9h3M2.5 15h3M18.5 9h3M18.5 15h3"/>',
-      gpu: '<rect x="2" y="6" width="20" height="11" rx="2.5"/><circle cx="9" cy="11.5" r="3"/><circle cx="16.5" cy="11.5" r="2"/><path d="M5 17v3M8.5 17v3"/>',
-      psu: '<rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="10" cy="12" r="4"/><path d="M10 9.5v5M7.5 12h5M17.5 9v6"/>' };
-    const steps = [['mobo', 'Mainboard', 'Hier kommt alles drauf'], ['cpu', 'Prozessor', 'Steuert den PC'], ['gpu', 'Grafikkarte', 'Rechnet beim Mining'], ['psu', 'Netzteil', 'Liefert den Strom']];
+    if (this.pickType) return this.pcPicker(o, this.pickType);
+    const g = this.g, s = g.s, p = o.parts, spots = this.w.room?.looseSpots || {};
+    const steps = [['mobo', 'Mainboard'], ['cpu', 'Prozessor'], ['gpu', 'Grafikkarte'], ['psu', 'Netzteil']];
     const cur = (t) => (t === 'gpu' ? p.gpus[0] : p[t]);
-    const nextI = steps.findIndex(([t]) => !cur(t));
-    const sec = h('<div class="pcb"></div>');
-    steps.forEach(([t, lab, hint], i) => {
-      const id = cur(t), it = id ? PART[id] : null, isNext = i === nextI, locked = !it && nextI >= 0 && i > nextI;
-      const row = h(`<div class="pcb-step ${it ? 'done' : ''} ${isNext ? 'next' : ''} ${locked ? 'locked' : ''}"><span class="ic"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICON[t]}</svg>${it ? '<i class="tick"></i>' : ''}</span><div class="tx"><b>${lab}</b><span>${it ? esc(it.name) : hint}</span></div><button class="btn small ${isNext ? 'primary' : ''}" ${locked ? 'disabled' : ''}>${it ? 'Tauschen' : 'Wählen'}</button></div>`);
-      row.querySelector('button').onclick = () => this.firstPicker(o, t);
+    const running = s.flags.miningStarted;
+    const sec = h(`<div class="pcb ${running ? 'running' : ''}"></div>`);
+    if (running) sec.append(h(`<div class="pcb-live"><span class="lab">Schon geschürft</span><b id="pcb-live">₿ 0</b><span class="sub">Dein PC arbeitet jetzt für dich.</span></div>`));
+    steps.forEach(([t, lab]) => {
+      const id = cur(t), it = id ? PART[id] : null, carried = s.inv?.includes(t), lying = s.loose?.[t];
+      const needMobo = !it && carried && (t === 'cpu' || t === 'gpu') && !p.mobo;
+      const st = it ? 'done' : carried ? (needMobo ? 'wait' : 'next') : 'lying';
+      const sub = it ? esc(it.name) : carried ? (needMobo ? 'Erst das Mainboard einbauen' : 'In deiner Tasche') : lying ? `Liegt ${spots[t]?.[4] || 'im Zimmer'}` : '–';
+      const row = h(`<div class="pcb-step ${st === 'done' ? 'done' : st === 'next' ? 'next' : 'locked'}"><span class="ic">${partSvg(t)}${it ? '<i class="tick"></i>' : ''}</span><div class="tx"><b>${lab}</b><span>${sub}</span></div>${st === 'next' ? '<button class="btn small primary">Einbauen</button>' : ''}</div>`);
+      const b = row.querySelector('button');
+      if (b) b.onclick = () => {
+        if (!g.installLoose(o.uid, t)) return;
+        this.inspect(o.uid); this.w.animateInstall?.(o.uid, t); setTimeout(() => this.audio?.install?.(), 260);
+        this.toast(g.pcReady(o) ? 'Alle Teile sind drin. Schalt deinen PC ein!' : `${lab} eingebaut`, 'good', 2600);
+      };
       sec.append(row);
     });
-    // Live-Vorschau: was der PC mit den eingebauten Teilen schafft
-    const hs = [p.cpu, ...p.gpus].filter(Boolean).reduce((a, id) => a + (PART[id].hash.sha256 || 0), 0), watt = g.rigWatt(o);
-    const rev = hs ? g.revenueFor({ sha256: hs }, 'BTC', 99) : 0, px = g.price('BTC') || 1;
-    const rows = [['Rechenleistung', hs ? fmtHash(hs, 'sha256') : '–'], ['Verbrauch', p.psu ? `${watt} W von ${PART[p.psu].cap} W` : `${watt} W`], ['Ertrag / Tag', rev ? `<span class="pos">≈ ${Math.round(rev / px).toLocaleString('de-DE')} BTC</span> <span style="color:var(--dim)">(${fmtUSD(rev)})</span>` : '–']];
-    sec.append(h(`<div class="kv pcb-sum">${rows.map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join('')}</div>`));
-    const ready = g.pcReady(o);
-    const on = h(`<div class="sec start"><button class="btn primary big wide ${ready ? 'glow' : ''}" ${ready ? '' : 'disabled'}><span class="bi"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg></span><span class="bt">PC einschalten</span></button>${ready ? '' : `<div class="pcb-left">Noch ${g.pcMissing(o).length} ${g.pcMissing(o).length === 1 ? 'Teil' : 'Teile'} bis zum Einschalten</div>`}</div>`);
-    on.querySelector('button').onclick = () => { if (!g.startMining(o.uid)) return; this.audio?.powerOn(); this.w.pulse?.(o.uid); this.toast('Dein PC läuft und schürft Bitcoin!', 'good', 3500); this.inspect(o.uid); };
-    sec.append(on);
+    if (!running) {
+      // Live-Vorschau: was der PC mit den eingebauten Teilen schafft
+      const hs = [p.cpu, ...p.gpus].filter(Boolean).reduce((a, id) => a + (PART[id].hash.sha256 || 0), 0), watt = g.rigWatt(o);
+      const rev = hs ? g.revenueFor({ sha256: hs }, 'BTC', 99) : 0, px = g.price('BTC') || 1;
+      const rows = [['Rechenleistung', hs ? fmtHash(hs, 'sha256') : '–'], ['Verbrauch', p.psu ? `${watt} W von ${PART[p.psu].cap} W` : `${watt} W`], ['Ertrag / Tag', rev ? `<span class="pos">≈ ${Math.round(rev / px).toLocaleString('de-DE')} BTC</span> <span style="color:var(--dim)">(${fmtUSD(rev)})</span>` : '–']];
+      sec.append(h(`<div class="kv pcb-sum">${rows.map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join('')}</div>`));
+      const ready = g.pcReady(o), miss = g.pcMissing(o).length;
+      const on = h(`<div class="sec start"><button class="btn primary big wide ${ready ? 'glow' : ''}" ${ready ? '' : 'disabled'}><span class="bi"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg></span><span class="bt">PC einschalten</span></button>${ready ? '' : `<div class="pcb-left">Noch ${miss} ${miss === 1 ? 'Teil' : 'Teile'} bis zum Einschalten</div>`}</div>`);
+      on.querySelector('button').onclick = () => this.powerOnSequence(o);
+      sec.append(on);
+    } else {
+      const done = h('<div class="sec start"><button class="btn big wide">Weiter</button></div>'); done.querySelector('button').onclick = () => this.resume(); sec.append(done);
+    }
     return sec;
   }
-  firstPicker(o, type) {
+  // Der große Moment: Lüfter laufen an, Monitor bootet, erste Coins
+  powerOnSequence(o) {
+    const g = this.g; if (!g.startMining(o.uid)) return;
+    this.audio?.powerOn(); this.w.powerOn?.(o.uid); this.showRun = true; this.inspect(o.uid);
+    clearTimeout(this.seqT1); clearTimeout(this.seqT2);
+    this.seqT1 = setTimeout(() => { if (this.inspUid === o.uid) this.w.focusMonitor?.(); }, 1700);
+    this.seqT2 = setTimeout(() => { if (this.inspUid === o.uid) this.w.focusObject?.(o.uid); }, 5200);
+  }
+  firstPicker(o, type) { this.pickType = type; this.inspect(o.uid); }
+  // Teile-Auswahl direkt im Inspektor (das Gehäuse bleibt links sichtbar)
+  pcPicker(o, type) {
     const g = this.g, p = o.parts;
     const names = { mobo: 'Mainboard', cpu: 'Prozessor', psu: 'Netzteil', gpu: 'Grafikkarte' };
-    const hints = { mobo: 'Auf das Mainboard kommt alles drauf.', cpu: 'Der Prozessor steuert den PC. Fürs Mining reicht ein günstiger.', gpu: 'Die Grafikkarte rechnet beim Mining. Sie bestimmt, wie viel du schürfst.', psu: 'Das Netzteil muss genug Watt für alle Teile liefern.' };
+    const hints = { mobo: 'Auf das Mainboard kommt alles drauf.', cpu: 'Steuert den PC. Fürs Mining reicht ein günstiger.', gpu: 'Rechnet beim Mining. Sie bestimmt, wie viel du schürfst.', psu: 'Muss genug Watt für alle Teile liefern.' };
+    const tipWhy = { mobo: 'Passt', cpu: 'Günstig, reicht völlig', gpu: 'Beste Leistung pro $', psu: 'Reicht und ist günstig' };
     const cur = type === 'gpu' ? p.gpus[0] : p[type], refund = cur ? g.itemPrice(PART[cur]) : 0, reserve = g.buildReserve(o, type);
     const avail = g.s.cash + refund - reserve, need = g.rigWatt(o) - (cur && type !== 'psu' ? PART[cur].watt || 0 : 0), px = g.price('BTC') || 1;
     const list = g.partList(type).sort((a, b) => g.itemPrice(a) - g.itemPrice(b));
-    const okFor = (it) => g.itemPrice(it) <= avail && !(type === 'psu' && it.cap < need);
-    const pickable = list.filter(okFor);
-    const tip = type === 'gpu' ? pickable.slice().sort((a, b) => (b.hash.sha256 || 0) / g.itemPrice(b) - (a.hash.sha256 || 0) / g.itemPrice(a))[0] : pickable[0];
-    const body = h(`<div class="pick1"><h2>${names[type]} wählen</h2><p class="pk-hint">${hints[type]}</p><div class="pk-budget"><span>Dein Budget</span><b>${this.money(Math.max(0, avail))}</b>${reserve ? `<small>${this.money(reserve)} bleiben für die restlichen Teile</small>` : ''}</div><div class="pk-list"></div></div>`);
+    const whyNot = (it) => (type === 'psu' && it.cap < need ? `Zu schwach (${need} W nötig)` : g.itemPrice(it) - refund > g.s.cash ? 'Zu teuer' : g.itemPrice(it) > avail ? 'Dann fehlt Geld für den Rest' : '');
+    const ok = list.filter((it) => !whyNot(it) || it.id === cur), no = list.filter((it) => whyNot(it) && it.id !== cur);
+    const tip = type === 'gpu' ? ok.filter((it) => it.id !== cur).sort((a, b) => (b.hash.sha256 || 0) / g.itemPrice(b) - (a.hash.sha256 || 0) / g.itemPrice(a))[0] : ok.find((it) => it.id !== cur);
+    const body = h(`<div class="pick1"><button class="pk-back" title="Zurück">‹ Zurück</button><h3>${names[type]} wählen</h3><p class="pk-hint">${hints[type]}</p><div class="pk-budget"><span>Budget</span><b>${this.money(Math.max(0, avail))}</b>${reserve ? `<small>+ ${this.money(reserve)} für den Rest</small>` : ''}</div><div class="pk-list"></div></div>`);
+    body.querySelector('.pk-back').onclick = () => { this.pickType = null; this.inspect(o.uid); };
     const box = body.querySelector('.pk-list');
-    for (const it of list) {
-      const price = g.itemPrice(it); let chips = [], why = '';
+    const card = (it, why) => {
+      const price = g.itemPrice(it); let chips = [];
       if (type === 'gpu' || type === 'cpu') { const hs = it.hash.sha256 || 0, r = hs ? g.revenueFor({ sha256: hs }, 'BTC', 99) : 0; chips = [fmtHash(hs, 'sha256'), `${it.watt} W`, `≈ ${Math.round(r / px).toLocaleString('de-DE')} BTC / Tag`]; }
-      if (type === 'mobo') chips = [`${it.slots} Plätze für Grafikkarten`];
-      if (type === 'psu') { chips = [`${it.cap} W`]; if (it.cap < need) why = `Zu schwach für deinen PC (${need} W)`; else chips.push(`reicht für ${need} W`); }
-      if (!why && price - refund > g.s.cash) why = 'Zu teuer';
-      else if (!why && price > avail) why = 'Dann fehlt Geld für die anderen Teile';
-      const isCur = it.id === cur, dis = !!why || isCur;
-      const card = h(`<div class="pk-card ${isCur ? 'cur' : ''} ${why ? 'dis' : ''} ${it === tip && !isCur ? 'tip' : ''}"><div class="pk-main"><div class="pk-name"><b>${esc(it.name)}</b>${it === tip && !isCur ? '<span class="tag">Tipp</span>' : ''}</div><div class="chips">${chips.map((x) => `<span>${x}</span>`).join('')}</div>${why ? `<div class="why">${why}</div>` : ''}</div><div class="pk-side"><div class="pk-price">${this.money(price)}</div><button class="btn small ${it === tip && !isCur ? 'primary' : ''}" ${dis ? 'disabled' : ''}>${isCur ? 'Eingebaut' : cur ? 'Tauschen' : 'Einbauen'}</button></div></div>`);
-      card.querySelector('button').onclick = () => {
+      if (type === 'mobo') chips = [`${it.slots} Grafikkarten-Plätze`];
+      if (type === 'psu') chips = [`${it.cap} W`, it.cap >= need ? `reicht für ${need} W` : ''].filter(Boolean);
+      const isCur = it.id === cur, isTip = it === tip;
+      const c = h(`<div class="pk-card ${isCur ? 'cur' : ''} ${why ? 'dis' : ''} ${isTip ? 'tip' : ''}"><div class="pk-top"><b>${esc(it.name)}</b><span class="pk-price">${this.money(price)}</span></div><div class="chips">${chips.map((x) => `<span>${x}</span>`).join('')}</div><div class="pk-bot"><span class="${why ? 'why' : isTip ? 'tipw' : 'note'}">${why || (isCur ? 'Eingebaut' : isTip ? '★ ' + tipWhy[type] : '')}</span>${why || isCur ? '' : `<button class="btn small ${isTip ? 'primary' : ''}">${cur ? 'Tauschen' : 'Einbauen'}</button>`}</div></div>`);
+      const b = c.querySelector('button');
+      if (b) b.onclick = () => {
         if (!g.setPart(o.uid, type, it.id, 0)) { this.toast('Nicht genug Geld.', 'bad'); return; }
-        this.closeModal(); this.inspect(o.uid); this.audio?.install?.(); this.w.pulse?.(o.uid);
+        this.pickType = null; this.inspect(o.uid); this.w.animateInstall?.(o.uid, type);
+        setTimeout(() => this.audio?.install?.(), 260);
         this.toast(g.pcReady(o) ? 'Alle Teile sind drin. Schalt deinen PC ein!' : `${names[type]} eingebaut`, 'good', 3000);
       };
-      box.append(card);
-    }
-    this.openModal(body, 'narrow pick');
+      return c;
+    };
+    for (const it of ok) box.append(card(it, ''));
+    if (no.length) { const d = h(`<details class="pk-more"><summary>Nicht verfügbar (${no.length})</summary></details>`); for (const it of no) d.append(card(it, whyNot(it))); box.append(d); }
+    return body;
   }
   rigSlots(o) {
-    const g = this.g, p = o.parts, def = PLACEABLE[o.type];
-    const sec = h('<div class="sec"><h4>Komponenten</h4></div>');
-    const slot = (lab, id, onClick) => { const it = id ? PART[id] : null; const e = h(`<div class="slot ${it ? 'filled' : ''}"><span class="lab">${lab}</span><span class="nm">${it ? esc(it.name) : '<i style="color:#7d8aa0">leer</i>'}</span><span>${it ? '✎' : '＋'}</span></div>`); e.onclick = onClick; sec.append(e); };
-    slot('Mainboard', p.mobo, () => this.partPicker(o, 'mobo'));
-    slot('CPU', p.cpu, () => this.partPicker(o, 'cpu'));
-    const watt = 25 + g.partIds(o).reduce((a, id) => a + (PART[id].watt || 0), 0);
-    slot(`Netzteil`, p.psu, () => this.partPicker(o, 'psu'));
-    if (p.psu) sec.append(h(`<div style="font-size:12px;color:${watt > PART[p.psu].cap ? '#ff8f84' : 'var(--dim)'};margin:-2px 0 6px 4px">Last: ${watt} W / ${PART[p.psu].cap} W</div>`));
+    const g = this.g, p = o.parts;
+    const sec = h('<div class="sec pcb"><h4>Komponenten</h4></div>');
+    const slot = (t, lab, id, onClick) => { const it = id ? PART[id] : null; const e = h(`<div class="pcb-step ${it ? 'done' : 'free'}"><span class="ic">${partSvg(t)}</span><div class="tx"><b>${lab}</b><span>${it ? esc(it.name) : 'frei'}</span></div><button class="btn small ${it ? '' : 'primary'}">${it ? 'Tauschen' : 'Einbauen'}</button></div>`); e.querySelector('button').onclick = onClick; sec.append(e); };
+    slot('mobo', 'Mainboard', p.mobo, () => this.partPicker(o, 'mobo'));
+    slot('cpu', 'Prozessor', p.cpu, () => this.partPicker(o, 'cpu'));
     const cap = g.rigGpuCap(o);
-    for (let i = 0; i < cap; i++) slot(`GPU ${i + 1}`, p.gpus[i], () => this.partPicker(o, 'gpu', Math.min(i, p.gpus.length)));
-    if (!p.mobo) sec.append(h(`<div style="font-size:12px;color:var(--dim)">Zuerst ein Mainboard einbauen.</div>`));
-    const row = h('<div class="row"></div>');
-    if (!p.mobo || !p.cpu || !p.psu) { const b = h(`<button class="btn primary small">Basis-Teile einbauen</button>`); b.onclick = () => { const r = g.quickBase(o.uid); if (!r) this.toast('Nicht genug Geld.', 'bad'); this.inspect(o.uid); }; row.append(b); }
-    if (p.mobo && p.gpus.length < cap) {
-      const best = this.bestGpu(); if (best) { const n = cap - p.gpus.length; const b = h(`<button class="btn small">Mit ${esc(best.name)} füllen (${n}× ${fmtUSD(g.itemPrice(best))})</button>`); b.onclick = () => { g.fillGpus(o.uid, best.id); this.inspect(o.uid); }; row.append(b); }
-    }
-    sec.append(row);
+    for (let i = 0; i < cap; i++) slot('gpu', `Grafikkarte ${i + 1}`, p.gpus[i], () => this.partPicker(o, 'gpu', Math.min(i, p.gpus.length)));
+    slot('psu', 'Netzteil', p.psu, () => this.partPicker(o, 'psu'));
+    if (p.psu) { const watt = g.rigWatt(o), capW = PART[p.psu].cap; sec.append(h(`<div class="pcb-load"><span>Netzteil-Last</span><div class="bar"><div style="width:${Math.min(100, watt / capW * 100)}%;background:${watt > capW ? '#ff8f84' : 'var(--acc)'}"></div></div><span>${watt} / ${capW} W</span></div>`)); }
+    if (!p.mobo || !p.cpu || !p.psu) { const b = h(`<button class="btn primary small">Basis-Teile einbauen</button>`); b.onclick = () => { const r = g.quickBase(o.uid); if (!r) this.toast('Nicht genug Geld.', 'bad'); this.inspect(o.uid); }; sec.append(b); }
     return sec;
   }
   bestGpu() {
@@ -540,7 +603,8 @@ export class UI {
       let prog = '';
       if (!done && go.progress) { const [cur, tgt, kind] = go.progress(s, g.helpers()); if (kind === 'parts') { prog = `<span class="pips">${[0, 1, 2, 3].map((i) => `<i class="${i < cur ? 'on' : ''}"></i>`).join('')}</span>`; } else { const f = (v) => (kind === 'hash' ? fmtHash(v) : fmtUSD(v)); const pc = Math.max(0, Math.min(100, tgt ? (cur / tgt) * 100 : 0)); prog = `<div style="font-size:11px;color:var(--dim)">${f(Math.max(0, cur))} / ${f(tgt)}</div><div class="bar" style="width:180px"><div style="width:${pc}%;background:#ffb000"></div></div>`; } }
       const gk = s.chapter + ':' + go.id, enter = gk !== this.goalKey; this.goalKey = gk;
-      const row = h(`<div class="goal ${done ? 'done' : ''} ${enter ? 'enter' : ''}"><div class="ck">${done ? '✓' : ''}</div><div>${esc(go.text)}${prog}</div></div>`);
+      const bag = (s.inv || []).length && !s.flags.miningStarted ? `<div class="bag"><span>In der Tasche</span>${s.inv.map((t) => `<i title="${PNAME[t]}">${partSvg(t, 16)}</i>`).join('')}</div>` : '';
+      const row = h(`<div class="goal ${done ? 'done' : ''} ${enter ? 'enter' : ''}"><div class="ck">${done ? '✓' : ''}</div><div>${esc(go.text)}${prog}${bag}</div></div>`);
       if (!done && go.action) { const b = h(`<button class="btn small primary"><kbd>G</kbd>${esc(go.action.label)}</button>`); b.disabled = !g.canPayGoal(go); b.onclick = () => { if (g.goalAction(go)) { this.toast('✔ Erledigt!', 'good'); this.goals(); } }; row.lastElementChild.append(h('<br/>'), b); }
       el.append(row);
     }
@@ -596,10 +660,10 @@ export class UI {
     el.innerHTML = '';
     const btns = [
       ['', 'Bauen', 'B', () => this.toggleBuild()], ['', 'Börse', 'M', () => this.market()], ['', 'Handy', 'P', () => this.phone(), unread], ['', 'Firma', 'C', () => this.company()],
-      ['', 'Technik', 'T', () => this.techs(), techN], ['', 'Rangliste', 'L', () => this.ranking()], ['', this.w.empire ? 'Zurück' : 'Karte', 'K', () => this.toggleMap()], ['', 'Menü', 'ESC', () => this.menu()],
+      ['', 'Technik', 'T', () => this.techs(), techN], ['', 'Rangliste', 'L', () => this.ranking()], ['', 'Fähigkeiten', 'J', () => this.skills()], ['', this.w.empire ? 'Zurück' : 'Karte', 'K', () => this.toggleMap()], ['', 'Menü', 'ESC', () => this.menu()],
     ];
-    const need = { B: 'build', M: 'market', P: 'phone', C: 'company', T: 'techs', L: 'ranking', K: 'map' };
-    const act = document.body.classList.contains('show-build') ? 'B' : this.w.empire ? 'K' : ({ market: 'M', phone: 'P', intro: 'P', company: 'C', techs: 'T', ranking: 'L', menu: 'ESC' })[this.modalKind] || (this.paused ? 'ESC' : null);
+    const need = { B: 'build', M: 'market', P: 'phone', C: 'company', T: 'techs', L: 'ranking', K: 'map', J: 'skills' };
+    const act = document.body.classList.contains('show-build') ? 'B' : this.w.empire ? 'K' : ({ market: 'M', phone: 'P', intro: 'P', company: 'C', techs: 'T', ranking: 'L', menu: 'ESC', skills: 'J' })[this.modalKind] || (this.paused ? 'ESC' : null);
     for (const [ic, l, key, fn, b] of btns.filter((x) => !need[x[2]] || g.has(need[x[2]]))) { const e = h(`<button class="${act === key ? 'on' : ''}" title="${l} (${key})"><span class="ic">${ic}</span>${l}<span class="key">${key}</span>${b ? `<span class="bdg">${b}</span>` : ''}</button>`); e.onclick = fn; el.append(e); }
   }
   toggleMap() {
@@ -619,7 +683,7 @@ export class UI {
       <div class="phone"><div class="ph-top"><div class="av"><svg viewBox="0 0 40 40" width="40" height="40"><circle cx="20" cy="20" r="20" fill="#ffcf8a"/><path d="M6 40c1-8 7-12 14-12s13 4 14 12z" fill="#e2574c"/><circle cx="20" cy="18" r="8.5" fill="#e7b48f"/><path d="M11 17c0-7 5-10 10-10 6 0 9 4 8 9-3-3-7-4-11-3-3 1-5 2-7 4z" fill="#2f241e"/><circle cx="17" cy="19" r="1.1" fill="#2f241e"/><circle cx="23" cy="19" r="1.1" fill="#2f241e"/><path d="M17 22.5q3 2.2 6 0" stroke="#8a4a3a" stroke-width="1.3" fill="none" stroke-linecap="round"/></svg></div><div><b>Deniz</b><span class="on">online</span></div></div>
         <div class="msg f-Deniz">${esc(txt)}</div>
         <div class="msg f-Deniz pricecard"><div class="pc-h"><span class="pc-dot">₿</span>Bitcoin · BTC</div><div class="pc-p">${fmtUSD(p)}</div><canvas class="chart" width="900" height="300"></canvas></div>
-        <div class="msg f-Deniz">Dein altes Gehäuse steht doch noch rum. Bau dir einen Mining-PC!</div>
+        <div class="msg f-Deniz">Deine alten PC-Teile liegen doch noch im Zimmer rum. Bau dir daraus einen Mining-PC!</div>
         <div class="row ip-act"><button class="btn primary big">Los geht’s</button></div>
       </div></div>`);
     if (m0) m0.read = true;
@@ -663,15 +727,18 @@ export class UI {
     const cv = h('<canvas class="chart" width="1200" height="520"></canvas>'); det.append(cv);
     const range = h(`<div class="seg" style="margin-top:10px"></div>`);
     this.range ??= 365;
-    for (const [l, d] of [['30 T', 30], ['1 J', 365], ['5 J', 1825], ['Alles', 99999]]) { const b = h(`<button class="btn small ${this.range === d ? 'on' : ''}">${l}</button>`); b.onclick = () => { this.range = d; this.market(); }; range.append(b); }
+    const hist = s.day - Math.max(c.start, toDay('2010-07-17'));
+    if (this.range !== 99999 && this.range >= hist) this.range = 99999;
+    for (const [l, d] of [['30 T', 30], ['1 J', 365], ['5 J', 1825], ['Alles', 99999]].filter(([, d]) => d === 99999 || d < hist)) { const b = h(`<button class="btn small ${this.range === d ? 'on' : ''}">${l}</button>`); b.onclick = () => { this.range = d; this.market(); }; range.append(b); }
     det.append(range);
     this.range ??= 365;
     requestAnimationFrame(() => this.chart(cv, c.id, this.range));
     const mined = (s.stats.coins || {})[c.id] || 0;
     const tile = (k, coin, cls = '') => h(`<div class="tile ${cls}"><div class="info"><div class="k">${k}</div><div class="v">${fmtCoin(coin)} <small>${c.id}</small></div><div class="u">≈ ${fmtUSD(coin * p)}</div></div><div class="acts"></div></div>`);
-    const tiles = h('<div class="tiles"></div>'), hold = tile('Du hast', w.ex, 'hold'); tiles.append(hold);
+    const pend = c.id === 'BTC' && !s.payoutCold ? this.pendingBtc() : 0;
+    const tiles = h('<div class="tiles"></div>'), hold = tile('Du hast', w.ex + pend, 'hold'); tiles.append(hold);
     const r1 = hold.querySelector('.acts');
-    for (const f of [0.25, 0.5, 1]) { const b = h(`<button class="btn ${f === 1 ? 'primary' : ''}">${f === 1 ? 'Alles verkaufen' : f * 100 + ' %'}</button>`); b.disabled = w.ex <= 0; b.onclick = () => { const u = g.sell(c.id, f); this.audio?.cash(); this.flashCash(u); this.toast(`Verkauft für ${fmtUSD(u)}`, 'good', 2500); this.market(); }; r1.append(b); }
+    for (const f of [0.25, 0.5, 1]) { const b = h(`<button class="btn ${f === 1 ? 'primary' : ''}">${f === 1 ? 'Alles verkaufen' : f * 100 + ' % verkaufen'}</button>`); b.disabled = w.ex + pend <= 0; b.onclick = () => { if (pend) g.creditPending(c.id, this.pendingBtc()); const u = g.sell(c.id, f); this.audio?.cash(); this.flashCash(u); this.toast(`Verkauft für ${fmtUSD(u)}`, 'good', 2500); this.market(); }; r1.append(b); }
     if (g.has('cold')) { const ct = tile('Cold-Wallet', w.cold, 'cold'); const tc = h(`<button class="btn small">${w.cold > 0 && w.ex === 0 ? 'Auf Börse holen' : 'Einlagern'}</button>`); tc.onclick = () => { g.transfer(c.id, !(w.cold > 0 && w.ex === 0)); this.market(); }; ct.querySelector('.acts').append(tc); tiles.append(ct); }
     det.append(tiles);
     const r2 = h(`<div class="row" style="align-items:center"><span style="font-size:13px">Kaufen für</span><input type="number" min="0" step="100" value="${Math.max(0, Math.round(Math.min(s.cash, 1000)))}"/><span>$</span><button class="btn small primary">Kaufen</button></div>`);
@@ -900,6 +967,28 @@ export class UI {
     if (o.items) line += `<br/>${o.items.length}/${def.slots} belegt`;
     el.innerHTML = `<b>${esc(def.name)}</b><br/>${line}`;
     el.style.left = pos[0] + 'px'; el.style.top = pos[1] + 'px';
+  }
+  // Erfahrung: kleine Einblendung, beim Stufenaufstieg eine große Karte
+  xpPop(k, n, lv) {
+    const box = $('#xpbox') || (() => { const b = h('<div id="xpbox"></div>'); document.body.append(b); return b; })();
+    const el = h(`<div class="xp"><span class="xi">${skillSvg(k, 16)}</span>+${n} ${SKILL[k].name}</div>`); box.append(el); setTimeout(() => el.remove(), 2400);
+    if (lv) setTimeout(() => this.levelUp(k, lv), 900);
+    this.dock();
+  }
+  levelUp(k, lv) {
+    document.getElementById('lvup')?.remove(); this.audio?.fanfare?.();
+    const el = h(`<div id="lvup"><div class="lv-ic">${skillSvg(k, 34)}</div><div class="lv-t1">Neue Stufe</div><div class="lv-t2">${SKILL[k].name} · Stufe ${lv}</div><div class="lv-t3">${SKILL[k].now(lv)}</div></div>`);
+    document.body.append(el); setTimeout(() => el.classList.add('out'), 3400); setTimeout(() => el.remove(), 3900);
+  }
+  skills() {
+    const g = this.g, s = g.s; if (!s.skills) return;
+    const body = h(`<div class="skills"><h2>Fähigkeiten</h2><p class="pk-hint">Was du tust, lernst du. Jede Stufe macht dich besser.</p><div class="sk-list"></div></div>`);
+    const list = body.querySelector('.sk-list');
+    for (const k of ['hw', 'mining', 'trade']) {
+      const x = s.skills[k] || 0, lv = g.skillLv(k), lo = SKILL_XP[lv - 1], hi = SKILL_XP[lv], pc = hi ? Math.round(((x - lo) / (hi - lo)) * 100) : 100;
+      list.append(h(`<div class="sk"><div class="sk-ic">${skillSvg(k, 26)}</div><div class="sk-main"><div class="sk-top"><b>${SKILL[k].name}</b><span class="sk-lv">Stufe ${lv}</span></div><div class="sk-bar"><div style="width:${pc}%"></div></div><div class="sk-row"><span>${SKILL[k].now(lv)}</span><span>${hi ? `${x} / ${hi} EP` : 'Höchste Stufe'}</span></div><div class="sk-learn">${hi ? `Nächste Stufe: ${SKILL[k].next(lv)} · ` : ''}Lernst du durch: ${SKILL[k].learn}</div></div></div>`));
+    }
+    this.openModal(body, 'narrow', 'skills');
   }
   milestone(title, sub) {
     document.getElementById('milestone')?.remove();

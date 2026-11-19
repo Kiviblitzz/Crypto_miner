@@ -139,6 +139,8 @@ export function buildRoom(def) {
     B.outside = 'town';
     B.doors = [{ c: [3.98, 1.0, 3.03], s: [0.14, 2.0, 0.85], label: 'Zimmertür' }];
     B.spawn = { x: 3.3, z: 3.0, look: [1.6, 0.9] };
+    // Plätze für herumliegende alte PC-Teile (Start)
+    B.looseSpots = { mobo: [0.52, 0.58, 2.7, 0.35, 'auf dem Bett'], cpu: [2.28, 0.745, 0.36, 0.5, 'auf dem Schreibtisch'], gpu: [1.6, 0.012, 1.85, 0.7, 'auf dem Teppich'], psu: [1.1, 0.0, 1.3, 0.3, 'vor dem Schrank'] };
     B.props = [{ c: [2.6, 1.08, 0.13], s: [0.55, 0.4, 0.12], label: 'PC-Monitor', hint: 'Börse', action: 'market' }, { c: [0.5, 0.45, 2.5], s: [1.0, 0.5, 2.0], label: 'Bett', hint: 'Schlafen', action: 'sleep' }];
   } else if (def.style === 'basement') {
     S = shell(def, {
