@@ -20,7 +20,7 @@ export function furniture(type) {
     box(g, 1.04, 0.04, 0.08, woodL, 0, 0.44, 0.985, 0, 0.018);
     soft(g, 0.92, 0.2, 1.88, mat('mattress', { color: 0xf3f3f0, roughness: 0.9 }), 0, 0.27, 0.0, 0.07);
     // Bettdecke (dick, weich) + umgeschlagenes Laken
-    soft(g, 0.98, 0.11, 1.36, mat('blanket', { color: 0x3d6db5, roughness: 0.95 }), 0, 0.42, 0.26, 0.05);
+    soft(g, 0.98, 0.11, 1.36, mat('blanket', { color: 0x4d6c96, roughness: 0.95 }), 0, 0.42, 0.26, 0.05);
     soft(g, 0.99, 0.07, 0.2, mat('sheetFold', { color: 0xe9eef5, roughness: 0.9 }), 0, 0.45, -0.38, 0.034);
     const p = soft(g, 0.62, 0.14, 0.36, mat('pillow', { color: 0xffffff, roughness: 0.95 }), 0, 0.46, -0.72, 0.065); p.rotation.x = -0.14;
     const p2 = soft(g, 0.32, 0.26, 0.09, mat('pillowYel', { color: 0xe8b23c, roughness: 0.95 }), 0.24, 0.5, -0.86, 0.04); p2.rotation.set(-0.35, 0.2, 0.08);
@@ -85,7 +85,7 @@ export function furniture(type) {
     tube(g, [[0, 0.2, -0.045], [0.02, 0.12, -0.09], [0.05, 0.01, -0.12], [0.1, 0.0, -0.2]], 0.003, M.cable(), 10, 5);
   } else if (type === 'chair') {
     // Bürostuhl: Sternfuß mit Rollen, Gaslift, Sitzkissen, Rückenlehne (+Z), Armlehnen
-    const fab = mat('chairFab', { color: 0x262a33, roughness: 0.9 }), acc = mat('chairAcc', { color: 0xd23b3b, roughness: 0.7 });
+    const fab = mat('chairFab', { color: 0x262a33, roughness: 0.9 }), acc = mat('chairAcc', { color: 0xa24a40, roughness: 0.75 });
     for (let i = 0; i < 5; i++) {
       const a = (i / 5) * Math.PI * 2, ex = Math.cos(a) * 0.27, ez = Math.sin(a) * 0.27;
       rod(g, [0, 0.08, 0], [ex, 0.055, ez], 0.016, M.black(), 8);
@@ -112,7 +112,7 @@ export function furniture(type) {
     box(g, 0.45, 0.012, 0.32, side, 0, 1.888, 0, 0, 0.005);
     box(g, 0.43, 1.88, 0.01, mat('shelfBack', { color: 0xc8b48c, roughness: 0.7 }), 0, 0.01, -0.155, 0, 0.003);
     for (const y of [0.0, 0.4, 0.8, 1.2, 1.6]) box(g, 0.41, 0.02, 0.3, wood, 0, y, 0.0, 0, 0.005);
-    const cols = [0xa33333, 0x3377aa, 0x33aa55, 0xe0b000, 0x6a3fa0, 0x2b2b2b, 0xd06a2a];
+    const cols = [0x8f4a42, 0x4a6a8a, 0x5a7d56, 0xb8954a, 0x6a5a82, 0x3a3a3c, 0xa8683e];
     let k = 0;
     for (const y of [0.42, 0.82]) {
       let x = -0.19;

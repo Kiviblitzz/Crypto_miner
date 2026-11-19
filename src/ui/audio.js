@@ -39,6 +39,7 @@ export class Audio {
   }
   click() { this.blip(1400, 0.03, 'square', 0.05); }
   buy() { this.blip(660, 0.06, 'triangle', 0.15); setTimeout(() => this.blip(990, 0.09, 'triangle', 0.15), 60); }
+  powerOn() { if (!this.ctx || this.muted) return; const t = this.ctx.currentTime, o = this.ctx.createOscillator(), g = this.ctx.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(520, t + 0.45); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.16, t + 0.08); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.6); o.connect(g).connect(this.master); o.start(t); o.stop(t + 0.65); setTimeout(() => this.blip(1046, 0.08, 'triangle', 0.1), 420); }
   cash() { [1320, 1760, 2640].forEach((f, i) => setTimeout(() => this.blip(f, 0.12, 'triangle', 0.12), i * 70)); }
   bad() { this.blip(180, 0.25, 'sawtooth', 0.12); }
   fanfare() { [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => this.blip(f, i === 3 ? 0.5 : 0.15, 'triangle', 0.16), i * 130)); }

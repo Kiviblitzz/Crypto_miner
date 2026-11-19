@@ -147,7 +147,7 @@ export class UI {
       if (it.kind === 'device') { const r = g.revenueFor({ [it.algo]: it.hash }, g.bestCoin({ [it.algo]: it.hash }, it.vram || 99) || 'BTC', it.vram || 99); const cost = it.watt / 1000 * 24 * g.elecPrice(fac); s = `${fmtHash(it.hash, it.algo)} · ${fmtWatt(it.watt)} · ${ALGO_LABEL[it.algo]}<br/>≈ <b class="${r - cost >= 0 ? 'pos' : 'neg'}">${r - cost >= 0 ? '+' : ''}${fmtUSD(r - cost)}/Tag</b> hier${it.hydro ? ' · nur in Rack/Container' : ''}`; }
       if (it.kind === 'cooling') s = `Kühlt ${fmtWatt(it.cool)} · verbraucht ${fmtWatt(it.watt)}`;
       if (it.kind === 'holder') s = esc(it.desc);
-      const card = h(`<div class="item ${price > g.s.cash || it.hydro ? 'dis' : ''}"><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${fmtUSD(price)}</span></div><div class="s">${s}</div></div>`);
+      const card = h(`<div class="item ${price > g.s.cash || it.hydro ? 'dis' : ''}"><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${fmtUSD(price)}</span></div><div class="s">${s}</div>${price > g.s.cash ? `<div class="miss">Dir fehlen ${fmtUSD(price - g.s.cash)}</div>` : ''}</div>`);
       card.onclick = () => {
         if (it.hydro) { this.toast('Hydro-Miner nur in Rack oder Container.', 'bad'); return; }
         if (price > g.s.cash) { this.toast('Nicht genug Geld.', 'bad'); return; }
@@ -184,6 +184,7 @@ export class UI {
     if (on) { $('#clickhint').classList.add('hidden'); this.prompt(null); }
   }
   openInspector(uid) { this.openedAt = performance.now(); if (!this.g.s.flags.seenPc) { this.g.s.flags.seenPc = true; this.g.checkGoals?.(); } this.w.select(uid); this.openUI(); }
+  flashCash(u) { const el = $('#st-cash'); if (!el) return; el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); if (u > 0) { const f = h(`<div class="cashfly">+${fmtUSD(u)}</div>`); document.body.append(f); setTimeout(() => f.remove(), 1400); } }
   // „Neu freigeschaltet“-Karte mit kurzer Erklärung
   featureCard(f) {
     if (!FEATURES[f]) return;
@@ -275,7 +276,7 @@ export class UI {
     const c = $('#insp-ctrl');
     if (!g.s.flags.miningStarted && def.kind === 'rig') {
       const st = h(`<div class="sec"><button class="btn primary big" style="width:100%">Mining starten</button></div>`);
-      st.querySelector('button').onclick = () => { g.startMining(uid); this.audio?.buy(); this.toast('Mining läuft!', 'good', 3000); this.inspect(uid); this.tutorial(); };
+      st.querySelector('button').onclick = () => { g.startMining(uid); this.audio?.powerOn(); this.w.pulse?.(uid); this.toast('Mining läuft!', 'good', 3000); this.inspect(uid); this.tutorial(); };
       c.append(st);
       return;
     }
@@ -549,10 +550,10 @@ export class UI {
     this.range ??= 365;
     requestAnimationFrame(() => this.chart(cv, c.id, this.range));
     const mined = (s.stats.coins || {})[c.id] || 0;
-    const kv = h(`<div class="kv"><div class="k" style="display:none">Insgesamt geschürft</div><div class="v">${fmtCoin(mined)} ${c.id} (heute ${fmtUSD(mined * p)} wert)</div><div class="k">Auf der Börse</div><div class="v">${fmtCoin(w.ex)} ${c.id} (${fmtUSD(w.ex * p)})</div><div class="k">In der Cold-Wallet</div><div class="v">${fmtCoin(w.cold)} ${c.id} (${fmtUSD(w.cold * p)})</div></div>`);
+    const kv = h(`<div class="kv"><div class="k">Du hast</div><div class="v">${fmtCoin(w.ex)} ${c.id} (${fmtUSD(w.ex * p)})</div><div class="k">In der Cold-Wallet</div><div class="v">${fmtCoin(w.cold)} ${c.id} (${fmtUSD(w.cold * p)})</div></div>`);
     det.append(kv);
     const r1 = h('<div class="row"></div>');
-    for (const f of [0.25, 0.5, 1]) { const b = h(`<button class="btn ${f === 1 ? 'primary' : 'small'}">${f === 1 ? 'Alles verkaufen' : f * 100 + ' %'}</button>`); b.disabled = w.ex <= 0; b.onclick = () => { const u = g.sell(c.id, f); this.audio?.cash(); this.toast(`Verkauft für ${fmtUSD(u)}`, 'good', 2500); this.market(); }; r1.append(b); }
+    for (const f of [0.25, 0.5, 1]) { const b = h(`<button class="btn ${f === 1 ? 'primary' : 'small'}">${f === 1 ? 'Alles verkaufen' : f * 100 + ' %'}</button>`); b.disabled = w.ex <= 0; b.onclick = () => { const u = g.sell(c.id, f); this.audio?.cash(); this.flashCash(u); this.toast(`Verkauft für ${fmtUSD(u)}`, 'good', 2500); this.market(); }; r1.append(b); }
     const tc = !g.has('cold') ? null : h(`<button class="btn small">⇄ ${w.cold > 0 && w.ex === 0 ? 'Auf Börse holen' : 'In Cold-Wallet'}</button>`); if (tc) tc.onclick = () => { g.transfer(c.id, !(w.cold > 0 && w.ex === 0)); this.market(); }; if (tc) r1.append(tc);
     det.append(r1);
     const r2 = h(`<div class="row" style="align-items:center"><span style="font-size:13px">Kaufen für</span><input type="number" min="0" step="100" value="${Math.max(0, Math.round(Math.min(s.cash, 1000)))}"/><span>$</span><button class="btn small primary">Kaufen</button></div>`);

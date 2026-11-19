@@ -15,7 +15,7 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 
 // Farbgebung: leichte Wärme, etwas Sättigung, weiche Vignette (läuft nach dem Tonemapping)
 const GradeShader = {
-  uniforms: { tDiffuse: { value: null }, vignette: { value: 0.28 }, sat: { value: 1.07 }, warm: { value: 0.018 } },
+  uniforms: { tDiffuse: { value: null }, vignette: { value: 0.26 }, sat: { value: 1.04 }, warm: { value: 0.006 } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
   fragmentShader: 'uniform sampler2D tDiffuse; uniform float vignette; uniform float sat; uniform float warm; varying vec2 vUv;\n' +
     'void main(){ vec4 c = texture2D(tDiffuse, vUv); float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722)); c.rgb = mix(vec3(l), c.rgb, sat);\n' +
@@ -27,7 +27,7 @@ import { objectModel } from './models.js';
 import { M, mat } from './materials.js';
 import { FACILITY } from '../data/world.js';
 import { PLACEABLE } from '../data/hardware.js';
-import { fmtHash, fmtUSD, fmtDate } from '../sim/game.js';
+import { fmtHash, fmtUSD, fmtDate, fmtCoin } from '../sim/game.js';
 
 const tmpV = new THREE.Vector3();
 
@@ -404,13 +404,15 @@ export class World {
     const sm = this.game.summary[this.facId]; if (!sm || sm.tripped) return;
     this.popups ||= [];
     const cand = [];
-    for (const [uid, e] of this.entries) { const a = sm.per.get(uid); if (!a || !a.units.length) continue; const rev = a.units.reduce((x, u) => x + u.rev, 0) * sm.throttle; if (rev > 0.01) cand.push([e, rev]); }
+    for (const [uid, e] of this.entries) { const a = sm.per.get(uid); if (!a || !a.units.length) continue; const rev = a.units.reduce((x, u) => x + u.rev, 0) * sm.throttle; const u0 = a.units.find((u) => u.coin && u.rev > 0); if (rev > 0.01) cand.push([e, rev, u0]); }
     cand.sort(() => Math.random() - 0.5);
-    for (const [e, rev] of cand.slice(0, 6)) {
+    for (const [e, rev, u0] of cand.slice(0, 6)) {
       let p = this.popups.find((q) => !q.visible);
       if (!p) { if (this.popups.length >= 14) break; const c = document.createElement('canvas'); c.width = 256; c.height = 64; const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; p = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false })); p.renderOrder = 15; p.userData.c = c; this.scene.add(p); this.popups.push(p); }
       const c = p.userData.c, g = c.getContext('2d'); g.clearRect(0, 0, 256, 64);
-      g.font = '700 40px Barlow, Arial'; g.textAlign = 'center'; g.shadowColor = 'rgba(0,0,0,0.6)'; g.shadowBlur = 10; g.shadowOffsetY = 2; const txt = '+' + fmtUSD(rev); g.fillStyle = '#8af2b4'; g.fillText(txt, 128, 46); g.shadowColor = 'transparent';
+      g.font = '700 40px Barlow, Arial'; g.textAlign = 'center'; g.shadowColor = 'rgba(0,0,0,0.6)'; g.shadowBlur = 10; g.shadowOffsetY = 2; const coin = u0?.coin || 'BTC', asCoin = !(this.game.s.autoSell?.[coin] > 0); const px = this.game.price(coin) || 1;
+      const per = 1.1 / ([Infinity, 4.0, 1.6, 0.5, 0.12][this.game.s.speed] || 4); // Anteil eines Tages pro Einblendung
+      const txt = asCoin ? `+${fmtCoin((rev / px) * per)} ${coin}` : '+' + fmtUSD(rev * per); g.fillStyle = asCoin ? '#ffcf5a' : '#8af2b4'; g.fillText(txt, 128, 46); g.shadowColor = 'transparent';
       p.material.map.needsUpdate = true;
       const sc = 0.5;
       const bb = e.group.userData.bbox; p.position.set(e.group.position.x, (bb ? bb.max.y : 0.6) + 0.15, e.group.position.z);
@@ -418,6 +420,7 @@ export class World {
       this.coinBurst(p.position, 3);
     }
   }
+  pulse(uid) { const e = this.entries.get(uid); if (!e || !this.outline) return; this.outline.selectedObjects = [e.group]; this.outline.pulsePeriod = 0.5; this.outline.visibleEdgeColor.set(0xffc23a); clearTimeout(this.pulseT); this.pulseT = setTimeout(() => { this.outline.pulsePeriod = 0; this.outline.visibleEdgeColor.set(0xfff4d6); }, 1500); const bb = e.group.userData.bbox; this.coinBurst(new THREE.Vector3(e.group.position.x, (bb ? bb.max.y : 0.5) + 0.1, e.group.position.z), 6); }
   // Kleine Münzen springen aus dem Gerät (Rückmeldung für Einkommen)
   coinBurst(pos, n) {
     if (!this.coinTex) { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'); const gr = g.createRadialGradient(26, 24, 4, 32, 32, 30); gr.addColorStop(0, '#fff3b0'); gr.addColorStop(0.5, '#ffc93a'); gr.addColorStop(1, '#c98a00'); g.fillStyle = gr; g.beginPath(); g.arc(32, 32, 28, 0, 7); g.fill(); g.strokeStyle = 'rgba(120,70,0,.6)'; g.lineWidth = 3; g.stroke(); g.fillStyle = 'rgba(120,70,0,.75)'; g.font = 'bold 34px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('₿', 32, 34); this.coinTex = new THREE.CanvasTexture(c); this.coinTex.colorSpace = THREE.SRGBColorSpace; this.coins = []; }
