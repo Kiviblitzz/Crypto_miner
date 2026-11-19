@@ -85,7 +85,7 @@ export function furniture(type) {
     tube(g, [[0, 0.2, -0.045], [0.02, 0.12, -0.09], [0.05, 0.01, -0.12], [0.1, 0.0, -0.2]], 0.003, M.cable(), 10, 5);
   } else if (type === 'chair') {
     // Bürostuhl: Sternfuß mit Rollen, Gaslift, Sitzkissen, Rückenlehne (+Z), Armlehnen
-    const fab = mat('chairFab', { color: 0x262a33, roughness: 0.9 }), acc = mat('chairAcc', { color: 0xc77a34, roughness: 0.75 });
+    const fab = mat('chairFab', { color: 0x8a7466, roughness: 0.92 }), acc = mat('chairAcc', { color: 0xc77a34, roughness: 0.75 });
     for (let i = 0; i < 5; i++) {
       const a = (i / 5) * Math.PI * 2, ex = Math.cos(a) * 0.27, ez = Math.sin(a) * 0.27;
       rod(g, [0, 0.08, 0], [ex, 0.055, ez], 0.016, M.black(), 8);

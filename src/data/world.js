@@ -48,7 +48,7 @@ export const CHAPTERS = [
     intro: 'Oktober 2010. Papas Laden steckt in Schulden. Du hast einen alten PC, 300 $ und eine Idee.',
     goals: [
       { id: 'look', text: 'Starte das Mining an deinem PC', check: (s) => s.flags.miningStarted },
-      { id: 'sell', text: 'Verkauf deine Bitcoin am Monitor', check: (s) => s.stats.sold > 0 },
+      { id: 'sell', text: 'Verkaufe deine Bitcoin am Monitor', check: (s) => s.stats.sold > 0 },
       { id: 'gpu', text: 'Bau eine zweite Grafikkarte ein', check: (s) => s.flags.boughtGpu },
       { id: 'earn', text: 'Schürfe Bitcoin im Wert von 1.000 $', check: (s) => s.stats.minedUSD >= 1000, progress: (s) => [s.stats.minedUSD, 1000, 'usd'] },
       { id: 'papa1', text: 'Bezahl Papas Stromrechnung', action: { label: '2.000 $ geben', cost: 2000, flag: 'papa1' }, check: (s) => s.flags.papa1 },

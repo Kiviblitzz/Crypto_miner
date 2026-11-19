@@ -1049,3 +1049,47 @@ body:has(#pause:not(.hidden)) #top, body:has(#pause:not(.hidden)) #goals, body:h
   #top #st-btc { background: rgba(38,28,22,.72); border-radius: 999px; padding: 5px 12px 5px 14px; margin-top: 4px; align-items: center; }
   #top #st-btc .v { font: 700 14px var(--font-fun) !important; }
 }
+/* Strenge Kritik Runde 3b (GPT) */
+#splash { background: linear-gradient(90deg, rgba(14,10,8,.72) 0%, rgba(14,10,8,.44) 32%, rgba(14,10,8,0) 64%) !important; }
+#splash .disclaimer { font-size: 13px !important; color: #d8c8b4 !important; text-shadow: 0 1px 3px rgba(0,0,0,.6); }
+.intro-phone .msg { line-height: 1.55 !important; }
+.intro-phone .pricecard { max-width: 280px; padding: 10px 12px !important; }
+.intro-phone .pricecard canvas.chart { height: 48px !important; }
+.intro-phone .pricecard .pc-p { font-size: 22px !important; }
+#insp-stats { font-size: 14px; line-height: 1.65; font-variant-numeric: tabular-nums; }
+#insp-stats .kv { font-size: 14px; }
+#inspector .sec.start .btn { min-height: 46px; padding-block: 8px !important; }
+#inspector .sec.start .btn .bi { width: 24px !important; height: 24px !important; }
+#inspector .sec.start .btn .bi svg { width: 14px; height: 14px; }
+.mk-head + canvas.chart { height: 220px !important; margin-top: 10px; background: #302419 !important; border-radius: 14px; }
+#pause .pause-card { box-sizing: border-box; width: min(364px, calc(100vw - 32px)); padding: 28px 32px !important; align-items: stretch !important; }
+#pause .pause-card .btn { width: 100%; min-width: 0; }
+.pause-brand { justify-content: flex-start !important; }
+.pause-coin { width: 44px !important; height: 44px !important; }
+.pause-logo { width: 228px !important; }
+@media (min-width: 721px) { body.has-wallet #goals { top: 140px !important; } }
+/* Strenge Kritik Runde 3c (strengster Reviewer) */
+@media (min-width: 721px) {
+  /* Rechte HUD-Spalte unabhängig von der linken: nichts springt */
+  #top #st-btc { position: absolute; top: 44px; right: 0; margin: 0 !important; }
+  #top #speed { position: absolute; top: 80px; right: 0; padding: 0 !important; }
+  body.show-build #top #st-btc { display: flex !important; }
+  #goals { top: 118px; }
+  body.has-wallet #goals { top: 128px !important; }
+  /* Tempo-Knöpfe warm */
+  #speed button { background: rgba(38,28,22,.72) !important; color: var(--dim) !important; text-shadow: none !important; }
+  #speed button.on { background: var(--acc) !important; color: #3a2300 !important; }
+  /* Status unten links und Tastenhinweise mit Fläche */
+  #sites .site { background: rgba(38,28,22,.72) !important; border-radius: 14px !important; padding: 7px 12px 9px !important; text-shadow: none !important; }
+  #sites .site .bar { background: rgba(255,236,210,.18) !important; }
+  #keys { background: rgba(38,28,22,.6); border-radius: 999px; padding: 6px 12px; text-shadow: none !important; }
+}
+/* Ausgewählt ≠ Hauptknopf: Gelb mit Unterkante nur für .btn.primary */
+#build .cats button.on { background: var(--acc-soft) !important; color: var(--acc) !important; box-shadow: inset 0 0 0 1.5px rgba(255,176,0,.45) !important; }
+.seg .btn.on { background: var(--acc-soft) !important; color: var(--acc) !important; box-shadow: inset 0 0 0 1.5px rgba(255,176,0,.45) !important; }
+/* Pause: beide Knöpfe gleich gebaut */
+#pause .pause-card .btn { padding: 13px 24px !important; min-height: 64px; box-sizing: border-box; }
+/* Börse: klare Hierarchie */
+.mk-head h3 { font-size: 18px !important; }
+.mk-head .px { font-size: 30px !important; color: var(--acc); }
+@media (min-width: 721px) { #top #st-btc, #top #speed { grid-area: auto !important; } }

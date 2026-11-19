@@ -115,7 +115,7 @@ export class UI {
   liveWallet() {
     const g = this.g, s = g.s, el = $('#st-wallet'); if (!el) return;
     const on = (!s.feat || s.flags.miningStarted) && !document.getElementById('splash')?.offsetParent;
-    el.style.display = on ? '' : 'none'; if (!on) return;
+    el.style.display = on ? '' : 'none'; document.body.classList.toggle('has-wallet', on); if (!on) return;
     if (this.rateDay !== s.day || !this.rateT || performance.now() - this.rateT > 1000) { this.rate = this.btcRate(); this.rateDay = s.day; this.rateT = performance.now(); }
     const w = s.wallet.BTC, live = w.ex + w.cold + (this.rate || 0) * (s.frac || 0);
     const txt = `<div class="v"><span class="cn">₿</span> ${fmtCoin(live)}</div><div class="l">≈ ${fmtUSD(live * g.price('BTC'))}</div>`;
@@ -542,7 +542,7 @@ export class UI {
       ['', 'Technik', 'T', () => this.techs(), techN], ['', 'Rangliste', 'L', () => this.ranking()], ['', this.w.empire ? 'Zurück' : 'Karte', 'K', () => this.toggleMap()], ['', 'Menü', 'ESC', () => this.menu()],
     ];
     const need = { B: 'build', M: 'market', P: 'phone', C: 'company', T: 'techs', L: 'ranking', K: 'map' };
-    const act = document.body.classList.contains('show-build') ? 'B' : this.w.empire ? 'K' : ({ market: 'M', phone: 'P', company: 'C', techs: 'T', ranking: 'L', menu: 'ESC' })[this.modalKind] || (this.paused ? 'ESC' : null);
+    const act = document.body.classList.contains('show-build') ? 'B' : this.w.empire ? 'K' : ({ market: 'M', phone: 'P', intro: 'P', company: 'C', techs: 'T', ranking: 'L', menu: 'ESC' })[this.modalKind] || (this.paused ? 'ESC' : null);
     for (const [ic, l, key, fn, b] of btns.filter((x) => !need[x[2]] || g.has(need[x[2]]))) { const e = h(`<button class="${act === key ? 'on' : ''}" title="${l} (${key})"><span class="ic">${ic}</span>${l}<span class="key">${key}</span>${b ? `<span class="bdg">${b}</span>` : ''}</button>`); e.onclick = fn; el.append(e); }
   }
   toggleMap() {
@@ -647,15 +647,16 @@ export class UI {
     }
     const dec = st ? Math.max(0, Math.ceil(-Math.log10(st) - 1e-9) + (Math.abs(st / Math.pow(10, Math.floor(Math.log10(st))) - 2.5) < 1e-6 ? 1 : 0)) : 0;
     const tl = (t) => { const v = logScale ? Math.pow(10, t) : t; return !logScale && v > 0 && v < 1 ? v.toFixed(dec).replace('.', ',') + ' $' : fmtUSD(v); };
-    if (!mini) { ctx.font = '600 13px Nunito, sans-serif'; pad = Math.max(56, ...ticks.map((t) => ctx.measureText(tl(t)).width)) + 20; }
+    if (!mini) { ctx.font = '600 14px Nunito, sans-serif'; pad = Math.max(56, ...ticks.map((t) => ctx.measureText(tl(t)).width)) + 20; }
     const x = (i) => pad + (i / n) * (W - pad - padR), y = (v) => H - padB - ((tf(v) - lo) / (hi - lo || 1)) * (H - padB - padT);
-    ctx.strokeStyle = 'rgba(255,240,220,0.07)'; ctx.font = '600 13px Nunito, sans-serif'; ctx.lineWidth = 1; ctx.fillStyle = '#c9b8a3'; ctx.textBaseline = 'middle';
+    ctx.strokeStyle = 'rgba(255,240,220,0.07)'; ctx.font = '600 14px Nunito, sans-serif'; ctx.lineWidth = 1; ctx.fillStyle = '#e2d1bb'; ctx.textBaseline = 'middle';
     if (!mini) for (const t of ticks) { const yy = H - padB - ((t - lo) / (hi - lo || 1)) * (H - padB - padT); ctx.beginPath(); ctx.moveTo(pad, yy); ctx.lineTo(W - padR, yy); ctx.stroke(); ctx.textAlign = 'right'; ctx.fillText(tl(t), pad - 10, yy); }
     ctx.textBaseline = 'alphabetic';
     if (!mini) { ctx.textAlign = 'left'; ctx.fillText(fmtDate(start), pad, H - 6); ctx.textAlign = 'right'; ctx.fillText(fmtDate(end), W - padR, H - 6); ctx.textAlign = 'left'; }
     const grad = ctx.createLinearGradient(0, 0, 0, H); grad.addColorStop(0, COIN[id].color + '38'); grad.addColorStop(1, COIN[id].color + '00');
     ctx.beginPath(); pts.forEach(([d, v], i) => (i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v)))); ctx.lineTo(x(n), H - padB); ctx.lineTo(x(0), H - padB); ctx.fillStyle = grad; ctx.fill();
     ctx.beginPath(); pts.forEach(([d, v], i) => (i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v)))); ctx.strokeStyle = COIN[id].color; ctx.lineWidth = 2; ctx.stroke();
+    if (!mini) { const [, lv] = pts[n]; ctx.beginPath(); ctx.arc(x(n), y(lv), 4.5, 0, 7); ctx.fillStyle = COIN[id].color; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#302419'; ctx.stroke(); }
     if (logScale && !mini) { ctx.fillStyle = '#9a8a78'; ctx.textAlign = 'right'; ctx.fillText('log. Skala', W - padR, 14); ctx.textAlign = 'left'; }
   }
 

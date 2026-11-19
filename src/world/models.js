@@ -16,7 +16,7 @@ const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 // ---------- Zusatz-Materialien ----------
 export const X = {
   gold: () => mat('gold', { color: 0xd8a640, roughness: 0.28, metalness: 1 }),
-  caseBlack: () => mat('caseBlack', { color: 0x1b1d22, roughness: 0.42, metalness: 0.35 }),
+  caseBlack: () => mat('caseBlack', { color: 0x2b2420, roughness: 0.55, metalness: 0.15 }),
   wire: () => mat('grillWire', { color: 0xc4c8ce, roughness: 0.3, metalness: 0.9 }),
   wireDark: () => mat('grillWireDark', { color: 0x2a2c31, roughness: 0.45, metalness: 0.6 }),
   ram: () => mat('ramSpreader', { color: 0x8d1c26, roughness: 0.35, metalness: 0.7 }),

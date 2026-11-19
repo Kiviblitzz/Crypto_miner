@@ -86,7 +86,7 @@ export class World {
     this.sun = new THREE.DirectionalLight(0xfff1dc, 2.5); this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048); this.sun.shadow.bias = -0.0004; this.sun.shadow.normalBias = 0.02;
     this.scene.add(this.sun); this.scene.add(this.sun.target);
-    this.fill = new THREE.AmbientLight(0xffffff, 0.12); this.scene.add(this.fill);
+    this.fill = new THREE.AmbientLight(0xffe6cc, 0.22); this.scene.add(this.fill);
     // Himmelskuppel mit Verlauf und Sonnenscheibe, dazu Sterne
     this.skyU = { top: { value: new THREE.Color(0x6fa3dc) }, horizon: { value: new THREE.Color(0xdfe9f2) }, sunDir: { value: new THREE.Vector3(0, 1, 0) }, sunCol: { value: new THREE.Color(0xfff2d0) } };
     this.sky = new THREE.Mesh(new THREE.SphereGeometry(400, 32, 16), new THREE.ShaderMaterial({ uniforms: this.skyU, side: THREE.BackSide, depthWrite: false, fog: false,
@@ -174,7 +174,7 @@ export class World {
     this.entries.clear();
     const def = this.def = FACILITY[id]; this.facId = id;
     if (this.gtao) this.gtao.enabled = def.tier <= 2; // in großen Hallen zu teuer
-    this.room = buildRoom(def); this.scene.add(this.room.root);
+    this.room = buildRoom(def); this.scene.add(this.room.root); this.screensDirty = true;
     this.outside = buildOutside(this.room.outside, def); this.scene.add(this.outside);
     this.roomLights = this.room.lights.map((L) => { const p = new THREE.PointLight(L.color, L.intensity, L.dist, 1.6); p.position.set(...L.pos); this.scene.add(p); return p; });
     if (this.gridHelper) this.scene.remove(this.gridHelper);
@@ -432,12 +432,12 @@ export class World {
     for (const [e, rev, u0] of cand.slice(0, 6)) {
       let p = this.popups.find((q) => !q.visible);
       if (!p) { if (this.popups.length >= 14) break; const c = document.createElement('canvas'); c.width = 256; c.height = 64; const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; p = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false })); p.renderOrder = 15; p.userData.c = c; this.scene.add(p); this.popups.push(p); }
-      const c = p.userData.c, g = c.getContext('2d'); g.clearRect(0, 0, 256, 64);
-      g.font = '600 40px Fredoka, Nunito, Arial'; g.textAlign = 'center'; g.shadowColor = 'rgba(0,0,0,0.6)'; g.shadowBlur = 10; g.shadowOffsetY = 2; const coin = u0?.coin || 'BTC', asCoin = !(this.game.s.autoSell?.[coin] > 0); const px = this.game.price(coin) || 1;
+      const c = p.userData.c, g = c.getContext('2d'); g.clearRect(0, 0, 256, 64); g.fillStyle = 'rgba(38,28,22,.86)'; g.beginPath(); g.roundRect(14, 6, 228, 52, 26); g.fill();
+      g.font = '600 34px Fredoka, Nunito, Arial'; g.textAlign = 'center'; g.shadowColor = 'transparent'; const coin = u0?.coin || 'BTC', asCoin = !(this.game.s.autoSell?.[coin] > 0); const px = this.game.price(coin) || 1;
       const per = 1.1 / ([Infinity, 4.0, 1.6, 0.5, 0.12][this.game.s.speed] || 4); // Anteil eines Tages pro Einblendung
-      const txt = asCoin ? `+${fmtCoin((rev / px) * per)} ${coin}` : '+' + fmtUSD(rev * per); g.fillStyle = asCoin ? '#ffc640' : '#6fdc9c'; g.fillText(txt, 128, 46); g.shadowColor = 'transparent';
+      const txt = asCoin ? `+${fmtCoin((rev / px) * per)} ${coin}` : '+' + fmtUSD(rev * per); g.fillStyle = asCoin ? '#ffc640' : '#6fdc9c'; g.fillText(txt, 128, 44, 210); g.shadowColor = 'transparent';
       p.material.map.needsUpdate = true;
-      const sc = 0.5;
+      const sc = 0.6;
       const bb = e.group.userData.bbox; p.position.set(e.group.position.x, (bb ? bb.max.y : 0.6) + 0.15, e.group.position.z);
       p.scale.set(sc, sc / 4, 1); p.visible = true; p.userData.life = 0; p.userData.y0 = p.position.y; p.material.opacity = 1;
       this.coinBurst(p.position, 3); this.onIncome?.();
@@ -462,12 +462,15 @@ export class World {
     const rad = size.length() / 2; let dist = rad / Math.sin(THREE.MathUtils.degToRad(15)) * 1.2;
     const dir = new THREE.Vector3(1, 0.62, 1.25).normalize(), cam = this.thumbCam, tgt = c.clone();
     const corners = []; for (let i = 0; i < 8; i++) corners.push(new THREE.Vector3(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z));
-    // Eng einrahmen: Objekt füllt ~78 % der Höhe bzw. ~86 % der Breite
-    for (let it = 0; it < 4; it++) {
+    // Eng einrahmen: Objekt füllt ~70 % der Höhe bzw. ~84 % der Breite, steht unten auf einer gemeinsamen Standlinie (NDC y = −0,72)
+    let ext = [0, 0, 0, 0];
+    for (let it = 0; it < 6; it++) {
       cam.position.copy(tgt).addScaledVector(dir, dist); cam.lookAt(tgt); cam.near = dist / 50; cam.far = dist * 4; cam.updateProjectionMatrix(); cam.updateMatrixWorld();
       let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const q of corners) { const v = q.clone().project(cam); x0 = Math.min(x0, v.x); x1 = Math.max(x1, v.x); y0 = Math.min(y0, v.y); y1 = Math.max(y1, v.y); }
-      const sx = (x1 - x0) / 2 / 0.86, sy = (y1 - y0) / 2 / 0.78, sc = Math.max(sx, sy);
-      const off = new THREE.Vector3((x0 + x1) / 2, (y0 + y1) / 2, 0.5).unproject(cam).sub(new THREE.Vector3(0, 0, 0.5).unproject(cam));
+      ext = [x0, x1, y0, y1];
+      const sx = (x1 - x0) / 2 / 0.84, sy = (y1 - y0) / 2 / 0.70, sc = Math.max(sx, sy);
+      const want = new THREE.Vector3((x0 + x1) / 2, y0 + 0.72 * sc, 0.5);
+      const off = want.unproject(cam).sub(new THREE.Vector3(0, 0, 0.5).unproject(cam));
       tgt.add(off); dist *= 0.35 + 0.65 * sc;
     }
     cam.position.copy(tgt).addScaledVector(dir, dist); cam.lookAt(tgt); cam.near = dist / 50; cam.far = dist * 4; cam.updateProjectionMatrix();
@@ -477,6 +480,9 @@ export class World {
     const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d'), img = g.createImageData(W, H);
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const si = ((H - 1 - y) * W + x) * 4, di = (y * W + x) * 4; for (let k = 0; k < 3; k++) { const v = px[si + k] / 255, t = v / (1 + v * 0.6); img.data[di + k] = Math.min(255, Math.pow(t * 1.15, 1 / 2.2) * 255); } img.data[di + 3] = px[si + 3]; }
     g.putImageData(img, 0, 0);
+    // Weicher Bodenschatten unter dem Objekt (hinter die Modellpixel gelegt)
+    { const cx = W / 2, cy = H * 0.86, rx = Math.max(26, Math.min(W * 0.36, (ext[1] - ext[0]) / 2 * W / 2 * 0.95)), ry = rx * 0.2;
+      g.save(); g.globalCompositeOperation = 'destination-over'; g.translate(cx, cy); g.scale(1, ry / rx); const sh = g.createRadialGradient(0, 0, 0, 0, 0, rx); sh.addColorStop(0, 'rgba(25,16,10,.55)'); sh.addColorStop(1, 'rgba(25,16,10,0)'); g.fillStyle = sh; g.beginPath(); g.arc(0, 0, rx, 0, 7); g.fill(); g.restore(); }
     const url = cv.toDataURL('image/png'); this.thumbs.set(type, url); return url;
   }
   // Kleine Münzen springen aus dem Gerät (Rückmeldung für Einkommen)
@@ -874,7 +880,7 @@ export class World {
       if (sc.kind === 'pc') {
         // Mining-Konsole auf dem Monitor im Kinderzimmer – mit echten Werten
         const s = this.game.s, sm = this.game.summary[this.facId];
-        g.fillStyle = '#020a02'; g.fillRect(0, 0, W, H); g.font = 'bold 26px monospace'; g.fillStyle = '#7f7';
+        g.fillStyle = '#140b04'; g.fillRect(0, 0, W, H); g.font = 'bold 26px monospace'; g.fillStyle = '#ffb347';
         g.fillText('miner v2.' + (s.day % 7) + ' – ' + fmtDate(s.day), 14, 34);
         g.font = '21px monospace';
         const lines = [];
