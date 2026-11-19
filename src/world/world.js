@@ -134,6 +134,12 @@ export class World {
     // Türen als Interaktionsflächen
     this.doorGroup.clear();
     for (const d of this.room.doors || []) { const m = new THREE.Mesh(new THREE.BoxGeometry(...d.s), new THREE.MeshBasicMaterial({ visible: false })); m.position.set(...d.c); m.userData.door = d; this.doorGroup.add(m); }
+    for (const p of this.room.props || []) { const m = new THREE.Mesh(new THREE.BoxGeometry(...p.s), new THREE.MeshBasicMaterial({ visible: false })); m.position.set(...p.c); m.userData.prop = p; this.doorGroup.add(m); }
+    // Freien Platz zum Erscheinen suchen (falls dort inzwischen etwas steht)
+    if (this.collides(this.player.pos.x, this.player.pos.z, this.player.radius)) {
+      outer: for (let r = 0.5; r < span; r += 0.5) for (let a = 0; a < 16; a++) { const x = sp.x + Math.cos(a / 16 * Math.PI * 2) * r, z = sp.z + Math.sin(a / 16 * Math.PI * 2) * r; if (!this.collides(x, z, this.player.radius)) { this.player.pos.set(x, 0, z); break outer; } }
+      this.player.apply();
+    }
     for (const wl of this.room.walls) wl.group.visible = true;
     this.room.ceil.visible = true;
     if (this.people) { this.scene.remove(this.people); this.people = null; }
@@ -318,6 +324,7 @@ export class World {
     if (this.placing) { this.confirmPlacement(); return; }
     const a = this.aim; if (!a) return;
     if (a.door) this.onDoor?.(a.door);
+    else if (a.prop) this.onProp?.(a.prop);
     else if (a.uid) this.onInteract?.(a.uid);
   }
   // Was liegt unter dem Fadenkreuz?
@@ -331,10 +338,11 @@ export class World {
     for (const h of hits) {
       const o = h.object; if (o.isSprite) continue;
       if (o.userData.door) { aim = { door: o.userData.door, dist: h.distance }; break; }
+      if (o.userData.prop) { aim = { prop: o.userData.prop, dist: h.distance }; break; }
       if (o.userData.uid) { aim = { uid: o.userData.uid, dist: h.distance }; break; }
       if (o.isMesh && o.visible) break; // Wand/Möbel verdeckt
     }
-    const key = aim ? (aim.uid || aim.door.label) : null, prev = this.aim ? (this.aim.uid || this.aim.door?.label) : null;
+    const key = aim ? (aim.uid || (aim.door || aim.prop).label) : null, prev = this.aim ? (this.aim.uid || (this.aim.door || this.aim.prop)?.label) : null;
     this.aim = aim;
     if (key !== prev) this.onAim?.(aim);
     const e = aim?.uid && this.entries.get(aim.uid);

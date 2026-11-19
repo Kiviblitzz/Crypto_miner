@@ -23,6 +23,7 @@ export class UI {
     world.onAim = (aim) => this.prompt(aim);
     world.onInteract = (uid) => this.openInspector(uid);
     world.onDoor = (door) => this.travel(door);
+    world.onProp = (p) => this.useProp(p);
     world.onPause = () => this.pause(true);
     world.onCanvasClickInUI = () => this.resume();
     world.onPlaced = (o) => { const d = PLACEABLE[o.type]; if (d.kind === 'rig' || d.kind === 'holder') this.toast(`✅ ${esc(d.name)} steht. Schau es an und drück <b>[E]</b>, um es zu bestücken.`, 'good', 5000); };
@@ -186,6 +187,8 @@ export class UI {
     let html = '';
     if (aim.door) {
       html = `<b>[E]</b> ${esc(aim.door.label)} <span>– Standort wechseln</span>`;
+    } else if (aim.prop) {
+      html = `<b>[E]</b> ${esc(aim.prop.label)} <span>– ${esc(aim.prop.hint)}</span>`;
     } else {
       const o = this.g.findObj(aim.uid); if (!o) { el.classList.add('hidden'); return; }
       const def = PLACEABLE[o.type], sm = this.g.summary[this.g.facOf(aim.uid)], a = sm?.per.get(aim.uid);
@@ -196,6 +199,18 @@ export class UI {
       html = `<b>[E]</b> ${esc(def.name)}${st ? `<div class="st">${st}</div>` : ''}${line ? `<div>${line}</div>` : ''}`;
     }
     el.innerHTML = html; el.classList.remove('hidden');
+  }
+  useProp(p) {
+    if (p.action === 'market') this.market();
+    else if (p.action === 'company') this.company();
+    else if (p.action === 'techs') this.techs();
+    else if (p.action === 'ranking') this.ranking();
+    else if (p.action === 'sleep') {
+      const s = this.g.s;
+      if (s.frac > 0.25 && s.frac < 0.8) { this.toast('😴 Noch nicht müde – schlafen kannst du ab 19 Uhr.', 'info', 3000); return; }
+      this.fade(); const steps = s.frac >= 0.8 ? 1 : 0; for (let i = 0; i < steps; i++) this.g.advanceDay(); s.frac = 0.29;
+      this.toast('☀️ Guten Morgen! Die Rigs haben die ganze Nacht geschürft.', 'good', 3500);
+    }
   }
   travel(door) {
     const g = this.g;
@@ -400,7 +415,7 @@ export class UI {
     for (const [ic, l, key, fn, b] of btns) { const e = h(`<button title="${l} (${key})"><span class="ic">${ic}</span>${l}<span class="key">${key}</span>${b ? `<span class="bdg">${b}</span>` : ''}</button>`); e.onclick = fn; el.append(e); }
   }
   toggleMap() {
-    if (this.w.empire) { this.w.hideEmpire(); this.resume(); }
+    if (this.w.empire) { this.w.hideEmpire(); this.pause(false); this.w.setMode('play'); }
     else { this.resume(); this.w.showEmpire(); }
   }
 

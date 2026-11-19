@@ -128,6 +128,7 @@ export function buildRoom(def) {
     B.outside = 'town';
     B.doors = [{ c: [3.98, 1.0, 3.03], s: [0.14, 2.0, 0.85], label: 'Zimmertür' }];
     B.spawn = { x: 3.3, z: 3.0, look: [1.6, 0.9] };
+    B.props = [{ c: [2.6, 1.08, 0.13], s: [0.55, 0.4, 0.12], label: 'PC-Monitor', hint: 'Krypto-Börse öffnen', action: 'market' }, { c: [0.5, 0.45, 2.5], s: [1.0, 0.5, 2.0], label: 'Bett', hint: 'schlafen bis zum Morgen', action: 'sleep' }];
   } else if (def.style === 'basement') {
     S = shell(def, {
       floorMat: mat('floorBase', { map: TEX.concrete([3, 2], 118), roughness: 0.9 }),
@@ -168,6 +169,8 @@ export function buildRoom(def) {
     B.outside = 'garden';
     B.doors = [{ c: [6.4, 1.2, 1.0], s: [1.2, 2.4, 2.0], label: 'Kellertreppe' }];
     B.spawn = { x: 5.2, z: 2.7, look: [2.0, 2.6] };
+    { const fb = new THREE.Group(); fb.position.set(5.3, 1.3, 0.09); S.back.add(fb); box(fb, 0.5, 0.7, 0.12, mat('fusebox', { color: 0xd8d4c8, roughness: 0.6 }), 0, 0, 0); for (let i = 0; i < 6; i++) box(fb, 0.05, 0.1, 0.02, M.black(), -0.15 + i * 0.06, 0.45, 0.07); box(fb, 0.03, 0.03, 0.01, M.ledGreen(), 0.18, 0.6, 0.07); }
+    B.props = [{ c: [5.3, 1.65, 0.15], s: [0.55, 0.75, 0.2], label: 'Sicherungskasten', hint: 'Strom & Standort verwalten', action: 'company' }];
   } else if (def.style === 'workshop') {
     S = shell(def, {
       floorMat: mat('floorWork', { map: TEX.concrete([4, 3], 132), roughness: 0.85 }),
@@ -195,6 +198,7 @@ export function buildRoom(def) {
     B.outside = 'yard';
     B.doors = [{ c: [8.5, 1.05, 0.06], s: [1.0, 2.1, 0.16], label: 'Tür zum Laden' }, { c: [9.95, 1.5, 4.25], s: [0.16, 3.0, 3.5], label: 'Rolltor' }];
     B.spawn = { x: 8.5, z: 1.4, look: [4.5, 5.0] };
+    B.props = [{ c: [1.6, 1.0, 0.4], s: [2.6, 0.3, 0.8], label: 'Werkbank', hint: 'Technik & Forschung', action: 'techs' }, { c: [0.9, 1.1, 0.35], s: [0.45, 0.35, 0.35], label: 'Alter Fernseher', hint: 'Krypto-Kurse ansehen', action: 'market' }];
   } else if (def.style === 'warehouse') {
     S = shell(def, {
       floorMat: mat('floorEpoxy', { map: TEX.epoxy([8, 6]), roughness: 0.35, metalness: 0.1 }),
@@ -222,6 +226,7 @@ export function buildRoom(def) {
     B.outside = 'industrial';
     B.doors = [{ c: [8, 2.25, 0.1], s: [4, 4.5, 0.2], label: 'Rolltor' }, { c: [16, 2.25, 0.1], s: [4, 4.5, 0.2], label: 'Rolltor' }];
     B.spawn = { x: 8, z: 1.6, look: [12, 10] };
+    B.props = [{ c: [2.5, 1.3, d - 1.5], s: [5, 2.6, 3], label: 'Büro-Container', hint: 'Firma, Personal & Strom', action: 'company' }];
   } else if (def.style === 'datacenter') {
     S = shell(def, {
       floorMat: mat('floorRaised', { map: TEX.tiles([w / 0.6, d / 0.6]), roughness: 0.5, metalness: 0.05 }),
@@ -247,6 +252,7 @@ export function buildRoom(def) {
     { const dr = new THREE.Mesh(new THREE.BoxGeometry(1.0, 2.2, 0.06), mat('dcDoor', { color: 0x8a939e, roughness: 0.4, metalness: 0.5 })); dr.position.set(d - 20, 1.1, 0.16); S.left.add(dr); const pl = textTexture([{ text: 'AUSGANG', font: 'bold 60px Arial', color: '#fff' }], { w: 256, h: 96, bg: '#1a8f3a' }); poster(S.left, pl, 0.6, 0.22, d - 20, 2.45, 0.17); }
     B.doors = [{ c: [0.08, 1.1, 20], s: [0.16, 2.2, 1.0], label: 'Ausgang' }];
     B.spawn = { x: 1.3, z: 20, look: [18, 13] };
+    B.props = [{ c: [18, 3.0, 0.3], s: [7, 3.5, 0.3], label: 'NOC-Großbildschirm', hint: 'Rangliste ansehen', action: 'ranking' }, { c: [3.7, 0.9, 2.1], s: [6.2, 0.6, 0.9], label: 'NOC-Arbeitsplätze', hint: 'Markt & Wallet', action: 'market' }];
   } else if (def.style === 'fjord') {
     S = shell(def, {
       floorMat: mat('floorFjord', { map: TEX.concrete([16, 10], 140), roughness: 0.8 }),
@@ -265,6 +271,7 @@ export function buildRoom(def) {
     { const dr = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.4, 0.08), mat('fjDoor', { color: 0x3b4450, roughness: 0.4, metalness: 0.6 })); dr.position.set(d - 20, 1.2, 0.18); S.left.add(dr); const pl = textTexture([{ text: 'UTGANG · AUSGANG', font: 'bold 40px Arial', color: '#fff' }], { w: 512, h: 96, bg: '#1a8f3a' }); poster(S.left, pl, 1.2, 0.22, d - 20, 2.7, 0.19); }
     B.doors = [{ c: [0.1, 1.2, 20], s: [0.2, 2.4, 1.2], label: 'Ausgang' }];
     B.spawn = { x: 1.6, z: 20, look: [32, 20] };
+    B.props = [{ c: [0.2, 8, 20], s: [0.3, 3.8, 12], label: 'HASHWERK NORD', hint: 'Rangliste ansehen', action: 'ranking' }];
   }
   // Decken-Material passend zum Raum
   const ceilMat = { bedroom: mat('ceilBed', { color: 0xf3f0ea, roughness: 1, side: THREE.DoubleSide }), basement: mat('ceilBase', { map: TEX.concrete([3, 2], 150), roughness: 1, side: THREE.DoubleSide }), workshop: mat('ceilWork', { map: TEX.concrete([4, 3], 120), roughness: 1, side: THREE.DoubleSide }), warehouse: mat('ceilWh', { map: TEX.corrugated([10, 6], '#6f7780'), roughness: 0.8, side: THREE.DoubleSide }), datacenter: mat('ceilDc', { map: TEX.tiles([w / 1.2, d / 1.2]), roughness: 0.9, side: THREE.DoubleSide }), fjord: mat('ceilFj', { color: 0x1e252d, roughness: 0.6, metalness: 0.4, transparent: true, opacity: 0.55, side: THREE.DoubleSide }) }[def.style];
