@@ -1583,7 +1583,9 @@ body[data-modal="market"] :is(#st-cash, #st-profit, #st-wallet) { visibility: hi
 /* Schwierigkeit: Auswahl im Titel und im Menü */
 #splash .diff-pick { display: flex; flex-direction: column; align-items: flex-start; }
 #splash .diff-pick .dp-h { font: 700 18px var(--font-fun); color: #fff8ec; margin-bottom: 2px; }
-#splash .diff-pick .btn { min-width: 340px; max-width: 420px; }
+#splash .diff-pick .btn { width: 460px; min-width: 0 !important; max-width: calc(100vw - 48px); }
+#splash .diff-pick .btn .bt { min-width: 0; }
+#splash .diff-pick .btn .bt small { white-space: normal !important; }
 #splash .diff-pick .dp-back { background: none; border: 0; color: rgba(255,248,236,.6); font: 700 14px var(--font); padding: 4px 2px; cursor: pointer; }
 #splash .diff-pick .dp-back:hover { color: #fff; }
 .diff-row { align-items: center; }
