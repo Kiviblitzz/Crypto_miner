@@ -1,7 +1,7 @@
 // Prozedurale 3D-Modelle: alles aus Grundkörpern gebaut, dann nach Material zusammengeführt (wenige Draw-Calls)
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { M, mat } from './materials.js';
+import { M, mat, textTexture } from './materials.js';
 import { PLACEABLE, PART } from '../data/hardware.js';
 
 // ---------- Helfer ----------
@@ -278,6 +278,29 @@ export function buildDecor(type) {
     box(root, 0.18, 0.25, 0.85, fab, -0.62, 0.4, 0); box(root, 0.18, 0.25, 0.85, fab, 0.62, 0.4, 0);
     box(root, 0.6, 0.12, 0.6, mat('cushion', { color: 0x5560a0, roughness: 0.95 }), -0.32, 0.4, 0.05);
     box(root, 0.6, 0.12, 0.6, mat('cushion', { color: 0x5560a0, roughness: 0.95 }), 0.32, 0.4, 0.05);
+  }
+  else if (type === 'neon') {
+    box(root, 0.06, 0.9, 0.06, M.black(), 0, 0, 0); box(root, 0.5, 0.03, 0.3, M.black(), 0, 0, 0);
+    const t = textTexture([{ text: 'HODL', font: 'bold 150px Arial', color: '#ff3df0' }], { w: 512, h: 220, bg: '#08020a' });
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.38), mat('neonSign', { map: t, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 2.2, side: THREE.DoubleSide })); m.position.set(0, 1.12, 0); root.add(m);
+    box(root, 0.94, 0.42, 0.02, M.black(), 0, 0.91, -0.02);
+  } else if (type === 'aquarium') {
+    box(root, 0.95, 0.7, 0.42, mat('aqCab', { color: 0x2b2b2b, roughness: 0.6 }), 0, 0, 0);
+    box(root, 0.9, 0.5, 0.38, M.water(), 0, 0.72, 0);
+    box(root, 0.92, 0.04, 0.4, M.black(), 0, 1.22, 0);
+    box(root, 0.8, 0.02, 0.02, M.ledBlue(), 0, 1.2, 0.18);
+    for (let i = 0; i < 5; i++) { const f = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), mat('fish' + (i % 2), { color: i % 2 ? 0xff8a00 : 0xffd400, emissive: i % 2 ? 0x552200 : 0x554400 })); f.scale.set(1.8, 1, 0.6); f.position.set(-0.3 + i * 0.15, 0.85 + (i % 3) * 0.1, (i % 2 - 0.5) * 0.15); root.add(f); }
+  } else if (type === 'fridge') {
+    box(root, 0.5, 1.45, 0.45, mat('fridgeBody', { color: 0xc8102e, roughness: 0.4, metalness: 0.3 }), 0, 0, 0);
+    box(root, 0.42, 1.2, 0.01, mat('fridgeGlass', { color: 0x223344, emissive: 0x9fd8ff, emissiveIntensity: 0.6, transparent: true, opacity: 0.7 }), 0, 0.15, 0.23);
+    for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) cyl(root, 0.025, 0.025, 0.12, mat('can' + ((r + c) % 3), { color: [0x22aa44, 0x2266dd, 0xeeeeee][(r + c) % 3], metalness: 0.7, roughness: 0.3 }), -0.13 + c * 0.087, 0.27 + r * 0.29, 0.12, 10);
+  } else if (type === 'arcade') {
+    box(root, 0.6, 1.75, 0.6, mat('arcadeBody', { color: 0x2a1a5e, roughness: 0.5 }), 0, 0, 0);
+    const t = textTexture([{ text: 'BLOCK', font: 'bold 70px Arial', color: '#ffd400', y: 70 }, { text: 'BUSTER', font: 'bold 70px Arial', color: '#ff3d7f', y: 150 }], { w: 256, h: 220, bg: '#05050f' });
+    const sc = new THREE.Mesh(new THREE.PlaneGeometry(0.46, 0.4), mat('arcadeScreen', { map: t, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 1.2 })); sc.position.set(0, 1.25, 0.301); root.add(sc);
+    box(root, 0.6, 0.06, 0.25, M.black(), 0, 0.9, 0.35);
+    cyl(root, 0.015, 0.015, 0.08, M.black(), -0.12, 0.98, 0.38, 8); for (let i = 0; i < 3; i++) cyl(root, 0.025, 0.025, 0.02, M.ledRed(), 0.05 + i * 0.07, 0.97, 0.38, 10);
+    box(root, 0.6, 0.12, 0.02, M.rgb(), 0, 1.6, 0.301);
   }
   return root;
 }

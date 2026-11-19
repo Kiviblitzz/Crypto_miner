@@ -17,6 +17,10 @@ Du startest **Oktober 2010 im Kinderzimmer** mit einem alten PC und baust bis in
 
 ![Imperium](docs/img/08_imperium.jpg)
 
+**Eigener Keller** – mit Deko (Neon-Schild, Aquarium, Arcade-Automat) und den ersten Open-Frame-Rigs:
+
+![Keller mit Deko](docs/img/12_keller_deko.jpg)
+
 **Rundgang** – nachts zwischen den Containern der Fjordhalle, mit Polarlicht:
 
 ![Fjord bei Nacht](docs/img/10_fjord_nacht.jpg)
