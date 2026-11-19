@@ -352,10 +352,10 @@ export class Game {
     this.dayUpdate(true); this.emit('objects', this.facOf(uid));
   }
   repairCost(o) {
-    if (o.items) { let c = 0; for (const it of o.items) if (it.b) c += this.itemPrice(PLACEABLE[it.id]) * 0.08; return Math.round(c); }
+    if (o.items) { let c = 0; for (const it of o.items) if (it.b) c += this.itemPrice(PLACEABLE[it.id]) * 0.08; return Math.round(c * this.fx('repair')); }
     let base = this.itemPrice(PLACEABLE[o.type]);
     if (o.parts) for (const pid of this.partIds(o)) base += this.itemPrice(PART[pid]);
-    return Math.max(5, Math.round(base * 0.08));
+    return Math.max(5, Math.round(base * 0.08 * this.fx('repair')));
   }
   brokenIn(facId) { let n = 0, c = 0; for (const o of this.s.fac[facId].objects) { if (o.broken || (o.items && o.items.some((i) => i.b))) { n++; c += this.repairCost(o); } } return { n, c }; }
   repairAll(facId) { let n = 0; for (const o of this.s.fac[facId].objects) if ((o.broken || (o.items && o.items.some((i) => i.b))) && this.repair(o.uid)) n++; return n; }
