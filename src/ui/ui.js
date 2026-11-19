@@ -67,8 +67,11 @@ export class UI {
     let sh = g.algoHash('sha256'), shAlgo = 'sha256';
     if (!sh) { for (const a of ['scrypt', 'ethash', 'kawpow', 'kheavy', 'equihash', 'rx', 'cn']) { const v = g.algoHash(a); if (v) { sh = v; shAlgo = a; break; } } }
     const smc = g.summary[s.current]; $('#heat').classList.toggle('on', !!smc && smc.temp > 38 && !smc.tripped);
-    $('#st-cash').innerHTML = `<div class="l">Kontostand</div><div class="v ${s.cash < 0 ? 'neg' : ''}">${fmtUSD(s.cash)}</div>`;
-    $('#st-nw').innerHTML = `<div class="l">Vermögen</div><div class="v">${fmtUSD(g.netWorthFast())}</div>`;
+    const nw = g.netWorthFast();
+    const ease = (cur, target) => (cur == null || Math.abs(target - cur) > Math.abs(target) * 0.5 + 1e4 ? target : cur + (target - cur) * 0.35);
+    this.dCash = ease(this.dCash, s.cash); this.dNw = ease(this.dNw, nw);
+    $('#st-cash').innerHTML = `<div class="l">Kontostand</div><div class="v ${s.cash < 0 ? 'neg' : ''}">${fmtUSD(this.dCash)}</div>`;
+    $('#st-nw').innerHTML = `<div class="l">Vermögen</div><div class="v">${fmtUSD(this.dNw)}</div>`;
     $('#st-profit').innerHTML = `<div class="l">Gewinn / Tag</div><div class="v ${p.net >= 0 ? 'pos' : 'neg'}">${p.net >= 0 ? '+' : ''}${fmtUSD(p.net)}</div>`;
     $('#st-btc').innerHTML = `<div class="l">Bitcoin</div><div class="v">${fmtUSD(btc)} <small class="${ch >= 0 ? 'pos' : 'neg'}">${ch >= 0 ? '▲' : '▼'}${Math.abs(ch).toFixed(1)}%</small></div>`;
     $('#st-hash').innerHTML = `<div class="l">${ALGO_LABEL[shAlgo]} Hashrate</div><div class="v">${fmtHash(sh, shAlgo)}</div>`;

@@ -75,6 +75,7 @@ export class World {
     this.bindInput();
     window.addEventListener('resize', () => this.resize()); this.resize();
     game.on('objects', (fac) => { if (fac === this.facId) this.syncObjects(); });
+    game.on('update', () => this.spawnIncome());
   }
 
   setQuality(q) {
@@ -125,6 +126,7 @@ export class World {
     } else { this.transition = null; this.camera.position.copy(endPos); }
     this.camera.near = span > 30 ? 0.2 : 0.05; this.camera.updateProjectionMatrix();
     if (this.people) { this.scene.remove(this.people); this.people = null; }
+    this.popups?.forEach((p) => (p.visible = false));
     this.buildWeather();
     this.scene.fog = def.style === 'fjord' ? new THREE.Fog(0xb8c8d8, 250, 900) : new THREE.Fog(0x9fb8d0, 60 + span * 3, 260 + span * 6);
     this.syncObjects();
@@ -301,6 +303,32 @@ export class World {
     this.onFP?.(false);
   }
   fpClick() { const uid = this.pick(true); if (uid) { this.fp.unlock(); this.select(uid); } }
+
+  // ---------- Schwebende Ertrags-Einblendungen ----------
+  spawnIncome() {
+    if (this.empire || this.fpActive || !this.game.s.speed) return;
+    const now = this.t; if (this.lastIncome && now - this.lastIncome < 1.1) return; this.lastIncome = now;
+    const sm = this.game.summary[this.facId]; if (!sm || sm.tripped) return;
+    this.popups ||= [];
+    const cand = [];
+    for (const [uid, e] of this.entries) { const a = sm.per.get(uid); if (!a || !a.units.length) continue; const rev = a.units.reduce((x, u) => x + u.rev, 0) * sm.throttle; if (rev > 0.01) cand.push([e, rev]); }
+    cand.sort(() => Math.random() - 0.5);
+    for (const [e, rev] of cand.slice(0, 6)) {
+      let p = this.popups.find((q) => !q.visible);
+      if (!p) { if (this.popups.length >= 14) break; const c = document.createElement('canvas'); c.width = 256; c.height = 64; const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; p = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false })); p.renderOrder = 15; p.userData.c = c; this.scene.add(p); this.popups.push(p); }
+      const c = p.userData.c, g = c.getContext('2d'); g.clearRect(0, 0, 256, 64);
+      g.font = 'bold 40px Arial'; g.textAlign = 'center'; g.lineWidth = 6; g.strokeStyle = 'rgba(0,0,0,0.75)'; const txt = '+' + fmtUSD(rev); g.strokeText(txt, 128, 46); g.fillStyle = '#5dff9c'; g.fillText(txt, 128, 46);
+      p.material.map.needsUpdate = true;
+      const span = Math.max(this.def.w, this.def.d), sc = 0.6 * Math.max(1, span / 6);
+      const bb = e.group.userData.bbox; p.position.set(e.group.position.x, (bb ? bb.max.y : 0.6) + 0.15, e.group.position.z);
+      p.scale.set(sc, sc / 4, 1); p.visible = true; p.userData.life = 0; p.userData.y0 = p.position.y; p.material.opacity = 1;
+    }
+  }
+  updatePopups(dt) {
+    if (!this.popups) return;
+    const span = Math.max(this.def.w, this.def.d);
+    for (const p of this.popups) { if (!p.visible) continue; p.userData.life += dt; p.position.y = p.userData.y0 + p.userData.life * 0.35 * Math.max(1, span / 12); p.material.opacity = Math.max(0, 1 - p.userData.life / 1.6); if (p.userData.life > 1.6) p.visible = false; }
+  }
 
   // ---------- Solarfeld neben dem Gebäude ----------
   updateSolar() {
@@ -580,7 +608,7 @@ export class World {
     }
     // Tag/Nacht
     this.updateDaylight(s.frac);
-    this.updatePeople(dt); this.updateSmoke(dt); this.updateWeather(dt);
+    this.updatePeople(dt); this.updateSmoke(dt); this.updateWeather(dt); this.updatePopups(dt);
     // Lüfter & LEDs
     const fanSpeed = 28 * dt;
     for (const e of this.entries.values()) {
