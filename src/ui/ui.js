@@ -70,7 +70,9 @@ export class UI {
     setTimeout(() => { applySnd(); applySens(); }, 0);
     $('#clickhint').onclick = () => this.w.requestLock();
     game.on('toast', (t, k, ms) => this.toast(t, k, ms));
-    game.on('message', (m) => { this.toast(`${FACE[m.from] || ''} <b>${esc(m.from)}:</b> ${esc(m.text)}`, 'msg', 7000); this.dock(); });
+    const showMsg = (m) => { this.toast(`${FACE[m.from] || ''} <b>${esc(m.from)}:</b> ${esc(m.text)}`, 'msg', 7000); this.dock(); };
+    this.flushMsgs = () => { const q = this.msgQ || []; this.msgQ = []; q.forEach((m, i) => setTimeout(() => showMsg(m), 3000 + i * 2500)); };
+    game.on('message', (m) => { if (this.inspUid || this.w.focus) { (this.msgQ ||= []).push(m); this.dock(); return; } showMsg(m); });
     game.on('news', () => this.ticker());
     game.on('feature', (f) => this.featureCard(f));
     game.on('milestone', (t, sub) => this.milestone(t, sub));
@@ -271,7 +273,8 @@ export class UI {
     document.body.classList.remove('show-build', 'show-goals'); this.dock();
     if (this.inspUid) { this.inspUid = null; $('#inspector').classList.add('hidden'); this.w.select(null); }
     this.w.focusObject?.(null); this.pickType = null; this.showRun = false; this.w.ghostPart?.(null);
-    if (this.lvQ) { const [k, lv] = this.lvQ; this.lvQ = null; this.lvBusy = true; setTimeout(() => this.levelUp(k, lv), 700); }
+    if (this.lvQ) { const [k, lv] = this.lvQ; this.lvQ = null; this.lvBusy = true; setTimeout(() => this.levelUp(k, lv), 2600); }
+    this.flushMsgs?.();
     if (this.w.mode === 'ui' || this.w.mode === 'play') this.w.setMode('play');
   }
   pause(on) {
@@ -320,7 +323,7 @@ export class UI {
     } else if (aim.door) {
       html = `<kbd>E</kbd>${esc(aim.door.label)}`;
     } else if (aim.prop) {
-      html = `<kbd>E</kbd>${esc(aim.prop.hint)}`;
+      html = aim.prop.action === 'market' && !this.g.has('market') ? `Monitor · ${this.g.s.flags.miningStarted ? 'Miner läuft' : 'aus'}` : `<kbd>E</kbd>${esc(aim.prop.hint)}`;
     } else {
       const o = this.g.findObj(aim.uid); if (!o) { el.classList.add('hidden'); return; }
       const def = PLACEABLE[o.type], sm = this.g.summary[this.g.facOf(aim.uid)], a = sm?.per.get(aim.uid);
@@ -763,7 +766,8 @@ export class UI {
     const r1 = hold.querySelector('.acts');
     const fee = g.s.skills ? g.tradeFee() : 0.005, net = (f) => (w.ex + pend) * f * p * (1 - fee);
     hold.querySelector('.info').append(h(`<div class="fee">Gebühr ${(fee * 100).toLocaleString('de-DE')} % · Handel senkt sie</div>`));
-    for (const f of [0.25, 0.5, 1]) { const b = h(`<button class="btn sellb ${f === 1 ? 'primary' : ''}"><b>${f === 1 ? 'Alles verkaufen' : f * 100 + ' % verkaufen'}</b><small>${net(f) > 0.004 ? '+' + fmtUSD(net(f)) : 'nichts da'}</small></button>`); b.disabled = w.ex + pend <= 0; b.onclick = () => { if (f === 1 && !b.classList.contains('confirm')) { b.classList.add('confirm'); b.innerHTML = `<b>Wirklich alles?</b><small>${fmtCoin(w.ex + pend)} BTC → +${fmtUSD(net(1))}</small>`; clearTimeout(this.sellArm); this.sellArm = setTimeout(() => this.market(), 4000); return; } clearTimeout(this.sellArm); if (pend) g.creditPending(c.id, this.pendingBtc()); const u = g.sell(c.id, f); this.audio?.cash(); this.flashCash(u); this.toast(`Verkauft für ${fmtUSD(u)}`, 'good', 2500); this.market(); }; r1.append(b); }
+    if (w.ex + pend <= 0.0001) r1.append(h('<div class="empty-sell">Noch keine Bitcoin – dein PC schürft gerade.</div>'));
+    else for (const f of [0.25, 0.5, 1]) { const b = h(`<button class="btn sellb ${f === 1 ? 'primary' : ''}"><b>${f === 1 ? 'Alles verkaufen' : f * 100 + ' % verkaufen'}</b><small>${net(f) > 0.004 ? '+' + fmtUSD(net(f)) : 'nichts da'}</small></button>`); b.disabled = w.ex + pend <= 0; b.onclick = () => { if (f === 1 && !b.classList.contains('confirm')) { b.classList.add('confirm'); b.innerHTML = `<b>Wirklich alles?</b><small>${fmtCoin(w.ex + pend)} BTC → +${fmtUSD(net(1))}</small>`; clearTimeout(this.sellArm); this.sellArm = setTimeout(() => this.market(), 4000); return; } clearTimeout(this.sellArm); if (pend) g.creditPending(c.id, this.pendingBtc()); const u = g.sell(c.id, f); this.audio?.cash(); this.flashCash(u); this.toast(`Verkauft für ${fmtUSD(u)}`, 'good', 2500); this.market(); }; r1.append(b); }
     if (g.has('cold')) { const ct = tile('Cold-Wallet', w.cold, 'cold'); const tc = h(`<button class="btn small">${w.cold > 0 && w.ex === 0 ? 'Auf Börse holen' : 'Einlagern'}</button>`); tc.onclick = () => { g.transfer(c.id, !(w.cold > 0 && w.ex === 0)); this.market(); }; ct.querySelector('.acts').append(tc); tiles.append(ct); }
     det.append(tiles);
     const r2 = h(`<div class="row" style="align-items:center"><span style="font-size:13px">Kaufen für</span><input type="number" min="0" step="100" value="${Math.max(0, Math.round(Math.min(s.cash, 1000)))}"/><span>$</span><button class="btn small primary">Kaufen</button></div>`);

@@ -355,9 +355,9 @@ export function buildRig(type, parts, only = null) {
     box(root, 0.008, 0.008, 0.004, M.ledBlue(), W / 2 - 0.04, y0 + H - 0.04, D / 2 + 0.014);
     }
     const want = (t) => !only || only === t;
-    if (parts?.mobo && want('mobo')) mobo(root, 0.3, 0.24, -W / 2 + 0.012, y0 + H * 0.6, 0, true).rotation.set(0, 0, -Math.PI / 2);
-    if (parts?.cpu && want('cpu')) cpuCooler(root, -W / 2 + 0.016, y0 + H * 0.78, 0.0, 0).rotation.set(0, 0, -Math.PI / 2);
-    if (parts?.psu && want('psu')) { psuBox(root, 0, y0 + 0.012, -0.1, 0.15, 0.086, 0.16, PART[parts.psu]?.cap); const cab = mat('cable2', { color: 0x1d1a18, roughness: 0.7 }); boxC(root, 0.022, 0.016, 0.008, M.black(), -0.045, y0 + 0.07, -0.016); tube(root, [[-0.045, y0 + 0.07, -0.014], [-0.045, y0 + 0.075, 0.04], [-0.07, y0 + 0.15, 0.085], [-0.086, y0 + 0.2, 0.09]], 0.004, cab, 18, 8); if (parts?.mobo) boxC(root, 0.014, 0.032, 0.02, M.black(), -0.09, y0 + 0.205, 0.09); }
+    if (parts?.mobo && want('mobo')) mobo(root, 0.3, 0.24, -W / 2 + 0.012, y0 + H * 0.6, -0.095, true).rotation.set(0, 0, -Math.PI / 2);
+    if (parts?.cpu && want('cpu')) cpuCooler(root, -W / 2 + 0.016, y0 + H * 0.78, -0.095, 0).rotation.set(0, 0, -Math.PI / 2);
+    if (parts?.psu && want('psu')) { psuBox(root, 0, y0 + 0.012, -0.1, 0.15, 0.086, 0.16, PART[parts.psu]?.cap); const cab = mat('cable2', { color: 0x1d1a18, roughness: 0.7 }); boxC(root, 0.022, 0.016, 0.008, M.black(), -0.045, y0 + 0.07, -0.016); tube(root, [[-0.045, y0 + 0.07, -0.014], [-0.05, y0 + 0.09, 0.02], [-0.072, y0 + 0.16, 0.01], [-0.086, y0 + 0.2, -0.005]], 0.004, cab, 18, 8); if (parts?.mobo) boxC(root, 0.014, 0.032, 0.02, M.black(), -0.09, y0 + 0.205, -0.005); }
     if (want('gpu')) gpus.forEach((gp, i) => {
       if (only && i !== gpus.length - 1) return;
       const m = gpuModel(root, gp.look); m.position.set(-W / 2 + 0.014, y0 + H * 0.5 - i * 0.07, -D / 2 + 0.03);

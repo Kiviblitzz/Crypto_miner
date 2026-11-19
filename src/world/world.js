@@ -280,7 +280,7 @@ export class World {
     look.addScaledVector(right, 0.12);
     const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(pos, look, new THREE.Vector3(0, 1, 0)));
     this.focus = { pos, q, light: rotV(0.32, 0.48, 0.18) };
-    if (!this.focusLight) { this.focusLight = new THREE.PointLight(0xffe2b8, 0, 0.9, 1.6); this.scene.add(this.focusLight); }
+    if (!this.focusLight) { this.focusLight = new THREE.PointLight(0xffe2b8, 0, 0.55, 1.6); this.scene.add(this.focusLight); }
     if (e.sprite) e.sprite.visible = false;
   }
   // Einbau-Animation: das neue Teil gleitet von der offenen Seite ins Gehäuse und rastet ein
@@ -373,9 +373,9 @@ export class World {
     const pr = this.room?.props?.find((p) => p.action === 'market'); if (!pr) return;
     const pos = new THREE.Vector3(pr.c[0] + 0.18, pr.c[1] + 0.05, pr.c[2] + 0.62), look = new THREE.Vector3(pr.c[0] + 0.05, pr.c[1], pr.c[2]);
     const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(pos, look, new THREE.Vector3(0, 1, 0)));
-    this.focus = { pos, q, light: new THREE.Vector3(pr.c[0] - 0.45, pr.c[1] + 0.3, pr.c[2] + 0.4) }; this.focusUid = null;
+    this.focus = { pos, q, light: new THREE.Vector3(pr.c[0] + 0.4, pr.c[1] + 0.15, pr.c[2] + 0.5) }; this.focusUid = null;
     if (this.bootPending) { this.bootT = this.t; this.bootPending = false; this.screensDirty = true; }
-    if (!this.focusLight) { this.focusLight = new THREE.PointLight(0xffe2b8, 0, 0.9, 1.6); this.scene.add(this.focusLight); }
+    if (!this.focusLight) { this.focusLight = new THREE.PointLight(0xffe2b8, 0, 0.55, 1.6); this.scene.add(this.focusLight); }
   }
   select(uid) {
     this.selected = uid; this.refreshSelBox();
@@ -562,7 +562,7 @@ export class World {
       const per = 3.0 / ([Infinity, 4.0, 1.6, 0.5, 0.12][this.game.s.speed] || 4); // Anteil eines Tages pro Einblendung
       const txt = asCoin ? `+${fmtCoin((rev / px) * per)} ${coin}` : '+' + fmtUSD(rev * per); g.fillStyle = asCoin ? '#ffc640' : '#6fdc9c'; g.fillText(txt, 128, 44, 210); g.shadowColor = 'transparent';
       p.material.map.needsUpdate = true;
-      const bb = e.group.userData.bbox, sc = Math.min(0.6, Math.max(0.22, this.camera.position.distanceTo(e.group.position) * 0.2)); p.position.set(e.group.position.x, (bb ? bb.max.y : 0.6) + 0.28, e.group.position.z);
+      const bb = e.group.userData.bbox, sc = Math.min(0.38, Math.max(0.2, this.camera.position.distanceTo(e.group.position) * 0.2)); p.position.set(e.group.position.x, (bb ? bb.max.y : 0.6) + 0.28, e.group.position.z);
       p.scale.set(sc, sc / 4, 1); p.visible = true; p.userData.life = 0; p.userData.y0 = p.position.y; p.material.opacity = 1;
       this.coinBurst(new THREE.Vector3(e.group.position.x, (bb ? bb.max.y : 0.6) + 0.02, e.group.position.z), 3); this.onIncome?.();
     }
@@ -624,7 +624,7 @@ export class World {
   updatePopups(dt) {
     if (this.coins) for (const k of this.coins) { if (!k.visible) continue; const u = k.userData; u.life += dt; u.v.y -= 4.2 * dt; k.position.addScaledVector(u.v, dt); k.material.rotation += u.spin * dt; k.scale.setScalar(0.07 * (1 - Math.max(0, u.life - 0.6) * 1.5)); k.material.opacity = Math.max(0, 1 - Math.max(0, u.life - 0.55) * 2.2); if (u.life > 1.0) k.visible = false; }
     if (!this.popups) return;
-    for (const p of this.popups) { if (!p.visible) continue; p.userData.life += dt; p.position.y = p.userData.y0 + p.userData.life * 0.35; p.material.opacity = Math.max(0, 1 - p.userData.life / 1.6); if (p.userData.life > 1.6) p.visible = false; }
+    for (const p of this.popups) { if (!p.visible) continue; p.userData.life += dt; p.position.y = p.userData.y0 + p.userData.life * 0.16; p.material.opacity = Math.max(0, 1 - p.userData.life / 1.2); if (p.userData.life > 1.2) p.visible = false; }
   }
 
   // ---------- Jahreszeit: Weihnachtsbaum im Dezember ----------

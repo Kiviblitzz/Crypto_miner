@@ -128,7 +128,7 @@ export function furniture(type) {
     tube(g, pts, 0.0018, M.cable(), 80, 4);
   } else if (type === 'radiator') {
     // Heizkörper unter dem Fenster
-    const wht = mat('radiator', { color: 0xeeeae2, roughness: 0.4, metalness: 0.2 });
+    const wht = mat('radiator', { color: 0xcdc4b6, roughness: 0.75, metalness: 0 });
     for (let i = 0; i < 16; i++) box(g, 0.045, 0.54, 0.07, wht, -0.4 + i * 0.054, 0.0, 0, 0, 0.012);
     box(g, 0.9, 0.03, 0.05, wht, 0, 0.03, 0, 0, 0.01); box(g, 0.9, 0.03, 0.05, wht, 0, 0.5, 0, 0, 0.01);
     cyl(g, 0.022, 0.022, 0.07, M.white(), 0.48, 0.42, 0, 16); cyl(g, 0.02, 0.02, 0.04, mat('thermoCap', { color: 0xdedad2, roughness: 0.5 }), 0.48, 0.48, 0, 16);

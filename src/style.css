@@ -1344,3 +1344,8 @@ body:has(#modal:not(.hidden)) #toasts { z-index: 35 !important; }
 .skills .sk { min-height: 96px !important; padding: 12px !important; }
 #build .item .thumb { height: 144px !important; padding: 10px !important; }
 .tiles .acts .btn.sellb.confirm { background: linear-gradient(180deg, #ff9f6b, #f07c4a) !important; color: #3a1600 !important; box-shadow: 0 4px 0 #a6481f !important; }
+/* Runde 9b (strengster Reviewer) */
+#lvup { top: 16% !important; bottom: auto !important; }
+.goal .cnt { display: inline-block; min-width: 34px; text-align: right; }
+.pcb-live b { display: inline-block; min-width: 6.5ch; text-align: center; }
+.tiles .empty-sell { font: 600 14px var(--font); color: var(--text2); padding: 8px 4px; }
