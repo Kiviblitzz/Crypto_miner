@@ -60,8 +60,9 @@ export const CHAPTERS = [
     ],
     waitText: 'Papa räumt den Hobbykeller über die Feiertage für dich frei – ab Januar gehört er dir.',
     bonus: [
-      { id: 'b1cool', wait: true, streak: 7, text: 'Halte dein Zimmer eine Woche lang unter 30 °C', check: (s) => (s.fac.kinder.temp || 21) < 30, reward: { rel: { mama: 1 }, text: 'Mama muss nicht mehr heimlich lüften' } },
-      { id: 'b1btc', wait: true, text: 'Halte 2.000 Bitcoin auf einmal', check: (s) => s.wallet.BTC.ex + s.wallet.BTC.cold >= 2000, progress: (s) => [s.wallet.BTC.ex + s.wallet.BTC.cold, 2000, 'coin'], reward: { rel: { opa: 1 }, text: 'Opa sammelt ja auch Briefmarken' } },
+      { id: 'b1top', until: '2010-12-31', from: (s) => !!s.goals.sell, text: 'Verkauf Bitcoin, solange der Kurs über 0,35 $ steht', check: (s) => (s.stats.soldMaxP || 0) >= 0.35, reward: { rel: { deniz: 1 }, xp: { trade: 40 }, text: 'Deniz: „0,39 $! Gutes Timing!“' } },
+      { id: 'b1hold', from: (s) => !!s.goals.gpu, text: 'Halte 2.000 Bitcoin auf einmal', check: (s) => s.wallet.BTC.ex + s.wallet.BTC.cold >= 2000, progress: (s) => [s.wallet.BTC.ex + s.wallet.BTC.cold, 2000, 'coin'], reward: { rel: { opa: 1 }, text: 'Opa sammelt ja auch Briefmarken' } },
+      { id: 'b1mine', from: (s) => !!s.goals.gpu, text: 'Schürfe insgesamt 10.000 Bitcoin', check: (s) => (s.stats.coins?.BTC || 0) >= 1e4, progress: (s) => [s.stats.coins?.BTC || 0, 1e4, 'coin'], reward: { rel: { mama: 1 }, text: 'Mama: „Und das alles mit unserem Strom?“' } },
     ],
   },
   {
@@ -76,8 +77,9 @@ export const CHAPTERS = [
     bonus: [
       // Bezug zu m1 („bis Ende 2013“): wer zwei Jahre früher zahlt, macht Papa sehr froh
       { id: 'b2early', until: '2011-12-31', text: 'Rette den Laden noch 2011 – zwei Jahre vor der Frist der Bank', check: (s) => !!s.flags.debt && s.day <= toDay('2011-12-31'), reward: { rel: { papa: 2 }, ach: 'deadline' } },
+      { id: 'b2fuse', streak: 60, text: '60 Tage am Stück ohne rausgeflogene Sicherung – mit mindestens 3 kW im Keller', check: (s, h, g) => s.unlocked.includes('keller') && !s.fac.keller.tripped && (g.summary?.keller?.watt || 0) >= 3000, reward: { rel: { opa: 1 }, text: 'Opa: „Sauber verkabelt, Junge.“' } },
       { id: 'b2ltc', text: 'Schürfe 50.000 Litecoin', check: (s) => (s.stats.coins?.LTC || 0) >= 5e4, progress: (s) => [s.stats.coins?.LTC || 0, 5e4, 'coin'], reward: { rel: { deniz: 1 }, xp: { mining: 60 }, text: 'Deniz hatte den richtigen Riecher' } },
-      { id: 'b2cold', text: 'Leg 100 Bitcoin in die Cold-Wallet', check: (s) => s.wallet.BTC.cold >= 100, progress: (s) => [s.wallet.BTC.cold, 100, 'coin'], reward: { rel: { opa: 1 }, text: 'Wie Opas Sparbuch unterm Kopfkissen' } },
+      { id: 'b2cold', text: 'Leg 100 Bitcoin in die Cold-Wallet', check: (s) => s.wallet.BTC.cold >= 100, progress: (s) => [s.wallet.BTC.cold, 100, 'coin'], reward: { rel: { mama: 1 }, text: 'Mama: „Endlich legst du mal was zurück.“' } },
     ],
   },
   {
@@ -90,7 +92,9 @@ export const CHAPTERS = [
     ],
     waitText: 'Die Halle in Lindental-Nord wird erst im Juni 2014 fertig.',
     bonus: [
+      { id: 'b3cold', until: '2014-02-23', text: 'Hab mindestens die Hälfte deiner Coins in der Cold-Wallet (ab 10.000 $)', check: (s, h, g) => { const v = g.coinValue(); return v.all >= 1e4 && v.coldShare >= 0.5; }, reward: { rel: { papa: 1 }, text: 'Papa: „Wie früher bei der Sparkasse.“' } },
       { id: 'b3top', until: '2014-05-31', text: 'Verkauf Coins, solange Bitcoin über 1.000 $ steht', check: (s) => !!s.stats.sold1000, reward: { rel: { opa: 1 }, xp: { trade: 120 }, text: 'Opa: „Oben verkaufen. Kluger Junge.“' } },
+      { id: 'b3eff', text: 'Bring deine SHA-256-Flotte unter 2.500 J/TH (ab 1 TH/s)', check: (s, h, g) => h.algoHash('sha256') >= 1e12 && g.fleetJTH() <= 2500, progress: (s, h, g) => [g.fleetJTH(), 2500, 'jth'], reward: { mod: [{ key: 'fail', mult: 0.95 }], xp: { hw: 80 }, text: 'Kühlere Miner: 5 % weniger Ausfälle' } },
       { id: 'b3doge', text: 'Schürfe eine Million Dogecoin', check: (s) => (s.stats.coins?.DOGE || 0) >= 1e6, progress: (s) => [s.stats.coins?.DOGE || 0, 1e6, 'coin'], reward: { rel: { deniz: 1 }, text: 'Deniz druckt Hunde-Sticker' } },
       { id: 'b3solar', unit: 'kWp', text: 'Bau 30 kWp Solar aufs Werkstattdach', check: (s) => (s.fac.werkstatt.solar || 0) >= 30, progress: (s) => [s.fac.werkstatt.solar || 0, 30, 'n'], reward: { rel: { mama: 1 }, mod: [{ key: 'elec', mult: 0.95, fac: 'werkstatt' }], text: '−5 % Strom in der Werkstatt' } },
     ],
@@ -101,13 +105,15 @@ export const CHAPTERS = [
     goals: [
       { id: 'tech', text: 'Stell einen Techniker ein', check: (s) => s.staff.tech > 0 },
       { id: 'ph1', text: 'Schaff 1 PH/s', check: (s, h) => h.algoHash('sha256') >= 1e15, progress: (s, h) => [h.algoHash('sha256'), 1e15, 'hash'] },
-      { id: 'nw1m', text: 'Werde Millionär', check: (s, h) => h.netWorth() >= 1e6, progress: (s, h) => [h.netWorth(), 1e6, 'usd'] },
+      { id: 'nw1m', text: 'Firmenwert 1 Mio. $ (ohne Coins)', check: (s, h) => h.firmValue() >= 1e6, progress: (s, h) => [h.firmValue(), 1e6, 'usd'] }, // Bargeld + Hardware − Kredit: gehortete Coins zählen nicht
     ],
     waitText: 'Das Frankfurter Rechenzentrum ist noch bis Juni 2017 an eine Bank vermietet.',
     bonus: [
+      { id: 'b4bear', until: '2016-01-07', text: 'Überstehe den Bärenmarkt: Schließ 2015 mit Gewinn ab', check: (s) => { const Y = s.stats.y?.[2015]; return !!Y && Y.nw1 != null && Y.rev - Y.elec - Y.fix > 0; }, reward: { rel: { papa: 1 }, text: 'Papa: „Wer im Winter verdient, schafft alles.“' } },
       { id: 'b4plus', streak: 90, text: 'Halte die Halle 90 Tage am Stück im Plus', check: (s, h, g) => facNet(g, 'halle') > 0, reward: { mod: [{ key: 'rent', mult: 0.8, fac: 'halle' }], text: 'Der Vermieter senkt die Hallenmiete um 20 %' } },
-      { id: 'b4cover', unit: 'Geräte', text: 'Volle Techniker-Abdeckung bei mindestens 60 Geräten', check: (s, h, g) => s.staff.tech > 0 && g.techCoverage() >= 1 && devices(s, g) >= 60, progress: (s, h, g) => [devices(s, g), 60, 'n'], reward: { rel: { deniz: 1 }, mod: [{ key: 'fail', mult: 0.95 }], text: '5 % weniger Ausfälle' } },
-      { id: 'b4eth', text: 'Schürfe 500 Ethereum', check: (s) => (s.stats.coins?.ETH || 0) >= 500, progress: (s) => [s.stats.coins?.ETH || 0, 500, 'coin'], reward: { rel: { papa: 1 }, text: 'Papa: „Ether? Klingt nach Narkose.“' } },
+      { id: 'b4eff', text: 'Bring deine SHA-256-Flotte unter 150 J/TH (ab 100 TH/s)', check: (s, h, g) => h.algoHash('sha256') >= 1e14 && g.fleetJTH() <= 150, progress: (s, h, g) => [g.fleetJTH(), 150, 'jth'], reward: { rel: { deniz: 1 }, text: 'Deniz: „Effizienz ist alles.“' } },
+      { id: 'b4cover', unit: 'Geräte', text: 'Volle Techniker-Abdeckung bei mindestens 60 Geräten', check: (s, h, g) => s.staff.tech > 0 && g.techCoverage() >= 1 && devices(s, g) >= 60, progress: (s, h, g) => [devices(s, g), 60, 'n'], reward: { mod: [{ key: 'fail', mult: 0.95 }], text: '5 % weniger Ausfälle' } },
+      { id: 'b4eth', text: 'Schürfe 500 Ethereum', check: (s) => (s.stats.coins?.ETH || 0) >= 500, progress: (s) => [s.stats.coins?.ETH || 0, 500, 'coin'], reward: { rel: { opa: 1 }, text: 'Opa: „Ether? Damit hat man früher operiert.“' } },
     ],
   },
   {
@@ -115,12 +121,14 @@ export const CHAPTERS = [
     intro: 'Ein echtes Rechenzentrum in Frankfurt. In der Branche spricht sich herum, dass es Hashwerk gibt – sogar bei MONOLITH in Zug.',
     goals: [
       { id: 'ph20', text: 'Schaff 20 PH/s', check: (s, h) => h.algoHash('sha256') >= 2e16, progress: (s, h) => [h.algoHash('sha256'), 2e16, 'hash'] },
-      { id: 'nw10m', text: '10 Mio. $ Vermögen', check: (s, h) => h.netWorth() >= 1e7, progress: (s, h) => [h.netWorth(), 1e7, 'usd'] },
+      { id: 'nw10m', text: 'Firmenwert 10 Mio. $ (ohne Coins)', check: (s, h) => h.firmValue() >= 1e7, progress: (s, h) => [h.firmValue(), 1e7, 'usd'] },
     ],
     waitText: 'Das Wasserkraftwerk in Sogn liefert erst ab Juni 2020 Strom für die Fjordhalle.',
     bonus: [
-      { id: 'b5y18', until: '2019-01-07', text: 'Schließ das Jahr 2018 ohne Verlust ab', check: (s) => { const Y = s.stats.y?.[2018]; return !!Y && Y.nw1 != null && Y.rev - Y.elec - Y.fix >= 0; }, reward: { mod: [{ key: 'elec', mult: 0.95, fac: 'rz' }], text: 'Neuer Stromvertrag: −5 % Strom im RZ' } },
-      { id: 'b5eth', text: 'Halte 1.000 Ethereum', check: (s) => s.wallet.ETH.ex + s.wallet.ETH.cold >= 1000, progress: (s) => [s.wallet.ETH.ex + s.wallet.ETH.cold, 1000, 'coin'], reward: { rel: { deniz: 1 }, xp: { trade: 150 } } },
+      { id: 'b5y18', until: '2019-01-07', text: 'Schließ den Krypto-Winter 2018 ohne Verlust ab', check: (s) => { const Y = s.stats.y?.[2018]; return !!Y && Y.nw1 != null && Y.rev - Y.elec - Y.fix >= 0; }, reward: { mod: [{ key: 'elec', mult: 0.95, fac: 'rz' }], text: 'Neuer Stromvertrag: −5 % Strom im RZ' } },
+      { id: 'b5eff', text: 'Bring deine SHA-256-Flotte unter 60 J/TH (ab 5 PH/s)', check: (s, h, g) => h.algoHash('sha256') >= 5e15 && g.fleetJTH() <= 60, progress: (s, h, g) => [g.fleetJTH(), 60, 'jth'], reward: { rel: { deniz: 1 }, text: 'Deniz rahmt das Datenblatt ein' } },
+      { id: 'b5fam', text: 'Halte die Familie zusammen: Papa, Mama, Opa und Deniz mindestens auf Stufe 2', check: (s) => ['papa', 'mama', 'opa', 'deniz'].every((k) => (s.rel?.[k] || 0) >= 2), reward: { rel: { mama: 1 }, text: 'Sonntagsessen bei Brandts' } },
+      { id: 'b5eth', text: 'Halte 1.000 Ethereum', check: (s) => s.wallet.ETH.ex + s.wallet.ETH.cold >= 1000, progress: (s) => [s.wallet.ETH.ex + s.wallet.ETH.cold, 1000, 'coin'], reward: { rel: { papa: 1 }, xp: { trade: 150 }, text: 'Papa versteht jetzt, was ein Token ist' } },
       { id: 'b5mw12', text: 'Bau das Rechenzentrum auf 12 MW aus', check: (s) => s.fac.rz.power >= 2, reward: { rel: { opa: 1 }, text: 'Opa: „Zwölf Megawatt. Ich hab mal einen Bauernhof verkabelt.“' } },
     ],
   },
@@ -133,7 +141,9 @@ export const CHAPTERS = [
     ],
     // Kein Wartedatum mehr: die Bonusziele stehen hier direkt unter dem aktuellen Ziel
     bonus: [
+      { id: 'b6cold', until: '2022-11-10', text: 'Bring vier Fünftel deiner Coins in die Cold-Wallet (ab 1 Mio. $)', check: (s, h, g) => { const v = g.coinValue(); return v.all >= 1e6 && v.coldShare >= 0.8; }, reward: { rel: { opa: 1 }, text: 'Opa: „Börsen kommen und gehen.“' } },
       { id: 'b6mw60', text: 'Bau die Fjordhalle auf 60 MW aus', check: (s) => s.fac.fjord.power >= 1, reward: { rel: { papa: 1 }, text: 'Papa fliegt zum ersten Mal nach Norwegen' } },
+      { id: 'b6eff', text: 'Bring deine SHA-256-Flotte unter 30 J/TH (ab 100 PH/s)', check: (s, h, g) => h.algoHash('sha256') >= 1e17 && g.fleetJTH() <= 30, progress: (s, h, g) => [g.fleetJTH(), 30, 'jth'], reward: { rel: { deniz: 1 }, text: 'Deniz: „Das ist Weltspitze.“' } },
       { id: 'b6heat', text: 'Lass die Abwärme ganz Sogn heizen', check: (s) => !!s.techs?.heatsale, reward: { rel: { mama: 1 }, text: 'Mama: „Ein ganzes Dorf warm – das ist mein Kind!“' } },
     ],
   },

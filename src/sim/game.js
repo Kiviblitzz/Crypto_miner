@@ -5,7 +5,9 @@ import { FACILITIES, FACILITY, CHAPTERS, MESSAGES, NEWS, START_DAY, TECHS } from
 import { EVENTS, EVENT } from '../data/events.js';
 import { ACHIEVEMENTS } from '../data/achievements.js';
 import { BTC_HASH, POWER_HOUSEHOLD, GPU_BOOM, MONOLITH_SHARE, DAG_AET, DAG_AEC, seasonOffset, noise, toDay, BTC_PRICE, curve, HALVINGS } from '../data/history.js';
-export const SKILL_XP = [0, 150, 600, 2000, 6000]; // Erfahrung für Stufe 1–5
+export const SKILL_XP = [0, 150, 500, 1200, 2500, 4500, 7500, 12000, 18000, 26000]; // Erfahrung für Stufe 1–10
+export const SKILL_PCT = 2; // Schrauben: −2 % Hardwarepreis, Mining: +2 % Ertrag je Stufe über 1
+export const TRADE_FEES = [0.04, 0.035, 0.03, 0.025, 0.02, 0.016, 0.013, 0.01, 0.0075, 0.005]; // Börsengebühr je Handel-Stufe
 
 const LAST_DATA_DAY = BTC_PRICE.lastDay;
 export const SAVE_KEY = 'hashwerk-save-v1';
@@ -81,7 +83,7 @@ export class Game {
 
   // ---------- Technologien ----------
   fx(key, facId = null) { let m = 1; const u = this.s.techs || {}; for (const t of TECHS) if (u[t.id] && t.fx[key]) m *= t.fx[key];
-    for (const md of this.s.mods || []) if (md.key === key && (!md.fac || md.fac === facId) && this.s.day < md.until) m *= md.mult; if (key === 'rev' && this.s.skills) m *= 1 + 0.04 * (this.skillLv('mining') - 1); return m; }
+    for (const md of this.s.mods || []) if (md.key === key && (!md.fac || md.fac === facId) && this.s.day < md.until) m *= md.mult; if (key === 'rev' && this.s.skills) m *= 1 + (SKILL_PCT / 100) * (this.skillLv('mining') - 1); return m; }
   techAvailable(t) { return this.s.day >= toDay(t.date) && (!t.minTier || Math.max(...this.s.unlocked.map((id) => FACILITY[id].tier)) >= t.minTier); }
   buyTech(id) { const t = TECHS.find((x) => x.id === id); if (!t || (this.s.techs ||= {})[id] || !this.techAvailable(t) || !this.canAfford(t.cost)) return false; this.s.cash -= t.cost; this.s.techs[id] = this.s.day;
     if (id === 'ico') { const usd = Math.min(30e6, 600000 + this.netWorthFast() * 0.25); const p = this.price('ETH') || 1; this.s.wallet.ETH.ex += usd / p; this.toast(`ICO ausverkauft: ${fmtUSD(usd)} in Ethereum`, 'good', 9000); }
@@ -159,7 +161,7 @@ export class Game {
       const ratio = Math.min(2.6, Math.max(0.06, Math.pow(h1 / h0, 0.55)));
       p *= ratio * Math.max(0.35, 1 - 0.1 * years);
     } else p *= Math.pow(1.02, Math.max(0, (day - toDay('2010-01-01')) / 365));
-    if (this.s?.skills) p *= 1 - 0.04 * (this.skillLv('hw') - 1);
+    if (this.s?.skills) p *= 1 - (SKILL_PCT / 100) * (this.skillLv('hw') - 1);
     if (this.s?.mods?.length) p *= this.fx('price') * this.fx('price:' + (item.kind === 'device' ? 'asic' : item.type || item.kind));
     return Math.max(1, Math.round(p));
   }
@@ -245,7 +247,7 @@ export class Game {
     this.grant('skills'); const after = this.skillLv(k); if (!quiet || after > before) this.emit('xp', k, Math.round(n), after > before ? after : 0);
   }
   creditPending(coin, n) { const s = this.s; if (!(n > 0)) return; s.wallet[coin].ex += n; s.accr = { day: s.day, f: s.frac }; }
-  tradeFee() { return [0.04, 0.03, 0.02, 0.01, 0.005][this.skillLv('trade') - 1] ?? 0.005; }
+  tradeFee() { return TRADE_FEES[this.skillLv('trade') - 1] ?? 0.005; }
   // ---------- Herumliegende Teile ----------
   pickUp(type) { const s = this.s; if (!s.loose?.[type]) return false; s.inv.push(type); s.invIds = { ...(s.invIds || {}), [type]: s.loose[type] }; delete s.loose[type]; this.checkGoals(); this.emit('loose'); return true; }
   installLoose(uid, type) {
@@ -649,6 +651,7 @@ export class Game {
       algoHash: (a) => this.algoHash(a), netWorth: () => this.netWorth(), monolithHash: () => this.monolithHash(), dailyRev: () => this.dailyProfit().rev,
       maxTemp: () => Math.max(...this.s.unlocked.map((id) => this.s.fac[id].temp || 21)),
       facilityTripped: () => this.s.unlocked.some((id) => this.s.fac[id].tripped),
+      firmValue: () => this.firmValue(), // Bargeld + Hardware − Kredit, ohne Coins
     };
   }
   checkMessages() {
@@ -781,7 +784,10 @@ export class Game {
     s.stats.y ||= {}; s.stats.trips ||= 0; s.stats.halv ||= 0; s.stats.tmax ||= 0; s.bonus ||= {}; s.streak ||= {};
   }
   inWait(ch) { return !!ch && ch.goals.every((go) => this.s.goals[go.id]) && this.s.day < toDay(ch.minDate); }
-  bonusOpen(ch, b) { const s = this.s; return !s.bonus?.[b.id] && !(b.until && s.day > toDay(b.until)) && (!b.wait || this.inWait(ch)); }
+  // Sparphase: es fehlt nur noch eine Zahlung (z. B. Papas Stromrechnung), für die das Geld noch nicht reicht
+  saving(ch) { const open = ch ? ch.goals.filter((go) => !this.s.goals[go.id]) : []; return open.length > 0 && open.every((go) => go.action && !this.canPayGoal(go)); }
+  idlePhase(ch) { return this.inWait(ch) || this.saving(ch); }
+  bonusOpen(ch, b) { const s = this.s; return !s.bonus?.[b.id] && !(b.until && s.day > toDay(b.until)) && (!b.from || b.from(s)) && (!b.wait || this.idlePhase(ch)); }
   checkBonus(ch = CHAPTERS[this.s.chapter]) {
     const s = this.s; if (!ch?.bonus || !s.bonus) return; const h = this.helpers();
     for (const b of ch.bonus) { if (!this.bonusOpen(ch, b)) continue; if (b.streak ? (s.streak[b.id] || 0) >= b.streak : b.check(s, h, this)) this.grantBonus(b); }
@@ -806,6 +812,10 @@ export class Game {
     if (r.text) out.push(r.text);
     return out.join(' · ');
   }
+  firmValue() { return this.s.cash + this.hardwareValue() - (this.s.loan || 0); }
+  // Effizienz der laufenden Flotte eines Algorithmus in J/TH (bzw. J pro 10^12 Hash); Infinity ohne Leistung
+  fleetJTH(algo = 'sha256') { let w = 0, hs = 0; for (const id of this.s.unlocked) { const sm = this.summary?.[id]; if (!sm || sm.tripped) continue; for (const a of sm.per.values()) for (const u of a.units || []) if (u.algo === algo && u.h > 0 && !u.idle) { w += u.w || 0; hs += u.h; } } return hs > 0 ? (w / hs) * 1e12 : Infinity; }
+  coinValue() { let ex = 0, cold = 0; for (const c of COINS) { const w = this.s.wallet[c.id], p = this.price(c.id); ex += w.ex * p; cold += w.cold * p; } return { ex, cold, all: ex + cold, coldShare: ex + cold > 0 ? cold / (ex + cold) : 0 }; }
   deviceCount() { let n = 0; for (const id of this.s.unlocked) for (const o of this.s.fac[id].objects) { const k = PLACEABLE[o.type]?.kind; if (k === 'holder') n += o.items.length; else if (k === 'rig' || k === 'device') n++; } return n; }
   // Leitwert Hashrate: SHA-256, sonst der erste andere Algorithmus mit Leistung (wie oben in der Leiste)
   mainHash() { for (const a of ['sha256', 'scrypt', 'ethash', 'kawpow', 'kheavy', 'equihash', 'rx', 'cn']) { const v = this.algoHash(a); if (v > 0) return [v, a]; } return [0, 'sha256']; }
@@ -829,7 +839,7 @@ export class Game {
     if (s.flags.won && !st.wonDay) st.wonDay = day;
     if (s.cash < 0 && !st.neg1) st.neg1 = day;
     if (day <= toDay('2011-03-31')) st.btc2010 = st.coins?.BTC || 0; // „erster Winter“ für den Was-wäre-wenn-Vergleich
-    if ((st.sold || 0) > (st.soldPrev ?? st.sold) + 0.01 && Math.max(this.price('BTC', D), this.price('BTC', day)) >= 1000) st.sold1000 ||= day;
+    if ((st.sold || 0) > (st.soldPrev ?? st.sold) + 0.01) { const p = Math.max(this.price('BTC', D), this.price('BTC', day)); st.soldMaxP = Math.max(st.soldMaxP || 0, p); if (p >= 1000) st.sold1000 ||= day; }
     st.soldPrev = st.sold || 0;
     this.bonusStreaks(); this.checkBonus();
     // Jahreswechsel: Abschluss des alten Jahres + Rückblick

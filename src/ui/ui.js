@@ -2,7 +2,7 @@
 import { COINS, COIN, ALGO_LABEL } from '../data/coins.js';
 import { PLACEABLE, PART, CATEGORIES, PLACEABLES, PARTS } from '../data/hardware.js';
 import { FACILITIES, FACILITY, CHAPTERS, TECHS, FEATURES, MESSAGES, yearTitle, FAMILY_MOOD, moodTier } from '../data/world.js';
-import { fmtUSD, fmtNum, fmtCoin, fmtHash, fmtDate, fmtWatt, SKILL_XP } from '../sim/game.js';
+import { fmtUSD, fmtNum, fmtCoin, fmtHash, fmtDate, fmtWatt, SKILL_XP, SKILL_PCT, TRADE_FEES } from '../sim/game.js';
 import { toDay, BTC_HASH, inHeatwave, HALVINGS, BTC_REWARD } from '../data/history.js';
 import { EVENT } from '../data/events.js';
 import { ACH, ACHIEVEMENTS } from '../data/achievements.js';
@@ -20,9 +20,9 @@ const PART_ICON = {
       psu: '<rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="10" cy="12" r="4"/><path d="M10 9.5v5M7.5 12h5M17.5 9v6"/>' };
 const PNAME = { mobo: 'Mainboard', cpu: 'Prozessor', gpu: 'Grafikkarte', psu: 'Netzteil' };
 const SKILL = {
-  hw: { name: 'Schrauben', learn: 'Teile einbauen, Geräte aufstellen', short: 'Einbauen', icon: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5a1.8 1.8 0 0 0 2.5 2.5l5.8-5.8a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>', now: (lv) => (lv > 1 ? `−${4 * (lv - 1)} % auf Hardware` : 'Noch kein Bonus'), next: (lv) => `−${4 * lv} % auf Hardware` },
-  mining: { name: 'Mining', learn: 'Jeder Tag, an dem dein PC schürft', short: 'Schürfen', icon: '<path d="M3.5 9.5C7.5 4.5 13.5 3.2 19.5 5.5" stroke-width="2.4"/><path d="M11.2 6.2 18.8 20" stroke-width="2.2"/><circle cx="11.2" cy="6.2" r="1.3" fill="currentColor"/>', now: (lv) => (lv > 1 ? `+${4 * (lv - 1)} % Mining-Ertrag` : 'Noch kein Bonus'), next: (lv) => `+${4 * lv} % Mining-Ertrag` },
-  trade: { name: 'Handel', learn: 'Coins verkaufen', short: 'Verkaufen', icon: '<circle cx="9" cy="9" r="5.5"/><path d="M14.6 8.8a5.5 5.5 0 1 1-5.8 5.8"/><path d="M9 6.8v4.4M7.2 9h3.6"/>', now: (lv) => `${[4, 3, 2, 1, 0.5][lv - 1].toLocaleString('de-DE')} % Börsengebühr`, next: (lv) => `${[3, 2, 1, 0.5][lv - 1]?.toLocaleString('de-DE') ?? '–'} % Börsengebühr` },
+  hw: { name: 'Schrauben', learn: 'Teile einbauen, Geräte aufstellen', short: 'Einbauen', icon: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5a1.8 1.8 0 0 0 2.5 2.5l5.8-5.8a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>', now: (lv) => (lv > 1 ? `−${SKILL_PCT * (lv - 1)} % auf Hardware` : 'Noch kein Bonus'), next: (lv) => `−${SKILL_PCT * lv} % auf Hardware` },
+  mining: { name: 'Mining', learn: 'Jeder Tag, an dem dein PC schürft', short: 'Schürfen', icon: '<path d="M3.5 9.5C7.5 4.5 13.5 3.2 19.5 5.5" stroke-width="2.4"/><path d="M11.2 6.2 18.8 20" stroke-width="2.2"/><circle cx="11.2" cy="6.2" r="1.3" fill="currentColor"/>', now: (lv) => (lv > 1 ? `+${SKILL_PCT * (lv - 1)} % Mining-Ertrag` : 'Noch kein Bonus'), next: (lv) => `+${SKILL_PCT * lv} % Mining-Ertrag` },
+  trade: { name: 'Handel', learn: 'Coins verkaufen', short: 'Verkaufen', icon: '<circle cx="9" cy="9" r="5.5"/><path d="M14.6 8.8a5.5 5.5 0 1 1-5.8 5.8"/><path d="M9 6.8v4.4M7.2 9h3.6"/>', now: (lv) => `${((TRADE_FEES[lv - 1] ?? 0.005) * 100).toLocaleString('de-DE')} % Börsengebühr`, next: (lv) => `${TRADE_FEES[lv] != null ? (TRADE_FEES[lv] * 100).toLocaleString('de-DE') : '–'} % Börsengebühr` },
 };
 const skillSvg = (k, size = 22) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${SKILL[k].icon}</svg>`;
 const partSvg = (t, size = 22) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${PART_ICON[t]}</svg>`;
@@ -244,7 +244,7 @@ export class UI {
     if (!force && el.childElementCount) return;
     this.lastBuildDay = g.s.day;
     el.innerHTML = '';
-    const hwLv = g.skillLv ? g.skillLv('hw') : 1; const head = h(`<div class="bhead"><h2>Bauen${hwLv > 1 ? `<span class="disc">Schrauben −${4 * (hwLv - 1)} %</span>` : ''}</h2><button class="modal-x" title="Schließen (B)">✕</button></div>`); head.querySelector('button').onclick = () => this.resume(); el.append(head);
+    const hwLv = g.skillLv ? g.skillLv('hw') : 1; const head = h(`<div class="bhead"><h2>Bauen${hwLv > 1 ? `<span class="disc">Schrauben −${SKILL_PCT * (hwLv - 1)} %</span>` : ''}</h2><button class="modal-x" title="Schließen (B)">✕</button></div>`); head.querySelector('button').onclick = () => this.resume(); el.append(head);
     const cats = h('<div class="cats"></div>');
     const catOk = (c) => (c.id !== 'rigs' || g.has('rigs')) && g.shopList(c.id, fac).length > 0;
     if (!CATEGORIES.some((c) => c.id === this.cat && catOk(c))) this.cat = (CATEGORIES.find(catOk) || CATEGORIES[0]).id;
@@ -671,7 +671,7 @@ export class UI {
       el.append(row);
     }
     const allDone = ch.goals.every((go) => s.goals[go.id]);
-    this.goalsBonus(el, ch, allDone && s.day < toDay(ch.minDate));
+    this.goalsBonus(el, ch, allDone && s.day < toDay(ch.minDate), !allDone && g.saving(ch));
   }
   // Taste G: nächste Ziel-Aktion (z. B. Papa die Stromrechnung geben) – in der Ego-Steuerung ohne Mausklick
   goalActionKey() {
@@ -1097,9 +1097,10 @@ export class UI {
   // ---------- Bonusziele in der Zielleiste ----------
   // Wartephase (alle Ziele erfüllt, Datum noch nicht erreicht): Begründung + bis zu 2 offene Bonusziele.
   // Sonst nur ein Bonusziel mit Frist (oder im letzten Kapitel, das kein Wartedatum hat).
-  goalsBonus(el, ch, wait) {
+  goalsBonus(el, ch, wait, saving = false) {
     const g = this.g, s = g.s;
-    const open = (ch.bonus || []).filter((b) => !s.bonus?.[b.id] && !(b.until && s.day > toDay(b.until)));
+    const open = (ch.bonus || []).filter((b) => !s.bonus?.[b.id] && !(b.until && s.day > toDay(b.until)) && (!b.from || b.from(s)));
+    if (saving && s.flags.miningStarted) { for (const b of open.slice(0, 2)) el.append(this.bonusRow(b)); return; } // Sparphase: Zeit für Bonusziele
     if (wait) {
       el.append(h(`<div class="goal wait"><div class="ck"></div><div><div class="gw-t">Weiter ab ${fmtDate(toDay(ch.minDate))}</div>${ch.waitText ? `<div class="gw-x">${esc(ch.waitText)}</div>` : ''}</div></div>`));
       for (const b of open.slice(0, 2)) el.append(this.bonusRow(b));
@@ -1111,7 +1112,8 @@ export class UI {
     if (pr) {
       const [cur, tgt, kind] = pr;
       const f = (v) => (kind === 'usd' ? fmtUSD(v) : kind === 'hash' ? fmtHash(v) : kind === 'coin' ? fmtCoin(v) : Math.round(v).toLocaleString('de-DE'));
-      prog = `<span class="gb-p">${f(Math.max(0, Math.min(cur, tgt)))} / ${f(tgt)}${kind === 'days' ? ' Tage' : b.unit ? ' ' + esc(b.unit) : ''}</span>`;
+      if (kind === 'jth') prog = Number.isFinite(cur) ? `<span class="gb-p">jetzt ${Math.round(cur).toLocaleString('de-DE')} J/TH</span>` : ''; // weniger ist besser
+      else prog = `<span class="gb-p">${f(Math.max(0, Math.min(cur, tgt)))} / ${f(tgt)}${kind === 'days' ? ' Tage' : b.unit ? ' ' + esc(b.unit) : ''}</span>`;
     }
     return h(`<div class="goal bonus"><div class="ck"></div><div><div class="gb-l"><span class="gb-tag">Bonus</span><span class="gb-x">${esc(b.text)}</span>${prog}</div>${rw || b.until ? `<div class="gb-r">${rw ? `<span class="gb-rw">${esc(rw)}</span>` : ''}${b.until ? `<span class="gb-u">bis ${fmtDate(toDay(b.until))}</span>` : ''}</div>` : ''}</div></div>`);
   }
@@ -1153,7 +1155,7 @@ export class UI {
     const partial = Y.d0 > toDay(`${y}-01-01`) + 1;
     const body = h(`<div class="story yr"><div class="ch">Jahresrückblick${partial ? ` · ab ${fmtDate(Y.d0)}` : ''}</div>
       <div class="yr-t"><b>${y}</b><span>${esc(yearTitle(y))}</span></div>
-      <div class="yr-grid">${cell('Ertrag', fmtUSD(Y.rev), 'pos')}${cell('Strom', Y.elec > 0 ? '−' + fmtUSD(Y.elec) : 'zahlt Mama')}${cell(Y.fix < 0 ? 'Feste Einnahmen' : 'Miete, Löhne, Zinsen', Y.fix > 0 ? '−' + fmtUSD(Y.fix) : Y.fix < 0 ? '+' + fmtUSD(-Y.fix) : '–', Y.fix < 0 ? 'pos' : '')}${cell('Gewinn', `${gain >= 0 ? '+' : ''}${fmtUSD(gain)}`, gain >= 0 ? 'pos' : 'neg')}</div>
+      <div class="yr-grid">${cell('Ertrag', fmtUSD(Y.rev), 'pos')}${cell('Strom', Y.elec > 0 ? '−' + fmtUSD(Y.elec) : 'zahlt Mama')}${cell(Y.fix < 0 ? 'Feste Einnahmen' : 'Fixkosten', Y.fix > 0 ? '−' + fmtUSD(Y.fix) : Y.fix < 0 ? '+' + fmtUSD(-Y.fix) : '–', Y.fix < 0 ? 'pos' : '')}${cell('Gewinn', `${gain >= 0 ? '+' : ''}${fmtUSD(gain)}`, gain >= 0 ? 'pos' : 'neg')}</div>
       <div class="yr-rows">${rows.map(([l, v]) => `<div class="yr-r"><span>${l}</span><span>${v}</span></div>`).join('')}</div>
       ${dec ? `<div class="yr-p"><span class="yr-k">Wichtigste Entscheidung</span>${esc(dec)}</div>` : ''}
       <div class="yr-p"><span class="yr-k">Familie</span>${esc(fam)}</div>
