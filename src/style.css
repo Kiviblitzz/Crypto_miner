@@ -203,3 +203,34 @@ canvas.nwchart { width: 100%; height: 180px; background: #0c1018; border-radius:
 @keyframes heatpulse { 50% { box-shadow: inset 0 0 220px 70px rgba(255, 60, 20, 0.5); } }
 
 body.empire #build, body.empire #inspector, body.empire #goals { display: none; }
+
+/* ---------- Schmale Bildschirme (Handy) ---------- */
+.mobile-only { display: none !important; }
+@media (max-width: 720px) {
+  .mobile-only { display: flex !important; }
+  #top { flex-wrap: wrap; gap: 6px; padding: 6px 8px; top: 6px; left: 6px; right: 6px; }
+  .brand { font-size: 16px; }
+  #date { min-width: 0; font-size: 12px; padding: 4px 8px; }
+  #date .tod { display: none; }
+  #speed button { padding: 2px 4px; }
+  .stats { width: 100%; margin-left: 0; justify-content: space-between; gap: 4px; }
+  .stat { min-width: 0; flex: 1; padding: 2px 6px; }
+  .stat .v { font-size: 12px; } .stat .l { font-size: 9px; }
+  .stats .stat:nth-child(2), .stats .stat:nth-child(4), .stats .stat:nth-child(5) { display: none; }
+  #sites { top: 124px; left: 6px; right: 6px; max-width: none; flex-wrap: nowrap; overflow-x: auto; }
+  .site { min-width: 96px; flex: none; }
+  #build { display: none; top: 172px; left: 6px; right: 6px; width: auto; bottom: 120px; }
+  body.show-build #build { display: flex; }
+  #goals { display: none; left: 6px; right: 6px; width: auto; bottom: 120px; }
+  body.show-goals #goals { display: block; }
+  #inspector { top: auto; bottom: 120px; left: 6px; right: 6px; width: auto; max-height: 52vh; }
+  #dock { left: 6px; right: 6px; bottom: 44px; flex-wrap: nowrap; overflow-x: auto; }
+  #dock button { min-width: 54px; padding: 6px 8px; font-size: 10px; flex: none; }
+  #ticker { left: 6px; right: 6px; }
+  #toasts { top: 170px; width: calc(100vw - 20px); }
+  .modal-card { padding: 16px 14px; }
+  .logo { font-size: 46px; letter-spacing: 4px; }
+  .tagline { font-size: 13px; }
+  .intro { font-size: 14px; }
+  .controls-help { display: none; }
+}

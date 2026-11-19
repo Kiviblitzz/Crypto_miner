@@ -123,7 +123,7 @@ export class UI {
       card.onclick = () => {
         if (it.hydro) { this.toast('Hydro-Miner brauchen Wasserkühlung: in ein Rack oder einen Container einsetzen.', 'bad'); return; }
         if (price > g.s.cash) { this.toast('Nicht genug Geld.', 'bad'); return; }
-        this.w.startPlacement(it.id);
+        this.w.startPlacement(it.id); document.body.classList.remove('show-build');
       };
       list.append(card);
     }
@@ -319,6 +319,8 @@ export class UI {
       ['📈', 'Markt', () => this.market()], ['📱', 'Handy', () => this.phone(), unread], ['🏢', 'Firma', () => this.company()], ['🔬', 'Technik', () => this.techs(), TECHS.filter((t) => !(g.s.techs || {})[t.id] && g.techAvailable(t) && g.s.cash >= t.cost).length],
       ['🏆', 'Rangliste', () => this.ranking()], ['🗺️', this.w.empire ? 'Zurück' : 'Imperium', () => (this.w.empire ? this.w.hideEmpire() : this.w.showEmpire())], ['🚶', 'Rundgang', () => this.w.enterFP()], ['⚙️', 'Menü', () => this.menu()],
     ];
+    const tog = (cls) => () => { document.body.classList.toggle(cls); if (cls === 'show-build') document.body.classList.remove('show-goals'); else document.body.classList.remove('show-build'); };
+    for (const [ic, l, fn] of [['🛒', 'Bauen', tog('show-build')], ['🎯', 'Ziele', tog('show-goals')]]) { const e = h(`<button class="mobile-only"><span class="ic">${ic}</span>${l}</button>`); e.onclick = fn; el.append(e); }
     for (const [ic, l, fn, b] of btns) { const e = h(`<button><span class="ic">${ic}</span>${l}${b ? `<span class="bdg">${b}</span>` : ''}</button>`); e.onclick = fn; el.append(e); }
   }
 
