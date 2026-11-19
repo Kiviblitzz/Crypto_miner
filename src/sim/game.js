@@ -2,7 +2,7 @@
 import { COINS, COIN } from '../data/coins.js';
 import { PLACEABLE, PART, PLACEABLES, PARTS, GPUS } from '../data/hardware.js';
 import { FACILITIES, FACILITY, CHAPTERS, MESSAGES, NEWS, START_DAY, TECHS } from '../data/world.js';
-import { EVENTS, EVENT } from '../data/events.js';
+import { EVENTS, EVENT, REL_PERK } from '../data/events.js';
 import { ACHIEVEMENTS } from '../data/achievements.js';
 import { BTC_HASH, POWER_HOUSEHOLD, GPU_BOOM, MONOLITH_SHARE, DAG_AET, DAG_AEC, seasonOffset, noise, toDay, BTC_PRICE, curve } from '../data/history.js';
 export const SKILL_XP = [0, 100, 300, 700, 1500]; // Erfahrung für Stufe 1–5
@@ -79,7 +79,15 @@ export class Game {
 
   // ---------- Technologien ----------
   fx(key, facId = null) { let m = 1; const u = this.s.techs || {}; for (const t of TECHS) if (u[t.id] && t.fx[key]) m *= t.fx[key];
-    for (const md of this.s.mods || []) if (md.key === key && (!md.fac || md.fac === facId) && this.s.day < md.until) m *= md.mult; if (key === 'rev' && this.s.skills) m *= 1 + 0.04 * (this.skillLv('mining') - 1); return m; }
+    for (const md of this.s.mods || []) if (md.key === key && (!md.fac || md.fac === facId) && this.s.day < md.until) m *= md.mult; if (key === 'rev' && this.s.skills) m *= 1 + 0.04 * (this.skillLv('mining') - 1); return m * this.relFx(key, facId); }
+  // Beziehungen ab Stufe 3 wirken (Texte: REL_PERK in events.js; Opa: siehe powerCost)
+  relFx(key, facId) {
+    const r = this.s.rel; if (!r) return 1;
+    if (key === 'rent' && facId === 'werkstatt' && r.papa >= 3) return 0; // Papa: keine Werkstattmiete
+    if (key === 'cool' && facId === 'kinder' && r.mama >= 3) return 1.2; // Mama: +20 % Kühlung im Kinderzimmer
+    if (key === 'fail' && r.deniz >= 3) return 0.9; // Deniz: −10 % Ausfälle
+    return 1;
+  }
   techAvailable(t) { return this.s.day >= toDay(t.date) && (!t.minTier || Math.max(...this.s.unlocked.map((id) => FACILITY[id].tier)) >= t.minTier); }
   buyTech(id) { const t = TECHS.find((x) => x.id === id); if (!t || (this.s.techs ||= {})[id] || !this.techAvailable(t) || !this.canAfford(t.cost)) return false; this.s.cash -= t.cost; this.s.techs[id] = this.s.day;
     if (id === 'ico') { const usd = Math.min(30e6, 600000 + this.netWorthFast() * 0.25); const p = this.price('ETH') || 1; this.s.wallet.ETH.ex += usd / p; this.toast(`ICO ausverkauft: ${fmtUSD(usd)} in Ethereum`, 'good', 9000); }
@@ -350,10 +358,10 @@ export class Game {
     this.dayUpdate(true); this.emit('objects', this.facOf(uid));
   }
   repairCost(o) {
-    if (o.items) { let c = 0; for (const it of o.items) if (it.b) c += this.itemPrice(PLACEABLE[it.id]) * 0.08; return Math.round(c); }
+    if (o.items) { let c = 0; for (const it of o.items) if (it.b) c += this.itemPrice(PLACEABLE[it.id]) * 0.08; return Math.round(c * this.fx('repair')); }
     let base = this.itemPrice(PLACEABLE[o.type]);
     if (o.parts) for (const pid of this.partIds(o)) base += this.itemPrice(PART[pid]);
-    return Math.max(5, Math.round(base * 0.08));
+    return Math.max(5, Math.round(base * 0.08 * this.fx('repair')));
   }
   brokenIn(facId) { let n = 0, c = 0; for (const o of this.s.fac[facId].objects) { if (o.broken || (o.items && o.items.some((i) => i.b))) { n++; c += this.repairCost(o); } } return { n, c }; }
   repairAll(facId) { let n = 0; for (const o of this.s.fac[facId].objects) if ((o.broken || (o.items && o.items.some((i) => i.b))) && this.repair(o.uid)) n++; return n; }
@@ -463,7 +471,7 @@ export class Game {
   hardwareValue() { let v = 0; for (const f of Object.values(this.s.fac)) for (const o of f.objects) v += this.objectValue(o); return v; }
   netWorth() { return this.s.cash + this.walletValue() + this.hardwareValue() - (this.s.loan || 0); }
   monolithHash(day = this.s.day) { return day < toDay('2014-03-01') ? 0 : BTC_HASH(Math.min(day, LAST_DATA_DAY)) * MONOLITH_SHARE(day) * (this.s.endless ? this.s.endless.BTC.h : 1) * this.fx('monolith'); }
-  dailyProfit() { let rev = 0, cost = 0; for (const id of this.s.unlocked) { const sm = this.summary[id]; if (!sm) continue; if (!sm.tripped) { rev += sm.rev * sm.throttle; cost += Math.max(0, sm.watt / 1000 * 24 - this.solarKwh(id)) * sm.elec; } cost += FACILITY[id].rent / 30.4 * this.fx('rent', id); } cost += this.s.staff.tech * this.techSalary() / 30.4; if (this.s.loan > 0) cost += this.s.loan * this.loanRate() / 365; return { rev, cost, net: rev - cost }; }
+  dailyProfit() { let rev = 0, cost = 0; for (const id of this.s.unlocked) { const sm = this.summary[id]; if (!sm) continue; if (!sm.tripped) { rev += sm.rev * sm.throttle; cost += Math.max(0, sm.watt / 1000 * 24 - this.solarKwh(id)) * sm.elec; } cost += FACILITY[id].rent / 30.4 * this.fx('rent', id); } cost += this.s.staff.tech * this.techSalary() / 30.4; for (const md of this.s.mods || []) if (md.key === 'monthly' && this.s.day < md.until) cost += md.mult / 30.4; if (this.s.loan > 0) cost += this.s.loan * this.loanRate() / 365; return { rev, cost, net: rev - cost }; }
   techSalary(day = this.s.day) { return Math.round(2600 * Math.pow(1.03, (day - toDay('2014-01-01')) / 365)); }
   techCoverage() { let n = 0; for (const id of this.s.unlocked) for (const o of this.s.fac[id].objects) { const def = PLACEABLE[o.type]; if (def.kind === 'holder') n += o.items.length; else if (def.kind !== 'decor' && def.kind !== 'cooling') n++; } return n ? Math.min(1, (this.s.staff.tech * 60) / n) : 1; }
 
@@ -718,7 +726,7 @@ export class Game {
     if (fx.cash) s.cash += fx.cash;
     for (const [c, n] of Object.entries(fx.coin || {})) { const w = s.wallet[c]; if (!w) continue; if (n >= 0) w.ex += n; else { let r = -n; const a = Math.min(w.ex, r); w.ex -= a; r -= a; w.cold = Math.max(0, w.cold - r); } }
     for (const [c, f] of Object.entries(fx.sellFrac || {})) this.sell(c, f);
-    for (const [k, n] of Object.entries(fx.rel || {})) { s.rel[k] = Math.max(-3, Math.min(5, (s.rel[k] || 0) + n)); }
+    for (const [k, n] of Object.entries(fx.rel || {})) { const old = s.rel[k] || 0; s.rel[k] = Math.max(-3, Math.min(5, old + n)); if (old < 3 && s.rel[k] >= 3 && REL_PERK[k]) this.toast(REL_PERK[k], 'good', 8000); }
     for (const m of fx.mod || []) s.mods.push({ key: m.key, mult: m.mult, fac: m.fac || null, until: m.days ? s.day + m.days : 1e9, src: m.src || null });
     for (const f of [].concat(fx.flag || [])) s.flags[f] = s.day || 1;
     for (const a of [].concat(fx.ach || [])) this.unlockAch(a);
@@ -766,9 +774,20 @@ export class Game {
   }
   upgradePower(facId) {
     const f = this.s.fac[facId], fd = FACILITY[facId];
-    const next = fd.power[f.power + 1]; if (!next || !this.canAfford(next.cost)) return false;
-    this.s.cash -= next.cost; f.power++; this.dayUpdate(true); return true;
+    const next = fd.power[f.power + 1]; if (!next) return false;
+    const wait = this.powerWaitUntil(facId); if (wait) { this.toast(`Der Netzbetreiber lässt dich warten: Ausbau ab ${fmtDate(wait)}.`, 'info', 7000); return false; }
+    const cost = this.powerCost(facId); if (!this.canAfford(cost)) return false;
+    this.s.cash -= cost; f.power++; this.dayUpdate(true); return true;
   }
+  // Preis des nächsten Stromausbaus: Ereignis-Modifikatoren (powerCost) und Opa ab Stufe 3 (−25 % in Keller/Werkstatt)
+  powerCost(facId) {
+    const f = this.s.fac[facId], next = FACILITY[facId].power[f.power + 1]; if (!next) return 0;
+    let c = next.cost * this.fx('powerCost', facId);
+    if ((facId === 'keller' || facId === 'werkstatt') && this.relLv('opa') >= 3) c *= 0.75;
+    return Math.round(c);
+  }
+  // Ereignis-Sperre (Netzbetreiber, Gemeinde Sogn): Tag, bis zu dem nicht ausgebaut werden darf, sonst 0
+  powerWaitUntil(facId) { let u = 0; for (const md of this.s.mods || []) if (md.key === 'powerWait' && md.mult === 0 && (!md.fac || md.fac === facId) && this.s.day < md.until) u = Math.max(u, md.until); return u; }
   hireTech(n) { if (FACILITY[this.s.unlocked[this.s.unlocked.length - 1]].tier < 3 && !this.s.flags.gmbh) return false; if (n > 0 && !this.canAfford(n * this.techSalary())) return false; this.s.staff.tech = Math.max(0, this.s.staff.tech + n); this.dayUpdate(true); return true; }
 
   // ---------- Solaranlage (Green Mining wie im Vorbild) ----------

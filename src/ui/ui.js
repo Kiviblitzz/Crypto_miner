@@ -106,7 +106,7 @@ export class UI {
   onDay() {
     if (this.g.s.ev?.open) this.tryEvent();
     this.sites(); this.goals(); this.keysHint();
-    for (const t of TECHS) if (toDay(t.date) === this.g.s.day) { this.toast(`Neue Technologie verfügbar: <b>${esc(t.name)}</b>`, 'good', 7000); this.dock(); }
+    for (const t of TECHS) if (!t.hidden && toDay(t.date) === this.g.s.day) { this.toast(`Neue Technologie verfügbar: <b>${esc(t.name)}</b>`, 'good', 7000); this.dock(); }
     if (this.g.s.day % 7 === 0) this.dock();
     if (this.g.s.day - this.lastBuildDay >= 7) this.build(true);
     if (this.inspUid) this.inspectStats();
@@ -710,7 +710,7 @@ export class UI {
   dock() {
     const el = $('#dock'), g = this.g;
     const unread = g.s.messages.filter((m) => !m.read).length + (g.s.ev?.open ? 1 : 0);
-    const techN = TECHS.filter((t) => !(g.s.techs || {})[t.id] && g.techAvailable(t) && g.s.cash >= t.cost).length;
+    const techN = TECHS.filter((t) => !t.hidden && !(g.s.techs || {})[t.id] && g.techAvailable(t) && g.s.cash >= t.cost).length;
     el.innerHTML = '';
     const btns = [
       ['', 'Bauen', 'B', () => this.toggleBuild()], ['', 'Börse', 'M', () => this.market()], ['', 'Handy', 'P', () => this.phone(), unread], ['', 'Firma', 'C', () => this.company()],
@@ -934,7 +934,7 @@ export class UI {
         ${un ? `<div class="k">Last</div><div class="v">${fmtWatt(sm.watt)}</div><div class="k">Temperatur</div><div class="v ${sm.temp > 38 ? 'neg' : ''}">${sm.temp.toFixed(1)} °C</div><div class="k">Geräte</div><div class="v">${fs.objects.length}</div>` : ''}</div></div>`);
       if (un) {
         const nx = f.power[fs.power + 1];
-        if (nx) { const b = h(`<button class="btn small">${esc(nx.label)}: ${fmtNum(nx.kw, 0)} kW (${fmtUSD(nx.cost)})</button>`); b.disabled = s.cash < nx.cost; b.onclick = () => { if (g.upgradePower(f.id)) { this.toast('Stromanschluss ausgebaut!', 'good'); this.company(); this.sites(); } }; c.append(b); }
+        if (nx) { const pc = g.powerCost(f.id), b = h(`<button class="btn small">${esc(nx.label)}: ${fmtNum(nx.kw, 0)} kW (${fmtUSD(pc)})</button>`); b.disabled = s.cash < pc; b.onclick = () => { if (g.upgradePower(f.id)) { this.toast('Stromanschluss ausgebaut!', 'good'); this.company(); this.sites(); } }; c.append(b); }
         else c.append(h('<div style="font-size:12px;color:var(--dim)">Maximaler Anschluss erreicht.</div>'));
         const step = g.solarStep(f.id);
         if (step) { const cost = step * g.solarPricePerKwp(); const sb = h(`<button class="btn small">+${step} kWp Solar (${fmtUSD(cost)})</button>`); sb.disabled = s.cash < cost; sb.onclick = () => { if (g.buildSolar(f.id)) { this.toast(`Solaranlage erweitert (${f.short})`, 'good'); this.company(); } }; c.append(sb); }
@@ -1002,7 +1002,7 @@ export class UI {
     const body = h(`<div><h2>Technik</h2><div class="cards"></div></div>`);
     const cards = body.querySelector('.cards');
     for (const t of TECHS) {
-      const own = (s.techs || {})[t.id], av = g.techAvailable(t);
+      const own = (s.techs || {})[t.id], av = g.techAvailable(t); if (t.hidden && !own) continue; // versteckt (z. B. ICO, jetzt ein Ereignis) – nur zeigen, wenn schon gekauft
       const c = h(`<div class="card ${!av && !own ? 'lock' : ''}"><h3>${t.icon} ${esc(t.name)}</h3><div class="sub">${own ? `Erforscht am ${fmtDate(own)}` : av ? `Kosten: <b style="color:#ffb000">${fmtUSD(t.cost)}</b>` : `ab ${fmtDate(toDay(t.date))}${t.minTier ? ` · braucht Standort „${FACILITIES.find((f) => f.tier === t.minTier).name}"` : ''}`}</div><div style="font-size:13px">${esc(t.desc)}</div></div>`);
       if (!own && av) { const b = h(`<button class="btn primary small" style="margin-top:8px">Erforschen</button>`); b.disabled = s.cash < t.cost; b.onclick = () => { if (g.buyTech(t.id)) { this.audio?.fanfare(); this.toast(`${esc(t.name)} erforscht!`, 'good'); this.techs(); this.dock(); } }; c.append(b); }
       cards.append(c);
