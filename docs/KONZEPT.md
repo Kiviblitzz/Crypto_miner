@@ -71,6 +71,8 @@ Alle Standorte laufen parallel weiter – das Zimmer bleibt als „Museum" deine
   historischen Zeitpunkt.
 * **Hardware-Releases:** Neue GPUs, CPUs, Mainboards, Netzteile und Miner erscheinen am echten
   Erscheinungsdatum (Toast + News-Ticker), alte verschwinden nach einigen Jahren aus dem Handel.
+* **Solar, Kredit, Hitzewellen, Übernahmeangebot 2021:** Solaranlagen senken Stromkosten, Bankkredite mit historischen Zinsen,
+  echte Hitzewellen heizen die Räume, und Viktor Kral bietet nach dem China-Bann an, Hashwerk zu kaufen (Entscheidung).
 * **Meilensteine:** 1 GH/s … 10 EH/s, „Millionär!", „Milliardär!" mit Fanfare.
 * **Leben in der Halle:** Techniker laufen herum, du sitzt im Kinderzimmer am Schreibtisch,
   defekte Geräte qualmen, ab 38 °C glüht der Bildschirmrand rot.

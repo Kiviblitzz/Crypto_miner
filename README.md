@@ -61,6 +61,7 @@ Ein-Datei-Version neu bauen: `npm run build:single`.
 * **Imperium-Ansicht (🗺️):** alle Standorte nebeneinander als Dioramen – vom Kinderzimmer bis zur Fjordhalle.
 * **Technik (🔬):** 9 Technologien wie Undervolting, eigene ASIC-Firmware, Immersionskühlung, Abwärme-Verkauf.
 * **Wetter & Welt:** echte Hitzewellen (2015–2025) heizen die Räume auf, Schnee im Winter, Polarlicht am Fjord.
+* **Solaranlagen (☀️):** pro Standort ausbaubar, saisonaler Ertrag wie in Deutschland, als Modulfeld in 3D.
 * **Bankkredit:** schneller wachsen mit historischen Zinsen – mit dem Risiko von 2022.
 * **Wärmebild (H):** zeigt Hitzequellen und Kühlbereiche wie die Overlays im Vorbild.
 * **3D:** Alle Modelle prozedural im Code gebaut (keine fremden Assets, keine Logos), Tag/Nacht,

@@ -171,6 +171,7 @@ export class World {
     if (this.selected) this.refreshSelBox();
     this.syncPeople();
     if (this.heatMode) this.updateHeat();
+    this.updateSolar();
   }
 
   // ---------- Auswahl ----------
@@ -301,6 +302,30 @@ export class World {
   }
   fpClick() { const uid = this.pick(true); if (uid) { this.fp.unlock(); this.select(uid); } }
 
+  // ---------- Solarfeld neben dem Gebäude ----------
+  updateSolar() {
+    const kwp = this.game.s.fac[this.facId]?.solar || 0;
+    if (this.solarKwp === kwp && this.solarFacId === this.facId) return;
+    this.solarKwp = kwp; this.solarFacId = this.facId;
+    if (this.solarMesh) { this.scene.remove(this.solarMesh); this.solarMesh = null; }
+    if (!kwp) return;
+    const n = Math.min(600, Math.round(kwp / 0.4));
+    if (!this.panelGeo) {
+      const c = document.createElement('canvas'); c.width = 64; c.height = 128; const g = c.getContext('2d');
+      g.fillStyle = '#14254a'; g.fillRect(0, 0, 64, 128); g.strokeStyle = '#6f87b8'; g.lineWidth = 1.5;
+      for (let x = 0; x <= 64; x += 16) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, 128); g.stroke(); }
+      for (let y = 0; y <= 128; y += 16) { g.beginPath(); g.moveTo(0, y); g.lineTo(64, y); g.stroke(); }
+      const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+      this.panelMat = new THREE.MeshStandardMaterial({ map: t, roughness: 0.25, metalness: 0.4 });
+      this.panelGeo = new THREE.BoxGeometry(1.0, 0.04, 1.65);
+    }
+    const im = new THREE.InstancedMesh(this.panelGeo, this.panelMat, n); im.castShadow = true;
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.5, 0, 0)), sc = new THREE.Vector3(1, 1, 1);
+    const perRow = Math.max(4, Math.floor((this.def.d + 4) / 1.15));
+    for (let i = 0; i < n; i++) { const row = Math.floor(i / perRow), col = i % perRow; m4.compose(new THREE.Vector3(this.def.w + 3 + row * 2.6, 0.75, -1 + col * 1.15), q, sc); im.setMatrixAt(i, m4); }
+    im.rotation.y = 0; this.solarMesh = im; this.scene.add(im);
+  }
+
   // ---------- Wetter: Schnee & Polarlicht ----------
   buildWeather() {
     if (this.weather) { this.scene.remove(this.weather); this.weather = null; }
@@ -385,7 +410,7 @@ export class World {
     if (this.empire) return;
     this.cancelPlacement(); this.select(null); this.onHover?.(null);
     if (this.heatGroup) { this.scene.remove(this.heatGroup); this.heatGroup = null; }
-    const vis = [this.room.root, this.outside, this.objGroup, this.people].filter(Boolean);
+    const vis = [this.room.root, this.outside, this.objGroup, this.people, this.solarMesh].filter(Boolean);
     vis.forEach((o) => (o.visible = false)); this.roomLights.forEach((l) => (l.visible = false));
     const g = (this.empire = new THREE.Group()); this.scene.add(g); this.empireHidden = vis;
     let x = 0; const ids = this.game.s.unlocked.slice().sort((a, b) => FACILITY[a].tier - FACILITY[b].tier);
