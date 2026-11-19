@@ -57,9 +57,11 @@ export class Game {
   hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; } }
   saveInfo() { try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); return s ? { day: s.day, cash: s.cash, sites: s.unlocked.length } : null; } catch (e) { return null; } }
   load() {
+    const prev = { s: this.s, cache: this.cache, summary: this.summary }; // bei Fehler zurück zum laufenden Spiel
     try {
       const raw = localStorage.getItem(SAVE_KEY); if (!raw) return false;
       const s = JSON.parse(raw); if (!s || s.version !== 1) return false;
+      s.fac ||= {}; s.wallet ||= {}; s.autoSell ||= {}; s.lastNet ||= {};
       for (const f of FACILITIES) s.fac[f.id] ||= { power: 0, tripped: false, temp: 21, objects: [] };
       // Alte Spielstände: Parodie-Kürzel auf echte Coins umstellen
       const MIG = { SLV: 'LTC', WUF: 'DOGE', SHD: 'XMR', AET: 'ETH', AEC: 'ETC', ZRP: 'ZEC', CRV: 'RVN', KSK: 'KAS' };
@@ -67,14 +69,33 @@ export class Game {
         if (s.wallet[o]) { s.wallet[n] = s.wallet[o]; delete s.wallet[o]; }
         if (s.autoSell[o] != null) { s.autoSell[n] = s.autoSell[o]; delete s.autoSell[o]; }
         if (s.stats?.coins?.[o] != null) { s.stats.coins[n] = s.stats.coins[o]; delete s.stats.coins[o]; }
+        if (s.endless?.[o]) { s.endless[n] = s.endless[o]; delete s.endless[o]; }
+        if (s.lastNet[o] != null) { s.lastNet[n] = s.lastNet[o]; delete s.lastNet[o]; }
         for (const f of Object.values(s.fac)) for (const ob of f.objects || []) if (ob.coin === o) ob.coin = n;
       }
+      // Unbekannte Objekte und Teile (z. B. aus anderen Spielversionen) aussortieren statt abzustürzen
+      for (const f of Object.values(s.fac)) {
+        f.objects = (f.objects || []).filter((ob) => ob && PLACEABLE[ob.type]);
+        for (const ob of f.objects) {
+          if (ob.coin !== 'auto' && !COIN[ob.coin]) ob.coin = 'auto';
+          if (PLACEABLE[ob.type].kind === 'rig') { ob.parts ||= { mobo: null, cpu: null, psu: null, gpus: [] }; for (const k of ['mobo', 'cpu', 'psu']) if (ob.parts[k] && !PART[ob.parts[k]]) ob.parts[k] = null; ob.parts.gpus = (ob.parts.gpus || []).filter((id) => PART[id]); }
+          if (PLACEABLE[ob.type].kind === 'holder') ob.items = (ob.items || []).filter((it) => it && PLACEABLE[it.id]);
+        }
+      }
+      s.unlocked = (s.unlocked || ['kinder']).filter((id) => FACILITY[id]); if (!s.unlocked.length) s.unlocked = ['kinder'];
+      if (!s.unlocked.includes(s.current)) s.current = s.unlocked[0];
+      if (s.endless) for (const c of COINS) s.endless[c.id] ||= { p: 1, h: 1 };
+      s.staff ||= { tech: 0 }; s.goals ||= {}; s.messages ||= []; s.ticker ||= [];
       if (!Number.isFinite(s.cash)) s.cash = 0;
       for (const c of COINS) { s.wallet[c.id] ||= { ex: 0, cold: 0 }; if (s.autoSell[c.id] == null) s.autoSell[c.id] = DEFAULT_AUTOSELL; }
       s.ev ||= { done: {}, open: null, log: [], later: [], last: 0 }; s.ev.done ||= {}; s.ev.log ||= []; s.ev.later ||= [];
       s.rel ||= { papa: 0, mama: 0, opa: 0, deniz: 0 }; s.mods ||= []; s.ach ||= {}; s.flags ||= {}; s.stats ||= { minedUSD: 0, sold: 0, spentHW: 0, elec: 0, history: [] };
       this.s = s; this.cache = {}; this.dayUpdate(true); return true;
-    } catch (e) { console.warn(e); return false; }
+    } catch (e) {
+      console.warn(e);
+      if (this.s !== prev.s) { this.s = prev.s; this.cache = prev.cache; this.summary = prev.summary; try { this.dayUpdate(true); } catch (e2) { /* alter Stand bleibt */ } }
+      return false;
+    }
   }
 
   // ---------- Technologien ----------
@@ -88,16 +109,22 @@ export class Game {
   // ---------- Markt ----------
   price(id, day = this.s.day) {
     const c = COIN[id]; if (day < c.start) return 0;
-    if (day > LAST_DATA_DAY && this.s.endless) return c.price(LAST_DATA_DAY) * this.s.endless[id].p;
+    if (day > LAST_DATA_DAY && this.s.endless) return c.price(LAST_DATA_DAY) * this.endlessMult(id, day, 0);
     if (id === 'BTC' && day <= c.price.dailyEnd) return c.price(day); // echte Tageskurse, kein künstliches Rauschen
     const vol = id === 'BTC' ? 0.045 : 0.07;
     return c.price(day) * Math.exp(noise(day, id.charCodeAt(0) + id.charCodeAt(1)) * vol);
   }
   netHash(id, day = this.s.day) {
     const c = COIN[id]; if (day < c.start) return Infinity;
-    if (day > LAST_DATA_DAY && this.s.endless) return c.hash(LAST_DATA_DAY) * this.s.endless[id].h;
+    if (day > LAST_DATA_DAY && this.s.endless) return c.hash(LAST_DATA_DAY) * this.endlessMult(id, day, 1);
     if (id === 'BTC' && day <= c.hash.dailyEnd) return c.hash(day); // echte Netz-Hashrate
     return c.hash(day) * Math.exp(noise(day, 99 + id.charCodeAt(0)) * 0.03);
+  }
+  // Endlosmodus: Kurs- (k=0) bzw. Hashraten-Faktor (k=1) eines vergangenen Tages aus der Historie, heute der laufende Wert
+  endlessMult(id, day, k) {
+    const s = this.s, e = s.endless[id]; if (!e) return 1;
+    const H = s.endlessHist, i = day < s.day && H ? H.ids.indexOf(id) : -1, r = i >= 0 && H.d[day];
+    return r ? r[i * 2 + k] : k ? e.h : e.p;
   }
   coinActive(id, day = this.s.day) { const c = COIN[id]; return day >= c.start && (!c.end || day < c.end); }
   coinAlgo(id, day = this.s.day) { return COIN[id].algo(day); }
@@ -228,11 +255,13 @@ export class Game {
   objectValue(o) {
     const def = PLACEABLE[o.type];
     let v = this.itemPrice(def) * 0.5;
-    if (o.parts) for (const pid of this.partIds(o)) v += this.itemPrice(PART[pid]) * 0.5;
+    if (o.parts) for (const pid of this.partIds(o)) v += this.itemPrice(PART[pid]) * 0.5 * (pid === o.parts.psu ? this.psuCount(o) : 1); // Doppel-Netzteil zählt doppelt
     if (o.items) for (const it of o.items) v += this.itemPrice(PLACEABLE[it.id]) * (it.b ? 0.2 : 0.5);
     if (o.broken) v *= 0.4;
     return Math.round(v);
   }
+  // Verkaufen erlaubt? Den einzigen PC im Kinderzimmer braucht man noch (sonst Sackgasse)
+  canSell(o) { return !!o && this.has('build') && !(this.s.chapter === 0 && o.type === 'tower'); }
   partIds(o) { const p = o.parts; return [p.mobo, p.cpu, p.psu, ...p.gpus].filter(Boolean); }
   // Erster PC-Zusammenbau: welche Teile fehlen noch, und wie viel Geld muss für sie übrig bleiben?
   // ---------- Fähigkeiten: lernen durch Tun ----------
@@ -241,7 +270,7 @@ export class Game {
     const s = this.s; if (!s.skills) return; const before = this.skillLv(k); s.skills[k] = (s.skills[k] || 0) + Math.round(n);
     this.grant('skills'); const after = this.skillLv(k); if (!quiet || after > before) this.emit('xp', k, Math.round(n), after > before ? after : 0);
   }
-  creditPending(coin, n) { const s = this.s; if (!(n > 0)) return; s.wallet[coin].ex += n; s.accr = { day: s.day, f: s.frac }; }
+  creditPending(coin, n) { const s = this.s; if (!(n > 0)) return; s.wallet[coin].ex += n; s.accr = { day: s.day, f: s.frac, coin }; }
   tradeFee() { return [0.04, 0.03, 0.02, 0.01, 0.005][this.skillLv('trade') - 1] ?? 0.005; }
   // ---------- Herumliegende Teile ----------
   pickUp(type) { const s = this.s; if (!s.loose?.[type]) return false; s.inv.push(type); s.invIds = { ...(s.invIds || {}), [type]: s.loose[type] }; delete s.loose[type]; this.checkGoals(); this.emit('loose'); return true; }
@@ -329,7 +358,7 @@ export class Game {
   }
   holderAdd(uid, devId, n = 1) {
     const o = this.findObj(uid); if (!o || !o.items) return 0;
-    const def = PLACEABLE[o.type], dev = PLACEABLE[devId];
+    const def = PLACEABLE[o.type], dev = PLACEABLE[devId]; if (!dev) return 0;
     const price = this.itemPrice(dev);
     let added = 0;
     while (added < n && o.items.length < def.slots && this.canAfford(price)) {
@@ -484,7 +513,9 @@ export class Game {
     this.checkFeatures();
     const day = s.day;
     // Gutschrift nur für den Teil des Tages, der noch nicht gutgeschrieben ist (erster Tag ab dem Einschalten, vorab verkaufte Anteile)
-    const D = day - 1, minedByCoin = {}, startK = Math.max(0, 1 - Math.max(s.mineDay0 === D ? s.mineFrac0 || 0 : 0, s.accr?.day === D ? s.accr.f : 0));
+    const D = day - 1, minedByCoin = {}, f0 = s.mineDay0 === D ? s.mineFrac0 || 0 : 0, startK = Math.max(0, 1 - f0);
+    // Vorab gutgeschrieben wurde nur der behaltene Anteil eines Coins (s.accr.coin) – Auto-Verkauf und andere Coins laufen voll weiter
+    const accrC = s.accr?.day === D ? s.accr.coin || 'BTC' : null, keepK = (c) => (c === accrC && startK > 0 ? Math.max(0, 1 - Math.max(f0, s.accr.f || 0)) / startK : 1);
     let elecCost = 0;
     const netOwn = {};
     for (const id of s.unlocked) {
@@ -517,7 +548,7 @@ export class Game {
       const p = this.price(c, day); minedUSD += n * p; s.stats.coins[c] = (s.stats.coins[c] || 0) + n;
       const sell = n * s.autoSell[c];
       sold += sell * p * (s.skills ? 1 - this.tradeFee() : 1);
-      const keep = n - sell;
+      const keep = (n - sell) * keepK(c);
       if (s.payoutCold) s.wallet[c].cold += keep; else s.wallet[c].ex += keep;
     }
     s.cash += sold - elecCost;
@@ -533,8 +564,8 @@ export class Game {
     if (!Number.isFinite(s.cash)) s.cash = 0;
     if (s.cash < 0) {
       // Automatisch Coins von der Börse verkaufen, um das Minus auszugleichen
-      let need = -s.cash + 50;
-      for (const c of COINS) { const w = s.wallet[c.id], p = this.price(c.id, day); if (need <= 0 || !p || w.ex <= 0) continue; const n = Math.min(w.ex, need / (p * 0.995)); w.ex -= n; s.cash += n * p * 0.995; need -= n * p * 0.995; }
+      let need = -s.cash + 50; const fk = 1 - (s.skills ? this.tradeFee() : 0.005);
+      for (const c of COINS) { const w = s.wallet[c.id], p = this.price(c.id, day); if (need <= 0 || !p || w.ex <= 0) continue; const n = Math.min(w.ex, need / (p * fk)); w.ex -= n; s.cash += n * p * fk; need -= n * p * fk; }
       if (s.cash < 0) { s.cash -= Math.min(-s.cash * 0.15 / 365, 5e6); if (!s.flags.warnedNeg || day - s.flags.warnedNeg > 30) { s.flags.warnedNeg = day; this.toast('Konto im Minus!', 'bad', 8000); } }
     }
     // Techniker reparieren
@@ -599,7 +630,7 @@ export class Game {
     const heatMul = (temp < 30 ? 1 : temp < 38 ? 1 + (temp - 30) / 8 : 2 + (temp - 38) * 0.5) * this.fx('fail');
     const life = (def.life || 6) * 365;
     if (def.kind === 'holder') {
-      const base = def.selfCooled ? 0.0004 : 0.0007 * heatMul;
+      const base = def.selfCooled ? 0.0004 * this.fx('fail') : 0.0007 * heatMul;
       for (const it of o.items) { if (it.b) continue; if (Math.random() < base) it.b = 1; }
     } else if (def.kind === 'rig' || def.kind === 'device') {
       if (o.broken) return;
@@ -636,6 +667,10 @@ export class Game {
       e.p *= Math.exp(gauss() * vol + 0.00025);
       e.h *= Math.exp(gauss() * 0.006 + (c.id === 'BTC' ? 0.0007 : 0.0003) + (Math.log(e.p) - Math.log(e.h)) * 0.002);
     }
+    // Verlauf merken (Charts, Wochenvergleich), begrenzt auf ~2000 Tage
+    const H = (s.endlessHist ||= { ids: COINS.map((c) => c.id), d: {} });
+    H.d[s.day] = H.ids.flatMap((id) => (s.endless[id] ? [+s.endless[id].p.toPrecision(6), +s.endless[id].h.toPrecision(6)] : [1, 1]));
+    delete H.d[s.day - 2000];
   }
 
   // ---------- Story ----------
@@ -746,9 +781,10 @@ export class Game {
     }
   }
   canPayGoal(g) { return this.canAfford(g.action.cost) || this.s.cash + this.exchangeValue() >= g.action.cost; }
-  exchangeValue() { let v = 0; for (const c of COINS) { const w = this.s.wallet[c.id]; if (w && w.ex > 0) v += w.ex * this.price(c.id) * 0.995; } return v; }
+  exchangeValue() { const fk = 1 - (this.s.skills ? this.tradeFee() : 0.005); let v = 0; for (const c of COINS) { const w = this.s.wallet[c.id]; if (w && w.ex > 0) v += w.ex * this.price(c.id) * fk; } return v; }
   goalAction(g) {
-    if (!this.canAfford(g.action.cost) && this.canPayGoal(g)) { let need = g.action.cost - this.s.cash + 0.01; for (const c of COINS) { const w = this.s.wallet[c.id], p = this.price(c.id); if (need <= 0 || !p || !(w.ex > 0)) continue; const n = Math.min(w.ex, need / (p * 0.995)); w.ex -= n; this.s.cash += n * p * 0.995; this.s.stats.sold += n * p * 0.995; need -= n * p * 0.995; } }
+    const fk = 1 - (this.s.skills ? this.tradeFee() : 0.005);
+    if (!this.canAfford(g.action.cost) && this.canPayGoal(g)) { let need = g.action.cost - this.s.cash + 0.01; for (const c of COINS) { const w = this.s.wallet[c.id], p = this.price(c.id); if (need <= 0 || !p || !(w.ex > 0)) continue; const n = Math.min(w.ex, need / (p * fk)); w.ex -= n; this.s.cash += n * p * fk; this.s.stats.sold += n * p * fk; need -= n * p * fk; } }
     if (!this.canAfford(g.action.cost)) return false;
     this.s.cash -= g.action.cost; this.s.flags[g.action.flag] = true;
     this.checkGoals(); this.checkFeatures(); this.dayUpdate(true); return true;
@@ -786,12 +822,13 @@ export class Game {
   // ---------- Wallet ----------
   sell(coin, frac) {
     const w = this.s.wallet[coin]; const n = w.ex * frac; if (n <= 0) return 0;
-    const usd = n * this.price(coin) * (1 - (this.s.skills ? this.tradeFee() : 0.005)); w.ex -= n; this.s.cash += usd; this.s.stats.sold += usd; if (this.s.skills) this.addXp('trade', 15 + Math.min(60, usd / 10)); this.dayUpdate(true); return usd;
+    const usd = n * this.price(coin) * (1 - (this.s.skills ? this.tradeFee() : 0.005)); w.ex -= n; this.s.cash += usd; this.s.stats.sold += usd; if (this.s.skills && usd >= 1) this.addXp('trade', Math.min(75, Math.max(2, usd / 10))); this.dayUpdate(true); return usd; // EP nach Volumen, nicht pro Klick
   }
   buy(coin, usd) {
+    if (!this.has('buycoins')) return 0;
     usd = Math.min(+usd || 0, this.s.cash); if (!(usd > 0) || !this.canAfford(usd)) return 0;
     const p = this.price(coin); if (!p) return 0;
-    const fee = this.s.skills ? this.tradeFee() : 0.005; this.s.wallet[coin].ex += (usd * (1 - fee)) / p; this.s.cash -= usd; if (this.s.skills) this.addXp('trade', 10 + Math.min(40, usd / 10)); this.dayUpdate(true); return usd;
+    const fee = this.s.skills ? this.tradeFee() : 0.005; this.s.wallet[coin].ex += (usd * (1 - fee)) / p; this.s.cash -= usd; if (this.s.skills && usd >= 1) this.addXp('trade', Math.min(50, Math.max(2, usd / 10))); this.dayUpdate(true); return usd;
   }
   transfer(coin, toCold) {
     const w = this.s.wallet[coin];
