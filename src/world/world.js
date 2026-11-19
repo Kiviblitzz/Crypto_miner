@@ -478,7 +478,9 @@ export class World {
       // Schild
       const c = document.createElement('canvas'); c.width = 512; c.height = 128; const cx = c.getContext('2d');
       cx.fillStyle = 'rgba(14,17,23,0.85)'; cx.fillRect(0, 0, 512, 128); cx.fillStyle = '#ffb000'; cx.font = 'bold 54px Arial'; cx.textAlign = 'center'; cx.fillText(def.name, 256, 62);
-      const sm = this.game.summary[id]; cx.fillStyle = '#e8edf4'; cx.font = '30px Arial'; cx.fillText(`${def.w}×${def.d} m · ${sm ? (sm.watt / 1000).toFixed(sm.watt < 1e4 ? 2 : 0) : 0} kW`, 256, 106);
+      const sm = this.game.summary[id]; cx.fillStyle = '#e8edf4'; cx.font = '26px Arial';
+      const sha = sm ? (sm.hashByAlgo.sha256 || 0) * sm.throttle : 0;
+      cx.fillText(`${def.w}×${def.d} m · ${sm ? (sm.watt / 1000).toFixed(sm.watt < 1e4 ? 2 : 0) : 0} kW${sha ? ' · ' + fmtHash(sha) : ''}`, 256, 106);
       const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
       const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false })); const sc = Math.max(5, def.w * 0.3);
       sp.scale.set(sc, sc / 4, 1); sp.position.set(x + def.w / 2, def.h + sc * 0.25 + 1, -def.d / 2 - 0.5); sp.renderOrder = 20; g.add(sp);

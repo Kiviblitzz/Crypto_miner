@@ -542,7 +542,10 @@ export class Game {
     if (n) { s.cash -= cost; this.emit('objects', s.current); }
   }
   exchangeCrash(loss, text) {
-    let lostUSD = 0;
+    let lostUSD = 0, coldUSD = 0;
+    for (const c of COINS) coldUSD += this.s.wallet[c.id].cold * this.price(c.id);
+    const exUSD = COINS.reduce((a, c) => a + this.s.wallet[c.id].ex * this.price(c.id), 0);
+    if (coldUSD > 1000 && exUSD < coldUSD * 0.05) { const ms = (this.s.milestones ||= {}); if (!ms.cold) { ms.cold = this.s.day; this.emit('milestone', 'Cold-Wallet-Profi', `${fmtUSD(coldUSD)} sicher – während andere alles verlieren.`); } }
     for (const c of COINS) { const w = this.s.wallet[c.id]; lostUSD += w.ex * loss * this.price(c.id); w.ex *= 1 - loss; }
     if (lostUSD > 1) this.toast(`💥 ${text} – du verlierst Coins im Wert von ${fmtUSD(lostUSD)}!`, 'bad', 9000);
     else this.toast(`🛡️ ${text} – deine Coins in der Cold-Wallet sind sicher.`, 'good', 7000);

@@ -528,7 +528,7 @@ export class UI {
       <div class="sec"><h4>Deine Hashrate (SHA-256, log)</h4><canvas class="nwchart" width="1000" height="240"></canvas></div>
       <div class="sec"><h4>Dein Weg</h4><div class="path"></div></div></div>`);
     const ms = Object.entries(s.milestones || {}).sort((a, b) => a[1] - b[1]);
-    const label = (k) => { const v = +k.slice(1); return k[0] === 'h' ? `${fmtHash(v)} Hashrate` : v >= 1e9 ? 'Milliardär' : v >= 1e6 ? (v === 1e6 ? 'Millionär' : fmtUSD(v) + ' Vermögen') : fmtUSD(v) + ' Vermögen'; };
+    const label = (k) => { if (k === 'cold') return 'Cold-Wallet-Profi (Börsenpleite überstanden)'; const v = +k.slice(1); return k[0] === 'h' ? `${fmtHash(v)} Hashrate` : v >= 1e9 ? 'Milliardär' : v >= 1e6 ? (v === 1e6 ? 'Millionär' : fmtUSD(v) + ' Vermögen') : fmtUSD(v) + ' Vermögen'; };
     const unl = s.unlocked.map((id) => [FACILITY[id].name, null]);
     body.querySelector('.path').innerHTML = (ms.length ? ms.map(([k, d]) => `<div style="display:flex;gap:10px;font-size:13px;padding:2px 0"><span style="color:#ffb000;min-width:86px">${fmtDate(d)}</span><span>🏆 ${label(k)}</span></div>`).join('') : '<div class="empty">Noch keine Meilensteine.</div>') + `<div style="font-size:12px;color:#94a0b2;margin-top:6px">Standorte: ${unl.map((u) => u[0]).join(' → ')}</div>`;
     requestAnimationFrame(() => {
