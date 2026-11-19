@@ -256,7 +256,7 @@ export function gpuModel(parent, look) {
   }
   // Oberkante: Logo-Leiste, Heatpipes, Stromstecker
   boxC(g, L * 0.62, 0.005, T * 0.4, shroud, L * 0.62, H - 0.0005, zF - T * 0.2);
-  plane(g, L * 0.3, T * 0.3, labelMat(red ? 'gpuLogoC' : 'gpuLogoV', 256, 48, (c, w, h) => { c.fillStyle = '#0b0b0d'; c.fillRect(0, 0, w, h); c.fillStyle = red ? '#ff2a40' : '#7dff3a'; c.font = 'bold 34px Arial'; c.textAlign = 'center'; c.fillText(red ? 'CRIMSON' : 'VERDANT', w / 2, 36); }, 1.4), L * 0.6, H + 0.0021, zF - T * 0.2, -Math.PI / 2);
+  g.userData.logo = plane(g, L * 0.3, T * 0.3, labelMat(red ? 'gpuLogoC' : 'gpuLogoV', 256, 48, (c, w, h) => { c.fillStyle = '#0b0b0d'; c.fillRect(0, 0, w, h); c.fillStyle = red ? '#ff2a40' : '#7dff3a'; c.font = 'bold 34px Arial'; c.textAlign = 'center'; c.fillText(red ? 'CRIMSON' : 'VERDANT', w / 2, 36); }, 1.4), L * 0.6, H + 0.0021, zF - T * 0.2, -Math.PI / 2);
   for (let k = 0; k < 3; k++) {
     const z = -T / 2 + 0.006 + k * ((T - 0.014) / 2), x0 = L * 0.08 + k * 0.006;
     tube(g, [[x0, H - 0.012, z], [x0 + 0.006, H + 0.003, z], [x0 + 0.03, H + 0.005, z], [L * 0.28 + k * 0.01, H - 0.012, z]], 0.0026, M.copper(), 12, 6);
@@ -286,7 +286,8 @@ function mobo(parent, w, d, x, y, z, vertical = false) {
   for (let i = 0; i < 4; i++) { boxC(g, 0.006, 0.008, d * 0.56, M.black(), w * 0.06 + i * 0.012, 0.005, -d * 0.1, 0); box(g, 0.0045, 0.03, d * 0.52, i % 2 ? X.ram() : M.darkMetal(), w * 0.06 + i * 0.012, 0.006, -d * 0.1); }
   // Chipsatz, PCIe, Batterie, Kondensatoren, Stecker
   box(g, 0.036, 0.008, 0.036, M.darkMetal(), w * 0.15, 0.001, d * 0.26);
-  for (let i = 0; i < 3; i++) boxC(g, w * 0.5, 0.008, 0.007, i === 0 ? M.alu() : M.black(), -w * 0.1, 0.005, d * 0.08 + i * 0.06, 0.001);
+  if (vertical) { for (let i = 0; i < 2; i++) boxC(g, 0.007, 0.008, 0.085, i ? M.black() : M.alu(), 0.047 + i * 0.07, 0.005, -0.037, 0.001); }
+  else for (let i = 0; i < 3; i++) boxC(g, w * 0.5, 0.008, 0.007, i === 0 ? M.alu() : M.black(), -w * 0.1, 0.005, d * 0.08 + i * 0.06, 0.001);
   cyl(g, 0.01, 0.01, 0.003, X.chrome(), w * 0.32, 0.003, d * 0.18, 18);
   if (!Q.lo) for (let i = 0; i < 8; i++) cyl(g, 0.0035, 0.0035, 0.009, X.cap(), sx - 0.03 + i * 0.009, 0.006, sz + 0.038, 10);
   box(g, 0.012, 0.012, 0.034, M.black(), w * 0.45, 0.001, -d * 0.1);
@@ -350,7 +351,7 @@ export function buildRig(type, parts, only = null) {
     const fr2 = fan(root, 0.06, { n: 7, square: true }); fr2.position.set(0, y0 + H * 0.34, D / 2 - 0.02);
     boxC(root, 0.05, 0.13, 0.003, X.chrome(), -W / 2 + 0.04, y0 + H * 0.78, -D / 2 - 0.0005, 0);
     if (!Q.lo) for (let i = 0; i < 6; i++) boxC(root, 0.014, 0.008, 0.004, i % 3 ? M.black() : M.cableBlue(), -W / 2 + 0.04, y0 + H * 0.72 + i * 0.018, -D / 2 - 0.002, 0);
-    for (let i = 0; i < 5; i++) boxC(root, W * 0.55, 0.012, 0.003, X.chrome(), 0.0, y0 + H * 0.52 - i * 0.022, -D / 2 - 0.0005, 0);
+    for (let i = (parts?.gpus?.length ? 1 : 0); i < 5; i++) boxC(root, W * 0.55, 0.012, 0.003, X.chrome(), 0.0, y0 + H * 0.52 - i * 0.022, -D / 2 - 0.0005, 0);
     box(root, 0.03, 0.022, 0.006, M.black(), 0.05, y0 + 0.04, -D / 2 - 0.003);
     box(root, 0.008, 0.008, 0.004, M.ledBlue(), W / 2 - 0.04, y0 + H - 0.04, D / 2 + 0.014);
     }
@@ -360,8 +361,8 @@ export function buildRig(type, parts, only = null) {
     if (parts?.psu && want('psu')) { psuBox(root, 0, y0 + 0.012, -0.1, 0.15, 0.086, 0.16, PART[parts.psu]?.cap); const cab = mat('cable2', { color: 0x1d1a18, roughness: 0.7 }); boxC(root, 0.022, 0.016, 0.008, M.black(), -0.045, y0 + 0.07, -0.016); tube(root, [[-0.045, y0 + 0.07, -0.014], [-0.05, y0 + 0.09, 0.02], [-0.072, y0 + 0.16, 0.01], [-0.086, y0 + 0.2, -0.005]], 0.004, cab, 18, 8); if (parts?.mobo) boxC(root, 0.014, 0.032, 0.02, M.black(), -0.09, y0 + 0.205, -0.005); }
     if (want('gpu')) gpus.forEach((gp, i) => {
       if (only && i !== gpus.length - 1) return;
-      const m = gpuModel(root, gp.look); m.position.set(-W / 2 + 0.014, y0 + H * 0.5 - i * 0.07, -D / 2 + 0.03);
-      m.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, 1), new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0)));
+      const m = gpuModel(root, gp.look); m.position.set(-W / 2 + 0.014, y0 + H * 0.5 - i * 0.07, -D / 2 + 0.012);
+      m.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, 1), new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0))); if (m.userData.logo) m.userData.logo.rotation.z += Math.PI;
       const gy = y0 + H * 0.5 - i * 0.07, zc = -D / 2 + 0.03 + gp.look.len - 0.04;
       if (parts?.psu) { const cab = mat('cable2', { color: 0x1d1a18, roughness: 0.7 }); boxC(root, 0.016, 0.014, 0.008, M.black(), 0.03 - i * 0.022, y0 + 0.07, -0.016); tube(root, [[0.03 - i * 0.022, y0 + 0.07, -0.014], [0.03 - i * 0.022, y0 + 0.08, 0.03], [0.045, gy - 0.04, zc + 0.03], [0.03, gy - 0.004, zc]], 0.003, cab, 16, 6); boxC(root, 0.014, 0.012, 0.018, M.black(), 0.026, gy - 0.004, zc - 0.006); }
     });

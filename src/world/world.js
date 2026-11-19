@@ -280,7 +280,7 @@ export class World {
     look.addScaledVector(right, 0.12);
     const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(pos, look, new THREE.Vector3(0, 1, 0)));
     this.focus = { pos, q, light: rotV(0.32, 0.48, 0.18) };
-    if (!this.focusLight) { this.focusLight = new THREE.PointLight(0xffe2b8, 0, 0.55, 1.6); this.scene.add(this.focusLight); }
+    if (!this.focusLight) { this.focusLight = new THREE.PointLight(0xfff2df, 0, 0.75, 1.6); this.scene.add(this.focusLight); }
     if (e.sprite) e.sprite.visible = false;
   }
   // Einbau-Animation: das neue Teil gleitet von der offenen Seite ins Gehäuse und rastet ein
@@ -312,8 +312,8 @@ export class World {
     const p = e.obj.parts, parts = { ...p, gpus: [...(p.gpus || [])] };
     if (sp.type === 'gpu') parts.gpus.push(sp.id); else parts[sp.type] = sp.id;
     const g = rigPartModel({ ...e.obj, parts }, sp.type);
-    this.ghostMat ||= new THREE.MeshBasicMaterial({ color: 0xffb547, transparent: true, opacity: 0.3, depthWrite: false });
-    this.ghostLine ||= new THREE.LineBasicMaterial({ color: 0xffd08a, transparent: true, opacity: 0.65, depthWrite: false });
+    this.ghostMat ||= new THREE.MeshBasicMaterial({ color: 0x9fe8bd, transparent: true, opacity: 0.14, depthWrite: false });
+    this.ghostLine ||= new THREE.LineBasicMaterial({ color: 0x9fe8bd, transparent: true, opacity: 0.72, depthWrite: false });
     const edges = [];
     g.traverse((m) => { if (m.isMesh) { m.material = this.ghostMat; m.castShadow = false; m.raycast = () => {}; if (m.geometry.attributes.position.count < 4000) { const l = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, 60), this.ghostLine); l.raycast = () => {}; edges.push([m, l]); } } });
     for (const [m, l] of edges) m.add(l);
@@ -336,7 +336,7 @@ export class World {
       const [x, y, z, ry] = spots[t], g = loosePartModel(t, s.loose[t]);
       g.position.set(x, y, z); g.rotation.y = ry; g.traverse((m) => { m.userData.loose = t; if (m.isMesh) { m.castShadow = true; } });
       const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.haloTex(), color: 0xffb547, transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending }));
-      halo.scale.set(0.55, 0.55, 1); halo.position.y = 0.06; halo.userData.halo = true; g.add(halo); g.userData.y0 = y;
+      halo.scale.set(0.42, 0.42, 1); halo.position.y = 0.06; halo.userData.halo = true; g.add(halo); g.userData.y0 = y;
       this.looseGroup.add(g); this.looseItems[t] = g;
     }
     const left = Object.values(this.looseItems).filter((g) => !g.userData.flying);
@@ -375,7 +375,7 @@ export class World {
     const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(pos, look, new THREE.Vector3(0, 1, 0)));
     this.focus = { pos, q, light: new THREE.Vector3(pr.c[0] + 0.4, pr.c[1] + 0.15, pr.c[2] + 0.5) }; this.focusUid = null;
     if (this.bootPending) { this.bootT = this.t; this.bootPending = false; this.screensDirty = true; }
-    if (!this.focusLight) { this.focusLight = new THREE.PointLight(0xffe2b8, 0, 0.55, 1.6); this.scene.add(this.focusLight); }
+    if (!this.focusLight) { this.focusLight = new THREE.PointLight(0xfff2df, 0, 0.75, 1.6); this.scene.add(this.focusLight); }
   }
   select(uid) {
     this.selected = uid; this.refreshSelBox();
@@ -953,7 +953,7 @@ export class World {
     if (this.mode === 'title' || this.visFrac == null) this.visFrac = s.frac;
     else { const df = (s.frac - this.visFrac + 1) % 1; this.visFrac = (this.visFrac + Math.min(df, dt / 90)) % 1; }
     this.updateDaylight(this.visFrac);
-    this.updatePeople(dt); this.updateSmoke(dt); this.updateWeather(dt); this.updatePopups(dt); this.updateInstall(dt); this.updateLoose(dt); if (this.ghostMat) { this.ghostMat.opacity = 0.12 + 0.04 * Math.sin(this.t * 4); this.ghostLine.opacity = 0.5 + 0.2 * Math.sin(this.t * 4); }
+    this.updatePeople(dt); this.updateSmoke(dt); this.updateWeather(dt); this.updatePopups(dt); this.updateInstall(dt); this.updateLoose(dt); if (this.ghostMat) { this.ghostMat.opacity = 0.14; this.ghostLine.opacity = 0.72 + 0.06 * Math.sin(this.t * 4); }
     // Lüfter & LEDs
     const fanSpeed = 28 * dt;
     for (const e of this.entries.values()) {

@@ -1349,3 +1349,18 @@ body:has(#modal:not(.hidden)) #toasts { z-index: 35 !important; }
 .goal .cnt { display: inline-block; min-width: 34px; text-align: right; }
 .pcb-live b { display: inline-block; min-width: 6.5ch; text-align: center; }
 .tiles .empty-sell { font: 600 14px var(--font); color: var(--text2); padding: 8px 4px; }
+/* Runde 10 (GPT) */
+#inspector .sec.start.two { display: grid !important; grid-template-columns: 1fr; gap: 8px; }
+#inspector .sec.start.two .btn { width: 100%; min-width: 0; white-space: normal; padding-inline: 12px !important; }
+body[data-modal="intro"] #top, body[data-modal="intro"] #goals, body[data-modal="intro"] #dock { visibility: hidden !important; }
+.goal .lastpick { margin-left: 8px; font: 700 12.5px var(--font); color: #9fe8bd; animation: popInC .25s ease-out; }
+.logo-wrap::before { background: radial-gradient(closest-side, rgba(20,12,6,.72) 0%, rgba(20,12,6,.72) 70%, transparent 100%) !important; }
+#splash .disclaimer { background: none !important; padding: 0 !important; font-size: 12px !important; }
+@media (min-width: 721px) { #build { grid-template-columns: 112px minmax(0, 1fr) !important; } }
+#build .item .thumb { height: 160px !important; }
+.tiles .acts .btn.sellb { min-width: 132px; }
+.skills .sk-row > span:last-child { font-weight: 700; color: var(--text); }
+.skills .sk-learn { font-size: 13px !important; color: var(--dim) !important; }
+/* Runde 10b (strengster Reviewer) */
+.toast.msg { background: var(--glass-strong) !important; }
+#inspector .sec.start.two .btn { flex: 1 1 0; min-width: 0; }

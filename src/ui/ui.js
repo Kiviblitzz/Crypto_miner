@@ -20,7 +20,7 @@ const PART_ICON = {
 const PNAME = { mobo: 'Mainboard', cpu: 'Prozessor', gpu: 'Grafikkarte', psu: 'Netzteil' };
 const SKILL = {
   hw: { name: 'Schrauben', learn: 'Teile einbauen, Geräte aufstellen', short: 'Einbauen', icon: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5a1.8 1.8 0 0 0 2.5 2.5l5.8-5.8a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>', now: (lv) => (lv > 1 ? `Hardware −${4 * (lv - 1)} %` : 'Noch kein Bonus'), next: (lv) => `−${4 * lv} %` },
-  mining: { name: 'Mining', learn: 'Jeder Tag, an dem dein PC schürft', short: 'Schürfen', icon: '<path d="M14.5 4.5c2.8-.6 5.4.7 6.5 3-2.2-.9-4.4-.8-6.2.2"/><path d="M14.5 4.5c-2.6 1.3-4 3.7-4 6.3 1-1.8 2.7-3 4.8-3.6"/><path d="M12.6 9.8 3.5 19a1.6 1.6 0 0 0 2.3 2.3l9.2-9.2"/>', now: (lv) => (lv > 1 ? `Ertrag +${4 * (lv - 1)} %` : 'Noch kein Bonus'), next: (lv) => `+${4 * lv} %` },
+  mining: { name: 'Mining', learn: 'Jeder Tag, an dem dein PC schürft', short: 'Schürfen', icon: '<path d="M3.5 9.5C7.5 4.5 13.5 3.2 19.5 5.5" stroke-width="2.4"/><path d="M11.2 6.2 18.8 20" stroke-width="2.2"/><circle cx="11.2" cy="6.2" r="1.3" fill="currentColor"/>', now: (lv) => (lv > 1 ? `Ertrag +${4 * (lv - 1)} %` : 'Noch kein Bonus'), next: (lv) => `+${4 * lv} %` },
   trade: { name: 'Handel', learn: 'Coins verkaufen', short: 'Verkaufen', icon: '<circle cx="9" cy="9" r="5.5"/><path d="M14.6 8.8a5.5 5.5 0 1 1-5.8 5.8"/><path d="M9 6.8v4.4M7.2 9h3.6"/>', now: (lv) => `Gebühr ${[4, 3, 2, 1, 0.5][lv - 1].toLocaleString('de-DE')} %`, next: (lv) => `${[3, 2, 1, 0.5][lv - 1]?.toLocaleString('de-DE') ?? '–'} %` },
 };
 const skillSvg = (k, size = 22) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${SKILL[k].icon}</svg>`;
@@ -46,7 +46,7 @@ export class UI {
       const pr = world.room?.props?.find((p) => p.action === 'market'); if (pr && t.label === 'Börse') this.useProp(pr);
     };
     world.onInstalled = (uid) => { this.installing = false; if (this.inspUid === uid) this.inspect(uid); };
-    world.onLoose = (t) => { this.w.pickupFx(t); if (!this.g.pickUp(t)) return; this.audio?.install?.(); this.toast(`${PNAME[t]} eingesteckt`, 'good', 2200); this.goals(); };
+    world.onLoose = (t) => { this.w.pickupFx(t); if (!this.g.pickUp(t)) return; this.lastPick = { t, at: performance.now() }; setTimeout(() => this.goals(), 1300); this.audio?.install?.(); this.toast(`${PNAME[t]} in der Tasche`, 'good', 2200); this.goals(); };
     game.on('xp', (k, n, lv) => this.xpPop(k, n, lv));
     world.onIncome = () => { this.bumpWallet(); this.audio?.tick?.(); };
     world.onLamp = (on) => this.toast(on ? 'Taschenlampe an' : 'Taschenlampe aus', 'info', 1500);
@@ -63,7 +63,7 @@ export class UI {
     const pref = (() => { try { return JSON.parse(localStorage.getItem('hashwerk_prefs') || '{}'); } catch (e) { return {}; } })();
     const savePref = () => { try { localStorage.setItem('hashwerk_prefs', JSON.stringify(pref)); } catch (e) { /* egal */ } };
     const snd = $('#ps-sound'), sens = $('#ps-sens');
-    const applySnd = () => { const on = pref.sound !== false; snd.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/>${on ? '<path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>' : '<path d="M16 9.5l5 5M21 9.5l-5 5"/>'}</svg><span>Ton</span>`; snd.setAttribute('aria-pressed', on); snd.title = on ? 'Ton ist an – klicken zum Ausschalten' : 'Ton ist aus – klicken zum Einschalten'; snd.classList.toggle('off', !on); this.audio?.setMuted?.(!on); };
+    const applySnd = () => { const on = pref.sound !== false; snd.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/>${on ? '<path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>' : '<path d="M16 9.5l5 5M21 9.5l-5 5"/>'}</svg><span>${on ? 'Ton an' : 'Ton aus'}</span>`; snd.setAttribute('aria-pressed', on); snd.title = on ? 'Ton ist an – klicken zum Ausschalten' : 'Ton ist aus – klicken zum Einschalten'; snd.classList.toggle('off', !on); this.audio?.setMuted?.(!on); };
     snd.onclick = () => { pref.sound = pref.sound === false; savePref(); applySnd(); };
     sens.value = pref.sens || 1; const applySens = () => { this.w.player.sens = 0.0022 * (+sens.value || 1); const v = $('#ps-val'); if (v) v.textContent = (+sens.value).toLocaleString('de-DE', { minimumFractionDigits: 1 }) + '×'; };
     sens.oninput = () => { pref.sens = +sens.value; savePref(); applySens(); };
@@ -71,7 +71,7 @@ export class UI {
     $('#clickhint').onclick = () => this.w.requestLock();
     game.on('toast', (t, k, ms) => this.toast(t, k, ms));
     const showMsg = (m) => { this.toast(`${FACE[m.from] || ''} <b>${esc(m.from)}:</b> ${esc(m.text)}`, 'msg', 7000); this.dock(); };
-    this.flushMsgs = () => { const q = this.msgQ || []; this.msgQ = []; q.forEach((m, i) => setTimeout(() => showMsg(m), 3000 + i * 2500)); };
+    this.flushMsgs = (base = 3000) => { const q = this.msgQ || []; this.msgQ = []; q.forEach((m, i) => setTimeout(() => showMsg(m), base + i * 2500)); };
     game.on('message', (m) => { if (this.inspUid || this.w.focus) { (this.msgQ ||= []).push(m); this.dock(); return; } showMsg(m); });
     game.on('news', () => this.ticker());
     game.on('feature', (f) => this.featureCard(f));
@@ -166,7 +166,7 @@ export class UI {
     el.classList.remove('hidden'); el.classList.toggle('edge', !sp.on); el.classList.toggle('left', !sp.on && sp.side < 0);
     const ex = sp.side < 0 ? 150 : innerWidth - 150, ey = Math.min(innerHeight - 140, Math.max(200, sp.front ? sp.y : innerHeight * 0.55));
     el.style.transform = sp.on ? `translate(${Math.round(sp.x)}px, ${Math.round(sp.y)}px)` : `translate(${ex}px, ${Math.round(ey)}px)`;
-    const t = el.querySelector('.om-t'); if (t.textContent !== label) t.textContent = label;
+    const t = el.querySelector('.om-t'), full = (Object.values(PNAME).includes(label) ? 'Nächstes Teil: ' : '') + label; if (t.textContent !== full) t.textContent = full;
   }
   // Heute schon geschürft, aber noch nicht gutgeschrieben
   pendingBtc() {
@@ -273,8 +273,9 @@ export class UI {
     document.body.classList.remove('show-build', 'show-goals'); this.dock();
     if (this.inspUid) { this.inspUid = null; $('#inspector').classList.add('hidden'); this.w.select(null); }
     this.w.focusObject?.(null); this.pickType = null; this.showRun = false; this.w.ghostPart?.(null);
+    const hadLv = !!this.lvQ;
     if (this.lvQ) { const [k, lv] = this.lvQ; this.lvQ = null; this.lvBusy = true; setTimeout(() => this.levelUp(k, lv), 2600); }
-    this.flushMsgs?.();
+    this.flushMsgs?.(hadLv ? 7200 : 3000);
     if (this.w.mode === 'ui' || this.w.mode === 'play') this.w.setMode('play');
   }
   pause(on) {
@@ -291,7 +292,7 @@ export class UI {
     clearTimeout(this.featT); this.featT = setTimeout(() => this.showFeatures(), 60);
   }
   showFeatures() {
-    if (this.w.mode !== 'play' || this.paused || document.getElementById('lvup') || this.lvQ || this.lvBusy) { clearTimeout(this.featT); this.featT = setTimeout(() => this.showFeatures(), 700); return; }
+    if (this.w.mode !== 'play' || this.paused || document.getElementById('lvup') || this.lvQ || this.lvBusy || document.querySelector('#toasts .toast.msg')) { clearTimeout(this.featT); this.featT = setTimeout(() => this.showFeatures(), 700); return; }
     const q = this.featQ || []; this.featQ = []; if (!q.length) return;
     this.audio?.message();
     const box = $('#featcards'); box.innerHTML = '';
@@ -484,7 +485,7 @@ export class UI {
       on.querySelector('button').onclick = () => this.powerOnSequence(o);
       sec.append(on);
     } else {
-      const bp = this.w.bootPending; const done = h(`<div class="sec start two"><button class="btn big ${bp ? 'primary glow' : ''}">Zum Monitor</button><button class="btn big ${bp ? '' : 'primary'}">Zurück ins Zimmer</button></div>`); const [bm, bw] = done.querySelectorAll('button'); bm.onclick = () => { bm.classList.remove('glow', 'primary'); bw.classList.add('primary'); const mon = this.w.focusUid == null; if (mon) { this.w.focusObject?.(o.uid); bm.textContent = 'Zum Monitor'; } else { this.w.focusMonitor?.(); bm.textContent = 'Zum PC'; } }; bw.onclick = () => this.resume(); sec.append(done);
+      const bp = this.w.bootPending; const done = h(`<div class="sec start two"><button class="btn big ${bp ? 'primary glow' : ''}">Zum Monitor</button><button class="btn big ${bp ? '' : 'primary'}">Ins Zimmer</button></div>`); const [bm, bw] = done.querySelectorAll('button'); bm.onclick = () => { bm.classList.remove('glow', 'primary'); bw.classList.add('primary'); const mon = this.w.focusUid == null; if (mon) { this.w.focusObject?.(o.uid); bm.textContent = 'Zum Monitor'; } else { this.w.focusMonitor?.(); bm.textContent = 'Zum PC'; } }; bw.onclick = () => this.resume(); sec.append(done);
     }
     return sec;
   }
@@ -627,7 +628,7 @@ export class UI {
       const done = !!s.goals[go.id];
       if (done || shown >= 1) continue; shown++;
       let prog = '';
-      if (!done && go.progress) { const [cur, tgt, kind] = go.progress(s, g.helpers()); if (kind === 'parts') { prog = `<span class="cnt">${cur} / ${tgt}</span>`; } else { const f = (v) => (kind === 'hash' ? fmtHash(v) : fmtUSD(v)); const pc = Math.max(0, Math.min(100, tgt ? (cur / tgt) * 100 : 0)); prog = `<div style="font-size:11px;color:var(--dim)">${f(Math.max(0, cur))} / ${f(tgt)}</div><div class="bar" style="width:180px"><div style="width:${pc}%;background:#ffb000"></div></div>`; } }
+      if (!done && go.progress) { const [cur, tgt, kind] = go.progress(s, g.helpers()); if (kind === 'parts') { const lp = this.lastPick && performance.now() - this.lastPick.at < 1200 ? `<span class="lastpick">+ ${PNAME[this.lastPick.t]}</span>` : ''; prog = `<span class="cnt">${cur} / ${tgt}</span>${lp}`; } else { const f = (v) => (kind === 'hash' ? fmtHash(v) : fmtUSD(v)); const pc = Math.max(0, Math.min(100, tgt ? (cur / tgt) * 100 : 0)); prog = `<div style="font-size:11px;color:var(--dim)">${f(Math.max(0, cur))} / ${f(tgt)}</div><div class="bar" style="width:180px"><div style="width:${pc}%;background:#ffb000"></div></div>`; } }
       const gk = s.chapter + ':' + go.id, enter = gk !== this.goalKey; this.goalKey = gk;
       const bag = s.loose && !s.flags.miningStarted && go.id === 'collect' ? `<span class="bag">${['mobo', 'cpu', 'gpu', 'psu'].map((t) => `<i class="${s.loose[t] ? 'miss' : 'got'}" title="${PNAME[t]}${s.loose[t] ? ' – noch nicht gefunden' : ' – eingesammelt'}">${partSvg(t, 16)}${s.loose[t] ? '' : '<b class="tk"></b>'}</i>`).join('')}</span>` : '';
       const gtext = go.id === 'sell' && !g.has('market') ? 'Lass deinen PC ein paar Tage schürfen' : go.text;
@@ -766,8 +767,8 @@ export class UI {
     const r1 = hold.querySelector('.acts');
     const fee = g.s.skills ? g.tradeFee() : 0.005, net = (f) => (w.ex + pend) * f * p * (1 - fee);
     hold.querySelector('.info').append(h(`<div class="fee">Gebühr ${(fee * 100).toLocaleString('de-DE')} % · Handel senkt sie</div>`));
-    if (w.ex + pend <= 0.0001) r1.append(h('<div class="empty-sell">Noch keine Bitcoin – dein PC schürft gerade.</div>'));
-    else for (const f of [0.25, 0.5, 1]) { const b = h(`<button class="btn sellb ${f === 1 ? 'primary' : ''}"><b>${f === 1 ? 'Alles verkaufen' : f * 100 + ' % verkaufen'}</b><small>${net(f) > 0.004 ? '+' + fmtUSD(net(f)) : 'nichts da'}</small></button>`); b.disabled = w.ex + pend <= 0; b.onclick = () => { if (f === 1 && !b.classList.contains('confirm')) { b.classList.add('confirm'); b.innerHTML = `<b>Wirklich alles?</b><small>${fmtCoin(w.ex + pend)} BTC → +${fmtUSD(net(1))}</small>`; clearTimeout(this.sellArm); this.sellArm = setTimeout(() => this.market(), 4000); return; } clearTimeout(this.sellArm); if (pend) g.creditPending(c.id, this.pendingBtc()); const u = g.sell(c.id, f); this.audio?.cash(); this.flashCash(u); this.toast(`Verkauft für ${fmtUSD(u)}`, 'good', 2500); this.market(); }; r1.append(b); }
+    if (w.ex + pend <= 0.0001) r1.append(h(`<div class="empty-sell">${s.stats.sold > 0 ? 'Alles verkauft – dein PC schürft schon weiter.' : 'Noch keine Bitcoin – dein PC schürft gerade.'}</div>`));
+    else for (const f of [0.25, 0.5, 1]) { const b = h(`<button class="btn sellb"><b>${f === 1 ? 'Alles verkaufen' : f * 100 + ' % verkaufen'}</b><small>${net(f) > 0.004 ? '+' + fmtUSD(net(f)) : 'nichts da'}</small></button>`); b.disabled = w.ex + pend <= 0; b.onclick = () => { if (f === 1 && !b.classList.contains('confirm')) { b.classList.add('confirm'); b.innerHTML = `<b>Wirklich alles?</b><small>${fmtCoin(w.ex + pend)} BTC → +${fmtUSD(net(1))}</small>`; clearTimeout(this.sellArm); this.sellArm = setTimeout(() => this.market(), 4000); return; } clearTimeout(this.sellArm); if (pend) g.creditPending(c.id, this.pendingBtc()); const u = g.sell(c.id, f); this.audio?.cash(); this.flashCash(u); this.toast(`Verkauft für ${fmtUSD(u)}`, 'good', 2500); this.market(); }; r1.append(b); }
     if (g.has('cold')) { const ct = tile('Cold-Wallet', w.cold, 'cold'); const tc = h(`<button class="btn small">${w.cold > 0 && w.ex === 0 ? 'Auf Börse holen' : 'Einlagern'}</button>`); tc.onclick = () => { g.transfer(c.id, !(w.cold > 0 && w.ex === 0)); this.market(); }; ct.querySelector('.acts').append(tc); tiles.append(ct); }
     det.append(tiles);
     const r2 = h(`<div class="row" style="align-items:center"><span style="font-size:13px">Kaufen für</span><input type="number" min="0" step="100" value="${Math.max(0, Math.round(Math.min(s.cash, 1000)))}"/><span>$</span><button class="btn small primary">Kaufen</button></div>`);

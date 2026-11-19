@@ -131,9 +131,9 @@ export function buildRoom(def) {
     put('lampion', 2.0, 1.8).position.y = 2.44;
     put('desklamp', 2.12, 0.12).position.y = 0.74;
     put('fairy', 2.0, 0.09).position.y = 2.42;
-    put('radiator', 1.5, 0.1).position.y = 0.12;
+    { const rad = put('radiator', 1.5, 0.1); rad.position.y = 0.12; rad.traverse((m) => { if (m.isMesh) m.userData.focusHide = true; }); } // stört die PC-Nahansicht
     B.blocked.push(blk(3.5, 0, 4.0, 0.5));
-    B.lights.push({ pos: [2.0, 2.05, 1.8], color: 0xffdcb0, intensity: 0.95, dist: 8 });
+    B.lights.push({ pos: [2.0, 2.05, 1.8], color: 0xffdcb0, intensity: 0.6, dist: 8 });
     B.lights.push({ pos: [2.22, 0.98, 0.34], color: 0xffb46b, intensity: 1.1, dist: 2.4 }); // Schreibtischlampe
     B.lights.push({ pos: [1.85, 1.25, 0.55], color: 0xcfe0ff, intensity: 0.95, dist: 4 }); // kühles Fensterlicht auf Tisch und PC
     B.outside = 'town';

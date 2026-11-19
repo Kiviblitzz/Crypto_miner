@@ -119,7 +119,7 @@ export function furniture(type) {
     rod(g, [0.04, 0.26, -0.02], [0.17, 0.36, 0.04], 0.007, M.black(), 8);
     sph(g, 0.012, brass, 0.04, 0.26, -0.02);
     const head = lathe(g, [[0.0, 0.0], [0.03, 0.0], [0.03, 0.03], [0.075, 0.1], [0.072, 0.105], [0.0, 0.03]], brass, 0.17, 0.36, 0.04, 24); head.rotation.z = Math.PI * 0.82; head.rotation.x = 0.25;
-    sph(g, 0.019, mat('bulbWarm', { color: 0x332211, emissive: 0xffd9a0, emissiveIntensity: 1.4 }), 0.2, 0.325, 0.055, 1, 0.6, 1);
+    sph(g, 0.019, mat('bulbWarm', { color: 0x332211, emissive: 0xffd9a0, emissiveIntensity: 0.8 }), 0.186, 0.338, 0.048, 1, 0.6, 1);
   } else if (type === 'fairy') {
     // Lichterkette an der Wand (hängt in Bögen)
     const bulb = mat('fairyBulb', { color: 0x332211, emissive: 0xffc070, emissiveIntensity: 2.8 });
