@@ -466,6 +466,20 @@ export class World {
     if (!this.room) return;
     for (const sc of this.room.screens) {
       const g = sc.canvas.getContext('2d'), W = sc.canvas.width, H = sc.canvas.height;
+      if (sc.kind === 'pc') {
+        // Mining-Konsole auf dem Monitor im Kinderzimmer – mit echten Werten
+        const s = this.game.s, sm = this.game.summary[this.facId];
+        g.fillStyle = '#020a02'; g.fillRect(0, 0, W, H); g.font = 'bold 26px monospace'; g.fillStyle = '#7f7';
+        g.fillText('miner v2.' + (s.day % 7) + ' – ' + fmtDate(s.day), 14, 34);
+        g.font = '21px monospace';
+        const lines = [];
+        let i = 0;
+        for (const o of this.game.facObjects(this.facId)) { const a = sm?.per.get(o.uid); if (!a || !a.units.length) continue; const u = a.units[0]; lines.push(`RIG${i++}: ${u.h ? fmtHash(u.h, u.algo) : 'idle'} ${u.coin || ''}`); if (lines.length >= 4) break; }
+        lines.push(`BTC ${fmtUSD(this.game.price('BTC'))}  T ${sm ? sm.temp.toFixed(1) : '--'}C`);
+        lines.push(`> ${Math.floor(this.t * 2) % 2 ? '_' : ' '}`);
+        lines.forEach((l, k) => g.fillText(l, 14, 76 + k * 34));
+        sc.tex.needsUpdate = true; continue;
+      }
       const s = this.game.s; g.fillStyle = '#04101c'; g.fillRect(0, 0, W, H);
       g.fillStyle = '#7fe3ff'; g.font = 'bold 54px Arial'; g.fillText('HASHWERK · NOC', 40, 80);
       g.font = '34px monospace'; g.fillStyle = '#cfe';

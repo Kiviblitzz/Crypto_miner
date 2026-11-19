@@ -104,9 +104,10 @@ export function buildRoom(def) {
     box(g, 1.5, 0.04, 0.5, desk, 2.75, 0.72, 0.25);
     for (const x of [2.05, 3.45]) box(g, 0.04, 0.72, 0.46, desk, x, 0, 0.25);
     // Monitor mit Mining-Konsole
-    const scr = textTexture([{ text: 'cgminer 2.0', font: 'bold 34px monospace', color: '#6f6', y: 40 }, { text: 'GPU0: 100 Mh/s  A:42 R:0', font: '26px monospace', color: '#6f6', y: 110 }, { text: 'Pool: connected', font: '26px monospace', color: '#6f6', y: 160 }, { text: '> _', font: '26px monospace', color: '#6f6', y: 210 }], { w: 512, h: 288, bg: '#020a02' });
+    const scrC = document.createElement('canvas'); scrC.width = 512; scrC.height = 288; const scr = new THREE.CanvasTexture(scrC); scr.colorSpace = THREE.SRGBColorSpace;
+    B.screens.push({ canvas: scrC, tex: scr, kind: 'pc' });
     box(g, 0.5, 0.32, 0.03, M.black(), 2.6, 0.92, 0.12);
-    const sm = new THREE.Mesh(new THREE.PlaneGeometry(0.46, 0.27), mat('monitorScreen', { map: scr, emissive: 0xffffff, emissiveMap: scr, emissiveIntensity: 0.9, roughness: 0.3 })); sm.position.set(2.6, 1.08, 0.136); g.add(sm);
+    const sm = new THREE.Mesh(new THREE.PlaneGeometry(0.46, 0.27), new THREE.MeshStandardMaterial({ map: scr, emissive: 0xffffff, emissiveMap: scr, emissiveIntensity: 0.9, roughness: 0.3 })); sm.position.set(2.6, 1.08, 0.136); g.add(sm);
     box(g, 0.06, 0.18, 0.06, M.black(), 2.6, 0.76, 0.1);
     box(g, 0.42, 0.02, 0.14, M.black(), 2.6, 0.76, 0.33); box(g, 0.06, 0.02, 0.1, M.black(), 2.95, 0.76, 0.33);
     box(g, 0.1, 0.25, 0.1, mat('mug', { color: 0xc23b3b, roughness: 0.4 }), 3.25, 0.76, 0.2);
@@ -216,7 +217,7 @@ export function buildRoom(def) {
     B.blocked.push(blk(0, 0, 8.5, 5.0));
     // Großer Status-Bildschirm
     const scr = document.createElement('canvas'); scr.width = 1024; scr.height = 512; const sTex = new THREE.CanvasTexture(scr); sTex.colorSpace = THREE.SRGBColorSpace;
-    const sm = new THREE.Mesh(new THREE.PlaneGeometry(7, 3.5), mat('bigScreen', { map: sTex, emissive: 0xffffff, emissiveMap: sTex, emissiveIntensity: 1, roughness: 0.3 })); sm.position.set(18, 3.0, 0.2); S.back.add(sm);
+    const sm = new THREE.Mesh(new THREE.PlaneGeometry(7, 3.5), new THREE.MeshStandardMaterial({ map: sTex, emissive: 0xffffff, emissiveMap: sTex, emissiveIntensity: 1, roughness: 0.3 })); sm.position.set(18, 3.0, 0.2); S.back.add(sm);
     B.screens.push({ canvas: scr, tex: sTex, kind: 'dc' });
     // Kabeltrassen
     for (let z = 7; z < d; z += 8) { box(g, w - 12, 0.06, 0.3, M.steel(), w / 2 + 5, h - 0.4, z); for (let x = 10; x < w - 1; x += 0.9) box(g, 0.04, 0.04, 0.26, M.cableYellow(), x, h - 0.34, z); }
