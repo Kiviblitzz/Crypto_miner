@@ -9,7 +9,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { buildRoom, buildOutside } from './rooms.js';
 import { objectModel } from './models.js';
-import { M } from './materials.js';
+import { M, mat } from './materials.js';
 import { FACILITY } from '../data/world.js';
 import { PLACEABLE } from '../data/hardware.js';
 import { fmtHash, fmtUSD, fmtDate } from '../sim/game.js';
@@ -123,6 +123,7 @@ export class World {
       this.transition = { from: startPos, to: endPos, t: 0, dur: 3.6, hold: true };
     } else { this.transition = null; this.camera.position.copy(endPos); }
     this.camera.near = span > 30 ? 0.2 : 0.05; this.camera.updateProjectionMatrix();
+    if (this.people) { this.scene.remove(this.people); this.people = null; }
     this.scene.fog = def.style === 'fjord' ? new THREE.Fog(0xb8c8d8, 250, 900) : new THREE.Fog(0x9fb8d0, 60 + span * 3, 260 + span * 6);
     this.syncObjects();
   }
@@ -147,7 +148,7 @@ export class World {
       e.obj = o;
     }
     for (const [uid, e] of this.entries) if (!seen.has(uid)) { this.objGroup.remove(e.group); this.entries.delete(uid); if (this.selected === uid) this.select(null); }
-    this.updateStatus();
+    this.updateStatus(); this.syncPeople();
   }
   updateStatus() {
     const sm = this.game.summary[this.facId]; if (!sm) return;
@@ -166,6 +167,7 @@ export class World {
       if (icon) { e.sprite.material.map = this.icons[icon]; const bb = e.group.userData.bbox; e.sprite.position.set(0, (bb ? bb.max.y : 1) + 0.25 * Math.max(1, span / 12), 0); e.sprite.scale.set(sc, sc, sc); }
     }
     if (this.selected) this.refreshSelBox();
+    this.syncPeople();
   }
 
   // ---------- Auswahl ----------
@@ -293,6 +295,90 @@ export class World {
   }
   fpClick() { const uid = this.pick(true); if (uid) { this.fp.unlock(); this.select(uid); } }
 
+  // ---------- Personal (NPCs) ----------
+  makePerson(vest = 0xff8a00, hat = true, skin = 0xe0b394) {
+    const g = new THREE.Group();
+    const mk = (geo, m, x, y, z) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.castShadow = true; g.add(o); return o; };
+    const pants = mat('npcPants', { color: 0x2b3446, roughness: 0.9 }), skinM = mat('npcSkin' + skin, { color: skin, roughness: 0.8 }), vestM = mat('npcVest' + vest, { color: vest, roughness: 0.6, emissive: vest, emissiveIntensity: 0.08 });
+    const legG = new THREE.BoxGeometry(0.12, 0.8, 0.14); legG.translate(0, -0.4, 0);
+    const armG = new THREE.BoxGeometry(0.09, 0.62, 0.1); armG.translate(0, -0.31, 0);
+    const legL = mk(legG, pants, -0.08, 0.82, 0), legR = mk(legG, pants, 0.08, 0.82, 0);
+    mk(new THREE.BoxGeometry(0.36, 0.56, 0.22), vestM, 0, 1.1, 0);
+    mk(new THREE.BoxGeometry(0.37, 0.05, 0.23), mat('npcStripe', { color: 0xdddddd, emissive: 0xffffff, emissiveIntensity: 0.3 }), 0, 1.05, 0);
+    const armL = mk(armG, vestM, -0.24, 1.36, 0), armR = mk(armG, vestM, 0.24, 1.36, 0);
+    mk(new THREE.SphereGeometry(0.12, 14, 10), skinM, 0, 1.52, 0);
+    if (hat) { const h = mk(new THREE.SphereGeometry(0.135, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat('npcHat', { color: 0xffd400, roughness: 0.4 }), 0, 1.55, 0); }
+    else mk(new THREE.BoxGeometry(0.25, 0.08, 0.25), mat('npcHair', { color: 0x2a1a10, roughness: 0.9 }), 0, 1.63, -0.01);
+    g.userData = { legL, legR, armL, armR, phase: Math.random() * 6, target: null, wait: 0, speed: 1.1 + Math.random() * 0.4 };
+    return g;
+  }
+  syncPeople() {
+    const s = this.game.s;
+    if (!this.people) { this.people = new THREE.Group(); this.scene.add(this.people); }
+    const tier = this.def.tier;
+    let want = 0;
+    if (tier >= 2 && s.flags.gmbh) want = 1;
+    if (tier >= 3) want += Math.min(7, s.staff.tech);
+    if (tier === 2 && s.flags.debt) want = Math.max(want, 1);
+    while (this.people.children.length > want) this.people.remove(this.people.children[this.people.children.length - 1]);
+    while (this.people.children.length < want) {
+      const first = this.people.children.length === 0;
+      const p = first ? this.makePerson(0x2e6fd6, false, 0xc89a72) : this.makePerson(0xff8a00, tier >= 3);
+      const pt = this.randomFloorPoint(); p.position.set(pt.x, 0, pt.z); this.people.add(p);
+    }
+  }
+  randomFloorPoint() {
+    for (let i = 0; i < 30; i++) {
+      const x = 0.5 + Math.random() * (this.def.w - 1), z = 0.5 + Math.random() * (this.def.d - 1);
+      const r = { x0: x - 0.3, x1: x + 0.3, z0: z - 0.3, z1: z + 0.3 };
+      const hit = (a) => a.x0 < r.x1 && a.x1 > r.x0 && a.z0 < r.z1 && a.z1 > r.z0;
+      if (this.room.blocked.some(hit)) continue;
+      if (this.game.facObjects(this.facId).some((o) => hit(this.rectOf(o)))) continue;
+      return new THREE.Vector3(x, 0, z);
+    }
+    return new THREE.Vector3(this.def.w / 2, 0, this.def.d / 2);
+  }
+  updatePeople(dt) {
+    if (!this.people) return;
+    const paused = !this.game.s.speed;
+    for (const p of this.people.children) {
+      const u = p.userData;
+      if (!u.target || u.wait > 0) {
+        u.wait -= dt; if (u.wait <= 0 && !u.target) u.target = this.randomFloorPoint();
+        const k = Math.sin(this.t * 2 + u.phase) * 0.05; u.armR.rotation.x = -0.6 + k; u.armL.rotation.x = k; u.legL.rotation.x = u.legR.rotation.x = 0;
+        if (!u.target) continue;
+        if (u.wait > 0) continue;
+      }
+      if (paused) continue;
+      const d = tmpV.subVectors(u.target, p.position); d.y = 0; const dist = d.length();
+      if (dist < 0.1) { u.target = null; u.wait = 1.5 + Math.random() * 4; continue; }
+      d.normalize(); p.position.addScaledVector(d, Math.min(dist, u.speed * dt));
+      p.rotation.y = Math.atan2(d.x, d.z);
+      u.phase += dt * u.speed * 6; const sw = Math.sin(u.phase) * 0.55;
+      u.legL.rotation.x = sw; u.legR.rotation.x = -sw; u.armL.rotation.x = -sw * 0.8; u.armR.rotation.x = sw * 0.8;
+    }
+  }
+  // ---------- Rauch für defekte Geräte ----------
+  updateSmoke(dt) {
+    if (!this.smoke) {
+      this.smoke = []; const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+      const gr = g.createRadialGradient(32, 32, 2, 32, 32, 30); gr.addColorStop(0, 'rgba(80,80,80,0.9)'); gr.addColorStop(1, 'rgba(80,80,80,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+      this.smokeTex = new THREE.CanvasTexture(c);
+    }
+    for (const e of this.entries.values()) {
+      if (e.sprite.visible && e.sprite.material.map === this.icons.broken && Math.random() < dt * 3 && this.smoke.length < 60) {
+        const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.smokeTex, transparent: true, depthWrite: false, opacity: 0.7 }));
+        const bb = e.group.userData.bbox; sp.position.set(e.group.position.x + (Math.random() - 0.5) * 0.2, (bb ? bb.max.y : 0.5) * 0.8, e.group.position.z + (Math.random() - 0.5) * 0.2);
+        sp.scale.setScalar(0.15); sp.userData.life = 0; this.scene.add(sp); this.smoke.push(sp);
+      }
+    }
+    for (let i = this.smoke.length - 1; i >= 0; i--) {
+      const sp = this.smoke[i]; sp.userData.life += dt;
+      sp.position.y += dt * 0.35; sp.scale.setScalar(0.15 + sp.userData.life * 0.35); sp.material.opacity = Math.max(0, 0.7 - sp.userData.life * 0.35);
+      if (sp.userData.life > 2) { this.scene.remove(sp); sp.material.dispose(); this.smoke.splice(i, 1); }
+    }
+  }
+
   // ---------- Pro Frame ----------
   update() {
     const dt = Math.min(0.05, this.clock.getDelta()); this.t += dt;
@@ -330,6 +416,7 @@ export class World {
     }
     // Tag/Nacht
     this.updateDaylight(s.frac);
+    this.updatePeople(dt); this.updateSmoke(dt);
     // Lüfter & LEDs
     const fanSpeed = 28 * dt;
     for (const e of this.entries.values()) {

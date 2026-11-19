@@ -58,6 +58,7 @@ export class UI {
     const ch = ((btc / btc7 - 1) * 100);
     let sh = g.algoHash('sha256'), shAlgo = 'sha256';
     if (!sh) { for (const a of ['scrypt', 'ethash', 'kawpow', 'kheavy', 'equihash', 'rx', 'cn']) { const v = g.algoHash(a); if (v) { sh = v; shAlgo = a; break; } } }
+    const smc = g.summary[s.current]; $('#heat').classList.toggle('on', !!smc && smc.temp > 38 && !smc.tripped);
     $('#st-cash').innerHTML = `<div class="l">Kontostand</div><div class="v ${s.cash < 0 ? 'neg' : ''}">${fmtUSD(s.cash)}</div>`;
     $('#st-nw').innerHTML = `<div class="l">Vermögen</div><div class="v">${fmtUSD(g.netWorthFast())}</div>`;
     $('#st-profit').innerHTML = `<div class="l">Gewinn / Tag</div><div class="v ${p.net >= 0 ? 'pos' : 'neg'}">${p.net >= 0 ? '+' : ''}${fmtUSD(p.net)}</div>`;

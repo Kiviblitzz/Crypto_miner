@@ -189,7 +189,7 @@ export function buildRoom(def) {
     const g = S.root;
     const col = mat('steelBeam', { color: 0x2f5f9a, roughness: 0.5, metalness: 0.6 });
     for (const x of [6, 12, 18]) for (const z of [5.5, 10.5]) { box(g, 0.35, h, 0.35, col, x, 0, z); B.blocked.push(blk(x - 0.5, z - 0.5, x + 0.5, z + 0.5)); }
-    for (const z of [0.3, d - 0.3]) box(g, w, 0.4, 0.25, col, w / 2, h - 0.5, z);
+    box(g, w, 0.4, 0.25, col, w / 2, h - 0.5, 0.3);
     // Büro-Container
     box(g, 5, 2.6, 3, mat('officeCont', { color: 0xe7e9ec, roughness: 0.6 }), 2.5, 0, d - 1.5);
     box(g, 1.2, 0.8, 0.02, M.window(), 1.5, 1.2, d - 3.01); box(g, 1.2, 0.8, 0.02, M.window(), 3.5, 1.2, d - 3.01);

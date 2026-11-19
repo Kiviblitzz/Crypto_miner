@@ -35,7 +35,7 @@ document.getElementById('btn-new').onclick = () => {
   game.newGame(); splash.classList.add('hidden'); splashOrbit = false;
   ui.switchSite('kinder'); ui.speedBar(); ui.ticker();
   ui.story(CHAPTERS[0].title, `${CHAPTERS[0].intro}<br/><br/>Dein PC steht neben dem Schreibtisch: ein alter <b>Silicor Core Q66</b> mit einer <b>Crimson RHD 4850</b>. Er schürft schon Bitcoin – du musst nur die Zeit laufen lassen (▶ oben).<br/><br/>Klick den PC an, um Teile zu tauschen. Links kannst du neue Rigs, Kühlung und später ASICs kaufen. Pass auf <b>Hitze</b> und <b>Strom</b> auf – Mamas Sicherung hält nur 1,8 kW.`, 'Los geht’s!');
-  ui.onModalClose = () => ui.setSpeed(1);
+  ui.onModalClose = () => { ui.setSpeed(1); const pc = game.facObjects('kinder')[0]; if (pc) world.select(pc.uid); ui.toast('👆 Das ist dein PC. Rechts siehst du Ertrag, Stromkosten und die Bauteile – klick einen GPU-Slot, um aufzurüsten.', 'msg', 9000); };
 };
 document.getElementById('btn-continue').onclick = () => {
   if (game.load()) { splash.classList.add('hidden'); splashOrbit = false; ui.switchSite(game.s.current); ui.speedBar(); ui.ticker(); ui.toast('Willkommen zurück!', 'good'); }
