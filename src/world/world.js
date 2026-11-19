@@ -33,14 +33,15 @@ import { fmtHash, fmtUSD, fmtDate, fmtCoin } from '../sim/game.js';
 
 const tmpV = new THREE.Vector3();
 
-// Status-Symbole: dunkle Glasscheibe mit farbigem Ring (statt Spielzeug-Weißring)
-function iconTexture(emoji, ring) {
+// Status-Symbole: gezeichnete Abzeichen (keine Betriebssystem-Emoji)
+function iconTexture(kind, ring) {
   const S = 256, c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d');
-  g.shadowColor = 'rgba(0,0,0,0.45)'; g.shadowBlur = 18; g.shadowOffsetY = 4;
-  g.fillStyle = 'rgba(16,19,25,0.82)'; g.beginPath(); g.arc(S / 2, S / 2, 92, 0, Math.PI * 2); g.fill();
-  g.shadowColor = 'transparent'; g.lineWidth = 6; g.strokeStyle = ring; g.globalAlpha = 0.85; g.stroke(); g.globalAlpha = 1;
-  g.font = '104px "Segoe UI Emoji","Noto Color Emoji","Apple Color Emoji",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.fillText(emoji, S / 2, S / 2 + 6);
+  g.shadowColor = 'rgba(0,0,0,0.4)'; g.shadowBlur = 16; g.shadowOffsetY = 4;
+  g.fillStyle = ring; g.beginPath(); g.arc(S / 2, S / 2, 84, 0, Math.PI * 2); g.fill();
+  g.shadowColor = 'transparent'; g.lineWidth = 10; g.strokeStyle = 'rgba(42,22,6,0.85)'; g.stroke();
+  g.fillStyle = '#fff8ec'; g.strokeStyle = 'rgba(42,22,6,0.85)'; g.lineWidth = 8; g.lineJoin = 'round'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  if (kind === 'power') { g.beginPath(); g.moveTo(140, 62); g.lineTo(96, 136); g.lineTo(126, 136); g.lineTo(112, 196); g.lineTo(162, 112); g.lineTo(130, 112); g.closePath(); g.stroke(); g.fill(); }
+  else { const txt = { broken: '!', warn: '!', empty: '+', sleep: 'Zz' }[kind] || '?'; g.font = (kind === 'sleep' ? '700 86px' : '700 120px') + ' Fredoka, Nunito, Arial'; g.strokeText(txt, S / 2, S / 2 + 6); g.fillText(txt, S / 2, S / 2 + 6); }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
 }
 
@@ -121,7 +122,7 @@ export class World {
 
     this.objGroup = new THREE.Group(); this.scene.add(this.objGroup);
     this.entries = new Map(); // uid -> {group, key, sprite}
-    this.icons = { broken: iconTexture('🔥', '#ff6b5e'), warn: iconTexture('⚠️', '#ffb000'), power: iconTexture('⚡', '#9aa3af'), empty: iconTexture('➕', '#4cc9f0'), sleep: iconTexture('💤', '#9aa3af') };
+    this.icons = { broken: iconTexture('broken', '#ff6b5e'), warn: iconTexture('warn', '#ffb000'), power: iconTexture('power', '#8d96a3'), empty: iconTexture('empty', '#4cc9f0'), sleep: iconTexture('sleep', '#7d8aa0') };
     this.raycaster = new THREE.Raycaster(); this.mouse = new THREE.Vector2(); this.floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     this.keys = {}; this.placing = null; this.selected = null; this.hoverUid = null;
     this.selBox = new THREE.Box3Helper(new THREE.Box3(), 0xffffff); this.selBox.material.transparent = true; this.selBox.material.opacity = 0.18; this.selBox.material.depthWrite = false; this.selBox.visible = false; this.scene.add(this.selBox);
@@ -238,7 +239,7 @@ export class World {
       else if (a?.status === 'empty') icon = 'empty';
       else if (a?.status === 'idle' || a?.status === 'off') icon = 'sleep';
       e.running = !sm.tripped && a && a.watt > 0;
-      e.sprite.visible = !!icon;
+      e.sprite.visible = !!icon && this.mode !== 'title';
       if (icon) { e.sprite.material.map = this.icons[icon]; const bb = e.group.userData.bbox; e.sprite.position.set(0, (bb ? bb.max.y : 1) + 0.22, 0); e.sprite.scale.set(sc, sc, sc); }
     }
     if (this.selected) this.refreshSelBox();
@@ -412,7 +413,7 @@ export class World {
 
   // ---------- Schwebende Ertrags-Einblendungen ----------
   spawnIncome() {
-    if (this.empire || this.mode === 'title' || !this.game.s.speed) return;
+    if (this.empire || this.mode === 'title' || !this.game.s.speed || document.body.classList.contains('show-build')) return;
     const now = this.t; if (this.lastIncome && now - this.lastIncome < 1.1) return; this.lastIncome = now;
     const sm = this.game.summary[this.facId]; if (!sm || sm.tripped) return;
     this.popups ||= [];
@@ -423,7 +424,7 @@ export class World {
       let p = this.popups.find((q) => !q.visible);
       if (!p) { if (this.popups.length >= 14) break; const c = document.createElement('canvas'); c.width = 256; c.height = 64; const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; p = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false })); p.renderOrder = 15; p.userData.c = c; this.scene.add(p); this.popups.push(p); }
       const c = p.userData.c, g = c.getContext('2d'); g.clearRect(0, 0, 256, 64);
-      g.font = '700 42px "Barlow Condensed", Barlow, Arial'; g.textAlign = 'center'; g.shadowColor = 'rgba(0,0,0,0.6)'; g.shadowBlur = 10; g.shadowOffsetY = 2; const coin = u0?.coin || 'BTC', asCoin = !(this.game.s.autoSell?.[coin] > 0); const px = this.game.price(coin) || 1;
+      g.font = '600 40px Fredoka, Nunito, Arial'; g.textAlign = 'center'; g.shadowColor = 'rgba(0,0,0,0.6)'; g.shadowBlur = 10; g.shadowOffsetY = 2; const coin = u0?.coin || 'BTC', asCoin = !(this.game.s.autoSell?.[coin] > 0); const px = this.game.price(coin) || 1;
       const per = 1.1 / ([Infinity, 4.0, 1.6, 0.5, 0.12][this.game.s.speed] || 4); // Anteil eines Tages pro Einblendung
       const txt = asCoin ? `+${fmtCoin((rev / px) * per)} ${coin}` : '+' + fmtUSD(rev * per); g.fillStyle = asCoin ? '#ffc640' : '#6fdc9c'; g.fillText(txt, 128, 46); g.shadowColor = 'transparent';
       p.material.map.needsUpdate = true;
@@ -449,14 +450,14 @@ export class World {
     const model = objectModel({ type, parts: def.kind === 'rig' ? { mobo: null, cpu: null, psu: null, gpus: [] } : undefined, items: def.kind === 'holder' ? [] : undefined, rot: 0 });
     this.thumbScene.add(model);
     const box = new THREE.Box3().setFromObject(model), size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
-    const rad = size.length() / 2, dist = rad / Math.sin(THREE.MathUtils.degToRad(15)) * 0.95;
+    const rad = size.length() / 2, dist = rad / Math.sin(THREE.MathUtils.degToRad(15)) * 1.2;
     const dir = new THREE.Vector3(1, 0.62, 1.25).normalize();
     this.thumbCam.position.copy(c).addScaledVector(dir, dist); this.thumbCam.lookAt(c); this.thumbCam.near = dist / 50; this.thumbCam.far = dist * 4; this.thumbCam.updateProjectionMatrix();
     const prevT = r.getRenderTarget(); r.setRenderTarget(this.thumbRT); r.setClearColor(0x000000, 0); r.clear(); r.render(this.thumbScene, this.thumbCam);
     const px = new Uint8Array(W * H * 4); r.readRenderTargetPixels(this.thumbRT, 0, 0, W, H, px); r.setRenderTarget(prevT);
     this.thumbScene.remove(model);
     const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d'), img = g.createImageData(W, H);
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const si = ((H - 1 - y) * W + x) * 4, di = (y * W + x) * 4; for (let k = 0; k < 3; k++) { const v = px[si + k] / 255, t = v / (1 + v * 0.6); img.data[di + k] = Math.min(255, Math.pow(t * 1.6, 1 / 2.2) * 255); } img.data[di + 3] = px[si + 3]; }
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const si = ((H - 1 - y) * W + x) * 4, di = (y * W + x) * 4; for (let k = 0; k < 3; k++) { const v = px[si + k] / 255, t = v / (1 + v * 0.6); img.data[di + k] = Math.min(255, Math.pow(t * 1.15, 1 / 2.2) * 255); } img.data[di + 3] = px[si + 3]; }
     g.putImageData(img, 0, 0);
     const url = cv.toDataURL('image/png'); this.thumbs.set(type, url); return url;
   }
@@ -836,6 +837,7 @@ export class World {
       this.sky.position.set(def.w / 2, 0, def.d / 2); this.stars.position.copy(this.sky.position);
       this.stars.material.opacity = Math.max(0, nightT - 0.2) * 0.9;
       for (const m of nightMats) m.emissiveIntensity = nightT * 1.3;
+      M.window().color.set(0xbfe2ff).lerp(new THREE.Color(0x101a33), nightT); M.window().opacity = 0.35 - 0.22 * nightT;
     }
     this.scene.environmentIntensity = 0.25 + day * 0.2;
     const lampK = 0.75 + (1 - day) * 0.6;

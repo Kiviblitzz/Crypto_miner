@@ -901,3 +901,71 @@ body.lowfx .featcard, body.lowfx .pause-card, body.lowfx #dock, body.lowfx #spla
 #build .item.dis { opacity: 1 !important; } #build .item.dis .thumb { opacity: .6; }
 #build .item.dis .p { color: #ffb5a7 !important; } #build .item .miss { font-size: 13px; color: #ffb5a7; }
 #pause { background: rgba(22,16,12,.34) !important; backdrop-filter: blur(3px) !important; }
+
+/* =====================================================================
+   v7 – warm & verspielt (strenge Kritik): warme Glasflächen, EIN Knopf-System,
+   zwei Schriften (Fredoka + Nunito), gezeichnetes Logo, Segment-Leisten
+   ===================================================================== */
+:root {
+  --font: 'Nunito', 'Segoe UI', system-ui, sans-serif; --font-c: var(--font-fun);
+  --glass: rgba(38, 28, 22, .82); --glass-strong: rgba(34, 25, 20, .93);
+  --surface-1: rgba(255, 236, 210, .05); --surface-2: rgba(255, 236, 210, .09); --surface-3: rgba(255, 236, 210, .14);
+  --stroke: rgba(255, 236, 210, .08); --text: #fff4e6; --dim: #c9b8a3; --text2: #d8c8b4;
+  --btn-a: #57443a; --btn-b: #45352c; --btn-edge: #231812;
+}
+html, body { font-family: var(--font); color: var(--text); }
+/* Ein Knopf-System: Pille, warm, mit Unterkante */
+.btn { font: 700 14px/1.1 var(--font-fun) !important; letter-spacing: .2px; border-radius: 999px !important; padding: 9px 18px; color: var(--text);
+  background: linear-gradient(180deg, var(--btn-a), var(--btn-b)) !important; box-shadow: 0 3px 0 var(--btn-edge), 0 6px 14px rgba(0,0,0,.25) !important; border: 0 !important; }
+.btn:hover { filter: brightness(1.08); transform: translateY(-1px); }
+.btn:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--btn-edge) !important; }
+.btn.small { padding: 7px 14px; font-size: 13px !important; }
+.btn.primary { color: #3a2300 !important; background: linear-gradient(180deg, #ffd25c, #ffb000) !important; box-shadow: 0 3px 0 #b86f00, 0 8px 18px rgba(255,160,0,.25) !important; }
+.btn.good { color: #e6ffef !important; background: linear-gradient(180deg, #4f9a6c, #3d7f57) !important; box-shadow: 0 3px 0 #1f4a31 !important; }
+.btn.danger { color: #ffece9 !important; background: linear-gradient(180deg, #b0564c, #93443b) !important; box-shadow: 0 3px 0 #4f1d18 !important; }
+.btn:disabled { filter: saturate(.3) brightness(.85); opacity: .55; transform: none; }
+/* Segment-Leiste (Zeitraum) */
+.seg { display: inline-flex; gap: 2px; padding: 4px; border-radius: 999px; background: var(--surface-1); box-shadow: inset 0 0 0 1px var(--stroke); }
+.seg .btn { background: none !important; box-shadow: none !important; color: var(--dim); padding: 6px 14px; }
+.seg .btn.on { background: var(--acc) !important; color: #3a2300 !important; box-shadow: 0 2px 0 #b86f00 !important; }
+canvas.chart, canvas.nwchart, .pricecard canvas.chart { background: rgba(40,24,10,.35) !important; }
+/* Logo als gezeichnete Wortmarke + Halo */
+.logo-wrap { position: relative; gap: 10px; }
+.logo-wrap::before { content: ''; position: absolute; inset: -70px -110px -60px -90px; background: radial-gradient(closest-side, rgba(20,12,6,.72), transparent); z-index: -1; pointer-events: none; }
+.logo-svg { width: 420px; height: auto; filter: drop-shadow(0 12px 18px rgba(0,0,0,.4)); }
+.logo-coin { width: 118px; height: 118px; }
+#splash .splash-btns .btn .bi svg, #pause .pause-card .btn .bi svg { display: block; }
+#splash .splash-btns .btn, #pause .pause-card .btn { background: linear-gradient(180deg, #5a4536, #46352a) !important; box-shadow: 0 6px 0 #241912, 0 14px 24px rgba(0,0,0,.35) !important; font: 600 22px/1.1 var(--font-fun) !important; }
+#splash .splash-btns .btn.primary, #pause .pause-card .btn.primary { background: linear-gradient(180deg, #ffd25c, #ffb000) !important; box-shadow: 0 6px 0 #b86f00, 0 14px 26px rgba(255,160,0,.3) !important; }
+#pause .pause-card .btn .bi { width: 40px; height: 40px; flex: none; display: grid; place-items: center; border-radius: 14px; background: rgba(255,255,255,.1); }
+#pause .pause-card .btn.primary .bi { background: rgba(255,255,255,.35); color: #7a4500; }
+#pause .pause-card .btn { display: flex; align-items: center; gap: 14px; }
+#pause .pause-card { background: rgba(40,28,20,.88) !important; }
+#pause .pause-card .logo.small { margin-bottom: 8px; }
+#splash .disclaimer { color: rgba(255,244,230,.5); }
+/* Bau-Katalog: Kopfzeile, aktive Kategorie */
+@media (min-width: 721px) {
+  #build { grid-template-rows: auto 1fr; }
+  #build .bhead { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; padding: 16px 18px 6px 22px; }
+  #build .bhead h2 { margin: 0; font: 600 22px var(--font-fun); }
+  #build .bhead .modal-x { position: static; }
+  #build .cats { background: none !important; }
+  #build .cats button { font: 700 14px var(--font-fun) !important; border-radius: 999px !important; }
+  #build .cats button.on { background: var(--acc) !important; color: #3a2300 !important; box-shadow: 0 3px 0 #b86f00; }
+  #build .item .t { font: 700 15px var(--font-fun) !important; }
+  #build .item .p { font: 700 15px var(--font-fun) !important; }
+  /* Tempo-Chips größer, HUD lesbar */
+  #speed button { height: 28px; min-width: 34px; padding: 0 10px; font: 700 14px var(--font-fun) !important; border-radius: 999px; }
+  #top, #sites, #keys { text-shadow: 0 1px 2px rgba(0,0,0,.55), 0 0 12px rgba(0,0,0,.35); }
+  #top .stat:not(#st-cash) .v, #st-btc .v { font-family: var(--font-fun) !important; }
+}
+/* Inspektor-Kopf */
+.insp-h { justify-content: flex-start !important; align-items: center !important; gap: 10px; }
+#insp-badge { margin-right: auto; }
+/* Handy: Profilbild & Online-Punkt */
+.phone .ph-top { display: flex; align-items: center; justify-content: flex-start !important; gap: 12px; }
+.phone .ph-top .av { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font: 700 18px var(--font-fun); color: #fff; background: linear-gradient(180deg, #6fb8ff, #3d7ee0); box-shadow: 0 3px 0 #23498a; }
+.phone .ph-top b { display: block; font: 700 16px var(--font-fun); }
+.phone .ph-top .on { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #8fe0a8; }
+.phone .ph-top .on::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #5fd38d; box-shadow: 0 0 8px rgba(95,211,141,.8); }
+.msg { background: rgba(255,236,210,.08) !important; }

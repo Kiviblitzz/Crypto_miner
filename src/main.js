@@ -35,7 +35,7 @@ const splash = document.getElementById('splash');
 const hasSave = game.hasSave();
 if (hasSave) {
   const b = document.getElementById('btn-continue'); b.classList.remove('hidden'); b.classList.add('primary'); document.getElementById('btn-new').classList.remove('primary');
-  const info = game.saveInfo(); if (info) b.innerHTML = `<span class="bi">▶</span><span class="bt">Weiterspielen<small>${fmtDate(info.day)} · ${fmtUSD(info.cash)}</small></span>`;
+  const info = game.saveInfo(); if (info) b.innerHTML = `<span class="bi"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span><span class="bt">Weiterspielen<small>${fmtDate(info.day)} · ${fmtUSD(info.cash)}</small></span>`;
 }
 let splashOrbit = true;
 document.getElementById('btn-new').onclick = () => {

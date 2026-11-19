@@ -91,7 +91,7 @@ export class UI {
     $('#st-cash').innerHTML = `<div class="l">Kontostand</div><div class="v ${s.cash < 0 ? 'neg' : ''}">${fmtUSD(this.dCash)}</div>`;
     $('#st-nw').innerHTML = `<div class="l">Vermögen</div><div class="v">${fmtUSD(this.dNw)}</div>`;
     $('#st-profit').innerHTML = `<div class="l">Gewinn / Tag</div><div class="v ${p.net >= 0 ? 'pos' : 'neg'}">${p.net >= 0 ? '+' : ''}${fmtUSD(p.net)}</div>`;
-    $('#st-btc').innerHTML = `<div class="l">Bitcoin</div><div class="v">${fmtUSD(btc)} <small class="${ch >= 0 ? 'pos' : 'neg'}">${ch >= 0 ? '▲' : '▼'}${Math.abs(ch).toFixed(1)}%</small></div>`;
+    $('#st-btc').innerHTML = `<div class="l">Bitcoin</div><div class="v">${fmtUSD(btc)} <small class="${ch >= 0 ? 'pos' : 'neg'}">${ch >= 0 ? '▲' : '▼'} ${Math.abs(ch).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %</small></div>`;
     $('#st-hash').innerHTML = `<div class="l">${ALGO_LABEL[shAlgo]} Hashrate</div><div class="v">${fmtHash(sh, shAlgo)}</div>`;
   }
 
@@ -151,6 +151,7 @@ export class UI {
     if (!force && el.childElementCount) return;
     this.lastBuildDay = g.s.day;
     el.innerHTML = '';
+    const head = h('<div class="bhead"><h2>Bauen</h2><button class="modal-x" title="Schließen (B)">✕</button></div>'); head.querySelector('button').onclick = () => this.resume(); el.append(head);
     const cats = h('<div class="cats"></div>');
     const catOk = (c) => (c.id !== 'rigs' || g.has('rigs')) && g.shopList(c.id, fac).length > 0;
     if (!CATEGORIES.some((c) => c.id === this.cat && catOk(c))) this.cat = (CATEGORIES.find(catOk) || CATEGORIES[0]).id;
@@ -166,7 +167,7 @@ export class UI {
       if (it.kind === 'device') { const r = g.revenueFor({ [it.algo]: it.hash }, g.bestCoin({ [it.algo]: it.hash }, it.vram || 99) || 'BTC', it.vram || 99); const cost = it.watt / 1000 * 24 * g.elecPrice(fac); s = `${fmtHash(it.hash, it.algo)} · ${fmtWatt(it.watt)} · ${ALGO_LABEL[it.algo]}<br/>≈ <b class="${r - cost >= 0 ? 'pos' : 'neg'}">${r - cost >= 0 ? '+' : ''}${fmtUSD(r - cost)}/Tag</b> hier${it.hydro ? ' · nur in Rack/Container' : ''}`; }
       if (it.kind === 'cooling') s = `Kühlt ${fmtWatt(it.cool)} · verbraucht ${fmtWatt(it.watt)}`;
       if (it.kind === 'holder') s = esc(it.desc);
-      const card = h(`<div class="item ${price > g.s.cash || it.hydro ? 'dis' : ''}"><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${fmtUSD(price)}</span></div><div class="s">${s}</div>${price > g.s.cash ? `<div class="miss">Dir fehlen ${fmtUSD(price - g.s.cash)}</div>` : ''}</div>`);
+      const card = h(`<div class="item ${price > g.s.cash || it.hydro ? 'dis' : ''}"><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${price >= 10 ? Math.round(price).toLocaleString('de-DE') + ' $' : fmtUSD(price)}</span></div><div class="s">${s}</div>${price > g.s.cash ? `<div class="miss">Dir fehlen ${fmtUSD(price - g.s.cash)}</div>` : ''}</div>`);
       try { const url = this.w.thumbnail(it.id); if (url) card.prepend(h(`<div class="thumb"><img alt="" src="${url}"/></div>`)); } catch (e) { /* ohne Vorschau weiter */ }
       card.onclick = () => {
         if (it.hydro) { this.toast('Hydro-Miner nur in Rack oder Container.', 'bad'); return; }
@@ -537,7 +538,7 @@ export class UI {
     const m0 = s.messages.find((m) => m.id === 'm0');
     const txt = m0 ? m0.text : MESSAGES.find((m) => m.id === 'm0').text;
     const body = h(`<div class="intro-phone"><div class="ip-date">${fmtDate(s.day)}</div>
-      <div class="phone"><div class="ph-top"><b>Deniz</b><span>online</span></div>
+      <div class="phone"><div class="ph-top"><div class="av">D</div><div><b>Deniz</b><span class="on">online</span></div></div>
         <div class="msg f-Deniz">${esc(txt)}</div>
         <div class="msg f-Deniz pricecard"><div class="pc-h"><span class="pc-dot">₿</span>Bitcoin · BTC</div><div class="pc-p">${fmtUSD(p)}</div><canvas class="chart" width="900" height="300"></canvas></div>
         <div class="msg f-Deniz">Probier’s aus! Starte das Mining an deinem PC.</div>
@@ -565,7 +566,7 @@ export class UI {
       const p = g.price(c.id), p30 = g.price(c.id, s.day - 30), w = s.wallet[c.id]; const val = (w.ex + w.cold) * p; total += val;
       const started = s.day >= c.start;
       const ch = p30 ? (p / p30 - 1) * 100 : 0;
-      const row = h(`<div class="coin ${this.marketCoin === c.id ? 'on' : ''} ${started ? '' : 'inactive'}"><div class="dot" style="background:${c.color}">${c.id}</div><div class="nm">${c.name}<small>${started ? `${fmtCoin(w.ex + w.cold)} ${c.id} · ${fmtUSD(val)}` : `Start ${fmtDate(c.start)}`}</small></div><div class="pr">${started ? fmtUSD(p) : '—'}<small class="${ch >= 0 ? 'pos' : 'neg'}">${started ? `${ch >= 0 ? '+' : ''}${ch.toFixed(1)} %` : ''}</small></div></div>`);
+      const row = h(`<div class="coin ${this.marketCoin === c.id ? 'on' : ''} ${started ? '' : 'inactive'}"><div class="dot" style="background:${c.color}">${c.id}</div><div class="nm">${c.name}<small>${started ? `${fmtCoin(w.ex + w.cold)} ${c.id} · ${fmtUSD(val)}` : `Start ${fmtDate(c.start)}`}</small></div><div class="pr">${started ? fmtUSD(p) : '—'}<small class="${ch >= 0 ? 'pos' : 'neg'}">${started ? `${ch >= 0 ? '+' : ''}${ch.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %` : ''}</small></div></div>`);
       row.onclick = () => { this.marketCoin = c.id; this.market(); };
       list.append(row);
     }
@@ -581,8 +582,9 @@ export class UI {
     if (g.has('coins')) det.append(h(`<div style="color:#94a0b2;font-size:12px;margin:4px 0 8px">${esc(c.desc)} · Algo: ${ALGO_LABEL[c.algo(s.day)]} · Netz: ${s.day >= c.start ? fmtHash(g.netHash(c.id), c.algo(s.day)) : '—'}${hp ? ` · Hashprice: <b style="color:#e8edf4">${fmtUSD(hp * hpUnit[0])} pro ${hpUnit[1]} und Tag</b>` : ''}${c.end && s.day >= c.end ? ' · <b class="neg">Mining beendet</b>' : ''}</div>`));
     if (c.id === 'BTC' && g.has('autosell')) { const nh = HALVINGS.find((d) => d > s.day); if (nh) det.append(h(`<div style="font-size:13px;margin:-2px 0 8px">Nächstes Halving: <b>${fmtDate(nh)}</b> (in ${(nh - s.day).toLocaleString('de-DE')} Tagen) – Blockbelohnung ${String(BTC_REWARD(s.day)).replace('.', ',')} → ${String(BTC_REWARD(nh)).replace('.', ',')} BTC</div>`)); }
     const cv = h('<canvas class="chart" width="1200" height="520"></canvas>'); det.append(cv);
-    const range = h(`<div class="row" style="margin-top:6px"></div>`);
-    for (const [l, d] of [['30 T', 30], ['1 J', 365], ['5 J', 1825], ['Alles', 99999]]) { const b = h(`<button class="btn small ${this.range === d ? 'primary' : ''}">${l}</button>`); b.onclick = () => { this.range = d; this.market(); }; range.append(b); }
+    const range = h(`<div class="seg" style="margin-top:10px"></div>`);
+    this.range ??= 365;
+    for (const [l, d] of [['30 T', 30], ['1 J', 365], ['5 J', 1825], ['Alles', 99999]]) { const b = h(`<button class="btn small ${this.range === d ? 'on' : ''}">${l}</button>`); b.onclick = () => { this.range = d; this.market(); }; range.append(b); }
     det.append(range);
     this.range ??= 365;
     requestAnimationFrame(() => this.chart(cv, c.id, this.range));
@@ -590,7 +592,7 @@ export class UI {
     const kv = h(`<div class="kv"><div class="k">Du hast</div><div class="v">${fmtCoin(w.ex)} ${c.id} (${fmtUSD(w.ex * p)})</div><div class="k">In der Cold-Wallet</div><div class="v">${fmtCoin(w.cold)} ${c.id} (${fmtUSD(w.cold * p)})</div></div>`);
     det.append(kv);
     const r1 = h('<div class="row"></div>');
-    for (const f of [0.25, 0.5, 1]) { const b = h(`<button class="btn ${f === 1 ? 'primary' : 'small'}">${f === 1 ? 'Alles verkaufen' : f * 100 + ' %'}</button>`); b.disabled = w.ex <= 0; b.onclick = () => { const u = g.sell(c.id, f); this.audio?.cash(); this.flashCash(u); this.toast(`Verkauft für ${fmtUSD(u)}`, 'good', 2500); this.market(); }; r1.append(b); }
+    for (const f of [0.25, 0.5, 1]) { const b = h(`<button class="btn ${f === 1 ? 'primary' : ''}">${f === 1 ? 'Alles verkaufen' : f * 100 + ' %'}</button>`); b.disabled = w.ex <= 0; b.onclick = () => { const u = g.sell(c.id, f); this.audio?.cash(); this.flashCash(u); this.toast(`Verkauft für ${fmtUSD(u)}`, 'good', 2500); this.market(); }; r1.append(b); }
     const tc = !g.has('cold') ? null : h(`<button class="btn small">⇄ ${w.cold > 0 && w.ex === 0 ? 'Auf Börse holen' : 'In Cold-Wallet'}</button>`); if (tc) tc.onclick = () => { g.transfer(c.id, !(w.cold > 0 && w.ex === 0)); this.market(); }; if (tc) r1.append(tc);
     det.append(r1);
     const r2 = h(`<div class="row" style="align-items:center"><span style="font-size:13px">Kaufen für</span><input type="number" min="0" step="100" value="${Math.max(0, Math.round(Math.min(s.cash, 1000)))}"/><span>$</span><button class="btn small primary">Kaufen</button></div>`);
@@ -606,15 +608,15 @@ export class UI {
     const g = this.g, s = g.s, ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
     ctx.clearRect(0, 0, W, H);
     const start = Math.max(COIN[id].start, s.day - range, toDay('2010-07-17')), end = s.day;
-    if (end - start < 2) { ctx.fillStyle = '#94a0b2'; ctx.font = '500 28px Barlow, sans-serif'; ctx.fillText('Noch keine Kursdaten', 40, 60); return; }
-    const n = 300, pts = [];
+    if (end - start < 2) { ctx.fillStyle = '#94a0b2'; ctx.font = '600 28px Nunito, sans-serif'; ctx.fillText('Noch keine Kursdaten', 40, 60); return; }
+    const n = Math.max(2, Math.min(300, end - start)), pts = []; ctx.lineJoin = 'round';
     for (let i = 0; i <= n; i++) { const d = Math.round(start + (end - start) * (i / n)); pts.push([d, g.price(id, d)]); }
     const vals = pts.map((p) => p[1]).filter((v) => v > 0);
     const logScale = Math.max(...vals) / Math.min(...vals) > 30;
     const tf = (v) => (logScale ? Math.log10(Math.max(v, 1e-9)) : v);
     const mn = Math.min(...vals.map(tf)), mx = Math.max(...vals.map(tf));
     const pad = mini ? 10 : 110, x = (i) => pad + (i / n) * (W - pad * (mini ? 2 : 1.25)), y = (v) => H - (mini ? 14 : 40) - ((tf(v) - mn) / (mx - mn || 1)) * (H - (mini ? 28 : 80));
-    ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.fillStyle = '#bcc6d3'; ctx.font = '500 30px Barlow, sans-serif'; ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.fillStyle = '#bcc6d3'; ctx.font = '600 30px Nunito, sans-serif'; ctx.lineWidth = 1;
     if (!mini) for (let k = 0; k <= 4; k++) { const v = mn + ((mx - mn) * k) / 4; const yy = H - 40 - (k / 4) * (H - 80); ctx.beginPath(); ctx.moveTo(pad, yy); ctx.lineTo(W - 20, yy); ctx.stroke(); ctx.fillText(fmtUSD(logScale ? Math.pow(10, v) : v), 4, yy - 4); }
     if (!mini) { ctx.fillText(fmtDate(start), pad, H - 8); ctx.fillText(fmtDate(end), W - 190, H - 8); }
     const grad = ctx.createLinearGradient(0, 0, 0, H); grad.addColorStop(0, COIN[id].color + '66'); grad.addColorStop(1, COIN[id].color + '00');
