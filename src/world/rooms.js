@@ -119,7 +119,7 @@ export function buildRoom(def) {
     const scrC = document.createElement('canvas'); scrC.width = 512; scrC.height = 288; const scr = new THREE.CanvasTexture(scrC); scr.colorSpace = THREE.SRGBColorSpace;
     B.screens.push({ canvas: scrC, tex: scr, kind: 'pc' });
     put('monitor', 2.6, 0.14).position.y = 0.74;
-    const sm = new THREE.Mesh(new THREE.PlaneGeometry(0.49, 0.285), new THREE.MeshStandardMaterial({ map: scr, emissive: 0xffffff, emissiveMap: scr, emissiveIntensity: 0.9, roughness: 0.25 })); sm.position.set(2.6, 0.74 + 0.32, 0.152); g.add(sm);
+    const sm = new THREE.Mesh(new THREE.PlaneGeometry(0.49, 0.285), new THREE.MeshStandardMaterial({ map: scr, emissive: 0xffffff, emissiveMap: scr, emissiveIntensity: 0.9, roughness: 0.95 })); sm.position.set(2.6, 0.74 + 0.32, 0.152); g.add(sm);
     B.blocked.push(blk(2.0, 0, 3.5, 0.5));
     // Stuhl
     put('chair', 3.05, 0.86, 0.42);

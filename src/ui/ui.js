@@ -39,6 +39,12 @@ export class UI {
     world.onDoor = (door) => this.travel(door);
     world.onProp = (p) => this.useProp(p);
     world.onSnap = () => this.audio?.install?.();
+    world.onNoAim = () => { // E ohne Ziel: das markierte Ziel in Reichweite benutzen
+      const t = this.objTarget, g = this.g; if (!t) return;
+      const lt = Object.keys(g.s.loose || {}).find((k) => t.label === `${PNAME[k]} aufheben`); if (lt) { world.onLoose(lt); return; }
+      const pc = g.facObjects(g.s.current).find((o) => o.type === 'tower'); if (pc && /einbauen|einschalten/i.test(t.label)) { this.openInspector(pc.uid); return; }
+      const pr = world.room?.props?.find((p) => p.action === 'market'); if (pr && t.label === 'Börse') this.useProp(pr);
+    };
     world.onInstalled = (uid) => { this.installing = false; if (this.inspUid === uid) this.inspect(uid); };
     world.onLoose = (t) => { this.w.pickupFx(t); if (!this.g.pickUp(t)) return; this.audio?.install?.(); this.toast(`${PNAME[t]} eingesteckt`, 'good', 2200); this.goals(); };
     game.on('xp', (k, n, lv) => this.xpPop(k, n, lv));
@@ -53,6 +59,15 @@ export class UI {
     $('#modal').addEventListener('pointerdown', (e) => { if (e.target.id === 'modal') this.closeModal(); });
     $('#pause-resume').onclick = () => this.resume();
     $('#pause-menu').onclick = () => { this.pause(false); this.menu(); };
+    // Einstellungen in der Pause: Ton, Mausempfindlichkeit (pro Gerät gemerkt)
+    const pref = (() => { try { return JSON.parse(localStorage.getItem('hashwerk_prefs') || '{}'); } catch (e) { return {}; } })();
+    const savePref = () => { try { localStorage.setItem('hashwerk_prefs', JSON.stringify(pref)); } catch (e) { /* egal */ } };
+    const snd = $('#ps-sound'), sens = $('#ps-sens');
+    const applySnd = () => { const on = pref.sound !== false; snd.textContent = on ? 'Ton an' : 'Ton aus'; snd.classList.toggle('off', !on); this.audio?.setMuted?.(!on); };
+    snd.onclick = () => { pref.sound = pref.sound === false; savePref(); applySnd(); };
+    sens.value = pref.sens || 1; const applySens = () => { this.w.player.sens = 0.0022 * (+sens.value || 1); };
+    sens.oninput = () => { pref.sens = +sens.value; savePref(); applySens(); };
+    setTimeout(() => { applySnd(); applySens(); }, 0);
     $('#clickhint').onclick = () => this.w.requestLock();
     game.on('toast', (t, k, ms) => this.toast(t, k, ms));
     game.on('message', (m) => { this.toast(`${FACE[m.from] || ''} <b>${esc(m.from)}:</b> ${esc(m.text)}`, 'msg', 7000); this.dock(); });
@@ -139,10 +154,11 @@ export class UI {
       const pc = g.facObjects('kinder').find((o) => o.type === 'tower');
       const spots = w.room?.looseSpots || {}, lying = Object.keys(s.loose || {}).filter((t) => spots[t]);
       if (pc && !s.flags.miningStarted && lying.length) { const cp = w.camera.position, d = (t) => Math.hypot(spots[t][0] - cp.x, spots[t][2] - cp.z) + (w.toScreen(spots[t][0], spots[t][1] + 0.1, spots[t][2]).on ? 0 : 100); const t = lying.sort((a, b) => d(a) - d(b))[0]; pos = [spots[t][0], spots[t][1] + 0.1, spots[t][2]]; label = `${PNAME[t]} aufheben`; aimed = w.aim?.loose === t; }
-      else if (pc && !s.flags.miningStarted) { pos = [pc.x, 0.78, pc.z]; label = g.pcReady(pc) ? 'PC einschalten' : (s.inv || []).length ? 'Teile einbauen' : 'PC zusammenbauen'; aimed = w.aim?.uid === pc.uid; }
+      else if (pc && !s.flags.miningStarted) { pos = [pc.x, 0.78, pc.z]; label = g.pcReady(pc) ? 'PC einschalten' : 'Teile einbauen'; aimed = w.aim?.uid === pc.uid; }
       else if (g.has('market') && !(s.stats.sold > 0)) { const pr = w.room?.props?.find((p) => p.action === 'market'); if (pr) { pos = [pr.c[0], pr.c[1] + 0.34, pr.c[2]]; label = 'Börse'; aimed = w.aim?.prop === pr; } }
     }
     const sp = pos && w.toScreen(...pos);
+    this.objTarget = sp && sp.dist < 2.0 ? { label, pos } : null;
     if (!sp || aimed || (w.aim && !aimed)) { el.classList.add('hidden'); return; }
     el.classList.toggle('far', sp.dist > 2.2);
     el.classList.remove('hidden'); el.classList.toggle('edge', !sp.on); el.classList.toggle('left', !sp.on && sp.side < 0);
@@ -272,7 +288,7 @@ export class UI {
     clearTimeout(this.featT); this.featT = setTimeout(() => this.showFeatures(), 60);
   }
   showFeatures() {
-    if (this.w.mode !== 'play' || this.paused) { clearTimeout(this.featT); this.featT = setTimeout(() => this.showFeatures(), 700); return; }
+    if (this.w.mode !== 'play' || this.paused || document.getElementById('lvup')) { clearTimeout(this.featT); this.featT = setTimeout(() => this.showFeatures(), 700); return; }
     const q = this.featQ || []; this.featQ = []; if (!q.length) return;
     this.audio?.message();
     const box = $('#featcards'); box.innerHTML = '';
@@ -313,7 +329,7 @@ export class UI {
       else if (def.kind === 'cooling') line = `kühlt ${fmtWatt(def.cool)}`;
       const st = { broken: 'Defekt – reparieren', partial: 'Teilweise defekt', psu: 'Netzteil zu schwach', incomplete: 'Teile fehlen – bestücken', empty: '➕ Leer – Geräte einsetzen', idle: 'pausiert (unrentabel)', off: '⏻ aus' }[a?.status];
       const build = o.type === 'tower' && o.parts && !this.g.s.flags.miningStarted, miss = build ? this.g.pcMissing(o).length : 0;
-      html = build ? `<kbd>E</kbd>${miss ? 'PC zusammenbauen' : 'PC einschalten'}<div class="st">${4 - miss} von 4 Teilen</div>` : `<kbd>E</kbd>${esc(o.type === 'tower' ? 'Dein PC' : (def.short || def.name.replace(/[-‑]Gehäuse|\s*\(.*\)/g, '')))}${st ? `<div class="st">${st}</div>` : line ? `<div class="ln">${line}</div>` : ''}`;
+      html = build ? `<kbd>E</kbd>${miss ? 'Teile einbauen' : 'PC einschalten'}<div class="st">${4 - miss} von 4 Teilen eingebaut</div>` : `<kbd>E</kbd>${esc(o.type === 'tower' ? 'Dein PC' : (def.short || def.name.replace(/[-‑]Gehäuse|\s*\(.*\)/g, '')))}${st ? `<div class="st">${st}</div>` : line ? `<div class="ln">${line}</div>` : ''}`;
     }
     el.innerHTML = html; el.classList.remove('hidden');
   }
@@ -609,8 +625,9 @@ export class UI {
       let prog = '';
       if (!done && go.progress) { const [cur, tgt, kind] = go.progress(s, g.helpers()); if (kind === 'parts') { prog = `<span class="cnt">${cur} / ${tgt}</span>`; } else { const f = (v) => (kind === 'hash' ? fmtHash(v) : fmtUSD(v)); const pc = Math.max(0, Math.min(100, tgt ? (cur / tgt) * 100 : 0)); prog = `<div style="font-size:11px;color:var(--dim)">${f(Math.max(0, cur))} / ${f(tgt)}</div><div class="bar" style="width:180px"><div style="width:${pc}%;background:#ffb000"></div></div>`; } }
       const gk = s.chapter + ':' + go.id, enter = gk !== this.goalKey; this.goalKey = gk;
-      const bag = s.loose && !s.flags.miningStarted && go.id === 'collect' ? `<div class="bag"><span>Tasche</span>${['mobo', 'cpu', 'gpu', 'psu'].map((t) => `<i class="${s.loose[t] ? 'empty' : 'got'}" title="${PNAME[t]}">${partSvg(t, 16)}</i>`).join('')}</div>` : '';
-      const row = h(`<div class="goal ${done ? 'done' : ''} ${enter ? 'enter' : ''}"><div class="ck">${done ? '✓' : ''}</div><div>${esc(go.text)}${prog}${bag}</div></div>`);
+      const bag = s.loose && !s.flags.miningStarted && go.id === 'collect' ? `<span class="bag">${['mobo', 'cpu', 'gpu', 'psu'].map((t) => `<i class="${s.loose[t] ? 'empty' : 'got'}" title="${PNAME[t]}">${partSvg(t, 16)}</i>`).join('')}</span>` : '';
+      const gtext = go.id === 'sell' && !g.has('market') ? 'Lass deinen PC ein paar Tage schürfen' : go.text;
+      const row = h(`<div class="goal ${done ? 'done' : ''} ${enter ? 'enter' : ''}"><div class="ck">${done ? '✓' : ''}</div><div>${esc(gtext)}${prog}${bag}</div></div>`);
       if (!done && go.action) { const b = h(`<button class="btn small primary"><kbd>G</kbd>${esc(go.action.label)}</button>`); b.disabled = !g.canPayGoal(go); b.onclick = () => { if (g.goalAction(go)) { this.toast('✔ Erledigt!', 'good'); this.goals(); } }; row.lastElementChild.append(h('<br/>'), b); }
       el.append(row);
     }
@@ -678,7 +695,7 @@ export class UI {
   }
 
   // ---------- Modals ----------
-  openModal(node, cls = '', kind = null) { this.openUI(); const m = $('#modal'); m.classList.remove('hidden'); const card = m.querySelector('.modal-card'); card.className = 'modal-card ' + cls; const b = m.querySelector('.modal-body'); b.innerHTML = ''; b.append(node); this.modalKind = kind; this.dock(); }
+  openModal(node, cls = '', kind = null) { document.getElementById('lvup')?.remove(); this.openUI(); const m = $('#modal'); m.classList.remove('hidden'); const card = m.querySelector('.modal-card'); card.className = 'modal-card ' + cls; const b = m.querySelector('.modal-body'); b.innerHTML = ''; b.append(node); this.modalKind = kind; this.dock(); }
   closeModal() { $('#modal').classList.add('hidden'); this.modalKind = null; this.dock(); const cb = this.onModalClose; this.onModalClose = null; cb?.(); if (!this.inspUid && !document.body.classList.contains('show-build') && $('#modal').classList.contains('hidden') && (this.w.mode === 'ui')) this.w.setMode('play'); }
   // Spielstart: Nachricht von Deniz – Bitcoin gibt es jetzt, dein PC kann das. Mit Kurs.
   introPhone(onClose) {
@@ -979,7 +996,7 @@ export class UI {
   // Erfahrung: kleine Einblendung, beim Stufenaufstieg eine große Karte
   xpPop(k, n, lv) {
     const box = $('#xpbox') || (() => { const b = h('<div id="xpbox"></div>'); document.body.append(b); return b; })();
-    const el = h(`<div class="xp"><span class="xi">${skillSvg(k, 16)}</span>+${n} ${SKILL[k].name}</div>`); box.append(el); setTimeout(() => el.remove(), 2400);
+    const el = h(`<div class="xp"><span class="xi">${skillSvg(k, 16)}</span>+${n} EP ${SKILL[k].name}</div>`); box.append(el); setTimeout(() => el.remove(), 2400);
     if (lv) { if (this.w.focus) this.lvQ = [k, lv]; else setTimeout(() => this.levelUp(k, lv), 900); }
     this.dock();
   }

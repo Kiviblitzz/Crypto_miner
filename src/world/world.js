@@ -344,15 +344,15 @@ export class World {
   }
   // Aufheben: das Teil fliegt kurz zur Kamera und verschwindet
   pickupFx(t) {
-    const g = this.looseItems?.[t]; if (!g) return; g.userData.flying = 0.001; this.syncLoose();
+    const g = this.looseItems?.[t]; if (!g) return; g.userData.flying = 0.001; g.traverse((m) => { if (m.isMesh) m.raycast = () => {}; }); this.aimLockUntil = this.t + 0.4; this.syncLoose();
   }
   updateLoose(dt) {
     if (!this.looseItems) return;
     for (const [t, g] of Object.entries(this.looseItems)) {
       const h = g.children.find((c) => c.userData.halo); if (h) h.material.opacity = 0.2 + 0.1 * Math.sin(this.t * 2.4 + g.position.x * 3);
       if (g.userData.flying) {
-        const f = (g.userData.flying += dt), k = Math.min(1, f / 0.42), tgt = this.camera.position.clone().add(new THREE.Vector3(0, -0.25, 0));
-        g.position.lerp(tgt, k * 0.35); g.scale.setScalar(Math.max(0.05, 1 - k)); g.rotation.y += dt * 6;
+        const f = (g.userData.flying += dt), k = Math.min(1, f / 0.42), tgt = this.camera.position.clone().addScaledVector(this.camera.getWorldDirection(new THREE.Vector3()), 0.3).add(new THREE.Vector3(0, -0.45, 0));
+        g.position.lerp(tgt, k * 0.35); g.scale.setScalar(Math.max(0.001, 1 - 1.6 * k)); g.rotation.y += dt * 6;
         if (k >= 1) { this.looseGroup.remove(g); delete this.looseItems[t]; }
       }
     }
@@ -367,7 +367,7 @@ export class World {
     const pr = this.room?.props?.find((p) => p.action === 'market'); if (!pr) return;
     const pos = new THREE.Vector3(pr.c[0] + 0.18, pr.c[1] + 0.05, pr.c[2] + 0.62), look = new THREE.Vector3(pr.c[0] + 0.05, pr.c[1], pr.c[2]);
     const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(pos, look, new THREE.Vector3(0, 1, 0)));
-    this.focus = { pos, q, light: new THREE.Vector3(pr.c[0], pr.c[1], pr.c[2] + 0.35) }; this.focusUid = null;
+    this.focus = { pos, q, light: new THREE.Vector3(pr.c[0] - 0.45, pr.c[1] + 0.3, pr.c[2] + 0.4) }; this.focusUid = null;
     if (!this.focusLight) { this.focusLight = new THREE.PointLight(0xffe2b8, 0, 0.9, 1.6); this.scene.add(this.focusLight); }
   }
   select(uid) {
@@ -502,7 +502,7 @@ export class World {
   }
   primaryAction() {
     if (this.placing) { this.confirmPlacement(); return; }
-    const a = this.aim; if (!a) return;
+    const a = this.aim; if (!a) { this.onNoAim?.(); return; }
     if (a.loose) this.onLoose?.(a.loose);
     else if (a.door) this.onDoor?.(a.door);
     else if (a.prop) this.onProp?.(a.prop);
@@ -510,6 +510,7 @@ export class World {
   }
   // Was liegt unter dem Fadenkreuz?
   updateAim() {
+    if (this.aimLockUntil && this.t < this.aimLockUntil) { if (this.aim) { this.aim = null; this.onAim?.(null); } return; }
     if (this.placing) { if (this.aim) { this.aim = null; this.onAim?.(null); } this.selBox.visible = false; this.outline.selectedObjects = []; return; }
     this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
     this.raycaster.far = this.reach() + 1.5;
@@ -553,8 +554,7 @@ export class World {
       const per = 3.0 / ([Infinity, 4.0, 1.6, 0.5, 0.12][this.game.s.speed] || 4); // Anteil eines Tages pro Einblendung
       const txt = asCoin ? `+${fmtCoin((rev / px) * per)} ${coin}` : '+' + fmtUSD(rev * per); g.fillStyle = asCoin ? '#ffc640' : '#6fdc9c'; g.fillText(txt, 128, 44, 210); g.shadowColor = 'transparent';
       p.material.map.needsUpdate = true;
-      const sc = 0.6;
-      const bb = e.group.userData.bbox; p.position.set(e.group.position.x, (bb ? bb.max.y : 0.6) + 0.15, e.group.position.z);
+      const bb = e.group.userData.bbox, sc = Math.min(0.6, Math.max(0.22, this.camera.position.distanceTo(e.group.position) * 0.2)); p.position.set(e.group.position.x, (bb ? bb.max.y : 0.6) + 0.15, e.group.position.z);
       p.scale.set(sc, sc / 4, 1); p.visible = true; p.userData.life = 0; p.userData.y0 = p.position.y; p.material.opacity = 1;
       this.coinBurst(new THREE.Vector3(e.group.position.x, (bb ? bb.max.y : 0.6) + 0.02, e.group.position.z), 3); this.onIncome?.();
     }
@@ -1013,14 +1013,14 @@ export class World {
         if (this.bootT != null && this.t - this.bootT < 5.5) {
           const pc = this.game.facObjects(this.facId).find((o) => o.type === 'tower'), gpu = pc?.parts?.gpus?.[0], a = pc && sm?.per.get(pc.uid);
           const boot = ['Starte Miner ...', `GPU gefunden: ${gpu ? PART[gpu].name : '-'}`, 'Verbinde mit dem Bitcoin-Netz ...', `Schürfe! ${a?.units?.[0]?.h ? fmtHash(a.units[0].h, 'sha256') : ''}`];
-          g.font = 'bold 30px monospace'; boot.slice(0, 1 + Math.floor((this.t - this.bootT) / 1.1)).forEach((l, k) => g.fillText(l, 14, 84 + k * 42));
+          g.font = 'bold 24px monospace'; boot.slice(0, 1 + Math.floor((this.t - this.bootT) / 1.1)).forEach((l, k) => g.fillText(l, 14, 80 + k * 36, W - 28));
           sc.tex.needsUpdate = true; continue;
         }
         let i = 0;
         for (const o of this.game.facObjects(this.facId)) { const a = sm?.per.get(o.uid); if (!a || !a.units.length) continue; const u = a.units[0]; lines.push(`RIG${i++}: ${u.h ? fmtHash(u.h, u.algo) : 'idle'} ${u.coin || ''}`); if (lines.length >= 4) break; }
         lines.push(`BTC ${fmtUSD(this.game.price('BTC'))}  T ${sm ? sm.temp.toFixed(1) : '--'}C`);
         lines.push(`> ${Math.floor(this.t * 2) % 2 ? '_' : ' '}`);
-        lines.forEach((l, k) => g.fillText(l, 14, 76 + k * 34));
+        lines.forEach((l, k) => g.fillText(l, 14, 76 + k * 34, W - 28));
         sc.tex.needsUpdate = true; continue;
       }
       const s = this.game.s; g.fillStyle = '#04101c'; g.fillRect(0, 0, W, H);

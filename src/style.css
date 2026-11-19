@@ -1267,3 +1267,18 @@ body:has(#pause:not(.hidden)) #top, body:has(#pause:not(.hidden)) #goals, body:h
 .featcard .fc-more { margin-top: 8px; font: 600 12.5px var(--font); color: var(--dim); }
 .intro-phone .msg.link { background: #35271e !important; padding: 4px !important; max-width: 300px; }
 .intro-phone .msg.link .pc-line { margin: 0; background: none; }
+/* Runde 6b (strengster Reviewer) */
+#objmark kbd { display: none !important; }
+#objmark .om-in { padding-left: 12px !important; }
+#lvup { background: rgb(40,28,20) !important; }
+@media (min-width: 721px) { #toasts { top: 156px !important; } }
+#goals .goal .bag { flex-basis: auto !important; margin: 0 0 0 8px !important; display: inline-flex; gap: 4px; vertical-align: middle; }
+#goals .goal .bag i { width: 22px !important; height: 22px !important; border-radius: 7px !important; }
+#goals .goal:has(.bag) { border-radius: 999px !important; }
+#splash .disclaimer { display: inline-block; padding: 4px 10px; border-radius: 999px; background: rgba(20,14,10,.55); font-size: 13px !important; color: #e6d6c2 !important; }
+.pause-set { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.pause-set .ps-t { flex: none; padding: 8px 14px; border-radius: 999px; border: 0; cursor: pointer; background: rgba(255,236,210,.1); color: var(--text); font: 600 14px var(--font-fun); }
+.pause-set .ps-t.off { color: var(--dim); }
+.pause-set .ps-s { flex: 1; display: flex; align-items: center; gap: 8px; font: 600 14px var(--font-fun); color: var(--text2); }
+.pause-set input[type=range] { flex: 1; accent-color: #ffb000; }
+.pause-note { font: 600 12px var(--font); color: var(--dim); text-align: center; margin-top: 2px; }
