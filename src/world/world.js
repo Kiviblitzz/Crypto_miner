@@ -262,6 +262,15 @@ export class World {
       this.select(this.pick());
     });
     c.addEventListener('contextmenu', (e) => e.preventDefault());
+    c.addEventListener('dblclick', () => {
+      if (this.placing || this.fpActive || this.empire) return;
+      const uid = this.pick(); const e = uid && this.entries.get(uid); if (!e) return;
+      const bb = new THREE.Box3().setFromObject(e.group); const ctr = bb.getCenter(new THREE.Vector3()); const size = bb.getSize(new THREE.Vector3()).length();
+      const dir = new THREE.Vector3().subVectors(this.camera.position, this.controls.target).normalize();
+      const dist = Math.max(this.controls.minDistance, size * 2.2 + 0.6);
+      const to = ctr.clone().addScaledVector(dir, dist); ctr.y = 0;
+      this.focusAnim = { fromT: this.controls.target.clone(), toT: ctr, fromP: this.camera.position.clone(), toP: to, t: 0 };
+    });
     window.addEventListener('keydown', (e) => {
       if (e.target.tagName === 'INPUT') return;
       this.keys[e.key.length === 1 ? e.key.toLowerCase() : e.key] = true;
@@ -576,6 +585,11 @@ export class World {
     const dt = Math.min(0.05, this.clock.getDelta()); this.t += dt;
     const s = this.game.s;
     // Kamera
+    if (this.focusAnim) {
+      const f = this.focusAnim; f.t = Math.min(1, f.t + dt / 0.6); const k = 1 - Math.pow(1 - f.t, 3);
+      this.controls.target.lerpVectors(f.fromT, f.toT, k); this.camera.position.lerpVectors(f.fromP, f.toP, k);
+      if (f.t >= 1) this.focusAnim = null;
+    }
     if (this.transition) {
       const tr = this.transition; if (!tr.hold) tr.t += dt / tr.dur; const k = tr.t >= 1 ? 1 : 1 - Math.pow(1 - tr.t, 3);
       this.camera.position.lerpVectors(tr.from, tr.to, k); if (tr.t >= 1) this.transition = null;
