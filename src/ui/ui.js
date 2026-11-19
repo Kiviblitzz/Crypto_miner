@@ -63,7 +63,7 @@ export class UI {
     const pref = (() => { try { return JSON.parse(localStorage.getItem('hashwerk_prefs') || '{}'); } catch (e) { return {}; } })();
     const savePref = () => { try { localStorage.setItem('hashwerk_prefs', JSON.stringify(pref)); } catch (e) { /* egal */ } };
     const snd = $('#ps-sound'), sens = $('#ps-sens');
-    const applySnd = () => { const on = pref.sound !== false; snd.textContent = on ? 'Ton an' : 'Ton aus'; snd.classList.toggle('off', !on); this.audio?.setMuted?.(!on); };
+    const applySnd = () => { const on = pref.sound !== false; snd.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/>${on ? '<path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>' : '<path d="M16 9.5l5 5M21 9.5l-5 5"/>'}</svg><span>Ton</span>`; snd.setAttribute('aria-pressed', on); snd.title = on ? 'Ton ist an – klicken zum Ausschalten' : 'Ton ist aus – klicken zum Einschalten'; snd.classList.toggle('off', !on); this.audio?.setMuted?.(!on); };
     snd.onclick = () => { pref.sound = pref.sound === false; savePref(); applySnd(); };
     sens.value = pref.sens || 1; const applySens = () => { this.w.player.sens = 0.0022 * (+sens.value || 1); };
     sens.oninput = () => { pref.sens = +sens.value; savePref(); applySens(); };
@@ -155,7 +155,7 @@ export class UI {
       const spots = w.room?.looseSpots || {}, lying = Object.keys(s.loose || {}).filter((t) => spots[t]);
       if (pc && !s.flags.miningStarted && lying.length) { const cp = w.camera.position, d = (t) => Math.hypot(spots[t][0] - cp.x, spots[t][2] - cp.z) + (w.toScreen(spots[t][0], spots[t][1] + 0.1, spots[t][2]).on ? 0 : 100); const t = lying.sort((a, b) => d(a) - d(b))[0]; pos = [spots[t][0], spots[t][1] + 0.1, spots[t][2]]; label = PNAME[t]; aimed = w.aim?.loose === t; }
       else if (pc && !s.flags.miningStarted) { pos = [pc.x, 0.78, pc.z]; label = g.pcReady(pc) ? 'PC einschalten' : 'Teile einbauen'; aimed = w.aim?.uid === pc.uid; }
-      else if (g.has('market') && !(s.stats.sold > 0)) { const pr = w.room?.props?.find((p) => p.action === 'market'); if (pr) { pos = [pr.c[0], pr.c[1] + 0.12, pr.c[2]]; label = 'Börse'; aimed = w.aim?.prop === pr; } }
+      else if (g.has('market') && !(s.stats.sold > 0)) { const pr = w.room?.props?.find((p) => p.action === 'market'); if (pr) { pos = [pr.c[0], pr.c[1] + 0.16, pr.c[2]]; label = 'Börse'; aimed = w.aim?.prop === pr; } }
     }
     const sp = pos && w.toScreen(...pos);
     this.objTarget = sp && sp.dist < 2.0 ? { label, pos } : null;
@@ -271,7 +271,7 @@ export class UI {
     document.body.classList.remove('show-build', 'show-goals'); this.dock();
     if (this.inspUid) { this.inspUid = null; $('#inspector').classList.add('hidden'); this.w.select(null); }
     this.w.focusObject?.(null); this.pickType = null; this.showRun = false; this.w.ghostPart?.(null);
-    if (this.lvQ) { const [k, lv] = this.lvQ; this.lvQ = null; setTimeout(() => this.levelUp(k, lv), 700); }
+    if (this.lvQ) { const [k, lv] = this.lvQ; this.lvQ = null; this.lvBusy = true; setTimeout(() => this.levelUp(k, lv), 700); }
     if (this.w.mode === 'ui' || this.w.mode === 'play') this.w.setMode('play');
   }
   pause(on) {
@@ -288,7 +288,7 @@ export class UI {
     clearTimeout(this.featT); this.featT = setTimeout(() => this.showFeatures(), 60);
   }
   showFeatures() {
-    if (this.w.mode !== 'play' || this.paused || document.getElementById('lvup')) { clearTimeout(this.featT); this.featT = setTimeout(() => this.showFeatures(), 700); return; }
+    if (this.w.mode !== 'play' || this.paused || document.getElementById('lvup') || this.lvQ || this.lvBusy) { clearTimeout(this.featT); this.featT = setTimeout(() => this.showFeatures(), 700); return; }
     const q = this.featQ || []; this.featQ = []; if (!q.length) return;
     this.audio?.message();
     const box = $('#featcards'); box.innerHTML = '';
@@ -481,14 +481,14 @@ export class UI {
       on.querySelector('button').onclick = () => this.powerOnSequence(o);
       sec.append(on);
     } else {
-      const done = h('<div class="sec start two"><button class="btn big">Zum Monitor</button><button class="btn big primary">Weiter</button></div>'); const [bm, bw] = done.querySelectorAll('button'); bm.onclick = () => { const mon = this.w.focusUid == null; if (mon) { this.w.focusObject?.(o.uid); bm.textContent = 'Zum Monitor'; } else { this.w.focusMonitor?.(); bm.textContent = 'Zum PC'; } }; bw.onclick = () => this.resume(); sec.append(done);
+      const done = h(`<div class="sec start two"><button class="btn big ${this.w.bootPending ? 'glow' : ''}">Zum Monitor</button><button class="btn big primary">Weiter</button></div>`); const [bm, bw] = done.querySelectorAll('button'); bm.onclick = () => { bm.classList.remove('glow'); const mon = this.w.focusUid == null; if (mon) { this.w.focusObject?.(o.uid); bm.textContent = 'Zum Monitor'; } else { this.w.focusMonitor?.(); bm.textContent = 'Zum PC'; } }; bw.onclick = () => this.resume(); sec.append(done);
     }
     return sec;
   }
   // Der große Moment: Lüfter laufen an, Monitor bootet, erste Coins
   powerOnSequence(o) {
     const g = this.g; if (!g.startMining(o.uid)) return;
-    const w0 = g.s.wallet.BTC; this.btcAtStart = w0.ex + w0.cold;
+    const w0 = g.s.wallet.BTC; this.btcAtStart = w0.ex + w0.cold; this.slowUntil = performance.now() + 9000;
     this.audio?.powerOn(); this.w.powerOn?.(o.uid); this.showRun = true; this.inspect(o.uid);
   }
   firstPicker(o, type) { this.pickType = type; this.inspect(o.uid); }
@@ -626,7 +626,7 @@ export class UI {
       let prog = '';
       if (!done && go.progress) { const [cur, tgt, kind] = go.progress(s, g.helpers()); if (kind === 'parts') { prog = `<span class="cnt">${cur} / ${tgt}</span>`; } else { const f = (v) => (kind === 'hash' ? fmtHash(v) : fmtUSD(v)); const pc = Math.max(0, Math.min(100, tgt ? (cur / tgt) * 100 : 0)); prog = `<div style="font-size:11px;color:var(--dim)">${f(Math.max(0, cur))} / ${f(tgt)}</div><div class="bar" style="width:180px"><div style="width:${pc}%;background:#ffb000"></div></div>`; } }
       const gk = s.chapter + ':' + go.id, enter = gk !== this.goalKey; this.goalKey = gk;
-      const bag = s.loose && !s.flags.miningStarted && go.id === 'collect' ? `<span class="bag">${['mobo', 'cpu', 'gpu', 'psu'].map((t) => `<i class="${s.loose[t] ? 'empty' : 'got'}" title="${PNAME[t]}">${partSvg(t, 16)}</i>`).join('')}</span>` : '';
+      const bag = s.loose && !s.flags.miningStarted && go.id === 'collect' ? `<span class="bag">${['mobo', 'cpu', 'gpu', 'psu'].map((t) => `<i class="${s.loose[t] ? 'miss' : 'got'}" title="${PNAME[t]}">${partSvg(t, 16)}</i>`).join('')}</span>` : '';
       const gtext = go.id === 'sell' && !g.has('market') ? 'Lass deinen PC ein paar Tage schürfen' : go.text;
       const row = h(`<div class="goal ${done ? 'done' : ''} ${enter ? 'enter' : ''}"><div class="ck">${done ? '✓' : ''}</div><div>${esc(gtext)}${prog}${bag}</div></div>`);
       if (!done && go.action) { const b = h(`<button class="btn small primary"><kbd>G</kbd>${esc(go.action.label)}</button>`); b.disabled = !g.canPayGoal(go); b.onclick = () => { if (g.goalAction(go)) { this.toast('✔ Erledigt!', 'good'); this.goals(); } }; row.lastElementChild.append(h('<br/>'), b); }
@@ -1002,7 +1002,7 @@ export class UI {
     this.dock();
   }
   levelUp(k, lv) {
-    document.getElementById('lvup')?.remove(); this.audio?.fanfare?.();
+    document.getElementById('lvup')?.remove(); this.audio?.fanfare?.(); this.lvBusy = true; clearTimeout(this.lvBT); this.lvBT = setTimeout(() => { this.lvBusy = false; }, 3900);
     if (this.modalKind === 'skills') { this.skills(); const card = document.querySelector(`.sk[data-skill="${k}"]`); if (card) { card.classList.add('lvl'); setTimeout(() => card.classList.remove('lvl'), 2200); } return; }
     const el = h(`<div id="lvup"><div class="lv-ic">${skillSvg(k, 34)}</div><div class="lv-t1">Neue Stufe</div><div class="lv-t2">${SKILL[k].name} · Stufe ${lv}</div><div class="lv-t3">${SKILL[k].now(lv)}</div></div>`);
     document.body.append(el); setTimeout(() => el.classList.add('out'), 3400); setTimeout(() => el.remove(), 3900);

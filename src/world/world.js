@@ -274,9 +274,9 @@ export class World {
     this.focusUid = e ? uid : null;
     if (!e) { this.focus = null; this.updateStatus(); return; }
     const o = e.obj, rot = -(o.rot || 0) * Math.PI / 2, rotV = (x, y, z) => new THREE.Vector3(x, y, z).applyAxisAngle(new THREE.Vector3(0, 1, 0), rot).add(new THREE.Vector3(o.x, 0, o.z));
-    const pos = rotV(0.8, 0.5, 0.3), look = rotV(0, 0.26, 0);
+    const pos = rotV(0.62, 0.6, 0.45), look = rotV(0, 0.26, 0);
     const right = new THREE.Vector3().subVectors(look, pos).cross(new THREE.Vector3(0, 1, 0)).normalize();
-    look.addScaledVector(right, 0.16);
+    look.addScaledVector(right, 0.2);
     const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(pos, look, new THREE.Vector3(0, 1, 0)));
     this.focus = { pos, q, light: rotV(0.32, 0.48, 0.18) };
     if (!this.focusLight) { this.focusLight = new THREE.PointLight(0xffe2b8, 0, 0.9, 1.6); this.scene.add(this.focusLight); }
@@ -363,7 +363,7 @@ export class World {
   // Erstes Einschalten: Lüfter laufen hoch, der Monitor bootet den Miner
   powerOn(uid) {
     const e = this.entries.get(uid); if (e) e.spinK = 0;
-    this.bootT = this.t; this.screensDirty = true; this.pulse(uid); const e2 = this.entries.get(uid), bb = e2?.group.userData.bbox; if (e2 && !this.focus) this.coinBurst(new THREE.Vector3(e2.group.position.x, (bb ? bb.max.y : 0.5) + 0.1, e2.group.position.z), 6);
+    this.bootPending = true; this.screensDirty = true; this.pulse(uid); const e2 = this.entries.get(uid), bb = e2?.group.userData.bbox; if (e2 && !this.focus) this.coinBurst(new THREE.Vector3(e2.group.position.x, (bb ? bb.max.y : 0.5) + 0.1, e2.group.position.z), 6);
   }
   // Kamera zum Monitor (Miner bootet)
   focusMonitor() {
@@ -371,6 +371,7 @@ export class World {
     const pos = new THREE.Vector3(pr.c[0] + 0.18, pr.c[1] + 0.05, pr.c[2] + 0.62), look = new THREE.Vector3(pr.c[0] + 0.05, pr.c[1], pr.c[2]);
     const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(pos, look, new THREE.Vector3(0, 1, 0)));
     this.focus = { pos, q, light: new THREE.Vector3(pr.c[0] - 0.45, pr.c[1] + 0.3, pr.c[2] + 0.4) }; this.focusUid = null;
+    if (this.bootPending) { this.bootT = this.t; this.bootPending = false; this.screensDirty = true; }
     if (!this.focusLight) { this.focusLight = new THREE.PointLight(0xffe2b8, 0, 0.9, 1.6); this.scene.add(this.focusLight); }
   }
   select(uid) {
@@ -523,6 +524,7 @@ export class World {
     for (const h of hits) {
       const o = h.object; if (o.isSprite) continue;
       if (o.userData.prop && looseHit) continue; // Teile auf dem Bett haben Vorrang vor der Schlafen-Box
+      if (o.userData.prop?.action === 'sleep' && this.game.s.feat && !this.game.s.flags.miningStarted) continue; // vor dem ersten PC gibt es nichts zu verschlafen
       if (o.userData.loose) { aim = { loose: o.userData.loose, dist: h.distance }; break; }
       if (o.userData.door) { aim = { door: o.userData.door, dist: h.distance }; break; }
       if (o.userData.prop) { aim = { prop: o.userData.prop, dist: h.distance }; break; }

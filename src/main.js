@@ -95,7 +95,7 @@ function loop(now) {
     world.controls.target.set(2.35 + Math.sin(t) * 0.4, 1.0 + Math.sin(t * 0.7) * 0.1, 0.4 + Math.cos(t) * 0.25);
     s.frac = 0.83;
   } else if (s.speed && document.getElementById('modal').classList.contains('hidden') && !ui.paused && (s.flags.miningStarted || !s.feat)) { // Zeit steht, bis der erste PC läuft
-    s.frac += dt / (ui.showRun ? 60 : SEC_PER_DAY[s.speed]); if (ui.showRun) s.frac = Math.min(s.frac, 0.995); // Einschalt-Moment in Zeitlupe, ohne Tageswechsel
+    const slow = ui.showRun && performance.now() < (ui.slowUntil || 0); s.frac += dt / (slow ? 60 : SEC_PER_DAY[s.speed]); // Einschalt-Moment kurz in Zeitlupe
     let n = 0;
     while (s.frac >= 1 && n < 4) { s.frac -= 1; game.advanceDay(); n++; }
     if (s.frac >= 1) s.frac = 0.99;

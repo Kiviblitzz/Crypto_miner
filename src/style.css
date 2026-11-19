@@ -1252,7 +1252,7 @@ body:has(#pause:not(.hidden)) #top, body:has(#pause:not(.hidden)) #goals, body:h
 @media (min-width: 721px) { #prompt { top: calc(50% + 88px) !important; } }
 #goals .goal:has(.bag) { width: fit-content; border-radius: 16px !important; }
 .goal .bag i.got { background: rgba(255,176,0,.2); color: var(--acc); }
-.goal .bag i.empty { background: rgba(255,236,210,.08); color: var(--dim); opacity: .45; }
+.goal .bag i.miss { background: rgba(255,236,210,.08); color: var(--dim); }
 .pcb-step.ready .ic { color: var(--text2); }
 .sec.start.two { display: flex; gap: 10px; }
 .sec.start.two .btn { flex: 1; }
@@ -1288,7 +1288,7 @@ body.aiming #crosshair { width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; bac
 #goals .goal .bag { align-items: center !important; }
 #goals .goal .bag i { display: grid !important; place-items: center; width: 24px !important; height: 24px !important; line-height: 0; }
 #goals .goal .bag i svg { display: block; }
-#goals .goal .bag i.empty { opacity: 1 !important; color: #bca890 !important; background: rgba(255,236,210,.07) !important; }
+#goals .goal .bag i.miss { opacity: 1 !important; color: #bca890 !important; background: rgba(255,236,210,.07) !important; }
 .pcb-live b { font-size: 36px !important; }
 .pcb-parts summary { cursor: pointer; list-style: none; font: 700 13px var(--font); color: var(--dim); padding: 8px 4px; }
 .pcb-parts summary::before { content: '▸ '; } .pcb-parts[open] summary::before { content: '▾ '; }
@@ -1301,3 +1301,10 @@ body.aiming #crosshair { width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; bac
 #ps-sens { -webkit-appearance: none; appearance: none; height: 6px; border-radius: 999px; background: #5a4638; outline: none; }
 #ps-sens::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #ffb000; box-shadow: 0 2px 0 #a66313; cursor: pointer; }
 #ps-sens::-moz-range-thumb { width: 16px; height: 16px; border: 0; border-radius: 50%; background: #ffb000; cursor: pointer; }
+/* Runde 7b (strengster Reviewer) */
+@media (min-width: 721px) { body[data-mode="ui"] #toasts { top: auto !important; bottom: 22px !important; } }
+#goals .goal .bag i { padding: 0 !important; }
+#goals { max-width: 540px; }
+#goals .goal > div:last-child { flex-wrap: nowrap !important; white-space: nowrap; }
+.pause-set .ps-t { min-width: 96px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.pause-set .ps-t.off { background: rgba(255,236,210,.05); }
