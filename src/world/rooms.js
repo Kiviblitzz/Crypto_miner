@@ -326,7 +326,7 @@ export function buildOutside(kind, def) {
     if (def.style === 'bedroom') {
       // Dachgeschoss: das eigene Haus steht darunter, man blickt über die Dächer
       g.position.y = -4.6;
-      const own = new THREE.Mesh(new THREE.BoxGeometry(w + 0.4, 4.6, d + 0.4), facade('#e8dcc4')); own.position.set(w / 2, 2.3, d / 2); g.add(own);
+      const own = new THREE.Mesh(new THREE.BoxGeometry(w + 0.4, 4.4, d + 0.4), facade('#e8dcc4')); own.position.set(w / 2, 2.2, d / 2); g.add(own); // endet unter dem Zimmerboden (kein Z-Fighting)
     }
     for (let i = 0; i < 24; i++) { const a = Math.random() * Math.PI * 2, r = rnd(10, 40); const t = new THREE.Group(); t.position.set(w / 2 + Math.cos(a) * r, 0, d / 2 + Math.sin(a) * r); cyl(t, 0.15, 0.2, 2, mat('trunk', { color: 0x5b3b24 }), 0, 1, 0, 8); const c = new THREE.Mesh(new THREE.SphereGeometry(rnd(1.2, 2), 10, 8), mat('treeTop', { color: 0x3f7a36, roughness: 0.9 })); c.position.y = 2.8; c.castShadow = true; t.add(c); g.add(t); }
   } else if (kind === 'industrial' || kind === 'city') {
