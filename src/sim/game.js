@@ -633,7 +633,7 @@ export function fmtNum(v, d = 2) { return nf(d).format(v); }
 export function fmtCoin(v) { const a = Math.abs(v); if (a >= 1e6) return nf(2).format(v / 1e6) + ' Mio.'; if (a >= 1000) return nf(0).format(v); if (a >= 1) return nf(3).format(v); if (a === 0) return '0'; return v.toPrecision(3).replace('.', ','); }
 export function fmtHash(h, algo) {
   const unit = algo === 'equihash' ? 'Sol/s' : 'H/s';
-  const u = ['', 'k', 'M', 'G', 'T', 'P', 'E', 'Z']; let i = 0;
+  const u = ['', 'k', 'M', 'G', 'T', 'P', 'E']; let i = 0;
   while (h >= 1000 && i < u.length - 1) { h /= 1000; i++; }
   return `${nf(h >= 100 ? 0 : h >= 10 ? 1 : 2).format(h)} ${u[i]}${unit}`;
 }
