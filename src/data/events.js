@@ -40,7 +40,13 @@ const memo = (name, f) => (g) => {
 const has = (s, id) => s.unlocked.includes(id);
 const top = (s) => s.unlocked.reduce((a, id) => (FACILITY[id].tier > FACILITY[a].tier ? id : a), s.unlocked[0]);
 const tier = (s) => FACILITY[top(s)].tier;
-const fname = (id) => FACILITY[id].name;
+const NAME = { kinder: 'Kinderzimmer', keller: 'Hobbykeller', werkstatt: 'Werkstatt', halle: 'Lagerhalle', rz: 'Rechenzentrum', fjord: 'Fjordhalle' };
+const GEN = { kinder: 'n', keller: 'm', werkstatt: 'f', halle: 'f', rz: 'n', fjord: 'f' };
+const fname = (id) => NAME[id] || FACILITY[id].name;
+// Grammatik: poss('keller', 'dat') → „deinem Hobbykeller“, poss('halle', 'nom', 'Ihr') → „Ihre Lagerhalle“; inn('werkstatt') → „in der Werkstatt“
+const poss = (id, k, base = 'dein') => `${base}${{ nom: { n: '', m: '', f: 'e' }, akk: { n: '', m: 'en', f: 'e' }, dat: { n: 'em', m: 'em', f: 'er' } }[k][GEN[id] || 'f']} ${fname(id)}`;
+const inn = (id) => `${GEN[id] === 'f' ? 'in der' : 'im'} ${fname(id)}`;
+const theNom = (id) => `${{ n: 'Das', m: 'Der', f: 'Die' }[GEN[id] || 'f']} ${fname(id)}`;
 const month = (s) => new Date(s.day * 864e5).getUTCMonth();
 const year = (s) => new Date(s.day * 864e5).getUTCFullYear();
 const LINDENTAL = ['kinder', 'keller', 'werkstatt', 'halle'];
@@ -147,7 +153,7 @@ const heatChoices = (extraCool = 1) => [
   { label: 'Durchziehen', hint: 'Hitze heißt: gedrosselte Geräte und mehr Ausfälle', fx: extraCool !== 1 ? { mod: [{ key: 'cool', mult: extraCool, days: 14 }] } : {}, reply: '<b>Deniz:</b> Ich stell schon mal Eiswürfel in den Kühlschrank. Für uns, nicht für die Miner.' },
 ];
 const heat = (id, date, window, text) => ({ id, from: 'Deniz', title: 'Hitzewelle', when: { date, window },
-  text: (s, h, g) => { const f = hottest(g); return `${text} Deine ${fname(f)} hat schon <b>${nf(0).format(g.summary[f]?.temp || 30)} °C</b>.`; },
+  text: (s, h, g) => { const f = hottest(g); return `${text} ${poss(f, 'nom', 'Dein')} hat schon <b>${nf(0).format(g.summary[f]?.temp || 30)} °C</b>.`; },
   choices: heatChoices(), fallback: 2 });
 
 const halving = (id, date, iso, from, to, line) => ({ id, from: 'Deniz', title: 'Halving', when: { date, window: 10 },
@@ -197,10 +203,10 @@ export const EVENTS = [
     ],
   },
   {
-    id: 'xmas', from: 'Mama', title: 'Weihnachten bei Brandts', when: { yearly: '12-21', from: '2010', window: 5 }, expire: 10,
+    id: 'xmas', from: 'Mama', title: 'Weihnachten bei Brandts', when: { yearly: '12-23', from: '2010', window: 5 }, expire: 10,
     text: (s) => `${XMAS[year(s)] || 'Wieder ein Jahr. Die Familie sitzt zusammen, draußen schneit es.'} „Und was legst du dieses Jahr unter den Baum?“`,
     choices: [
-      { label: 'Ein großes Fest für alle', cost: memo('xmas', (g) => amt(g, 3, 60)), hint: 'Alle, die dir noch nicht ganz vertrauen (unter Stufe 3): +1', fx: (g, s) => ({ rel: Object.fromEntries(FAMILY.filter((k) => (s.rel[k] || 0) < 3).map((k) => [k, 1])) }), reply: '<b>Mama:</b> So voll war das Wohnzimmer noch nie. Opa singt. Opa singt nie.' },
+      { label: 'Ein großes Fest für alle', cost: memo('xmas', (g) => amt(g, 3, 60)), hint: 'Alle, die dir gerade grollen oder fremdeln (unter Stufe 2): +1', fx: (g, s) => ({ rel: Object.fromEntries(FAMILY.filter((k) => (s.rel[k] || 0) < 2).map((k) => [k, 1])) }), reply: '<b>Mama:</b> So voll war das Wohnzimmer noch nie. Opa singt. Opa singt nie.' },
       { label: 'Selbstgebastelte Geschenke', hint: 'Mama +1 · Hardware-Erfahrung', fx: { rel: { mama: 1 }, xp: { hw: 15 } }, reply: '<b>Mama:</b> Ein Stern aus alten Lüftern, der leuchtet! Der kommt an die Spitze.' },
       { label: 'Heiligabend bei den Rigs', hint: 'Mama −1, Papa −1 · eine Woche +8 % Ertrag', fx: { rel: { mama: -1, papa: -1 }, mod: [{ key: 'rev', mult: 1.08, days: 7 }] }, reply: '<b>Mama:</b> Wir heben dir Kartoffelsalat auf. Wie jedes Jahr.' },
     ],
@@ -234,7 +240,7 @@ export const EVENTS = [
   {
     id: 'opastrom', from: 'Opa Heinz', title: 'Opa und der Starkstrom', when: { date: '2011-03-10', window: 120 },
     cond: (s) => !!opaFac(s),
-    text: (s) => { const id = opaFac(s), nx = FACILITY[id].power[s.fac[id].power + 1]; return `„Junge, deine Sicherung fliegt bald. Ich leg dir im ${fname(id)} <b>${nx.label}</b> (${nf(1).format(nx.kw)} kW). Du zahlst das Material, ich die Arbeit. Und du hilfst mit.“ Beim Elektriker kostet das ${usd(nx.cost)}.`; },
+    text: (s) => { const id = opaFac(s), nx = id && FACILITY[id].power[s.fac[id].power + 1]; if (!nx) return '„Na, Junge, deine Leitungen sind ja schon dick genug. Sag Bescheid, wenn du mehr brauchst.“'; return `„Junge, deine Sicherung fliegt bald. Ich leg dir ${inn(id)} <b>${nx.label}</b> (${nf(1).format(nx.kw)} kW). Du zahlst das Material, ich die Arbeit. Und du hilfst mit.“ Beim Elektriker kostet das ${usd(nx.cost)}.`; },
     choices: [
       { label: 'Opa machen lassen', cost: (g) => opaCost(g.s), hint: '40 % günstiger · Opa +1 · viel Hardware-Erfahrung', fx: (g, s) => ({ do: () => { const id = opaFac(s); if (id) s.fac[id].power++; }, rel: { opa: 1 }, xp: { hw: 80 }, flag: 'opaStrom', log: 'Opa hat den Starkstrom gelegt' }), reply: '<b>Opa:</b> Rot ist Phase, Blau ist Null. Und Finger weg, wenn ich „weg“ sage.' },
       { label: 'Opa machen lassen – mit einem Kasten Bier', cost: (g) => opaCost(g.s) + 20, hint: '40 % günstiger · Opa +2 · viel Hardware-Erfahrung', fx: (g, s) => ({ do: () => { const id = opaFac(s); if (id) s.fac[id].power++; }, rel: { opa: 2 }, xp: { hw: 80 }, flag: 'opaStrom', log: 'Opa hat den Starkstrom gelegt (mit Bier)' }), reply: '<b>Opa:</b> Ein Mann von Welt. Das Bier trinken wir, wenn die Sicherung hält.' },
@@ -300,7 +306,7 @@ export const EVENTS = [
 
   // ---------- 2012 ----------
   {
-    id: 'abi', from: 'Mama', title: 'Abiturprüfungen', when: { date: '2012-03-06', window: 14 },
+    id: 'abi', from: 'Mama', title: 'Abiturprüfungen', when: { date: '2012-03-07', window: 14 },
     text: '„In vier Wochen sind deine Prüfungen. Ich sehe dich nur noch zwischen deinen Kisten. Wie wär’s mit Lernen?“',
     choices: [
       { label: 'Lernen – die Rigs laufen allein', hint: 'Mama +2 · 45 Tage 30 % mehr Ausfälle (keiner schaut nach)', fx: { rel: { mama: 2 }, mod: [{ key: 'fail', mult: 1.3, days: 45 }], flag: 'abi', log: 'Frühjahr 2012: fürs Abitur gelernt' }, reply: '<b>Mama:</b> Nervennahrung steht vor deiner Tür. Opa passt auf die Sicherung auf.' },
@@ -437,19 +443,19 @@ export const EVENTS = [
   },
   {
     id: 'netz', from: 'Netzbetreiber', title: 'Warteschlange am Netz', when: { from: '2014-06-01', chance: 0.5, repeat: 30 },
-    cond: (s, h, g) => !!netzFac(s, g),
-    text: (s, h, g) => { const id = netzFac(s, g), nx = FACILITY[id].power[s.fac[id].power + 1], sm = g.summary[id]; return `„Für ${nx.label} in ${id === 'halle' ? 'Lindental-Nord' : 'Frankfurt-Ost'} brauchen Sie einen neuen Netzanschluss. ${id === 'rz' ? 'Rechenzentren stehen hier Schlange.' : 'Das Mittelspannungsnetz ist voll.'} Normal: 180 Tage Wartezeit. Mit Baukostenzuschuss: sofort.“ Die ${fname(id)} nutzt ${nf(0).format((sm.watt / 1000 / sm.capKw) * 100)} % ihres Anschlusses.`; },
+    cond: (s, h, g) => { const id = netzFac(s, g); if (id) s.ev.netzFac = id; return !!id; },
+    text: (s, h, g) => { const id = netzTarget(s, g), nx = FACILITY[id].power[s.fac[id].power + 1], sm = g.summary[id]; return `„Für ${nx ? nx.label : 'den nächsten Ausbau'} in ${id === 'halle' ? 'Lindental-Nord' : 'Frankfurt-Ost'} brauchen Sie einen neuen Netzanschluss. ${id === 'rz' ? 'Rechenzentren stehen hier Schlange.' : 'Das Mittelspannungsnetz ist voll.'} Normal: 180 Tage Wartezeit. Mit Baukostenzuschuss: sofort.“ ${theNom(id)} nutzt ${nf(0).format(sm ? (sm.watt / 1000 / sm.capKw) * 100 : 0)} % des Anschlusses.`; },
     choices: [
-      { label: 'Opa kennt den Netzmeister', need: (s) => (s.rel?.opa || 0) >= 3, hint: 'Opa ab Stufe 3: kein Zuschuss, kein Warten · Opa +1', fx: (g, s) => { const id = netzFac(s, g) || 'halle'; return { rel: { opa: 1 }, flag: 'netz_' + id, log: `Opa hat beim Netzbetreiber angerufen (${fname(id)})` }; }, reply: '<b>Opa:</b> Der Hubert und ich, wir haben 1971 zusammen gelernt. Das geht klar.' },
-      { label: 'Baukostenzuschuss zahlen', hint: 'Stromausbau dort sofort möglich, ein Jahr lang 40 % teurer', fx: (g, s) => { const id = netzFac(s, g) || 'halle'; return { mod: [{ key: 'powerCost', mult: 1.4, days: 365, fac: id }], flag: 'netz_' + id, log: `Netzbetreiber: Baukostenzuschuss für die ${fname(id)}` }; }, reply: '<b>Netzbetreiber:</b> Der Bagger kommt Montag.' },
-      { label: 'Anstellen – 180 Tage warten', hint: 'Kein Stromausbau dort für 180 Tage, danach zum Normalpreis', fx: (g, s) => { const id = netzFac(s, g) || 'halle'; return { mod: [{ key: 'powerWait', mult: 0, days: 180, fac: id }], flag: 'netz_' + id, log: `Netzbetreiber: 180 Tage Warteschlange für die ${fname(id)}` }; }, reply: '<b>Netzbetreiber:</b> Sie sind Nummer 47. Wir melden uns.' },
+      { label: 'Opa kennt den Netzmeister', need: (s) => (s.rel?.opa || 0) >= 3, hint: 'Opa ab Stufe 3: kein Zuschuss, kein Warten · Opa +1', fx: (g, s) => { const id = netzTarget(s, g); return { rel: { opa: 1 }, flag: 'netz_' + id, log: `Opa hat beim Netzbetreiber angerufen (${fname(id)})` }; }, reply: '<b>Opa:</b> Der Hubert und ich, wir haben 1971 zusammen gelernt. Das geht klar.' },
+      { label: 'Baukostenzuschuss zahlen', hint: 'Stromausbau dort sofort möglich, ein Jahr lang 40 % teurer', fx: (g, s) => { const id = netzTarget(s, g); return { mod: [{ key: 'powerCost', mult: 1.4, days: 365, fac: id }], flag: 'netz_' + id, log: `Netzbetreiber: Baukostenzuschuss (${fname(id)})` }; }, reply: '<b>Netzbetreiber:</b> Der Bagger kommt Montag.' },
+      { label: 'Anstellen – 180 Tage warten', hint: 'Kein Stromausbau dort für 180 Tage, danach zum Normalpreis', fx: (g, s) => { const id = netzTarget(s, g); return { mod: [{ key: 'powerWait', mult: 0, days: 180, fac: id }], flag: 'netz_' + id, log: `Netzbetreiber: 180 Tage Warteschlange (${fname(id)})` }; }, reply: '<b>Netzbetreiber:</b> Sie sind Nummer 47. Wir melden uns.' },
     ],
     fallback: 2,
   },
 
   // ---------- 2015 ----------
   {
-    id: 'papaonline', from: 'Papa', title: 'Papa gegen das Internet', when: { date: '2015-03-07', window: 14 },
+    id: 'papaonline', from: 'Papa', title: 'Papa gegen das Internet', when: { date: '2015-03-08', window: 14 },
     text: '„Die Leute schauen sich bei mir Fernseher an und bestellen sie dann online. Deniz meint, ich brauche einen Webshop. Ich weiß nicht mal, was ein Warenkorb ist.“',
     choices: [
       { label: 'Webshop bauen lassen', cost: memo('shop', (g) => nice(Math.max(2500, rev(g) * 3))), hint: 'Papa +2 · Papa zahlt dir zwei Jahre lang monatlich etwas zurück', fx: (g) => ({ rel: { papa: 2 }, mod: [{ key: 'monthly', mult: -Math.round(memo('shop', () => 0)(g) / 12), days: 730 }], flag: 'webshop', log: 'März 2015: Webshop für Elektro Brandt' }), reply: '<b>Papa:</b> Drei Bestellungen über Nacht! Aus Bayern! Wer kauft in Bayern Kabel bei mir?' },
@@ -471,7 +477,7 @@ export const EVENTS = [
   },
   {
     id: 'kita15', from: 'Opa Heinz', title: 'Abwärme für die Kita', when: { date: '2015-10-10', window: 14 }, cond: (s) => tier(s) >= 2,
-    text: (s) => `„Die Kita Sonnenschein frierst jeden Winter, die Ölheizung ist von 1979. Deine ${fname(top(s))} macht Wärme ohne Ende. Ich könnte eine Leitung legen.“`,
+    text: (s) => `„Die Kita Sonnenschein friert jeden Winter, die Ölheizung ist von 1979. ${poss(top(s), 'nom', 'Dein')} macht Wärme ohne Ende. Ich könnte eine Leitung legen.“`,
     choices: [
       { label: 'Leitung legen, Kita zahlt Heizgeld', cost: memo('kita', (g) => nice(Math.max(3000, rev(g) * 3))), hint: 'Opa +1, Mama +1 · drei Jahre monatliches Heizgeld', fx: (g) => ({ rel: { opa: 1, mama: 1 }, mod: [{ key: 'monthly', mult: -Math.round(memo('kita', () => 0)(g) / 12), days: 1095 }], flag: 'kita', log: 'Oktober 2015: Abwärme heizt die Kita' }), reply: '<b>Opa:</b> Fünfzehn Meter Rohr, und die Kinder haben es warm. So muss Technik.' },
       { label: 'Leitung legen, Wärme gratis', cost: memo('kita', (g) => nice(Math.max(3000, rev(g) * 3))), hint: 'Opa +2, Mama +2', fx: { rel: { opa: 2, mama: 2 }, flag: 'kita', log: 'Oktober 2015: Abwärme heizt die Kita – gratis' }, reply: '<b>Mama:</b> Die Kinder haben dir ein Bild gemalt. Ein Computer mit Sonne drin.' },
@@ -482,7 +488,7 @@ export const EVENTS = [
 
   // ---------- 2016 ----------
   {
-    id: 'kralhalle', from: 'Viktor Kral', title: 'Kral zieht nach Lindental', when: { date: '2016-03-06', window: 30 },
+    id: 'kralhalle', from: 'Viktor Kral', title: 'Kral zieht nach Lindental', when: { date: '2016-03-07', window: 30 },
     text: (s) => (has(s, 'halle')
       ? '„Nachbarn, Brandt! MONOLITH mietet die Halle neben Ihrer. Übrigens: Für die Trafostation zwischen unseren Hallen gibt es ein Vorkaufsrecht. 60.000 $. Ich biete mit.“'
       : '„MONOLITH mietet im Gewerbegebiet Lindental-Nord – da, wo Sie irgendwann hinwollen. Für die Trafostation dort gibt es ein Vorkaufsrecht. 60.000 $. Ich biete mit.“'),
@@ -525,8 +531,8 @@ export const EVENTS = [
 
   // ---------- 2017 ----------
   {
-    id: 'kralhost', from: 'Viktor Kral', title: 'Kral will mieten', when: { date: '2017-03-07', window: 20 }, cond: (s) => tier(s) >= 2,
-    text: (s, h, g) => `„Brandt, ein Geschäftsvorschlag. MONOLITH stellt eigene Maschinen in Ihre ${fname(top(s))} – ein Fünftel Ihres Anschlusses. Sie bekommen <b>${usd(hostFee(g))}</b> im Monat, zwei Jahre fest. Den Strom zahle ich.“`,
+    id: 'kralhost', from: 'Viktor Kral', title: 'Kral will mieten', when: { date: '2017-03-08', window: 20 }, cond: (s) => tier(s) >= 2,
+    text: (s, h, g) => `„Brandt, ein Geschäftsvorschlag. MONOLITH stellt eigene Maschinen in ${poss(top(s), 'akk', 'Ihr')} – ein Fünftel Ihres Anschlusses. Sie bekommen <b>${usd(hostFee(g))}</b> im Monat, zwei Jahre fest. Den Strom zahle ich.“`,
     choices: [
       { label: 'Vermieten', hint: 'Zwei Jahre: ein Fünftel weniger Anschluss, feste Miete · MONOLITH +3 %', fx: (g, s) => ({ mod: [{ key: 'cap', mult: 0.8, days: 730, fac: top(s) }, { key: 'monthly', mult: -hostFee(g), days: 730 }, { key: 'monolith', mult: 1.03, days: 730 }], flag: 'kralHost', log: `März 2017: Fläche an MONOLITH vermietet (${usd(hostFee(g))}/Monat)` }), reply: '<b>Kral:</b> Freut mich. Meine Techniker kommen Montag. Sie fassen nichts an.' },
       { label: 'Nicht an MONOLITH', hint: 'Deniz +1 – er traut Kral nicht', fx: { rel: { deniz: 1 }, log: 'März 2017: Krals Mietangebot abgelehnt' }, reply: '<b>Deniz:</b> Der wollte nur unsere Kühlung abschauen. Gut so.' },
@@ -606,10 +612,10 @@ export const EVENTS = [
 
   // ---------- 2018 ----------
   {
-    id: 'opa80', from: 'Mama', title: 'Opa wird 80', when: { date: '2018-03-07', window: 14 },
-    text: (s) => `„Opa wird 80! Er will ‚kein Theater‘. Also machen wir Theater. Die halbe Straße kommt, und er will unbedingt deine ${fname(top(s))} sehen.“`,
+    id: 'opa80', from: 'Mama', title: 'Opa wird 80', when: { date: '2018-03-08', window: 14 },
+    text: (s) => `„Opa wird 80! Er will ‚kein Theater‘. Also machen wir Theater. Die halbe Straße kommt, und er will unbedingt ${poss(top(s), 'akk')} sehen.“`,
     choices: [
-      { label: (g) => `Ein Fest in der ${fname(top(g.s))}`, cost: memo('o80', (g) => nice(Math.max(2000, rev(g) * 2))), hint: 'Opa +2, Mama +1, Papa +1', fx: { rel: { opa: 2, mama: 1, papa: 1 }, log: 'März 2018: Opas 80. zwischen den Minern gefeiert' }, reply: '<b>Opa:</b> Achtzig Jahre, und das hier ist das Lauteste, was ich je gehört hab. Herrlich.' },
+      { label: (g) => `Ein Fest ${inn(top(g.s))}`, cost: memo('o80', (g) => nice(Math.max(2000, rev(g) * 2))), hint: 'Opa +2, Mama +1, Papa +1', fx: { rel: { opa: 2, mama: 1, papa: 1 }, log: 'März 2018: Opas 80. zwischen den Minern gefeiert' }, reply: '<b>Opa:</b> Achtzig Jahre, und das hier ist das Lauteste, was ich je gehört hab. Herrlich.' },
       { label: 'Sein altes Röhrenradio restaurieren', hint: 'Opa +2 · Hardware-Erfahrung', fx: { rel: { opa: 2 }, xp: { hw: 40 }, flag: 'radio', log: 'März 2018: Opas Röhrenradio von 1962 restauriert' }, reply: '<b>Opa:</b> Das spielt ja wieder! Da lief 1962 die Nachricht, dass ich die Meisterprüfung hab.' },
       { label: 'Nur kurz vorbeischauen', hint: 'Opa −1', fx: { rel: { opa: -1 } }, reply: '<b>Mama:</b> Er hat zweimal gefragt, wo du bist.' },
     ],
@@ -617,7 +623,7 @@ export const EVENTS = [
   },
   heat('heat18', '2018-07-24', 10, '„Dürresommer! Zwei Wochen über 35 Grad, die Flüsse sind so warm, dass Kraftwerke drosseln.“'),
   {
-    id: 'winter18', from: 'Deniz', title: 'Krypto-Winter', when: { date: '2018-10-05', window: 14 },
+    id: 'winter18', from: 'Deniz', title: 'Krypto-Winter', when: { date: '2018-10-08', window: 14 },
     text: (s, h, g) => `„Seit Januar fällt der Kurs: <b>${usd(g.price('BTC'))}</b>. Bei einem Miner in Sachsen steht der Insolvenzverwalter – Container voller Geräte für einen Bruchteil.“${s.stats.papaBtc ? ` Papa fragt leise, ob seine Bitcoin (jetzt ${usd(s.stats.papaBtc * g.price('BTC'))}) je wieder was wert werden.` : ''}`,
     choices: [
       { label: 'Zuschlagen', hint: '30 Tage ASICs 45 % billiger · ein Jahr mehr Ausfälle (gebraucht)', fx: { mod: [{ key: 'price:asic', mult: 0.55, days: 30 }, { key: 'fail', mult: 1.2, days: 365 }], log: 'Oktober 2018: Insolvenz-Miner günstig gekauft' }, reply: '<b>Deniz:</b> Die haben noch Aufkleber von 2017 drauf: „To the moon“. Na dann.' },
@@ -647,7 +653,7 @@ export const EVENTS = [
 
   // ---------- 2019 ----------
   {
-    id: 'silberhochzeit', from: 'Opa Heinz', title: 'Silberhochzeit', when: { date: '2019-03-07', window: 14 },
+    id: 'silberhochzeit', from: 'Opa Heinz', title: 'Silberhochzeit', when: { date: '2019-03-08', window: 14 },
     text: '„Deine Eltern sind 25 Jahre verheiratet. Sabine wollte immer nach Norwegen, Fjorde gucken. Frank sagt, das ist zu teuer. Frank sagt immer, das ist zu teuer.“',
     choices: [
       { label: 'Eine Norwegen-Reise schenken', cost: memo('silber', (g) => nice(Math.max(4000, rev(g) * 2))), hint: 'Mama +2, Papa +2 · Mama bringt Ideen mit', fx: { rel: { mama: 2, papa: 2 }, flag: 'norwegen', log: 'März 2019: Eltern zur Silberhochzeit nach Norwegen geschickt' }, reply: '<b>Mama</b> (Postkarte): „Wasserfälle, Wasserkraft, kalte Luft. Wär das nicht was für deine Computer?“' },
@@ -696,7 +702,7 @@ export const EVENTS = [
   halving('halv20', '2020-05-08', '11.05.2020', 6.25 * 2, 6.25, '„Mitten in der Pandemie. Ausgerechnet jetzt“, seufzt Deniz.'),
   {
     id: 'opahaus', from: 'Opa Heinz', title: 'Opa will arbeiten', when: { date: '2020-08-01', window: 30 }, cond: (s) => tier(s) >= 2,
-    text: (s) => `„Rente ist langweilig. Ich bin 82 und will was tun. Lass mich Hausmeister in deiner ${fname(top(s))} sein. Ich kenn jedes Kabel.“${has(s, 'fjord') ? ' „Und ja, auch in Norwegen. Ich war 1962 schon mal da. Auf Montage.“' : ''}`,
+    text: (s) => `„Rente ist langweilig. Ich bin 82 und will was tun. Lass mich Hausmeister in ${poss(top(s), 'dat')} sein. Ich kenn jedes Kabel.“${has(s, 'fjord') ? ' „Und ja, auch in Norwegen. Ich war 1962 schon mal da. Auf Montage.“' : ''}`,
     choices: [
       { label: 'Opa wird Hausmeister', hint: 'Opa +2 · −15 % Ausfälle · 1.500 $ Lohn im Monat', fx: { rel: { opa: 2 }, mod: [{ key: 'fail', mult: 0.85, src: 'opaHaus' }, { key: 'monthly', mult: 1500, src: 'opaHaus' }], flag: 'opaHaus', log: 'August 2020: Opa wird Hausmeister bei Hashwerk' }, reply: '<b>Opa:</b> Erster Arbeitstag: Ich hab drei lose Klemmen gefunden. DREI.' },
       { label: 'Opa berät beim Stromnetz', hint: 'Opa +1 · Stromausbau überall 15 % günstiger', fx: { rel: { opa: 1 }, mod: [{ key: 'powerCost', mult: 0.85 }], log: 'August 2020: Opa berät Hashwerk beim Stromnetz' }, reply: '<b>Opa:</b> Ich ruf nur ein paar Leute an. Und dann rufen die ein paar Leute an.' },
@@ -717,7 +723,7 @@ export const EVENTS = [
 
   // ---------- 2021 ----------
   {
-    id: 'autobauer', from: 'Papa', title: 'Papa und das E-Auto', when: { date: '2021-03-07', window: 14 },
+    id: 'autobauer', from: 'Papa', title: 'Papa und das E-Auto', when: { date: '2021-03-08', window: 14 },
     text: (s, h, g) => `„Ein Autobauer hat für Milliarden Bitcoin gekauft, und man kann jetzt Autos mit Bitcoin bezahlen! Unser Lieferwagen ist 22 Jahre alt … Bitcoin steht bei <b>${usd(g.price('BTC'))}</b>.“`,
     choices: [
       { label: 'Papa einen E-Transporter schenken', cost: memo('auto', (g) => nice(Math.max(45000, rev(g) * 0.5))), hint: 'Papa +2 · Hardware dauerhaft 3 % billiger (ihr holt selbst ab)', fx: { rel: { papa: 2 }, mod: [{ key: 'price', mult: 0.97 }], log: 'März 2021: Papa einen E-Transporter geschenkt' }, reply: '<b>Papa:</b> Der fährt ja ganz leise! Ich hab dreimal gehupt, um sicherzugehen, dass er an ist.' },
@@ -756,7 +762,7 @@ export const EVENTS = [
 
   // ---------- 2022 ----------
   {
-    id: 'denizpapa', from: 'Deniz', title: 'Deniz wird Vater', when: { date: '2022-03-07', window: 14 },
+    id: 'denizpapa', from: 'Deniz', title: 'Deniz wird Vater', when: { date: '2022-03-08', window: 14 },
     text: '„Ayla ist schwanger! Im Juni ist es so weit. Ich will zwei Monate Elternzeit nehmen. Ich weiß, gerade ist viel los …“',
     choices: [
       { label: 'Natürlich – volle zwei Monate', hint: 'Deniz +2 · 60 Tage 20 % mehr Ausfälle', fx: { rel: { deniz: 2 }, mod: [{ key: 'fail', mult: 1.2, days: 60 }], flag: 'denizKind', log: 'März 2022: Deniz geht in Elternzeit' }, reply: '<b>Deniz:</b> Ich schick dir jeden Tag ein Foto. Von ihr, nicht von den Windeln.' },
@@ -778,14 +784,17 @@ export const EVENTS = [
     fallback: 3,
   },
   {
-    id: 'fxtstop', from: 'Deniz', title: 'Bei FXT stimmt was nicht', when: { date: '2022-11-06', window: 4 }, cond: (s, h, g) => exUSD(g) > 100,
-    text: (s, h, g) => `„FXT, die zweitgrößte Börse der Welt, wackelt: Auszahlungen dauern ewig, Gerüchte sagen, das Kundengeld ist weg. Auf der Börse hast du noch <b>${usd(exUSD(g))}</b>. Wir haben das 2014 schon mal erlebt …“`,
+    id: 'fxtstop', from: 'Deniz', title: 'Bei FXT stimmt was nicht', when: { date: '2022-11-06', window: 4 },
+    text: (s, h, g) => (exUSD(g) > 100
+      ? `„FXT, die zweitgrößte Börse der Welt, wackelt: Auszahlungen dauern ewig, Gerüchte sagen, das Kundengeld ist weg. Auf der Börse hast du noch <b>${usd(exUSD(g))}</b>. Wir haben das 2014 schon mal erlebt …“`
+      : '„FXT, die zweitgrößte Börse der Welt, wackelt – Gerüchte sagen, das Kundengeld ist weg. Unsere Coins liegen zum Glück in der Cold-Wallet. Erste Geier kaufen schon FXT-Guthaben für 10 Cent pro Dollar.“'),
     choices: [
-      { label: 'Sofort alles in die Cold-Wallet', hint: 'Über eine andere Börse · 2 % Gebühr · neue Coins landen dort', fx: (g, s) => ({ do: () => { for (const c of Object.keys(s.wallet)) { const w = s.wallet[c]; w.cold += w.ex * 0.98; w.ex = 0; } s.payoutCold = true; }, flag: 'fxtSafe', log: 'November 2022: Coins vor der FXT-Pleite gerettet' }), reply: '<b>Deniz:</b> Drei Tage vor dem Knall. Wir lernen doch dazu.' },
-      { label: 'Alles zu 90 % verkaufen', hint: 'Ein Händler nimmt FXT-Guthaben', fx: (g, s) => { let v = 0; for (const c of Object.keys(s.wallet)) { const w = s.wallet[c]; v += w.ex * (g.price(c) || 0) * 0.9; w.ex = 0; } return { cash: v, log: `November 2022: FXT-Guthaben für ${usd(v)} verkauft` }; }, reply: '<b>Deniz:</b> Zehn Prozent Lehrgeld. Besser als hundert.' },
+      { label: 'Sofort alles in die Cold-Wallet', need: (s, h, g) => exUSD(g) > 100, hint: 'Über eine andere Börse · 2 % Gebühr · neue Coins landen dort', fx: (g, s) => ({ do: () => { for (const c of Object.keys(s.wallet)) { const w = s.wallet[c]; w.cold += w.ex * 0.98; w.ex = 0; } s.payoutCold = true; }, flag: 'fxtSafe', log: 'November 2022: Coins vor der FXT-Pleite gerettet' }), reply: '<b>Deniz:</b> Fünf Tage vor dem Knall. Wir lernen doch dazu.' },
+      { label: 'Börsenguthaben zu 90 % verkaufen', need: (s, h, g) => exUSD(g) > 100, hint: 'Ein Händler nimmt FXT-Guthaben', fx: (g, s) => { let v = 0; for (const c of Object.keys(s.wallet)) { const w = s.wallet[c]; v += w.ex * (g.price(c) || 0) * 0.9; w.ex = 0; } return { cash: v, log: `November 2022: FXT-Guthaben für ${usd(v)} verkauft` }; }, reply: '<b>Deniz:</b> Zehn Prozent Lehrgeld. Besser als hundert.' },
+      { label: 'FXT-Forderungen billig aufkaufen', cost: memo('fxtc', (g) => amt(g, 5, 1000)), hint: '10 Cent pro Dollar – vielleicht zahlt der Insolvenzverwalter eines Tages etwas', fx: (g) => ({ stat: { fxtClaim: memo('fxtc', () => 0)(g) * 10 }, log: 'November 2022: FXT-Forderungen für 10 Cent pro Dollar gekauft' }), reply: '<b>Deniz:</b> Wir kaufen Schulden einer Pleite-Börse. Wenn das Opa erfährt …' },
       { label: 'Abwarten', hint: 'FXT ist doch riesig', fx: {}, reply: '<b>Deniz:</b> Hoffentlich hast du recht. Ich hab ein ganz mieses Gefühl.' },
     ],
-    fallback: 2,
+    fallback: 3,
   },
   {
     id: 'kralbroke', from: 'Viktor Kral', title: 'MONOLITH wankt', when: { date: '2022-12-05', window: 25 }, cond: (s) => !!s.flags.gmbh && !s.flags.soldOut,
@@ -808,7 +817,7 @@ export const EVENTS = [
 
   // ---------- 2023 ----------
   {
-    id: 'strompreisbremse', from: 'Papa', title: 'Die Strompreisbremse', when: { date: '2023-03-07', window: 14 },
+    id: 'strompreisbremse', from: 'Papa', title: 'Die Strompreisbremse', when: { date: '2023-03-08', window: 14 },
     text: '„Der Staat deckelt die Strompreise – rückwirkend ab Januar. Aber nur mit Antrag: Formulare, Nachweise, Verbrauchsprognosen. Für große Verbraucher gibt’s extra Regeln.“',
     choices: [
       { label: 'Steuerberater macht den Antrag', cost: memo('spb', (g) => amt(g, 2, 800)), hint: '10 Monate: −20 % Strom in Lindental und Frankfurt', fx: { mod: facMods([...LINDENTAL, 'rz'], 'elec', 0.8, 300), log: 'März 2023: Strompreisbremse beantragt (Steuerberater)' }, reply: '<b>Steuerberater:</b> Formular 7b, Anlage C. Mein Lieblingsformular.' },
@@ -852,7 +861,7 @@ export const EVENTS = [
   halving('halv24', '2024-04-17', '20.04.2024', 6.25, 3.125, '„Jetzt zählt nur noch Effizienz“, sagt Deniz.'),
   {
     id: 'aitenant', from: 'Deniz', title: 'Eine KI-Firma klopft an', when: { date: '2024-06-10', window: 45 }, cond: (s) => has(s, 'fjord') || has(s, 'rz'),
-    text: (s) => { const f = aiFac(s); return `„NordGPU will Fläche in deiner ${fname(f)} für KI-Server mieten. Fester Preis, egal was Bitcoin macht: 80.000 $ pro Megawatt und Monat.“ Die ${fname(f)} hat gerade <b>${nf(1).format(kw(s, f) / 1000)} MW</b>.`; },
+    text: (s) => { const f = aiFac(s); return `„NordGPU will Fläche in ${poss(f, 'dat')} für KI-Server mieten. Fester Preis, egal was Bitcoin macht: 80.000 $ pro Megawatt und Monat.“ ${theNom(f)} hat gerade <b>${nf(1).format(kw(s, f) / 1000)} MW</b>.`; },
     choices: [
       { label: 'Die Hälfte vermieten', hint: 'Halber Anschluss · feste Miete', fx: (g, s) => { const f = aiFac(s); return { mod: [{ key: 'cap', mult: 0.5, fac: f }, { key: 'monthly', mult: -Math.round(kw(s, f) / 1000 * 0.5 * 80000) }], flag: 'aiTenant', ach: 'ai', log: `Juni 2024: halbe ${fname(f)} an NordGPU vermietet` }; }, reply: '<b>Deniz:</b> Bitcoin und KI unter einem Dach. 2024, Baby.' },
       { label: 'Ein Drittel vermieten', hint: 'Zwei Drittel Anschluss · feste Miete', fx: (g, s) => { const f = aiFac(s); return { mod: [{ key: 'cap', mult: 2 / 3, fac: f }, { key: 'monthly', mult: -Math.round(kw(s, f) / 1000 / 3 * 80000) }], flag: 'aiTenant', ach: 'ai', log: `Juni 2024: ein Drittel der ${fname(f)} an NordGPU vermietet` }; }, reply: '<b>Deniz:</b> Ein Drittel Zukunft, zwei Drittel Bitcoin. Gefällt mir.' },
@@ -861,11 +870,11 @@ export const EVENTS = [
     fallback: 2,
   },
   {
-    id: 'goxrefund', from: 'Deniz', title: 'GoxBank zahlt zurück', when: { date: '2024-07-05', window: 30 }, cond: (s) => (s.stats.lostBtc?.gox || 0) > 0.01,
-    text: (s) => `Zehn Jahre nach der Pleite zahlt der GoxBank-Treuhänder aus! Du bekommst einen Teil deiner damals verlorenen <b>${nf(2).format(s.stats.lostBtc.gox)} BTC</b> zurück.`,
+    id: 'goxrefund', from: 'Deniz', title: 'Die Treuhänder zahlen', when: { date: '2024-07-05', window: 30 }, cond: (s) => (s.stats.lostBtc?.gox || 0) > 0.01 || (s.stats.lostBtc?.fxt || 0) > 0.001 || (s.stats.fxtClaim || 0) > 0,
+    text: (s, h, g) => { const gx = s.stats.lostBtc?.gox || 0, fx = refundFxt(s, g); return `${gx > 0.01 ? `Zehn Jahre nach der Pleite zahlt der GoxBank-Treuhänder aus: <b>${nf(2).format(gx * 0.2)} BTC</b> von deinen damals verlorenen ${nf(2).format(gx)} BTC kommen zurück.` : ''}${fx > 0 ? ` Und die FXT-Abwicklung zahlt 110 % – für dich <b>${usd(fx)}</b>.` : ''}`; },
     choices: [
-      { label: 'Auszahlung in Bitcoin annehmen', hint: (g) => `${nf(2).format(g.s.stats.lostBtc.gox * 0.2)} BTC`, fx: (g, s) => ({ coin: { BTC: s.stats.lostBtc.gox * 0.2 }, log: `Juli 2024: ${nf(2).format(s.stats.lostBtc.gox * 0.2)} BTC von GoxBank zurück` }), reply: '<b>Deniz:</b> Zehn Jahre! Ich hatte das Passwort schon vergessen.' },
-      { label: 'Sofort verkaufen und Deniz einladen', hint: 'Bargeld · Deniz +1', fx: (g, s) => ({ cash: s.stats.lostBtc.gox * 0.2 * g.price('BTC') * 0.98, rel: { deniz: 1 }, log: 'Juli 2024: GoxBank-Auszahlung verkauft' }), reply: '<b>Deniz:</b> Steak. Auf GoxBank. Endlich zahlen die mal was.' },
+      { label: 'Auszahlung annehmen', hint: 'GoxBank zahlt in Bitcoin, FXT in Dollar', fx: (g, s) => { const n = (s.stats.lostBtc?.gox || 0) * 0.2, v = refundFxt(s, g); s.stats.fxtClaim = 0; return { coin: { BTC: n }, cash: v, log: `Juli 2024: Treuhänder zahlen ${nf(2).format(n)} BTC und ${usd(v)} zurück` }; }, reply: '<b>Deniz:</b> Zehn Jahre! Ich hatte das GoxBank-Passwort schon vergessen.' },
+      { label: 'Alles verkaufen und Deniz einladen', hint: 'Bargeld · Deniz +1', fx: (g, s) => { const v = (s.stats.lostBtc?.gox || 0) * 0.2 * g.price('BTC') * 0.98 + refundFxt(s, g); s.stats.fxtClaim = 0; return { cash: v, rel: { deniz: 1 }, log: `Juli 2024: Treuhänder-Auszahlung von ${usd(v)} kassiert` }; }, reply: '<b>Deniz:</b> Steak. Auf GoxBank. Endlich zahlen die mal was.' },
     ],
     fallback: 0,
   },
@@ -877,7 +886,7 @@ export const EVENTS = [
   },
   {
     id: 'kralki', from: 'Viktor Kral', title: 'KRAL Compute', when: { date: '2024-10-10', window: 30 }, cond: (s) => tier(s) >= 3,
-    text: (s, h, g) => { const f = kiFac(s); return `„Brandt. MONOLITH heißt jetzt KRAL Compute. Bitcoin ist Vergangenheit, die Zukunft ist KI – und KI braucht Strom. Ich kaufe Ihnen die halbe Anschlussleistung Ihrer ${fname(f)} ab: <b>${usd(kiOffer(g))}</b>, heute.“`; },
+    text: (s, h, g) => { const f = kiFac(s); return `„Brandt. MONOLITH heißt jetzt KRAL Compute. Bitcoin ist Vergangenheit, die Zukunft ist KI – und KI braucht Strom. Ich kaufe Ihnen die halbe Anschlussleistung in ${poss(f, 'dat', 'Ihr')} ab: <b>${usd(kiOffer(g))}</b>, heute.“`; },
     choices: [
       { label: 'Halben Anschluss verkaufen', hint: 'Sofort viel Geld · halbe Leistung dort, für immer', fx: (g, s) => { const f = kiFac(s), v = kiOffer(g); return { cash: v, mod: [{ key: 'cap', mult: 0.5, fac: f }, { key: 'monolith', mult: 0.9 }], log: `Oktober 2024: halben Anschluss der ${fname(f)} an KRAL Compute verkauft (${usd(v)})` }; }, reply: '<b>Kral:</b> Ein kluger Mann. Meine Leute verlegen die Kabel heute Nacht.' },
       { label: 'Gegenangebot: Wir hosten seine Server', hint: 'Zwei Jahre halbe Leistung, dafür Miete (insgesamt mehr Geld)', fx: (g, s) => { const f = kiFac(s), v = kiOffer(g); return { mod: [{ key: 'cap', mult: 0.5, fac: f, days: 730 }, { key: 'monthly', mult: -Math.round((v * 1.4) / 24), days: 730 }, { key: 'monolith', mult: 0.9 }], log: `Oktober 2024: KRAL-Compute-Server in der ${fname(f)}` }; }, reply: '<b>Kral:</b> Sie verhandeln wie ein Elektriker. Das meine ich als Kompliment.' },
@@ -888,7 +897,7 @@ export const EVENTS = [
 
   // ---------- 2025 ----------
   {
-    id: 'reserve25', from: 'Opa Heinz', title: 'Eine Reserve für Hashwerk', when: { date: '2025-03-07', window: 14 },
+    id: 'reserve25', from: 'Opa Heinz', title: 'Eine Reserve für Hashwerk', when: { date: '2025-03-08', window: 14 },
     text: '„Im Radio: Ein ganzer Staat legt eine Bitcoin-Reserve an. Und du? Du verkaufst alles, was du schürfst. Meine Mutter hatte immer Einmachgläser im Keller. Für schlechte Zeiten.“',
     choices: [
       { label: 'Bitcoin für 30 Tagesumsätze kaufen', cost: memo('res', (g) => amt(g, 30, 5000)), hint: 'Hashwerk-Reserve · Opa +1', fx: (g) => ({ ...buy(g, 'BTC', memo('res', () => 0)(g)), rel: { opa: 1 }, log: 'März 2025: Hashwerk-Reserve in Bitcoin angelegt' }), reply: '<b>Opa:</b> Ein Glas für schlechte Zeiten. Brav.' },
@@ -920,7 +929,7 @@ export const EVENTS = [
 
   // ---------- 2026 ----------
   {
-    id: 'tief26', from: 'Deniz', title: 'Der Kater nach dem Gipfel', when: { date: '2026-03-07', window: 14 },
+    id: 'tief26', from: 'Deniz', title: 'Der Kater nach dem Gipfel', when: { date: '2026-03-08', window: 14 },
     text: (s, h, g) => `„Bitcoin bei <b>${usd(g.price('BTC'))}</b> – ${nf(0).format(Math.max(0, (1 - g.price('BTC') / 126000) * 100))} % unter dem Hoch vom Oktober. Der Ertrag pro Terahash ist so tief wie nie, kleine Miner schalten ab. Und wir?“`,
     choices: [
       { label: 'Pausierte Geräte verkaufen', hint: (g) => { let n = 0; for (const id of g.s.unlocked) for (const a of g.summary[id]?.per.values() || []) if (a.status === 'idle') n++; return n ? `${n} unrentable Geräte zum Restwert` : 'Gerade ist nichts pausiert'; }, fx: (g) => { const r = sellIdle(g); return { log: `März 2026: ${r.n} unrentable Geräte für ${usd(r.v)} verkauft` }; }, reply: '<b>Deniz:</b> Platz für die nächste Generation. Ein bisschen traurig ist es trotzdem.' },
@@ -965,7 +974,7 @@ export const EVENTS = [
   {
     id: 'e_hitze', from: 'Deniz', title: 'Hitzesommer', when: { from: '2027-01-01', chance: 0.2, repeat: 365 },
     cond: (s) => month(s) >= 5 && month(s) <= 7,
-    text: (s, h, g) => { const f = hottest(g); return `„Schon wieder ein Rekordsommer. Die Außenluft ist so warm, dass alle Kühlungen schwächeln – zwei Wochen lang.“ Deine ${fname(f)} hat <b>${nf(0).format(g.summary[f]?.temp || 30)} °C</b>.`; },
+    text: (s, h, g) => { const f = hottest(g); return `„Schon wieder ein Rekordsommer. Die Außenluft ist so warm, dass alle Kühlungen schwächeln – zwei Wochen lang.“ ${poss(f, 'nom', 'Dein')} hat <b>${nf(0).format(g.summary[f]?.temp || 30)} °C</b>.`; },
     choices: heatChoices(0.8),
     fallback: 2,
   },
@@ -995,6 +1004,9 @@ function netzFac(s, g) {
   }
   return null;
 }
+function netzTarget(s, g) { const id = s.ev.netzFac || netzFac(s, g); return id && has(s, id) ? id : has(s, 'rz') ? 'rz' : 'halle'; }
+// FXT: verlorene Bitcoin zum Kurs vom Pleitetag ×1,1 plus aufgekaufte Forderungen ×1,1
+function refundFxt(s, g) { return ((s.stats.lostBtc?.fxt || 0) * g.price('BTC', toDay('2022-11-11')) + (s.stats.fxtClaim || 0)) * 1.1; }
 function hostFee(g) { const id = top(g.s), cap = g.summary?.[id]?.capKw || kw(g.s, id); return nice(cap * 0.2 * 24 * 30.4 * 0.06); }
 function icoCost(g) { return nice(Math.min(400000, Math.max(25000, g.netWorthFast() * 0.08))); }
 const icoRaise = memo('icoRaise', (g) => nice(Math.min(30e6, icoCost(g) * 1.5 + Math.max(0, g.netWorthFast()) * 0.25)));
