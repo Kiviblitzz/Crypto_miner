@@ -329,6 +329,18 @@ export class World {
     const sx = (v.x + 1) / 2 * innerWidth, sy = (1 - v.y) / 2 * innerHeight, front = cs.z < -0.1;
     return { x: sx, y: sy, front, on: front && sx > 40 && sx < innerWidth - 40 && sy > 60 && sy < innerHeight - 40, side: cs.x < 0 ? -1 : 1, dist: cam.position.distanceTo(new THREE.Vector3(x, y, z)) };
   }
+  // Taschenlampe passt sich der Entfernung an: nahe Wände überstrahlen nicht
+  updateLamp(dt) {
+    const vm = this.vm; if (!vm?.lampOn || !this.room) return;
+    if (!this._lampRay) { this._lampRay = new THREE.Raycaster(); this._lampRay.far = 8; this._lampD = 3; this._lampN = 0; }
+    if ((this._lampN = (this._lampN + 1) % 5) === 0) {
+      this._lampRay.setFromCamera({ x: 0.04, y: -0.08 }, this.camera);
+      const hit = this._lampRay.intersectObject(this.room.root, true).find((h) => h.object.visible && !h.object.isPoints);
+      this._lampD = hit ? hit.distance : 6;
+    }
+    this._lampDs = (this._lampDs ?? this._lampD) + (this._lampD - (this._lampDs ?? this._lampD)) * Math.min(1, dt * 6);
+    vm.lamp.intensity = 15 * Math.max(0.12, Math.min(1, Math.pow(this._lampDs / 2.6, 1.4)));
+  }
   updateDusty(dt) {
     if (!this.dusty) return;
     // dunkler, staubiger Keller: weniger Umgebungslicht, Sonne kaum durch die verdreckten Fenster
@@ -968,7 +980,7 @@ export class World {
     if (this.mode === 'title' || this.visFrac == null) this.visFrac = s.frac;
     else { const df = (s.frac - this.visFrac + 1) % 1; this.visFrac = (this.visFrac + Math.min(df, dt / 90)) % 1; }
     this.updateDaylight(this.visFrac);
-    this.updatePeople(dt); this.updateSmoke(dt); this.updateWeather(dt); this.updatePopups(dt); this.updateInstall(dt); this.updateLoose(dt); this.updateDusty(dt); if (this.ghostMat) { this.ghostMat.opacity = 0.1; this.ghostLine.opacity = 0.38 + 0.06 * Math.sin(this.t * 4); }
+    this.updatePeople(dt); this.updateSmoke(dt); this.updateWeather(dt); this.updatePopups(dt); this.updateInstall(dt); this.updateLoose(dt); this.updateDusty(dt); this.updateLamp(dt); if (this.ghostMat) { this.ghostMat.opacity = 0.1; this.ghostLine.opacity = 0.38 + 0.06 * Math.sin(this.t * 4); }
     // Lüfter & LEDs
     const fanSpeed = 28 * dt;
     for (const e of this.entries.values()) {
