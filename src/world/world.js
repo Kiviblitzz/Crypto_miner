@@ -183,7 +183,8 @@ export class World {
     this.room = buildRoom(def); this.scene.add(this.room.root); this.screensDirty = true;
     // Verstaubter Keller, solange er noch nicht ausgebaut ist: Gerümpel, Spinnweben, Staub, schwaches Flackerlicht
     this.dusty = id === 'keller' && this.game.s?.feat && !this.game.s.unlocked.includes('keller');
-    if (this.dusty) { const dc = buildDustyClutter(def); this.room.root.add(dc.group); this.room.blocked.push(...dc.blocked); this.dustPts = dc.group.userData.dust; for (const L of this.room.lights) { L.intensity *= 0.3; L.dist = 3.6; L.color = 0xffc98a; } this.room.lights.splice(1); this.room.props = []; } else this.dustPts = null;
+    this.dustBulb = null;
+    if (this.dusty) { const dc = buildDustyClutter(def); this.room.root.add(dc.group); this.room.blocked.push(...dc.blocked); this.dustPts = dc.group.userData.dust; for (const L of this.room.lights) { L.intensity *= 0.3; L.dist = 3.6; L.color = 0xffc98a; } this.room.lights.splice(1); this.room.lights.push({ pos: [6.4, 2.2, 0.7], color: 0xffd9a8, intensity: 0.35, dist: 3.2 }); const bl = this.room.bulbs || []; if (bl[1]) bl[1].material = mat('bulbDead', { color: 0x4a443c, roughness: 0.3 }); if (bl[0]) { bl[0].material = bl[0].material.clone(); this.dustBulb = bl[0]; } this.room.props = []; } else this.dustPts = null;
     this.syncLoose();
     this.outside = buildOutside(this.room.outside, def); this.scene.add(this.outside);
     this.roomLights = this.room.lights.map((L) => { const p = new THREE.PointLight(L.color, L.intensity, L.dist, 1.6); p.position.set(...L.pos); this.scene.add(p); return p; });
@@ -345,7 +346,7 @@ export class World {
     if (!this.dusty) return;
     // dunkler, staubiger Keller: weniger Umgebungslicht, Sonne kaum durch die verdreckten Fenster
     this.hemi.intensity *= 0.22; this.sun.intensity *= 0.25; this.moon.intensity *= 0.4; this.scene.environmentIntensity *= 0.2;
-    const L = this.roomLights?.[0]; if (L) { const f = Math.sin(this.t * 23) * Math.sin(this.t * 7.3) > 0.82 ? 0.3 : 1; L.intensity *= f; }
+    const L = this.roomLights?.[0]; if (L) { const f = Math.sin(this.t * 23) * Math.sin(this.t * 7.3) > 0.82 ? 0.3 : 1; L.intensity *= f; if (this.dustBulb) this.dustBulb.material.emissiveIntensity = 2.5 * f; }
     if (this.dustPts) { const a = this.dustPts.geometry.attributes.position, h = this.def.h; for (let i = 0; i < a.count; i++) { let y = a.getY(i) + Math.sin(this.t * 0.4 + i) * dt * 0.02 - dt * 0.006; if (y < 0.15) y = h - 0.3; a.setY(i, y); a.setX(i, a.getX(i) + Math.cos(this.t * 0.3 + i * 1.7) * dt * 0.01); } a.needsUpdate = true; }
   }
   // Herumliegende Teile im Zimmer (leuchten, bis man sie aufhebt)

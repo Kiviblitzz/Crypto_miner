@@ -83,7 +83,12 @@ export function buildRoom(def) {
     windowFrame(S.back, 1.0, 2.0, 0.9, 2.15, 0.15);
     // Tür (rechts, nahe vorne)
     box(S.right, 0.86, 2.06, 0.04, mat('door', { color: 0xb98d63, roughness: 0.55 }), 3.03, 0, 0.02, 0, 0.004);
-    for (const [y, h] of [[0.16, 0.78], [1.1, 0.78]]) box(S.right, 0.6, h, 0.006, mat('doorPanel', { color: 0xa47b54, roughness: 0.55 }), 3.03, y, 0.045, 0, 0.004);
+    for (const [y, h] of [[0.16, 0.78], [1.1, 0.78]]) {
+      box(S.right, 0.6, h, 0.006, mat('doorPanel', { color: 0xa47b54, roughness: 0.55 }), 3.03, y, 0.045, 0, 0.004);
+      const mold = mat('doorMold', { color: 0x8f6844, roughness: 0.5 });
+      for (const yy of [y - 0.01, y + h - 0.01]) box(S.right, 0.64, 0.02, 0.012, mold, 3.03, yy, 0.05, 0, 0.004);
+      for (const xx of [3.03 - 0.31, 3.03 + 0.31]) box(S.right, 0.02, h + 0.02, 0.012, mold, xx, y - 0.01, 0.05, 0, 0.004);
+    }
     for (const x of [2.575, 3.475]) box(S.right, 0.06, 2.042, 0.075, mat('doorFrame', { color: 0xf6f1e6, roughness: 0.45 }), x, 0, 0.0375, 0, 0.004);
     box(S.right, 0.96, 0.07, 0.075, mat('doorFrame', { color: 0xf6f1e6, roughness: 0.45 }), 3.025, 2.042, 0.0375, 0, 0.004);
     cyl(S.right, 0.026, 0.026, 0.012, X.chrome(), 3.36, 1.0, 0.046, 20, 'z');
@@ -161,13 +166,13 @@ export function buildRoom(def) {
       const disp = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.045), new THREE.MeshBasicMaterial({ map: textTexture([{ text: '58 °C', font: 'bold 52px monospace', color: '#7dffb0' }], { w: 192, h: 88, bg: '#0d1a12' }) }));
       disp.rotation.y = Math.PI / 2; disp.position.set(fx + 0.012, 1.37, 4.26); g.add(disp);
       for (const z of [4.46, 4.56]) { cyl(g, 0.022, 0.022, 0.025, M.black(), fx + 0.02, 1.35, z, 16, 'x'); box(g, 0.006, 0.02, 0.004, M.white(), fx + 0.034, 1.36, z, 0, 0); }
-      cyl(g, 0.045, 0.045, 0.03, X.chrome(), fx + 0.012, 1.08, 4.25, 24, 'x');
-      const gauge = new THREE.Mesh(new THREE.CircleGeometry(0.037, 24), new THREE.MeshStandardMaterial({ map: textTexture([{ text: '◜ 1,5 bar ◝', font: 'bold 34px Nunito, sans-serif', color: '#333' }], { w: 128, h: 128, bg: '#f4f1ea' }), roughness: 0.4 }));
-      gauge.rotation.y = Math.PI / 2; gauge.position.set(fx + 0.029, 1.08, 4.25); g.add(gauge);
+      cyl(g, 0.045, 0.045, 0.03, X.chrome(), fx + 0.012, 0.98, 4.25, 24, 'x');
+      const gauge = new THREE.Mesh(new THREE.CircleGeometry(0.037, 24), new THREE.MeshStandardMaterial({ map: textTexture([{ text: '1,5 bar', font: 'bold 24px Nunito, sans-serif', color: '#333' }], { w: 128, h: 128, bg: '#f4f1ea' }), roughness: 0.4 }));
+      gauge.rotation.y = Math.PI / 2; gauge.position.set(fx + 0.029, 0.98, 4.25); g.add(gauge);
       for (const [y, h2, z, d2] of [[0.12, 0.003, 4.4, 0.5], [1.12, 0.003, 4.4, 0.5]]) box(g, 0.004, h2, d2, seam, fx, y, z, 0, 0);
       for (const z of [4.15, 4.65]) box(g, 0.004, 1.0, 0.003, seam, fx, 0.12, z, 0, 0);
-      const brand = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.05), new THREE.MeshStandardMaterial({ map: textTexture([{ text: 'THERMOLUX', font: 'bold 44px Nunito, sans-serif', color: '#8a2f24' }], { w: 256, h: 64, bg: '#e9e4d8' }), roughness: 0.6 }));
-      brand.rotation.y = Math.PI / 2; brand.position.set(fx + 0.003, 0.98, 4.4); g.add(brand);
+      const brand = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.05), new THREE.MeshStandardMaterial({ map: textTexture([{ text: 'THERMOLUX', font: 'bold 34px Nunito, sans-serif', color: '#8a2f24' }], { w: 256, h: 64, bg: '#e9e4d8' }), roughness: 0.6 }));
+      brand.rotation.y = Math.PI / 2; brand.position.set(fx + 0.003, 0.84, 4.4); g.add(brand);
       for (const [z, col] of [[4.25, 0xc0392b], [4.55, 0x2f6fb3]]) { cyl(g, 0.018, 0.018, 0.12, M.copper(), fx + 0.06, 0.25, z, 12, 'x'); cyl(g, 0.018, 0.018, 0.25, M.copper(), fx + 0.12, 0.125, z, 12); cyl(g, 0.034, 0.034, 0.025, mat('valve' + col, { color: col, roughness: 0.5 }), fx + 0.06, 0.3, z, 16); }
     }
     B.blocked.push(blk(0, 4.0, 0.7, 5.0));
@@ -194,7 +199,7 @@ export function buildRoom(def) {
       const hr = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, len, 12), rail); hr.position.copy(pA).lerp(pB, 0.5); hr.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), pB.clone().sub(pA).normalize()); hr.castShadow = true; g.add(hr);
       for (let i = 1; i < 6; i++) { const z = z0 - (i + 0.5) * run, y0 = (i + 1) * rise + 0.03, y1 = yAt(z) - 0.02; const b = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.009, y1 - y0, 8), bal); b.position.set(xr, (y0 + y1) / 2, z); g.add(b); }
       // Treppenloch in der Decke
-      const hole = new THREE.Mesh(new THREE.PlaneGeometry(W, 1.3), new THREE.MeshBasicMaterial({ color: 0x0d0a08 })); hole.rotation.x = Math.PI / 2; hole.position.set(x0 + W / 2, h - 0.004, 0.65); g.add(hole);
+      const hole = new THREE.Mesh(new THREE.PlaneGeometry(W, 1.3), new THREE.MeshBasicMaterial({ color: 0x3a2c20 })); hole.rotation.x = Math.PI / 2; hole.position.set(x0 + W / 2, h - 0.004, 0.65); g.add(hole);
       B.blocked.push(blk(5.75, 0, 7.0, z0 + 0.05));
     }
     // Regal mit Kartons
@@ -210,8 +215,9 @@ export function buildRoom(def) {
     B.blocked.push(blk(2.5, 0, 3.5, 0.5));
     // Rohre an der Decke
     cyl(g, 0.05, 0.05, w, mat('pipe', { color: 0x9aa0a6, roughness: 0.4, metalness: 0.6 }), w / 2, h - 0.15, 0.3, 10, 'x');
-    cyl(g, 0.035, 0.035, w, M.copper(), w / 2, h - 0.25, 0.45, 10, 'x');
-    for (const x of [2, 5]) { const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 10), M.ledWhite()); bulb.position.set(x, h - 0.2, 2.5); g.add(bulb); B.lights.push({ pos: [x, h - 0.7, 2.5], color: 0xffe2b0, intensity: 3.2, dist: 7 }); }
+    cyl(g, 0.035, 0.035, w, mat('pipeCopperOld', { color: 0x8a5a3c, roughness: 0.6, metalness: 0.5 }), w / 2, h - 0.25, 0.45, 10, 'x');
+    B.bulbs = [];
+    for (const x of [2, 5]) { const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 10), M.ledWhite()); bulb.position.set(x, h - 0.2, 2.5); bulb.userData.bulb = B.bulbs.length; g.add(bulb); B.bulbs.push(bulb); cyl(g, 0.022, 0.022, 0.05, mat('bulbSocket', { color: 0x2a2622, roughness: 0.5 }), x, h - 0.13, 2.5, 14); cyl(g, 0.004, 0.004, 0.11, M.black(), x, h - 0.055, 2.5, 6); B.lights.push({ pos: [x, h - 0.7, 2.5], color: 0xffe2b0, intensity: 3.2, dist: 7 }); }
     { // gerahmtes Urlaubsfoto
       const c = document.createElement('canvas'); c.width = 320; c.height = 256; const x = c.getContext('2d');
       const sky = x.createLinearGradient(0, 0, 0, 130); sky.addColorStop(0, '#7fb6d8'); sky.addColorStop(1, '#d9ecf2'); x.fillStyle = sky; x.fillRect(0, 0, 320, 130);
@@ -512,6 +518,7 @@ export function buildDustyClutter(def) {
   const can = mat('paintCan', { color: 0x8a8f94, roughness: 0.5, metalness: 0.6 });
   for (const [x, y, z, r, hh, c] of [[2.65, 1.575, 0.2, 0.08, 0.18, can], [2.85, 1.575, 0.22, 0.07, 0.15, mat('paintCan2', { color: 0x9c3b2e, roughness: 0.6 })], [3.3, 1.575, 0.2, 0.05, 0.12, mat('jar', { color: 0xc9d6c8, roughness: 0.15, transparent: true, opacity: 0.6 })]]) { const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, hh, 16), c); m.position.set(x, y + hh / 2, z); m.castShadow = true; g.add(m); }
   box3(0.3, 0.16, 0.14, mat('oldRadio', { color: 0x6b4a32, roughness: 0.7 }), 3.1, 1.575, 0.22);
+  { const sp = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 0.1), mat('radioSpeaker', { color: 0x2a221c, roughness: 0.9 })); sp.position.set(3.03, 1.655, 0.2915); g.add(sp); for (const y of [1.69, 1.625]) cyl(g, 0.015, 0.015, 0.014, mat('radioKnob', { color: 0xd9cdb4, roughness: 0.4 }), 3.19, y, 0.297, 14, 'z'); }
   // Spinnweben in den Ecken
   const web = new THREE.MeshBasicMaterial({ map: webTexture(), transparent: true, depthWrite: false, side: THREE.DoubleSide, opacity: 0.85 });
   for (const [x, z, ry] of [[0.02, 0.02, 0], [def.w - 0.02, 0.02, -Math.PI / 2], [0.02, def.d - 0.02, Math.PI / 2], [3.4, 0.02, 0]]) {
