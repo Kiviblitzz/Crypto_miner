@@ -874,6 +874,15 @@ export class Game {
     if (n) this.toast(`Notverkauf: ${n} Gerät(e) für ${fmtUSD(v)} abgegeben.`, 'info', 7000);
     return v;
   }
+  bankSaving() { // Sparprogramm: alles einmotten (außer Kinderzimmer), Personal entlassen
+    const s = this.s; let n = 0;
+    for (const id of s.unlocked) if (this.canMothball(id) && !s.fac[id].mothball && (s.fac[id].objects.length || FACILITY[id].rent)) { s.fac[id].mothball = s.day || 1; n++; }
+    const k = s.staff?.list?.length || 0; if (k) { s.staff.list = []; this.syncStaff(); }
+    for (const id of s.unlocked) for (const u of UPGRADES[id] || []) if (u.cancel && u.monthly > 0 && s.fac[id].up?.[u.id]) delete s.fac[id].up[u.id];
+    if (n || k) this.toast(`Sparprogramm: ${n} Standort(e) eingemottet, ${k} Leute entlassen.`, 'info', 7000);
+    this.dayUpdate(true); this.emit('objects', s.current); return n + k;
+  }
+  reschedOk() { const s = this.s, amt = Math.max(0, -s.cash) + 1000; return (s.loan || 0) + amt <= Math.max(20000, this.hardwareValue() * 0.8 + this.walletValue() * 0.5); }
   bankReschedule() { const s = this.s, amt = Math.ceil((Math.max(0, -s.cash) + 1000) / 100) * 100; s.loan = (s.loan || 0) + amt; s.loanHi = (s.loanHi || 0) + amt; s.cash += amt; return amt; }
 
   // Kontingente (stock in hardware.js): n Stück pro Kalendermonat bis zum Datum

@@ -11,12 +11,21 @@ export const BANK_EVENTS = [
       {
         label: 'Notverkauf: älteste Geräte abgeben',
         hint: (g) => { const v = g.bankSalePreview(); return v > 0 ? `Bringt etwa ${usd(v)} · das Kinderzimmer bleibt` : 'Es gibt nichts mehr zu verkaufen'; },
-        fx: (g) => ({ do: () => g.bankFireSale(), log: 'Bankgespräch: Notverkauf alter Geräte' }),
+        need: (s, h, g) => g.bankSalePreview() > 0,
+        fx: (g) => ({ do: () => { if (!g.bankFireSale()) g.bankSaving(); }, log: 'Bankgespräch: Notverkauf alter Geräte' }),
         reply: '<b>Herr Albers:</b> Schade um die Maschinen. Aber so bleibt das Konto sauber.',
       },
       {
+        label: 'Sparprogramm: einmotten und Personal entlassen',
+        hint: (g) => { const n = g.s.staff?.list?.length || 0, m = g.s.unlocked.filter((id) => g.canMothball(id) && !g.s.fac[id].mothball).length; return n || m ? `${m} Standort(e) einmotten, ${n} Leute entlassen` : 'Es gibt nichts mehr zu sparen'; },
+        need: (s, h, g) => (s.staff?.list?.length || 0) + s.unlocked.filter((id) => g.canMothball(id) && !s.fac[id].mothball).length > 0,
+        fx: (g) => ({ do: () => g.bankSaving(), log: 'Bankgespräch: Sparprogramm' }),
+        reply: '<b>Herr Albers:</b> Harte Schnitte. Aber die Zahlen werden es Ihnen danken.',
+      },
+      {
         label: 'Umschuldung: Kredit zu 13 %',
-        hint: (g) => `Das Minus wird zum Bankkredit (${usd(Math.max(0, -g.s.cash) + 1000)}), teurer als der normale Kredit`,
+        hint: (g) => (g.reschedOk() ? `Das Minus wird zum Bankkredit (${usd(Math.max(0, -g.s.cash) + 1000)}), teurer als der normale Kredit` : 'Die Bank will erst mehr Sicherheiten sehen'),
+        need: (s, h, g) => g.reschedOk(),
         fx: (g) => ({ do: () => g.bankReschedule(), log: 'Bankgespräch: Umschuldung zu 13 %' }),
         reply: '<b>Herr Albers:</b> Unterschreiben Sie hier. Und hier. Und hier.',
       },
