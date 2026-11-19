@@ -103,6 +103,7 @@ export const PARTS = [...GPUS, ...CPUS, ...PSUS, ...MOBOS];
 // ---------- Platzierbare Objekte ----------
 // size: [breite, tiefe] in Metern (Raster 0,5 m), minTier: ab welchem Standort-Level
 // kind: rig | device | holder | cooling | decor
+// stock: { n, until } – Kontingent: höchstens n Stück pro Kalendermonat bis zum Datum (Lieferengpässe der ersten ASICs)
 export const PLACEABLES = [
   // Rig-Rahmen
   { id: 'tower', kind: 'rig', cat: 'rigs', name: 'Tower-PC-Gehäuse', release: '2005-01', price: 60, size: [0.5, 0.5], maxGpu: 3, minTier: 0, maxTier: 2, desc: 'Klassisches Gehäuse mit Glasseite. Max. 3 GPUs.' },
@@ -115,9 +116,9 @@ export const PLACEABLES = [
   { id: 'fpga1', kind: 'device', cat: 'asic', name: 'Fieldforge FX-1 (FPGA)', release: '2011-07', price: 580, watt: 20, algo: 'sha256', hash: 210 * M, size: [0.5, 0.5], minTier: 0, look: 'fpga', life: 6 },
   { id: 'fpga4', kind: 'device', cat: 'asic', name: 'Fieldforge Quad (FPGA)', release: '2012-04', price: 1100, watt: 50, algo: 'sha256', hash: 830 * M, size: [0.5, 0.5], minTier: 0, look: 'fpga', life: 6 },
   { id: 'usbhub', kind: 'device', cat: 'asic', name: 'HashStick U1 ×10 (USB-Hub)', release: '2013-06', price: 380, watt: 30, algo: 'sha256', hash: 3.3 * G, size: [0.5, 0.5], minTier: 0, look: 'usb', life: 4 },
-  { id: 'gla1', kind: 'device', cat: 'asic', name: 'Glacier A1', release: '2013-02', price: 1300, watt: 620, algo: 'sha256', hash: 66 * G, size: [0.5, 0.5], minTier: 0, look: 'asic_old', life: 4 },
+  { id: 'gla1', kind: 'device', cat: 'asic', name: 'Glacier A1', release: '2013-02', price: 1300, watt: 620, algo: 'sha256', hash: 66 * G, size: [0.5, 0.5], minTier: 0, look: 'asic_old', life: 4, stock: { n: 2, until: '2013-10-01' } },
   { id: 'gridstone', kind: 'device', cat: 'asic', name: 'Gridstone G1 (Scrypt)', release: '2014-03', price: 90, watt: 7, algo: 'scrypt', hash: 350 * K, size: [0.5, 0.5], minTier: 0, look: 'usb', life: 4 },
-  { id: 's1', kind: 'device', cat: 'asic', name: 'Swarm S1', release: '2013-12', price: 1200, watt: 360, algo: 'sha256', hash: 180 * G, size: [0.5, 0.5], minTier: 0, look: 'asic_old', life: 4 },
+  { id: 's1', kind: 'device', cat: 'asic', name: 'Swarm S1', release: '2013-12', price: 1200, watt: 360, algo: 'sha256', hash: 180 * G, size: [0.5, 0.5], minTier: 0, look: 'asic_old', life: 4, stock: { n: 3, until: '2014-04-01' } },
   { id: 's3', kind: 'device', cat: 'asic', name: 'Swarm S3', release: '2014-07', price: 650, watt: 340, algo: 'sha256', hash: 440 * G, size: [0.5, 0.5], minTier: 0, look: 'asic_old', life: 4 },
   { id: 's5', kind: 'device', cat: 'asic', name: 'Swarm S5', release: '2014-12', price: 370, watt: 590, algo: 'sha256', hash: 1.15 * T, size: [0.5, 0.5], minTier: 0, look: 'asic', life: 5 },
   { id: 's7', kind: 'device', cat: 'asic', name: 'Swarm S7', release: '2015-09', price: 1800, watt: 1300, algo: 'sha256', hash: 4.73 * T, size: [0.5, 0.5], minTier: 0, look: 'asic', life: 5 },

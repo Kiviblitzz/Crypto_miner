@@ -2,10 +2,12 @@
 import { COINS, COIN, ALGO_LABEL } from '../data/coins.js';
 import { PLACEABLE, PART, CATEGORIES, PLACEABLES, PARTS } from '../data/hardware.js';
 import { FACILITIES, FACILITY, CHAPTERS, TECHS, FEATURES, MESSAGES } from '../data/world.js';
+import { DIFFICULTY } from '../data/world.js';
 import { fmtUSD, fmtNum, fmtCoin, fmtHash, fmtDate, fmtWatt, SKILL_XP } from '../sim/game.js';
 import { toDay, BTC_HASH, inHeatwave, HALVINGS, BTC_REWARD } from '../data/history.js';
 import { EVENT } from '../data/events.js';
 import { ACH } from '../data/achievements.js';
+import { ROLES, TRAITS, QUOTES } from '../data/staff.js';
 
 const $ = (s) => document.querySelector(s);
 const h = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
@@ -98,7 +100,7 @@ export class UI {
     if (!document.body.classList.contains('show-build')) return;
     const cash = this.g.s.cash;
     for (const card of document.querySelectorAll('#build .item[data-price]')) {
-      const p = +card.dataset.price, short = p > cash; card.classList.toggle('dis', short || !!card.dataset.hydro); const pb = card.querySelector('.place'); if (pb) pb.disabled = short || !!card.dataset.hydro;
+      const p = +card.dataset.price, short = p > cash; const off = !!(card.dataset.hydro || card.dataset.sold); card.classList.toggle('dis', short || off); const pb = card.querySelector('.place'); if (pb) pb.disabled = short || off;
       const m = card.querySelector('.miss'); if (m) { const t = short ? `Dir fehlen ${this.money(p - cash)}` : ''; if (m.textContent !== t) m.textContent = t; }
     }
   }
@@ -210,7 +212,7 @@ export class UI {
         continue;
       }
       const kw = sm.watt / 1000, cap = sm.capKw, pct = Math.min(100, (kw / cap) * 100);
-      const b = h(`<div class="site ${g.s.current === f.id ? 'on' : ''}"><div class="n">${f.tier === 0 ? '' : f.tier === 1 ? '' : f.tier === 2 ? '' : f.tier === 3 ? '' : f.tier === 4 ? '' : ''} ${f.short} ${sm.tripped ? '<b class="neg">· Sicherung raus</b>' : ''}</div>
+      const b = h(`<div class="site ${g.s.current === f.id ? 'on' : ''}"><div class="n">${f.tier === 0 ? '' : f.tier === 1 ? '' : f.tier === 2 ? '' : f.tier === 3 ? '' : f.tier === 4 ? '' : ''} ${f.short} ${sm.tripped ? '<b class="neg">· Sicherung raus</b>' : ''}${g.s.fac[f.id].mothball ? '<b class="moth">· eingemottet</b>' : ''}</div>
         <div class="m" title="${kw < 10 ? kw.toFixed(2) : kw.toFixed(0)} / ${cap} kW"><span class="${sm.temp > 38 ? 'neg' : ''}">${sm.temp.toFixed(0)} °C</span></div>
         <div class="bar ${pct > 90 ? 'hot' : ''}"><div style="width:${pct}%"></div></div></div>`);
       b.onclick = () => { if (g.s.current !== f.id) this.switchSite(f.id); };
@@ -252,8 +254,10 @@ export class UI {
       if (it.kind === 'device') { const r = g.revenueFor({ [it.algo]: it.hash }, g.bestCoin({ [it.algo]: it.hash }, it.vram || 99) || 'BTC', it.vram || 99); const cost = it.watt / 1000 * 24 * g.elecPrice(fac); s = `${fmtHash(it.hash, it.algo)} · ${fmtWatt(it.watt)} · ${ALGO_LABEL[it.algo]}<br/>≈ <b class="${r - cost >= 0 ? 'pos' : 'neg'}">${r - cost >= 0 ? '+' : ''}${fmtUSD(r - cost)}/Tag</b> hier${it.hydro ? ' · nur in Rack/Container' : ''}`; }
       if (it.kind === 'cooling') s = `Kühlt ${fmtWatt(it.cool)} · verbraucht ${fmtWatt(it.watt)}`;
       if (it.kind === 'holder') s = esc(it.desc);
+      const left = g.stockLeft(it), sold = left === 0; if (left !== Infinity) s += `<br/><span class="stock ${sold ? 'neg' : ''}">${sold ? 'Kontingent: ' + esc(g.stockText(it)) : `Kontingent: noch ${left} Stück diesen Monat`}</span>`;
       const card = h(`<div class="item ${price > g.s.cash || it.hydro ? 'dis' : ''}" data-price="${price}" ${it.hydro ? 'data-hydro="1"' : ''}><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${this.money(price)}</span></div><div class="s">${s}</div><div class="miss">${price > g.s.cash ? `Dir fehlen ${this.money(price - g.s.cash)}` : ''}</div><button class="btn small primary place" ${price > g.s.cash || it.hydro ? 'disabled' : ''}>Platzieren · ${this.money(price)}</button></div>`);
       try { const url = this.w.thumbnail(it.id); if (url) card.prepend(h(`<div class="thumb"><img alt="" src="${url}"/></div>`)); } catch (e) { /* ohne Vorschau weiter */ }
+      if (sold) { card.dataset.sold = '1'; card.classList.add('dis'); card.querySelector('.place').disabled = true; card.addEventListener('click', (e) => { e.stopImmediatePropagation(); this.toast(`${it.name}: ${g.stockText(it)}`, 'bad'); }); }
       card.onclick = () => {
         if (it.hydro) { this.toast('Hydro-Miner nur in Rack oder Container.', 'bad'); return; }
         if (price > g.s.cash) { this.toast('Nicht genug Geld.', 'bad'); return; }
@@ -627,7 +631,8 @@ export class UI {
     if (o.items.length < def.slots) {
       const devs = g.shopList('asic', g.facOf(o.uid)).filter((d) => def.id !== 'shelf' || !d.hydro).sort((a, b) => b.releaseDay - a.releaseDay);
       const sel = h('<select style="margin-top:6px"></select>');
-      for (const d of devs) { const p = g.itemPrice(d); const r = g.revenueFor({ [d.algo]: d.hash }, g.bestCoin({ [d.algo]: d.hash }, d.vram || 99) || 'BTC', d.vram || 99) - d.watt / 1000 * 24 * g.elecPrice(g.facOf(o.uid)); sel.append(h(`<option value="${d.id}">${esc(d.name)} – ${fmtUSD(p)} (${r >= 0 ? '+' : ''}${fmtUSD(r)}/Tag)</option>`)); }
+      for (const d of devs) { const p = g.itemPrice(d); const r = g.revenueFor({ [d.algo]: d.hash }, g.bestCoin({ [d.algo]: d.hash }, d.vram || 99) || 'BTC', d.vram || 99) - d.watt / 1000 * 24 * g.elecPrice(g.facOf(o.uid)); const left = g.stockLeft(d); sel.append(h(`<option value="${d.id}" ${left === 0 ? 'disabled' : ''}>${esc(d.name)} – ${fmtUSD(p)} (${r >= 0 ? '+' : ''}${fmtUSD(r)}/Tag)${left === 0 ? ' · ' + g.stockText(d) : left !== Infinity ? ` · noch ${left} diesen Monat` : ''}</option>`)); }
+      if (sel.selectedOptions[0]?.disabled) { const ok = [...sel.options].find((x) => !x.disabled); if (ok) sel.value = ok.value; }
       sec.append(sel);
       const row = h('<div class="row"></div>');
       const others = g.facObjects(g.facOf(o.uid)).filter((x) => x.type === o.type && x.items.length < def.slots);
@@ -934,27 +939,25 @@ export class UI {
         ${un ? `<div class="k">Last</div><div class="v">${fmtWatt(sm.watt)}</div><div class="k">Temperatur</div><div class="v ${sm.temp > 38 ? 'neg' : ''}">${sm.temp.toFixed(1)} °C</div><div class="k">Geräte</div><div class="v">${fs.objects.length}</div>` : ''}</div></div>`);
       if (un) {
         const nx = f.power[fs.power + 1];
-        if (nx) { const b = h(`<button class="btn small">${esc(nx.label)}: ${fmtNum(nx.kw, 0)} kW (${fmtUSD(nx.cost)})</button>`); b.disabled = s.cash < nx.cost; b.onclick = () => { if (g.upgradePower(f.id)) { this.toast('Stromanschluss ausgebaut!', 'good'); this.company(); this.sites(); } }; c.append(b); }
+        if (nx) { const pc = g.powerCost(f.id); const b = h(`<button class="btn small">${esc(nx.label)}: ${fmtNum(nx.kw, 0)} kW (${fmtUSD(pc)})</button>`); b.disabled = s.cash < pc; b.onclick = () => { if (g.upgradePower(f.id)) { this.toast('Stromanschluss ausgebaut!', 'good'); this.company(); this.sites(); } }; c.append(b); }
         else c.append(h('<div style="font-size:12px;color:var(--dim)">Maximaler Anschluss erreicht.</div>'));
         const step = g.solarStep(f.id);
         if (step) { const cost = step * g.solarPricePerKwp(); const sb = h(`<button class="btn small">+${step} kWp Solar (${fmtUSD(cost)})</button>`); sb.disabled = s.cash < cost; sb.onclick = () => { if (g.buildSolar(f.id)) { this.toast(`Solaranlage erweitert (${f.short})`, 'good'); this.company(); } }; c.append(sb); }
         if (s.current !== f.id) { const go = h('<button class="btn small" style="margin-left:6px">Hingehen</button>'); go.onclick = () => { this.closeModal(); this.switchSite(f.id); }; c.append(go); }
+        c.append(this.facExtras(f.id)); // Ausbauten, Einmotten
       } else if (can) { const b = h(`<button class="btn primary small">Übernehmen (${fmtUSD(f.cost)})</button>`); b.onclick = () => { this.closeModal(); this.unlock(f.id); }; c.append(b); }
       else { const ci = CHAPTERS.findIndex((ch) => ch.unlock === f.id); c.append(h(`<div style="font-size:12px;color:var(--dim)">Ab ${(CHAPTERS[ci]?.minDate || '').slice(0, 4)}</div>`)); }
       cards.append(c);
     }
     const st = body.querySelector('.staff');
     const allowed = s.flags.gmbh;
-    st.innerHTML = `<h4>Personal</h4><div class="kv"><div class="k">Techniker</div><div class="v">${s.staff.tech}</div><div class="k">Gehalt je Techniker</div><div class="v">${fmtUSD(g.techSalary())}/Monat</div><div class="k">Abdeckung</div><div class="v">${Math.round(g.techCoverage() * 100)} %</div></div>`;
-    const row = h('<div class="row"></div>');
-    for (const n of [1, 5]) { const b = h(`<button class="btn small good">+${n} einstellen</button>`); b.disabled = !allowed; b.onclick = () => { g.hireTech(n); this.company(); }; row.append(b); }
-    const f1 = h('<button class="btn small danger">−1 entlassen</button>'); f1.disabled = !s.staff.tech; f1.onclick = () => { g.hireTech(-1); this.company(); }; row.append(f1);
-    st.append(row);
+    st.append(this.staffSec()); // Personal mit Namen, Rollen, Bewerbungen
     const stHide = !allowed && !s.staff.tech;
     const p = g.dailyProfit();
     const loan = s.loan || 0, lim = g.loanLimit();
     const lb = h(`<div class="sec"><h4>Bankkredit</h4><div class="kv"><div class="k">Offener Kredit</div><div class="v ${loan ? 'neg' : ''}">${fmtUSD(loan)}</div><div class="k">Zinssatz</div><div class="v">${(g.loanRate() * 100).toFixed(1).replace('.', ',')} % p. a.</div><div class="k">Zinsen pro Tag</div><div class="v">${fmtUSD(loan * g.loanRate() / 365)}</div><div class="k">Weiterer Rahmen</div><div class="v">${fmtUSD(lim)}</div></div><div class="row"></div></div>`);
     const lr = lb.querySelector('.row');
+    lb.querySelector('.kv').insertAdjacentHTML('beforeend', `<div class="k">Dispo-Rahmen</div><div class="v ${-s.cash > g.dispoLimit() ? 'neg' : ''}">${s.cash < 0 ? fmtUSD(-s.cash) + ' von ' : ''}${fmtUSD(g.dispoLimit())} · ${fmtNum(g.dispoRate() * 100, 0)} %</div>${s.loanHi > 0 && loan > 0 ? `<div class="k">davon Umschuldung</div><div class="v">${fmtUSD(Math.min(s.loanHi, loan))} · 13 %</div>` : ''}`);
     for (const f of [0.25, 1]) { const amt = Math.round(lim * f / 100) * 100; const b = h(`<button class="btn small">${fmtUSD(amt)} leihen</button>`); b.disabled = amt <= 0; b.onclick = () => { const u = g.takeLoan(amt); if (u) { this.audio?.cash(); this.toast(`Kredit über ${fmtUSD(u)} aufgenommen`, 'good'); } this.company(); }; lr.append(b); }
     const rp = h(`<button class="btn small good">Tilgen (${fmtUSD(Math.min(loan, Math.max(0, s.cash)))})</button>`); rp.disabled = !loan || s.cash <= 0; rp.onclick = () => { const u = g.repayLoan(loan); if (u) this.toast(`${fmtUSD(u)} getilgt`, 'good'); this.company(); }; lr.append(rp);
     if (g.has('loan')) st.append(lb);
@@ -962,6 +965,81 @@ export class UI {
     const nwc = h('<div class="sec"><h4>Vermögensverlauf (log)</h4><canvas class="nwchart" width="1100" height="260"></canvas></div>'); if (g.has('ranking') && (s.stats.history || []).length >= 3) st.append(nwc); requestAnimationFrame(() => this.nwChart(nwc.querySelector('canvas')));
     st.append(h(`<div class="sec"><h4>Bilanz pro Tag</h4><div class="kv"><div class="k">Mining-Ertrag</div><div class="v pos">${fmtUSD(p.rev)}</div><div class="k">Strom, Miete, Löhne</div><div class="v neg">−${fmtUSD(p.cost)}</div><div class="k">Gesamt geschürft</div><div class="v">${fmtUSD(s.stats.minedUSD)}</div><div class="k">Stromkosten bisher</div><div class="v">${fmtUSD(s.stats.elec)}</div><div class="k">In Hardware investiert</div><div class="v">${fmtUSD(s.stats.spentHW)}</div></div></div>`));
     this.openModal(body, '', 'company');
+  }
+
+  // Firmenfenster neu zeichnen, ohne an den Anfang zu springen
+  reCompany() { const c = $('#modal .modal-card'), y = c ? c.scrollTop : 0; this.company(); const c2 = $('#modal .modal-card'); if (c2) c2.scrollTop = y; this.sites(); }
+  // Je Standort: Ausbauten und Einmotten (im Firmenfenster)
+  facExtras(fid) {
+    const g = this.g, s = g.s, f = s.fac[fid], box = h('<div class="fac-ext"></div>');
+    const ups = g.upgrades(fid);
+    if (ups.length) {
+      box.append(h('<div class="fx-h">Ausbauten</div>'));
+      for (const u of ups) {
+        const on = g.upActive(fid, u), was = !!f.up?.[u.id];
+        const price = u.cost ? fmtUSD(u.cost) : u.monthly > 0 ? `${fmtUSD(u.monthly)}/Monat` : '';
+        const r = h(`<div class="fx-row ${on ? 'on' : ''}" title="${esc(u.desc)}"><div class="fx-t"><b>${esc(u.name)}</b><small>${esc(u.eff)}${u.monthly > 0 && u.cost ? ` · ${fmtUSD(u.monthly)}/Monat` : ''}</small></div></div>`);
+        if (on) {
+          r.append(h(`<span class="fx-ok">${u.days ? 'bis ' + fmtDate(f.up[u.id] + u.days) : u.monthly > 0 ? `${fmtUSD(u.monthly)}/Monat` : 'Gebaut'}</span>`));
+          if (u.cancel) { const b = h('<button class="btn small">Kündigen</button>'); b.onclick = () => { g.cancelUpgrade(fid, u.id); this.toast(`${u.name} gekündigt`, 'info'); this.reCompany(); }; r.append(b); }
+        } else {
+          const need = Math.max(u.cost || 0, u.monthly > 0 ? u.monthly : 0);
+          const b = h(`<button class="btn small">${was ? 'Erneuern' : u.cost ? 'Kaufen' : 'Buchen'} · ${price}</button>`); b.disabled = !g.canAfford(need);
+          b.onclick = () => { if (g.buyUpgrade(fid, u.id)) { this.audio?.cash?.(); this.toast(`${u.name}: ${u.eff}`, 'good'); } else this.toast('Nicht genug Geld.', 'bad'); this.reCompany(); };
+          r.append(b);
+        }
+        box.append(r);
+      }
+    }
+    if (g.canMothball(fid)) {
+      const keep = g.upgrades(fid).some((u) => u.keepRent && g.upActive(fid, u));
+      const rentTxt = FACILITY[fid].rent ? (keep ? 'Miete bleibt (Mietvertrag)' : 'Miete 30 %') : 'keine Miete';
+      const r = h(`<div class="fx-row moth ${f.mothball ? 'on' : ''}"></div>`);
+      if (!f.mothball) {
+        r.innerHTML = `<div class="fx-t"><b>Einmotten</b><small>Alle Geräte aus · ${rentTxt} · kein Verschleiß</small></div>`;
+        const b = h('<button class="btn small">Einmotten</button>'); b.onclick = () => { g.mothball(fid, true); this.reCompany(); }; r.append(b);
+      } else {
+        const rd = g.restartDay(fid), c = g.restartCost(fid), early = s.day < rd;
+        r.innerHTML = `<div class="fx-t"><b>Eingemottet</b><small>seit ${fmtDate(f.mothball)} · ${rentTxt} · Anfahren ${fmtUSD(c)}</small></div>`;
+        const b = h(`<button class="btn small primary">${early ? 'Ab ' + fmtDate(rd) : 'Wieder anfahren'}</button>`); b.disabled = early || s.cash - c < -g.dispoLimit();
+        b.onclick = () => { if (g.mothball(fid, false)) this.audio?.cash?.(); this.reCompany(); }; r.append(b);
+      }
+      box.append(r);
+    }
+    return box;
+  }
+  // Personal: Teamkarten, drei Bewerbungen, Sammel-Einstellung
+  staffSec() {
+    const g = this.g, s = g.s, list = s.staff.list || [], sec = h('<div class="staff2"></div>');
+    const cov = Math.round(g.techCoverage() * 100), pay = g.staffMonthly();
+    sec.append(h(`<h4>Personal</h4>`));
+    sec.append(h(`<div class="kv"><div class="k">Team</div><div class="v">${list.length} ${list.length === 1 ? 'Person' : 'Leute'} · ${s.staff.tech} in der Technik</div><div class="k">Reparatur-Abdeckung</div><div class="v ${cov < 100 && s.staff.tech ? 'neg' : ''}">${cov} %</div><div class="k">Gehälter</div><div class="v">${fmtUSD(pay)}/Monat</div></div>`));
+    const card = (p, cand) => {
+      const R = ROLES[p.role], T = TRAITS[p.trait], sal = g.staffSalary(p);
+      const q = cand ? (QUOTES[p.trait] || [])[p.id % 2] : '';
+      const el = h(`<div class="pcard ${cand ? 'cand' : ''} r-${p.role}"><div class="pc-top"><span class="pc-av">${esc(p.name.split(' ').map((x) => x[0]).join(''))}</span><div class="pc-n"><b>${esc(p.name)}</b><small>${esc(g.roleName(p))}${cand ? '' : ` · seit ${fmtDate(p.since)}`}</small></div></div>
+        <div class="pc-tags"><span class="pc-tag">${esc(T?.name || '')}</span></div>
+        <div class="pc-eff">${esc(p.role === 'tech' ? T?.eff || '' : R.eff)}</div>${q ? `<div class="pc-q">${esc(q)}</div>` : ''}
+        <div class="pc-f"><span>${fmtUSD(sal)}/Monat</span></div></div>`);
+      const b = cand ? h('<button class="btn small good">Einstellen</button>') : h('<button class="btn small danger">Entlassen</button>');
+      if (cand) { b.disabled = !g.canAfford(sal); b.onclick = () => { if (g.hire(p.id)) { this.toast(`${p.name} fängt bei Hashwerk an.`, 'good'); } else this.toast('Dafür reicht das Geld nicht.', 'bad'); this.reCompany(); }; }
+      else b.onclick = () => { if (this.fireArmed === p.id) { g.fire(p.id); this.fireArmed = null; this.toast(`${p.name} geht. Schade.`, 'info'); this.reCompany(); } else { this.fireArmed = p.id; b.textContent = 'Wirklich?'; } };
+      el.querySelector('.pc-f').append(b); return el;
+    };
+    if (list.length) {
+      const key = list.filter((p) => p.role !== 'tech'), techs = list.filter((p) => p.role === 'tech');
+      const shown = [...key, ...techs.slice(0, Math.max(0, 8 - key.length))];
+      const grid = h('<div class="pgrid"></div>'); for (const p of shown) grid.append(card(p, false));
+      const more = list.length - shown.length; if (more > 0) grid.append(h(`<div class="pcard more"><b>+ ${more}</b><small>weitere ${more === 1 ? 'Person' : 'Leute'} in der Technik</small></div>`));
+      sec.append(grid);
+    } else sec.append(h('<div class="pc-empty">Noch niemand angestellt. Techniker reparieren kaputte Geräte, ehe du es merkst.</div>'));
+    sec.append(h('<h4 class="pc-h2">Bewerbungen</h4>'));
+    const pool = h('<div class="pgrid"></div>'); for (const p of g.staffPool()) pool.append(card(p, true)); sec.append(pool);
+    const row = h('<div class="row"></div>');
+    const add = h(`<button class="btn small">+5 Techniker ohne Auswahl · ${fmtUSD(5 * g.techSalary())}/Monat</button>`); add.disabled = !g.canAfford(5 * g.techSalary()); add.onclick = () => { if (g.hireTech(5)) this.toast('Fünf neue Leute in der Technik.', 'good'); this.reCompany(); }; row.append(add);
+    if (s.staff.tech >= 5) { const rm = h('<button class="btn small danger">−5 Techniker</button>'); rm.onclick = () => { g.hireTech(-5); this.reCompany(); }; row.append(rm); }
+    sec.append(row);
+    return sec;
   }
 
   offer(usd) {
@@ -1058,11 +1136,17 @@ export class UI {
     const nb = body.querySelector('[data-a=new]');
     nb.onclick = () => {
       if (!nb.dataset.armed) { nb.dataset.armed = '1'; nb.textContent = 'Sicher? Nochmal klicken = neu starten'; setTimeout(() => { if (nb.isConnected) { delete nb.dataset.armed; nb.textContent = 'Neues Spiel'; } }, 4000); return; }
-      g.newGame(); this.closeModal(); this.switchSite('kinder'); this.speedBar(); this.ticker();
+      this.newGamePick(nb); // Schwierigkeit wählen, dann neu starten
     };
     body.querySelector('[data-a=mute]').onclick = () => { this.audio?.setMuted(!this.audio.muted); this.menu(); };
     body.querySelectorAll('[data-q]').forEach((b) => (b.onclick = () => { this.w.setQuality(b.dataset.q); this.menu(); }));
     this.openModal(body, 'narrow', 'menu');
+  }
+
+  newGamePick(nb) {
+    const g = this.g, row = h('<div class="row diff-row"></div>');
+    for (const [id, d] of Object.entries(DIFFICULTY)) { const b = h(`<button class="btn small ${id === 'normal' ? 'primary' : ''}" title="${esc(d.desc)}">${esc(d.name)}</button>`); b.onclick = () => { g.newGame(id); this.closeModal(); this.switchSite('kinder'); this.speedBar(); this.ticker(); }; row.append(b); }
+    row.prepend(h('<span class="dp-lab">Neues Spiel als</span>')); nb.closest('.row').after(row); nb.remove();
   }
 
   // ---------- Ticker / Toasts / Hinweis ----------
