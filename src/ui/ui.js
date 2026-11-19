@@ -45,7 +45,7 @@ export class UI {
       const pc = g.facObjects(g.s.current).find((o) => o.type === 'tower'); if (pc && t.label === 'Dein PC') { this.openInspector(pc.uid); return; }
       const pr = world.room?.props?.find((p) => p.action === 'market'); if (pr && t.label === 'Börse') this.useProp(pr);
     };
-    world.onInstalled = (uid) => { this.installing = false; if (this.inspUid === uid) this.inspect(uid); };
+    world.onInstalled = (uid) => { this.installing = false; if (this.inspUid === uid) this.inspect(uid); if (this.afterSnap) { this.toast(this.afterSnap, 'good', 2600); this.afterSnap = null; } };
     world.onLoose = (t) => { this.w.pickupFx(t); if (!this.g.pickUp(t)) return; this.lastPick = { t, at: performance.now() }; setTimeout(() => this.goals(), 1300); this.audio?.install?.(); this.toast(`${PNAME[t]} in der Tasche`, 'good', 2200); this.goals(); };
     game.on('xp', (k, n, lv) => this.xpPop(k, n, lv));
     world.onIncome = () => { this.bumpWallet(); this.audio?.tick?.(); };
@@ -70,7 +70,7 @@ export class UI {
     setTimeout(() => { applySnd(); applySens(); }, 0);
     $('#clickhint').onclick = () => this.w.requestLock();
     game.on('toast', (t, k, ms) => this.toast(t, k, ms));
-    const showMsg = (m) => { this.toast(`${FACE[m.from] || ''} <b>${esc(m.from)}:</b> ${esc(m.text)}`, 'msg', 7000); this.dock(); };
+    const showMsg = (m) => { if (document.querySelector('#featcards .featcard') || document.getElementById('lvup') || this.lvBusy) { setTimeout(() => showMsg(m), 1200); return; } this.toast(`${FACE[m.from] || ''} <b>${esc(m.from)}:</b> ${esc(m.text)}`, 'msg', 7000); this.dock(); };
     this.flushMsgs = (base = 3000) => { const q = this.msgQ || []; this.msgQ = []; q.forEach((m, i) => setTimeout(() => showMsg(m), base + i * 2500)); };
     game.on('message', (m) => { if (this.inspUid || this.w.focus) { (this.msgQ ||= []).push(m); this.dock(); return; } showMsg(m); });
     game.on('news', () => this.ticker());
@@ -166,7 +166,9 @@ export class UI {
     el.classList.remove('hidden'); el.classList.toggle('edge', !sp.on); el.classList.toggle('left', !sp.on && sp.side < 0);
     const ex = sp.side < 0 ? 150 : innerWidth - 150, ey = Math.min(innerHeight - 140, Math.max(200, sp.front ? sp.y : innerHeight * 0.55));
     el.style.transform = sp.on ? `translate(${Math.round(sp.x)}px, ${Math.round(sp.y)}px)` : `translate(${ex}px, ${Math.round(ey)}px)`;
-    const t = el.querySelector('.om-t'), full = (Object.values(PNAME).includes(label) ? 'Nächstes Teil: ' : '') + label; if (t.textContent !== full) t.textContent = full;
+    // nicht mit Meldungen überlappen
+    const mr = el.querySelector('.om-in').getBoundingClientRect(); let hit = false; for (const t of document.querySelectorAll('#toasts .toast')) { const r = t.getBoundingClientRect(); if (mr.right > r.left - 12 && mr.left < r.right + 12 && mr.bottom > r.top - 12 && mr.top < r.bottom + 12) { hit = true; break; } } el.style.visibility = hit ? 'hidden' : '';
+    const t = el.querySelector('.om-t'), full = label; if (t.textContent !== full) t.textContent = full;
   }
   // Heute schon geschürft, aber noch nicht gutgeschrieben
   pendingBtc() {
@@ -470,7 +472,7 @@ export class UI {
       if (b) b.onclick = () => {
         if (this.installing || !g.installLoose(o.uid, t)) return;
         this.installing = true; this.installingType = t; clearTimeout(this.instT); this.instT = setTimeout(() => { this.installing = false; }, 1600); this.w.ghostPart?.(null); this.inspect(o.uid); this.w.animateInstall?.(o.uid, t);
-        this.toast(g.pcReady(o) ? 'Alle Teile sind drin. Schalt deinen PC ein!' : `${lab} eingebaut`, 'good', 2600);
+        this.afterSnap = g.pcReady(o) ? 'Alle Teile sind drin. Schalt deinen PC ein!' : `${lab} eingebaut`;
       };
       (partsBox || sec).append(row);
     });
@@ -630,7 +632,7 @@ export class UI {
       let prog = '';
       if (!done && go.progress) { const [cur, tgt, kind] = go.progress(s, g.helpers()); if (kind === 'parts') { const lp = this.lastPick && performance.now() - this.lastPick.at < 1200 ? `<span class="lastpick">+ ${PNAME[this.lastPick.t]}</span>` : ''; prog = `<span class="cnt">${cur} / ${tgt}</span>${lp}`; } else { const f = (v) => (kind === 'hash' ? fmtHash(v) : fmtUSD(v)); const pc = Math.max(0, Math.min(100, tgt ? (cur / tgt) * 100 : 0)); prog = `<div style="font-size:11px;color:var(--dim)">${f(Math.max(0, cur))} / ${f(tgt)}</div><div class="bar" style="width:180px"><div style="width:${pc}%;background:#ffb000"></div></div>`; } }
       const gk = s.chapter + ':' + go.id, enter = gk !== this.goalKey; this.goalKey = gk;
-      const bag = s.loose && !s.flags.miningStarted && go.id === 'collect' ? `<span class="bag">${['mobo', 'cpu', 'gpu', 'psu'].map((t) => `<i class="${s.loose[t] ? 'miss' : 'got'}" title="${PNAME[t]}${s.loose[t] ? ' – noch nicht gefunden' : ' – eingesammelt'}">${partSvg(t, 16)}${s.loose[t] ? '' : '<b class="tk"></b>'}</i>`).join('')}</span>` : '';
+      const bag = s.loose && !s.flags.miningStarted && go.id === 'collect' ? `<span class="bag">${['mobo', 'cpu', 'gpu', 'psu'].map((t) => `<i class="${s.loose[t] ? 'miss' : 'got'}" title="${PNAME[t]}${s.loose[t] ? ' – noch nicht gefunden' : ' – eingesammelt'}">${partSvg(t, 16)}${s.loose[t] ? '' : '<b class="tk"></b>'}<em>${{ mobo: 'Board', cpu: 'CPU', gpu: 'GPU', psu: 'Netzteil' }[t]}</em></i>`).join('')}</span>` : '';
       const gtext = go.id === 'sell' && !g.has('market') ? 'Lass deinen PC ein paar Tage schürfen' : go.text;
       const row = h(`<div class="goal ${done ? 'done' : ''} ${enter ? 'enter' : ''}"><div class="ck">${done ? '✓' : ''}</div><div>${esc(gtext)}${prog}${bag}</div></div>`);
       if (!done && go.action) { const b = h(`<button class="btn small primary"><kbd>G</kbd>${esc(go.action.label)}</button>`); b.disabled = !g.canPayGoal(go); b.onclick = () => { if (g.goalAction(go)) { this.toast('✔ Erledigt!', 'good'); this.goals(); } }; row.lastElementChild.append(h('<br/>'), b); }
@@ -709,9 +711,9 @@ export class UI {
     const txt = m0 ? m0.text : MESSAGES.find((m) => m.id === 'm0').text;
     const body = h(`<div class="intro-phone"><div class="ip-date">${fmtDate(s.day)}</div>
       <div class="phone"><div class="ph-top"><div class="av"><svg viewBox="0 0 40 40" width="40" height="40"><circle cx="20" cy="20" r="20" fill="#ffcf8a"/><path d="M6 40c1-8 7-12 14-12s13 4 14 12z" fill="#e2574c"/><circle cx="20" cy="18" r="8.5" fill="#e7b48f"/><path d="M11 17c0-7 5-10 10-10 6 0 9 4 8 9-3-3-7-4-11-3-3 1-5 2-7 4z" fill="#2f241e"/><circle cx="17" cy="19" r="1.1" fill="#2f241e"/><circle cx="23" cy="19" r="1.1" fill="#2f241e"/><path d="M17 22.5q3 2.2 6 0" stroke="#8a4a3a" stroke-width="1.3" fill="none" stroke-linecap="round"/></svg></div><div><b>Deniz</b><span class="on">online</span></div></div>
-        <div class="msg f-Deniz">${esc(txt)}<div class="pc-line"><span class="pc-dot">₿</span><span>Bitcoin</span><b>${fmtUSD(p)}</b><canvas class="spark"></canvas></div></div>
-        <div class="msg f-Deniz">Deine alten PC-Teile liegen doch noch im Zimmer. Schau eins an und drück <kbd>E</kbd>.</div>
-        <div class="row ip-act"><button class="btn primary big">Los geht’s</button></div>
+        <div class="msg f-Deniz">${esc(txt)}</div>
+        <div class="msg f-Deniz">Deine alten PC-Teile liegen doch noch im Zimmer. Schau eins an und drück <kbd>E</kbd>.<div class="pc-line"><span class="pc-dot">₿</span><span>Bitcoin gerade</span><b>${fmtUSD(p)}</b><canvas class="spark"></canvas></div></div>
+        <div class="row ip-act"><button class="btn primary big">Teile suchen</button></div>
       </div></div>`);
     if (m0) m0.read = true;
     body.querySelector('button').onclick = () => this.closeModal();
@@ -1062,7 +1064,7 @@ export class UI {
     const list = body.querySelector('.sk-list');
     for (const k of ['hw', 'mining', 'trade']) {
       const x = s.skills[k] || 0, lv = g.skillLv(k), lo = SKILL_XP[lv - 1], hi = SKILL_XP[lv], pc = hi ? Math.round(((x - lo) / (hi - lo)) * 100) : 100;
-      list.append(h(`<div class="sk" data-skill="${k}"><div class="sk-ic">${skillSvg(k, 26)}</div><div class="sk-main"><div class="sk-top"><b>${SKILL[k].name}</b><span class="sk-lv">Stufe ${lv}</span></div><div class="sk-bar"><div style="width:${pc}%"></div></div><div class="sk-row"><span>${SKILL[k].now(lv)}</span><span>${hi ? `${x - lo} / ${hi - lo} EP` : 'Höchste Stufe'}</span></div><div class="sk-learn"><span>${hi ? `Nächste Stufe: ${SKILL[k].next(lv)}` : 'Höchste Stufe erreicht'}</span><span>EP durch ${SKILL[k].short}</span></div></div></div>`));
+      list.append(h(`<div class="sk" data-skill="${k}"><div class="sk-ic">${skillSvg(k, 26)}</div><div class="sk-main"><div class="sk-top"><b>${SKILL[k].name}</b><span class="sk-lv">Stufe ${lv}</span></div><div class="sk-bar"><div style="width:${pc}%"></div></div><div class="sk-row"><span>${SKILL[k].now(lv)}${hi ? ` → ${SKILL[k].next(lv)}` : ''}</span><span>${hi ? `${x - lo} / ${hi - lo} EP` : 'Höchste Stufe'}</span></div><div class="sk-learn"><span>EP durch ${SKILL[k].short}</span></div></div></div>`));
     }
     this.openModal(body, 'narrow', 'skills');
   }

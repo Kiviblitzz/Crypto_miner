@@ -298,11 +298,11 @@ export class World {
   }
   updateInstall(dt) {
     const a = this.install; if (!a) return;
-    a.t += dt; const k = Math.min(1, a.t / 0.48), c1 = 1.70158, c3 = c1 + 1, eb = 1 + c3 * Math.pow(k - 1, 3) + c1 * Math.pow(k - 1, 2);
+    a.t += dt; const k = Math.min(1, a.t / 0.58), c1 = 1.70158, c3 = c1 + 1, eb = 1 + c3 * Math.pow(k - 1, 3) + c1 * Math.pow(k - 1, 2);
     a.part.position.set(Math.max(0, 1 - eb) * 0.24, (1 - k) * (1 - k) * 0.03, 0);
-    const pk = Math.max(0, Math.min(1, (a.t - 0.36) / 0.2)); a.part.scale.setScalar(1 + 0.03 * Math.sin(pk * Math.PI));
+    const pk = Math.max(0, Math.min(1, (a.t - 0.46) / 0.2)); a.part.scale.setScalar(1 + 0.01 * Math.sin(pk * Math.PI));
     if (k >= 1 && !a.snapped) { a.snapped = true; this.onSnap?.(a.uid); }
-    if (a.t > 0.66) { this.install = null; const e = this.entries.get(a.uid); if (e) e.key = null; this.syncObjects(); if (this.selected === a.uid) this.refreshSelBox(); this.onInstalled?.(a.uid); }
+    if (a.t > 0.76) { this.install = null; const e = this.entries.get(a.uid); if (e) e.key = null; this.syncObjects(); if (this.selected === a.uid) this.refreshSelBox(); this.onInstalled?.(a.uid); }
   }
   // Halbtransparente Vorschau: hier kommt das Teil hin
   ghostPart(uid, type, id) { this.ghostSpec = uid && type && id ? { uid, type, id } : null; this.applyGhost(); }
@@ -315,7 +315,7 @@ export class World {
     this.ghostMat ||= new THREE.MeshBasicMaterial({ color: 0x9fe8bd, transparent: true, opacity: 0.14, depthWrite: false });
     this.ghostLine ||= new THREE.LineBasicMaterial({ color: 0x9fe8bd, transparent: true, opacity: 0.72, depthWrite: false });
     const edges = [];
-    g.traverse((m) => { if (m.isMesh) { m.material = this.ghostMat; m.castShadow = false; m.raycast = () => {}; if (m.geometry.attributes.position.count < 4000) { const l = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, 60), this.ghostLine); l.raycast = () => {}; edges.push([m, l]); } } });
+    g.traverse((m) => { if (m.isMesh) { m.material = this.ghostMat; m.castShadow = false; m.raycast = () => {}; if (m.geometry.attributes.position.count < 4000) { const l = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, 80), this.ghostLine); l.raycast = () => {}; edges.push([m, l]); } } });
     for (const [m, l] of edges) m.add(l);
     this.ghost = g; e.group.add(g);
   }
@@ -330,13 +330,14 @@ export class World {
     if (!this.looseGroup) { this.looseGroup = new THREE.Group(); this.scene.add(this.looseGroup); }
     const s = this.game.s, spots = this.room?.looseSpots, want = spots && s?.loose ? Object.keys(s.loose).filter((t) => spots[t]) : [];
     this.looseItems ||= {};
-    for (const [t, g] of Object.entries(this.looseItems)) if (!want.includes(t) && !g.userData.flying) { this.looseGroup.remove(g); delete this.looseItems[t]; }
+    for (const [t, g] of Object.entries(this.looseItems)) if (!want.includes(t) && !g.userData.flying) { this.looseGroup.remove(g); if (g.userData.haloMesh) this.looseGroup.remove(g.userData.haloMesh); delete this.looseItems[t]; }
     for (const t of want) {
       if (this.looseItems[t]) continue;
       const [x, y, z, ry] = spots[t], g = loosePartModel(t, s.loose[t]);
       g.position.set(x, y, z); g.rotation.y = ry; g.traverse((m) => { m.userData.loose = t; if (m.isMesh) { m.castShadow = true; } });
-      const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.haloTex(), color: 0xffb547, transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending }));
-      halo.scale.set(0.42, 0.42, 1); halo.position.y = 0.06; halo.userData.halo = true; g.add(halo); g.userData.y0 = y;
+      // Weicher Lichtfleck flach auf der Ablagefläche (kein zur Kamera gedrehtes Sprite mit harten Schnittkanten)
+      const halo = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), new THREE.MeshBasicMaterial({ map: this.haloTex(), color: 0xffb547, transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -4 }));
+      halo.rotation.x = -Math.PI / 2; halo.position.set(x, y + 0.004, z); halo.raycast = () => {}; halo.renderOrder = 2; this.looseGroup.add(halo); g.userData.haloMesh = halo; g.userData.y0 = y;
       this.looseGroup.add(g); this.looseItems[t] = g;
     }
     const left = Object.values(this.looseItems).filter((g) => !g.userData.flying);
@@ -355,11 +356,11 @@ export class World {
   updateLoose(dt) {
     if (!this.looseItems) return;
     for (const [t, g] of Object.entries(this.looseItems)) {
-      const h = g.children.find((c) => c.userData.halo); if (h) h.material.opacity = (t === this.markLoose ? 0.38 : 0.12) + (t === this.markLoose ? 0.08 : 0.03) * Math.sin(this.t * 2.4 + g.position.x * 3);
+      const h = g.userData.haloMesh; if (h) h.material.opacity = g.userData.flying ? 0 :  (t === this.markLoose ? 0.3 : 0.1) + (t === this.markLoose ? 0.06 : 0.02) * Math.sin(this.t * 2.4 + g.position.x * 3);
       if (g.userData.flying) {
         const f = (g.userData.flying += dt), k = Math.min(1, f / 0.42), tgt = this.camera.position.clone().addScaledVector(this.camera.getWorldDirection(new THREE.Vector3()), 0.3).add(new THREE.Vector3(0, -0.45, 0));
         g.position.lerp(tgt, k * 0.35); g.scale.setScalar(Math.max(0.001, 1 - 1.6 * k)); g.rotation.y += dt * 6;
-        if (k >= 1) { this.looseGroup.remove(g); delete this.looseItems[t]; }
+        if (k >= 1) { this.looseGroup.remove(g); if (g.userData.haloMesh) this.looseGroup.remove(g.userData.haloMesh); delete this.looseItems[t]; }
       }
     }
   }
@@ -574,11 +575,11 @@ export class World {
   // Vorschaubild für den Bau-Katalog: Modell im kleinen Fotostudio rendern (einmal pro Typ)
   thumbnail(type) {
     this.thumbs ||= new Map(); if (this.thumbs.has(type)) return this.thumbs.get(type);
-    const W = 240, H = 160, r = this.renderer;
+    const W = 480, H = 320, r = this.renderer;
     if (!this.thumbScene) {
       const sc = (this.thumbScene = new THREE.Scene()); sc.environment = this.scene.environment;
       sc.add(new THREE.HemisphereLight(0xfff4e6, 0x3a3530, 0.7));
-      const k = new THREE.DirectionalLight(0xffffff, 1.8); k.position.set(2, 3, 2.5); sc.add(k);
+      const k = new THREE.DirectionalLight(0xffffff, 1.3); k.position.set(2, 3, 2.5); sc.add(k);
       this.thumbCam = new THREE.PerspectiveCamera(30, W / H, 0.01, 200);
       this.thumbRT = new THREE.WebGLRenderTarget(W, H, { samples: 4 });
     }
@@ -595,7 +596,7 @@ export class World {
       cam.position.copy(tgt).addScaledVector(dir, dist); cam.lookAt(tgt); cam.near = dist / 50; cam.far = dist * 4; cam.updateProjectionMatrix(); cam.updateMatrixWorld();
       let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const q of corners) { const v = q.clone().project(cam); x0 = Math.min(x0, v.x); x1 = Math.max(x1, v.x); y0 = Math.min(y0, v.y); y1 = Math.max(y1, v.y); }
       ext = [x0, x1, y0, y1];
-      const sx = (x1 - x0) / 2 / 0.84, sy = (y1 - y0) / 2 / 0.78, sc = Math.max(sx, sy);
+      const sx = (x1 - x0) / 2 / 0.84, sy = (y1 - y0) / 2 / 0.84, sc = Math.max(sx, sy);
       const want = new THREE.Vector3((x0 + x1) / 2, y0 + 0.74 * sc, 0.5);
       const off = want.unproject(cam).sub(new THREE.Vector3(0, 0, 0.5).unproject(cam));
       tgt.add(off); dist *= 0.35 + 0.65 * sc;
@@ -956,7 +957,7 @@ export class World {
     if (this.mode === 'title' || this.visFrac == null) this.visFrac = s.frac;
     else { const df = (s.frac - this.visFrac + 1) % 1; this.visFrac = (this.visFrac + Math.min(df, dt / 90)) % 1; }
     this.updateDaylight(this.visFrac);
-    this.updatePeople(dt); this.updateSmoke(dt); this.updateWeather(dt); this.updatePopups(dt); this.updateInstall(dt); this.updateLoose(dt); if (this.ghostMat) { this.ghostMat.opacity = 0.14; this.ghostLine.opacity = 0.72 + 0.06 * Math.sin(this.t * 4); }
+    this.updatePeople(dt); this.updateSmoke(dt); this.updateWeather(dt); this.updatePopups(dt); this.updateInstall(dt); this.updateLoose(dt); if (this.ghostMat) { this.ghostMat.opacity = 0.1; this.ghostLine.opacity = 0.38 + 0.06 * Math.sin(this.t * 4); }
     // Lüfter & LEDs
     const fanSpeed = 28 * dt;
     for (const e of this.entries.values()) {
@@ -1019,7 +1020,7 @@ export class World {
         const s = this.game.s, sm = this.game.summary[this.facId];
         if (s.feat && !s.flags.miningStarted) { g.fillStyle = '#050403'; g.fillRect(0, 0, W, H); g.fillStyle = '#3a2a18'; g.beginPath(); g.arc(W - 18, H - 16, 4, 0, 7); g.fill(); sc.tex.needsUpdate = true; continue; }
         g.fillStyle = '#140b04'; g.fillRect(0, 0, W, H); g.font = 'bold 26px monospace'; g.fillStyle = '#ffb347';
-        g.fillText('miner v2.' + (s.day % 7) + ' – ' + fmtDate(s.day), 14, 34);
+        g.fillText('miner v0.3 – ' + fmtDate(s.day), 14, 34);
         g.font = '21px monospace';
         const lines = [];
         if (this.bootT != null && this.t - this.bootT < 5.5) {

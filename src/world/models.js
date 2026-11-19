@@ -287,7 +287,7 @@ function mobo(parent, w, d, x, y, z, vertical = false) {
   // Chipsatz, PCIe, Batterie, Kondensatoren, Stecker
   box(g, 0.036, 0.008, 0.036, M.darkMetal(), w * 0.15, 0.001, d * 0.26);
   if (vertical) { for (let i = 0; i < 2; i++) boxC(g, 0.007, 0.008, 0.085, i ? M.black() : M.alu(), 0.047 + i * 0.07, 0.005, -0.037, 0.001); }
-  else for (let i = 0; i < 3; i++) boxC(g, w * 0.5, 0.008, 0.007, i === 0 ? M.alu() : M.black(), -w * 0.1, 0.005, d * 0.08 + i * 0.06, 0.001);
+  else for (let i = 0; i < 2; i++) boxC(g, w * 0.5, 0.008, 0.007, i === 0 ? M.alu() : M.black(), -w * 0.1, 0.005, d * 0.08 + i * 0.06, 0.001);
   cyl(g, 0.01, 0.01, 0.003, X.chrome(), w * 0.32, 0.003, d * 0.18, 18);
   if (!Q.lo) for (let i = 0; i < 8; i++) cyl(g, 0.0035, 0.0035, 0.009, X.cap(), sx - 0.03 + i * 0.009, 0.006, sz + 0.038, 10);
   box(g, 0.012, 0.012, 0.034, M.black(), w * 0.45, 0.001, -d * 0.1);

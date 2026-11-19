@@ -103,7 +103,7 @@ export const CHAPTERS = [
 
 // Handy-Nachrichten. when: Datum ODER cond(state, helpers)
 export const MESSAGES = [
-  { id: 'm0', date: '2010-10-01', from: 'Deniz', text: 'Alter, Bitcoin ist Internetgeld, das Computer selbst herstellen – mit einer Grafikkarte richtig schnell!' },
+  { id: 'm0', date: '2010-10-01', from: 'Deniz', text: 'Ey, meine alte Grafikkarte schürft jetzt Bitcoin – Internetgeld, das Computer selbst herstellen!' },
   { id: 'm1', date: '2010-10-04', from: 'Papa', text: 'Die Bank will 15.000 $ bis Ende 2013. Sonst ist der Laden weg. Nicht dein Problem, Kind.' },
   { id: 'm2', date: '2010-10-09', from: 'Deniz', text: 'Tipp: Crimson-Karten minen viel schneller als Verdant. Die RHD 5870 ist gerade der Hit.' },
   { id: 'm3', cond: (s, h) => h.maxTemp() > 32, from: 'Mama', text: 'Warum ist es bei dir so warm? Und was brummt da?' },
