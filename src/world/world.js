@@ -253,6 +253,7 @@ export class World {
       if (btn === 2 && this.placing) { this.cancelPlacement(); return; }
       if (btn !== 0) return;
       if (this.placing) { this.confirmPlacement(); return; }
+      if (this.empire) return;
       this.select(this.pick());
     });
     c.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -271,7 +272,7 @@ export class World {
     return null;
   }
   hoverCheck() {
-    const uid = this.fpActive ? null : this.pick();
+    const uid = this.fpActive || this.empire ? null : this.pick();
     this.canvas.style.cursor = uid ? 'pointer' : 'default';
     this.onHover?.(uid, this.clientPos);
   }
@@ -279,6 +280,7 @@ export class World {
   // ---------- Rundgang ----------
   enterFP() {
     if (this.fpActive) return;
+    if (this.empire) this.hideEmpire();
     this.cancelPlacement(); this.select(null);
     this.savedCam = { pos: this.camera.position.clone(), target: this.controls.target.clone() };
     this.fpActive = true; this.controls.enabled = false;
@@ -295,6 +297,52 @@ export class World {
     this.onFP?.(false);
   }
   fpClick() { const uid = this.pick(true); if (uid) { this.fp.unlock(); this.select(uid); } }
+
+  // ---------- Imperium-Ansicht: alle Standorte nebeneinander ----------
+  showEmpire() {
+    if (this.empire) return;
+    this.cancelPlacement(); this.select(null); this.onHover?.(null);
+    const vis = [this.room.root, this.outside, this.objGroup, this.people].filter(Boolean);
+    vis.forEach((o) => (o.visible = false)); this.roomLights.forEach((l) => (l.visible = false));
+    const g = (this.empire = new THREE.Group()); this.scene.add(g); this.empireHidden = vis;
+    let x = 0; const ids = this.game.s.unlocked.slice().sort((a, b) => FACILITY[a].tier - FACILITY[b].tier);
+    let maxD = 0;
+    for (const id of ids) {
+      const def = FACILITY[id]; const room = buildRoom(def);
+      for (const wl of room.walls) wl.group.visible = wl.name === 'back' || wl.name === 'left';
+      room.root.position.set(x, 0, -def.d / 2); g.add(room.root);
+      for (const o of this.game.facObjects(id)) { const m = objectModel(o); m.position.set(x + o.x, 0, -def.d / 2 + o.z); m.rotation.y = -o.rot * Math.PI / 2; g.add(m); }
+      // Schild
+      const c = document.createElement('canvas'); c.width = 512; c.height = 128; const cx = c.getContext('2d');
+      cx.fillStyle = 'rgba(14,17,23,0.85)'; cx.fillRect(0, 0, 512, 128); cx.fillStyle = '#ffb000'; cx.font = 'bold 54px Arial'; cx.textAlign = 'center'; cx.fillText(def.name, 256, 62);
+      const sm = this.game.summary[id]; cx.fillStyle = '#e8edf4'; cx.font = '30px Arial'; cx.fillText(`${def.w}×${def.d} m · ${sm ? (sm.watt / 1000).toFixed(sm.watt < 1e4 ? 2 : 0) : 0} kW`, 256, 106);
+      const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false })); const sc = Math.max(5, def.w * 0.3);
+      sp.scale.set(sc, sc / 4, 1); sp.position.set(x + def.w / 2, def.h + sc * 0.25 + 1, -def.d / 2 - 0.5); sp.renderOrder = 20; g.add(sp);
+      x += def.w + Math.max(3, def.w * 0.25); maxD = Math.max(maxD, def.d);
+    }
+    const total = x;
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(total + 200, maxD + 200), mat('empireGround', { color: 0x4f7a3c, roughness: 1 }));
+    ground.rotation.x = -Math.PI / 2; ground.position.set(total / 2, -0.12, 0); ground.receiveShadow = true; g.add(ground);
+    this.empireDef = { w: total, d: maxD, h: 10, tier: 9, grid: 1 };
+    const sc2 = this.sun.shadow.camera; const sz = total * 0.6 + 10; sc2.left = -sz; sc2.right = sz; sc2.top = sz; sc2.bottom = -sz; sc2.far = sz * 6; sc2.updateProjectionMatrix();
+    this.savedCamE = { pos: this.camera.position.clone(), target: this.controls.target.clone(), def: this.def };
+    this.def = { ...this.def, w: total, d: maxD, style: 'empire' };
+    this.controls.maxDistance = total * 2 + 40; this.controls.minDistance = 2;
+    this.controls.target.set(total / 2, 0, 0);
+    const end = new THREE.Vector3(total / 2 + total * 0.08, total * 0.42 + 8, total * 0.62 + 10);
+    const start = new THREE.Vector3(2.5, 3.2, 4.5);
+    this.camera.position.copy(start); this.camera.near = 0.2; this.camera.updateProjectionMatrix();
+    this.transition = { from: start, to: end, t: 0, dur: 4.5 };
+    this.onEmpire?.(true);
+  }
+  hideEmpire() {
+    if (!this.empire) return;
+    this.scene.remove(this.empire); this.empire = null;
+    this.empireHidden.forEach((o) => (o.visible = true)); this.roomLights.forEach((l) => (l.visible = true));
+    this.loadFacility(this.facId);
+    this.onEmpire?.(false);
+  }
 
   // ---------- Personal (NPCs) ----------
   makePerson(vest = 0xff8a00, hat = true, skin = 0xe0b394) {
@@ -416,7 +464,7 @@ export class World {
       if (!this.transition) this.controls.update();
       // Wände zur Kamera ausblenden
       const cp = this.camera.position;
-      for (const wl of this.room.walls) {
+      if (!this.empire) for (const wl of this.room.walls) {
         const n = wl.outward; let outside;
         if (n.z < 0) outside = cp.z < 0; else if (n.z > 0) outside = cp.z > this.def.d; else if (n.x < 0) outside = cp.x < 0; else outside = cp.x > this.def.w;
         wl.group.visible = !outside || cp.y < 0;

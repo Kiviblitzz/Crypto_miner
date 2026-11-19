@@ -17,6 +17,7 @@ export class UI {
     this.dock(); this.speedBar();
     world.onSelect = (uid) => this.inspect(uid);
     world.onHover = (uid, pos) => this.tip(uid, pos);
+    world.onEmpire = (on) => { this.dock(); this.hint(on ? 'Imperium: alle deine Standorte im Größenvergleich · Rechts ziehen = drehen · Rad = Zoom' : null); document.body.classList.toggle('empire', on); };
     world.onFPError = () => this.toast('Der Rundgang braucht Maus-Steuerung (Pointer Lock) – auf diesem Gerät nicht verfügbar.', 'bad');
     world.onPlacing = (on) => this.hint(on ? 'Linksklick = platzieren · R = drehen · Shift = mehrfach · Rechtsklick/ESC = abbrechen' : null);
     world.onFP = (on) => { this.hint(on ? 'Rundgang: WASD laufen · Shift = rennen · Maus = umsehen · Klick = Gerät ansehen · ESC = zurück' : null); $('#crosshair').classList.toggle('hidden', !on); };
@@ -93,7 +94,7 @@ export class UI {
     const br = g.brokenIn(g.s.current);
     if (br.n) { const b = h(`<div class="site fix" title="Alle defekten Geräte hier reparieren"><div class="n">🔧 ${br.n} defekt</div><div class="m">Alle reparieren: ${fmtUSD(br.c)}</div></div>`); b.onclick = () => { const n = g.repairAll(g.s.current); this.toast(n ? `🔧 ${n} Gerät(e) repariert` : 'Nicht genug Geld.', n ? 'good' : 'bad'); this.sites(); }; el.append(b); }
   }
-  switchSite(id, cinematic = false) { this.g.s.current = id; this.w.loadFacility(id, { cinematic }); this.inspect(null); this.refresh(); }
+  switchSite(id, cinematic = false) { if (this.w.empire) { this.w.scene.remove(this.w.empire); this.w.empire = null; this.w.empireHidden.forEach((o) => (o.visible = true)); this.w.roomLights.forEach((l) => (l.visible = true)); this.w.onEmpire?.(false); } this.g.s.current = id; this.w.loadFacility(id, { cinematic }); this.inspect(null); this.refresh(); }
 
   // ---------- Baumenü ----------
   build(force = false) {
@@ -311,7 +312,7 @@ export class UI {
     el.innerHTML = '';
     const btns = [
       ['📈', 'Markt', () => this.market()], ['📱', 'Handy', () => this.phone(), unread], ['🏢', 'Firma', () => this.company()], ['🔬', 'Technik', () => this.techs(), TECHS.filter((t) => !(g.s.techs || {})[t.id] && g.techAvailable(t) && g.s.cash >= t.cost).length],
-      ['🏆', 'Rangliste', () => this.ranking()], ['🚶', 'Rundgang', () => this.w.enterFP()], ['⚙️', 'Menü', () => this.menu()],
+      ['🏆', 'Rangliste', () => this.ranking()], ['🗺️', this.w.empire ? 'Zurück' : 'Imperium', () => (this.w.empire ? this.w.hideEmpire() : this.w.showEmpire())], ['🚶', 'Rundgang', () => this.w.enterFP()], ['⚙️', 'Menü', () => this.menu()],
     ];
     for (const [ic, l, fn, b] of btns) { const e = h(`<button><span class="ic">${ic}</span>${l}${b ? `<span class="bdg">${b}</span>` : ''}</button>`); e.onclick = fn; el.append(e); }
   }

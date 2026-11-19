@@ -13,6 +13,10 @@ Du startest **Oktober 2010 im Kinderzimmer** mit einem alten PC und baust bis in
 | ![Lagerhalle](docs/img/05_halle.jpg) | ![Rechenzentrum](docs/img/06_rz.jpg) |
 | ![Fjordhalle](docs/img/07_fjord.jpg) | ![Markt](docs/img/09_markt.jpg) |
 
+**Imperium-Ansicht** – alle Standorte im Größenvergleich:
+
+![Imperium](docs/img/08_imperium.jpg)
+
 Recherche: [docs/RECHERCHE.md](docs/RECHERCHE.md) · Konzept & Story: [docs/KONZEPT.md](docs/KONZEPT.md)
 
 ## Spielen
@@ -50,6 +54,8 @@ Ein-Datei-Version neu bauen: `npm run build:single`.
   alle laufen parallel. Strom (Sicherung fliegt!), Hitze (Drosselung, Defekte), Miete, Techniker.
 * **Story:** Papas Elektronikladen retten, Opa Heinz legt Starkstrom, Kumpel Deniz wird CTO,
   Rivale Viktor Kral (MONOLITH Hash AG) muss überholt werden. Nachrichten aufs Handy, News-Ticker.
+* **Imperium-Ansicht (🗺️):** alle Standorte nebeneinander als Dioramen – vom Kinderzimmer bis zur Fjordhalle.
+* **Technik (🔬):** 9 Technologien wie Undervolting, eigene ASIC-Firmware, Immersionskühlung, Abwärme-Verkauf.
 * **3D:** Alle Modelle prozedural im Code gebaut (keine fremden Assets, keine Logos), Tag/Nacht,
   Bloom-LEDs, Wände blenden sich zur Kamera aus, Rundgang-Modus in Ego-Perspektive.
 
