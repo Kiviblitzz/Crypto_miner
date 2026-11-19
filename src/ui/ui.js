@@ -31,7 +31,7 @@ export class UI {
     game.on('milestone', (t, sub) => this.milestone(t, sub));
     game.on('won', () => this.ending());
     game.on('offer', (usd) => this.offer(usd));
-    game.on('release', (it, text) => { this.toast(`🆕 ${esc(text)}`, 'info', 6000); this.ticker(); this.lastBuildDay = -99; });
+    game.on('release', (it, text) => { if (it.type !== 'psu' && it.type !== 'mobo') this.toast(`🆕 ${esc(text)}`, 'info', 6000); this.ticker(); this.lastBuildDay = -99; });
     game.on('update', () => this.onDay());
     game.on('refresh', () => this.refresh());
     game.on('unlockable', (id) => { this.toast(`🔓 Neuer Standort verfügbar: <b>${FACILITY[id].name}</b> – siehe Ziele unten links`, 'good', 8000); this.goals(); this.sites(); });
