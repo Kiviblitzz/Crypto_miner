@@ -519,10 +519,21 @@ export class World {
       me.userData.legL.rotation.x = me.userData.legR.rotation.x = -1.45; me.userData.armL.rotation.x = me.userData.armR.rotation.x = -1.1;
       me.position.set(2.75, -0.36, 0.72); me.rotation.y = Math.PI; this.scene.add(me); this.people.userData.me = me; this.people.add(me);
     }
+    // Familie: Papa in der Werkstatt, Opa im Keller (nach dem Starkstrom)
+    const fam = [];
+    if (tier === 2) fam.push(['papa', 0x7a5230, 0xd9a983, 1.4, 0.95, Math.PI]);
+    if (tier === 1 && (s.fac.keller?.power || 0) > 0) fam.push(['opa', 0x5b6b4a, 0xe2b896, 4.2, 0.75, Math.PI]);
+    for (const [key, vest, skin, x, z, ry] of fam) {
+      if (this.people.userData[key]) continue;
+      const p = this.makePerson(vest, false, skin); p.userData.static = true; p.userData.work = true;
+      p.position.set(x, 0, z); p.rotation.y = ry; this.people.userData[key] = p; this.people.add(p);
+      p.children.filter((c) => c.geometry?.type === 'BoxGeometry' && Math.abs(c.position.y - 1.63) < 0.01).forEach((h) => (h.material = mat('npcGrayHair', { color: 0xbfbfbf, roughness: 0.9 })));
+    }
+    want += fam.length;
     if (this.people.userData.me) want += 1;
-    while (this.people.children.length > want) this.people.remove(this.people.children[this.people.children.length - 1]);
+    while (this.people.children.length > want) { const ch = this.people.children; let i = ch.length - 1; while (i >= 0 && ch[i].userData.static) i--; if (i < 0) break; this.people.remove(ch[i]); }
     while (this.people.children.length < want) {
-      const first = this.people.children.length === 0;
+      const first = !this.people.children.some((c) => !c.userData.static);
       const p = first ? this.makePerson(0x2e6fd6, false, 0xc89a72) : this.makePerson(0xff8a00, tier >= 3);
       const pt = this.randomFloorPoint(); p.position.set(pt.x, 0, pt.z); this.people.add(p);
     }
@@ -543,6 +554,7 @@ export class World {
     const paused = !this.game.s.speed;
     for (const p of this.people.children) {
       const u = p.userData;
+      if (u.static && u.work) { u.armR.rotation.x = -0.9 + Math.sin(this.t * 3) * 0.25; u.armL.rotation.x = -0.7 + Math.cos(this.t * 2.3) * 0.1; continue; }
       if (u.static) { u.armR.rotation.x = -1.1 + Math.sin(this.t * 9) * 0.04; u.armL.rotation.x = -1.1 + Math.cos(this.t * 8) * 0.04; continue; }
       if (!u.target || u.wait > 0) {
         u.wait -= dt; if (u.wait <= 0 && !u.target) u.target = this.randomFloorPoint();
