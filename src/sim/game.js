@@ -704,7 +704,7 @@ export class Game {
   buy(coin, usd) {
     usd = Math.min(+usd || 0, this.s.cash); if (!(usd > 0) || !this.canAfford(usd)) return 0;
     const p = this.price(coin); if (!p) return 0;
-    this.s.wallet[coin].ex += (usd * 0.995) / p; this.s.cash -= usd; this.dayUpdate(true); return usd;
+    const fee = this.s.skills ? this.tradeFee() : 0.005; this.s.wallet[coin].ex += (usd * (1 - fee)) / p; this.s.cash -= usd; if (this.s.skills) this.addXp('trade', 10 + Math.min(40, usd / 10)); this.dayUpdate(true); return usd;
   }
   transfer(coin, toCold) {
     const w = this.s.wallet[coin];

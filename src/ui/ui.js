@@ -760,20 +760,65 @@ export class UI {
     det.append(range);
     this.range ??= 365;
     requestAnimationFrame(() => this.chart(cv, c.id, this.range));
-    const mined = (s.stats.coins || {})[c.id] || 0;
-    const tile = (k, coin, cls = '') => h(`<div class="tile ${cls}"><div class="info"><div class="k">${k}</div><div class="v">${fmtCoin(coin)} <small>${c.id}</small></div><div class="u">≈ ${fmtUSD(coin * p)}</div></div><div class="acts"></div></div>`);
-    const pend = c.id === 'BTC' && !s.payoutCold ? this.pendingBtc() : 0;
-    const tiles = h('<div class="tiles"></div>'), hold = tile('Du hast', w.ex + pend, 'hold'); tiles.append(hold);
-    const r1 = hold.querySelector('.acts');
-    const fee = g.s.skills ? g.tradeFee() : 0.005, net = (f) => (w.ex + pend) * f * p * (1 - fee);
-    hold.querySelector('.info').append(h(`<div class="fee">Gebühr ${(fee * 100).toLocaleString('de-DE')} % · Handel senkt sie</div>`));
-    if (w.ex + pend <= 0.0001) r1.append(h(`<div class="empty-sell">${s.stats.sold > 0 ? 'Alles verkauft – dein PC schürft schon weiter.' : 'Noch keine Bitcoin – dein PC schürft gerade.'}</div>`));
-    else for (const f of [0.25, 0.5, 1]) { const b = h(`<button class="btn sellb"><b>${f === 1 ? 'Alles verkaufen' : f * 100 + ' % verkaufen'}</b><small>${net(f) > 0.004 ? '+' + fmtUSD(net(f)) : 'nichts da'}</small></button>`); b.disabled = w.ex + pend <= 0; b.onclick = () => { if (f === 1 && !b.classList.contains('confirm')) { b.classList.add('confirm'); b.innerHTML = `<b>Wirklich alles?</b><small>${fmtCoin(w.ex + pend)} BTC → +${fmtUSD(net(1))}</small>`; clearTimeout(this.sellArm); this.sellArm = setTimeout(() => this.market(), 4000); return; } clearTimeout(this.sellArm); if (pend) g.creditPending(c.id, this.pendingBtc()); const u = g.sell(c.id, f); this.audio?.cash(); this.flashCash(u); this.toast(`Verkauft für ${fmtUSD(u)}`, 'good', 2500); this.market(); }; r1.append(b); }
-    if (g.has('cold')) { const ct = tile('Cold-Wallet', w.cold, 'cold'); const tc = h(`<button class="btn small">${w.cold > 0 && w.ex === 0 ? 'Auf Börse holen' : 'Einlagern'}</button>`); tc.onclick = () => { g.transfer(c.id, !(w.cold > 0 && w.ex === 0)); this.market(); }; ct.querySelector('.acts').append(tc); tiles.append(ct); }
-    det.append(tiles);
-    const r2 = h(`<div class="row" style="align-items:center"><span style="font-size:13px">Kaufen für</span><input type="number" min="0" step="100" value="${Math.max(0, Math.round(Math.min(s.cash, 1000)))}"/><span>$</span><button class="btn small primary">Kaufen</button></div>`);
-    r2.querySelector('button').onclick = () => { const v = +r2.querySelector('input').value; if (g.coinActive(c.id) || s.day >= c.start) { const u = g.buy(c.id, v); if (u) this.toast(`${fmtUSD(u)} in ${c.name} investiert`, 'good', 2500); this.market(); } };
-    if (g.has('buycoins')) det.append(r2);
+    // ---------- Handelsfenster: selbst eingeben, kaufen oder verkaufen ----------
+    det.classList.add('mk-left');
+    const wrap = h('<div class="mk-wrap"></div>'); det.replaceWith(wrap); wrap.append(det);
+    const tk = h('<div class="ticket"></div>'); wrap.append(tk);
+    this.trade ||= { mode: 'sell', unit: 'BTC' };
+    const T = this.trade, fee = g.s.skills ? g.tradeFee() : 0.005, feeTxt = (fee * 100).toLocaleString('de-DE');
+    const pend = c.id === 'BTC' && !s.payoutCold ? this.pendingBtc() : 0, have = w.ex + pend;
+    const num = (str) => { str = String(str || '').trim().replace(/\s/g, ''); if (str.includes(',')) str = str.replace(/\./g, '').replace(',', '.'); const v = parseFloat(str); return Number.isFinite(v) && v > 0 ? v : 0; };
+    const fmtIn = (v, unit) => (v > 0 ? v.toLocaleString('de-DE', { maximumFractionDigits: unit === 'BTC' ? 4 : 2, useGrouping: false }) : '');
+    const sym = c.id === 'BTC' ? '₿' : c.id;
+    tk.innerHTML = `<div class="seg tk-tabs"><button class="btn small ${T.mode === 'sell' ? 'on' : ''}" data-m="sell">Verkaufen</button><button class="btn small ${T.mode === 'buy' ? 'on' : ''}" data-m="buy">Kaufen</button></div>
+      <div class="tk-bal"><div><span>Du hast</span><b>${fmtCoin(have)} ${c.id}</b><small>≈ ${fmtUSD(have * p)}</small></div><div><span>Kontostand</span><b>${fmtUSD(s.cash)}</b></div></div>
+      <label class="tk-amt"><span class="lab">${T.mode === 'sell' ? 'Menge verkaufen' : 'Menge kaufen'}</span><span class="field"><input type="text" inputmode="decimal" autocomplete="off" placeholder="0"/><button class="unit" title="Einheit wechseln">${T.unit === 'BTC' ? c.id : '$'}</button></span></label>
+      <div class="tk-chips"><button class="btn small" data-p="0.25">25 %</button><button class="btn small" data-p="0.5">50 %</button><button class="btn small" data-p="1">100 %</button></div>
+      <input class="tk-range" type="range" min="0" max="100" step="1" value="0" aria-label="Anteil"/>
+      <div class="tk-sum"><div><span>Kurs</span><b>${fmtUSD(p)}</b></div><div><span>Menge</span><b class="q">–</b></div><div><span>Gebühr (${feeTxt} %)</span><b class="f">–</b></div><div class="tot"><span class="tl">${T.mode === 'sell' ? 'Du bekommst' : 'Du zahlst'}</span><b class="t">–</b></div></div>
+      <div class="tk-msg"></div>
+      <button class="btn primary big wide tk-go" disabled>${T.mode === 'sell' ? 'Verkaufen' : 'Kaufen'}</button>
+      <div class="tk-note">Gebühr ${feeTxt} % · deine Fähigkeit Handel senkt sie</div>`;
+    const inp = tk.querySelector('input[type=text]'), rng = tk.querySelector('.tk-range'), go = tk.querySelector('.tk-go'), msg = tk.querySelector('.tk-msg');
+    // Obergrenze in der gewählten Einheit
+    const maxIn = () => (T.mode === 'sell' ? (T.unit === 'BTC' ? have : have * p) : (T.unit === 'BTC' ? Math.max(0, s.cash) / p : Math.max(0, s.cash)));
+    const calc = () => {
+      const v = num(inp.value), mx = maxIn(), over = v > mx * 1.000001 + 1e-9;
+      const coins = T.unit === 'BTC' ? v : v / p;
+      let q = '–', f = '–', t = '–', ok = v > 0 && !over;
+      if (v > 0) {
+        if (T.mode === 'sell') { const gross = coins * p; q = `${fmtCoin(coins)} ${c.id}`; f = `−${fmtUSD(gross * fee)}`; t = `+${fmtUSD(gross * (1 - fee))}`; }
+        else { const usd = T.unit === 'BTC' ? coins * p / (1 - fee) : v; q = `${fmtCoin(usd * (1 - fee) / p)} ${c.id}`; f = `−${fmtUSD(usd * fee)}`; t = fmtUSD(usd); ok = ok && usd <= s.cash + 1e-6; }
+      }
+      tk.querySelector('.q').textContent = q; tk.querySelector('.f').textContent = f; tk.querySelector('.t').textContent = t;
+      msg.textContent = over ? (T.mode === 'sell' ? `So viel hast du nicht – höchstens ${fmtIn(mx, T.unit)} ${T.unit === 'BTC' ? c.id : '$'}.` : `Dafür reicht dein Geld nicht – höchstens ${fmtIn(mx, T.unit)} ${T.unit === 'BTC' ? c.id : '$'}.`) : (mx <= 0 ? (T.mode === 'sell' ? (s.stats.sold > 0 ? 'Alles verkauft – dein PC schürft schon weiter.' : 'Noch keine Bitcoin – dein PC schürft gerade.') : 'Kein Geld zum Kaufen da.') : '');
+      msg.classList.toggle('bad', over); inp.closest('.field').classList.toggle('bad', over);
+      go.disabled = !ok; go.textContent = ok ? (T.mode === 'sell' ? `Verkaufen · ${t}` : `Kaufen · ${q}`) : (T.mode === 'sell' ? 'Verkaufen' : 'Kaufen');
+      if (document.activeElement !== rng) rng.value = mx > 0 ? Math.round(Math.min(1, v / mx) * 100) : 0;
+      tk.querySelectorAll('.tk-chips .btn').forEach((b) => b.classList.toggle('on', mx > 0 && Math.abs(v / mx - +b.dataset.p) < 0.004));
+    };
+    const setPct = (k) => { const mx = maxIn(); inp.value = fmtIn(k >= 1 ? mx : mx * k, T.unit); calc(); };
+    inp.oninput = calc; inp.onkeydown = (e) => { if (e.key === 'Enter' && !go.disabled) go.click(); if (e.key === 'Escape') inp.blur(); };
+    rng.oninput = () => setPct(+rng.value / 100);
+    tk.querySelectorAll('.tk-chips .btn').forEach((b) => (b.onclick = () => setPct(+b.dataset.p)));
+    tk.querySelectorAll('.tk-tabs .btn').forEach((b) => (b.onclick = () => { T.mode = b.dataset.m; this.market(); }));
+    tk.querySelector('.unit').onclick = (e) => { e.preventDefault(); const v = num(inp.value), coins = T.unit === 'BTC' ? v : v / p; T.unit = T.unit === 'BTC' ? 'USD' : 'BTC'; e.currentTarget.textContent = T.unit === 'BTC' ? c.id : '$'; inp.value = fmtIn(T.unit === 'BTC' ? coins : coins * p, T.unit); calc(); };
+    if (maxIn() <= 0) { inp.disabled = true; rng.disabled = true; tk.querySelectorAll('.tk-chips .btn').forEach((b) => (b.disabled = true)); }
+    go.onclick = () => {
+      const v = num(inp.value); if (!(v > 0)) return;
+      if (T.mode === 'sell') {
+        if (pend) g.creditPending(c.id, this.pendingBtc());
+        const avail = s.wallet[c.id].ex, coins = Math.min(avail, T.unit === 'BTC' ? v : v / p); if (!(coins > 0)) return;
+        const u = g.sell(c.id, coins >= avail * 0.9999 ? 1 : coins / avail); if (!u) return;
+        this.audio?.cash(); this.flashCash(u); this.toast(`${fmtCoin(coins)} ${c.id} verkauft · +${fmtUSD(u)}`, 'good', 3000);
+      } else {
+        const usd = Math.min(s.cash, T.unit === 'BTC' ? v * p / (1 - fee) : v); const u = g.buy(c.id, usd); if (!u) { this.toast('Kauf nicht möglich.', 'bad'); return; }
+        this.audio?.cash(); this.toast(`${fmtCoin(u * (1 - fee) / p)} ${c.id} gekauft · −${fmtUSD(u)}`, 'good', 3000);
+      }
+      this.market();
+    };
+    calc();
+    if (g.has('cold')) { const ct = h(`<div class="tk-cold"><div><span>Cold-Wallet</span><b>${fmtCoin(w.cold)} ${c.id}</b></div><button class="btn small">${w.cold > 0 && w.ex === 0 ? 'Auf Börse holen' : 'Einlagern'}</button></div>`); ct.querySelector('button').onclick = () => { g.transfer(c.id, !(w.cold > 0 && w.ex === 0)); this.market(); }; tk.append(ct); }
     const r3 = h(`<div class="sec"><h4>Auto-Verkauf: <span id="as-v">${Math.round(s.autoSell[c.id] * 100)} %</span></h4><input type="range" min="0" max="100" step="5" value="${Math.round(s.autoSell[c.id] * 100)}"/></div>`);
     r3.querySelector('input').oninput = (e) => { s.autoSell[c.id] = e.target.value / 100; r3.querySelector('#as-v').textContent = e.target.value + ' %'; };
     const all = h('<button class="btn small" style="margin-top:6px">Für alle</button>'); all.onclick = () => { for (const k of COINS) s.autoSell[k.id] = s.autoSell[c.id]; this.toast('Übernommen', 'good', 1500); }; r3.append(all);
