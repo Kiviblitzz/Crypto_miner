@@ -270,7 +270,7 @@ export class Game {
     const s = this.s; if (!s.skills) return; const before = this.skillLv(k); s.skills[k] = (s.skills[k] || 0) + Math.round(n);
     this.grant('skills'); const after = this.skillLv(k); if (!quiet || after > before) this.emit('xp', k, Math.round(n), after > before ? after : 0);
   }
-  creditPending(coin, n) { const s = this.s; if (!(n > 0)) return; s.wallet[coin].ex += n; s.accr = { day: s.day, f: s.frac, coin }; }
+  creditPending(coin, n) { const s = this.s; if (!(n > 0)) return; s.wallet[coin].ex += n; const n0 = s.accr?.day === s.day && s.accr.coin === coin ? s.accr.n || 0 : 0; s.accr = { day: s.day, f: s.frac, coin, n: n0 + n }; } // n: heute schon gutgeschrieben
   tradeFee() { return [0.04, 0.03, 0.02, 0.01, 0.005][this.skillLv('trade') - 1] ?? 0.005; }
   // ---------- Herumliegende Teile ----------
   pickUp(type) { const s = this.s; if (!s.loose?.[type]) return false; s.inv.push(type); s.invIds = { ...(s.invIds || {}), [type]: s.loose[type] }; delete s.loose[type]; this.checkGoals(); this.emit('loose'); return true; }
@@ -612,7 +612,7 @@ export class Game {
       const p = this.price(c, day); minedUSD += n * p; s.stats.coins[c] = (s.stats.coins[c] || 0) + n;
       const sell = n * s.autoSell[c];
       sold += sell * p * (s.skills ? 1 - this.tradeFee() : 1);
-      const keep = (n - sell) * keepK(c);
+      const keep = c === accrC && s.accr.n != null ? Math.max(0, n - sell - s.accr.n) : (n - sell) * keepK(c); // vorab Gutgeschriebenes abziehen
       if (s.payoutCold) s.wallet[c].cold += keep; else s.wallet[c].ex += keep;
     }
     s.cash += sold - elecCost;
