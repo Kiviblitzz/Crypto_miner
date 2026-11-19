@@ -187,6 +187,7 @@ export const NEWS = [
   ['2022-07-17', 'Hitzewelle und Energiekrise: Strom so teuer wie nie'],
   ['2022-09-15', 'The Merge: Aether wechselt zu Proof-of-Stake – GPU-Mining endet'],
   ['2022-11-11', 'Börse FXT bricht zusammen – Milliarden Kundengelder weg', { exchangeLoss: 0.85 }],
+  ['2022-12-21', 'Großer Miner „CoreHash" insolvent – zu viele Kredite, zu wenig Hashprice'],
   ['2023-08-15', 'Kaskad-ASICs ausgeliefert – GPUs verlieren'],
   ['2024-01-11', 'US-Behörde genehmigt Spot-Bitcoin-ETFs'],
   ['2024-03-14', 'Bitcoin erreicht 73.000 $'],

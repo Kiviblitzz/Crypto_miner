@@ -389,9 +389,9 @@ export class Game {
   algoHash(algo) { let h = 0; for (const id of this.s.unlocked) { const sm = this.summary[id]; if (sm && !sm.tripped) h += (sm.hashByAlgo[algo] || 0) * sm.throttle; } return h; }
   walletValue() { let v = 0; for (const c of COINS) { const w = this.s.wallet[c.id]; v += (w.ex + w.cold) * this.price(c.id); } return v; }
   hardwareValue() { let v = 0; for (const f of Object.values(this.s.fac)) for (const o of f.objects) v += this.objectValue(o); return v; }
-  netWorth() { return this.s.cash + this.walletValue() + this.hardwareValue(); }
+  netWorth() { return this.s.cash + this.walletValue() + this.hardwareValue() - (this.s.loan || 0); }
   monolithHash(day = this.s.day) { return day < toDay('2014-03-01') ? 0 : BTC_HASH(Math.min(day, LAST_DATA_DAY)) * MONOLITH_SHARE(day) * (this.s.endless ? this.s.endless.BTC.h : 1); }
-  dailyProfit() { let rev = 0, cost = 0; for (const id of this.s.unlocked) { const sm = this.summary[id]; if (!sm) continue; if (!sm.tripped) { rev += sm.rev * sm.throttle; cost += sm.watt / 1000 * 24 * sm.elec; } cost += FACILITY[id].rent / 30.4; } cost += this.s.staff.tech * this.techSalary() / 30.4; return { rev, cost, net: rev - cost }; }
+  dailyProfit() { let rev = 0, cost = 0; for (const id of this.s.unlocked) { const sm = this.summary[id]; if (!sm) continue; if (!sm.tripped) { rev += sm.rev * sm.throttle; cost += sm.watt / 1000 * 24 * sm.elec; } cost += FACILITY[id].rent / 30.4; } cost += this.s.staff.tech * this.techSalary() / 30.4; if (this.s.loan > 0) cost += this.s.loan * this.loanRate() / 365; return { rev, cost, net: rev - cost }; }
   techSalary(day = this.s.day) { return Math.round(2600 * Math.pow(1.03, (day - toDay('2014-01-01')) / 365)); }
   techCoverage() { let n = 0; for (const id of this.s.unlocked) for (const o of this.s.fac[id].objects) { const def = PLACEABLE[o.type]; if (def.kind === 'holder') n += o.items.length; else if (def.kind !== 'decor' && def.kind !== 'cooling') n++; } return n ? Math.min(1, (this.s.staff.tech * 60) / n) : 1; }
 
@@ -450,6 +450,7 @@ export class Game {
     let fixed = 0;
     for (const id of s.unlocked) fixed += FACILITY[id].rent / 30.4;
     fixed += s.staff.tech * this.techSalary(day) / 30.4;
+    if (s.loan > 0) fixed += (s.loan * this.loanRate(day)) / 365;
     s.cash -= fixed;
     if (s.cash < 0) {
       // Automatisch Coins von der Börse verkaufen, um das Minus auszugleichen
@@ -500,7 +501,7 @@ export class Game {
     }
   }
   algoHashFrom(netOwn) { return netOwn.BTC || 0; }
-  netWorthFast() { return this.s.cash + this.walletValue() + this.hardwareValue(); }
+  netWorthFast() { return this.s.cash + this.walletValue() + this.hardwareValue() - (this.s.loan || 0); }
 
   wear(o, temp, day) {
     const def = PLACEABLE[o.type];
@@ -597,6 +598,12 @@ export class Game {
     this.s.cash -= next.cost; f.power++; this.dayUpdate(true); return true;
   }
   hireTech(n) { if (FACILITY[this.s.unlocked[this.s.unlocked.length - 1]].tier < 3 && !this.s.flags.gmbh) return false; this.s.staff.tech = Math.max(0, this.s.staff.tech + n); this.dayUpdate(true); return true; }
+
+  // ---------- Bankkredit ----------
+  loanRate(day = this.s.day) { return day < toDay('2022-06-01') ? 0.065 : day < toDay('2024-06-01') ? 0.115 : 0.09; }
+  loanLimit() { return Math.max(0, Math.round((this.hardwareValue() * 0.5 + this.walletValue() * 0.25 + Math.max(0, this.s.cash) * 0.2) / 1000) * 1000 - (this.s.loan || 0)); }
+  takeLoan(usd) { usd = Math.min(usd, this.loanLimit()); if (usd <= 0) return 0; this.s.loan = (this.s.loan || 0) + usd; this.s.cash += usd; this.dayUpdate(true); return usd; }
+  repayLoan(usd) { usd = Math.min(usd, this.s.loan || 0, Math.max(0, this.s.cash)); if (usd <= 0) return 0; this.s.loan -= usd; this.s.cash -= usd; this.dayUpdate(true); return usd; }
 
   // ---------- Wallet ----------
   sell(coin, frac) {
