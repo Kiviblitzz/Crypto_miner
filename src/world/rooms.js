@@ -154,6 +154,15 @@ export function buildRoom(def) {
     cyl(g, 0.035, 0.035, w, M.copper(), w / 2, h - 0.25, 0.45, 10, 'x');
     for (const x of [2, 5]) { const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 10), M.ledWhite()); bulb.position.set(x, h - 0.2, 2.5); g.add(bulb); B.lights.push({ pos: [x, h - 0.3, 2.5], color: 0xffe2b0, intensity: 3.2, dist: 7 }); }
     poster(S.left, textTexture([{ text: 'Familie Brandt', font: 'bold 40px Georgia', color: '#333' }, { text: 'Urlaub 1998', font: '30px Georgia', color: '#555' }], { w: 256, h: 256, bg: '#f5efe0' }), 0.4, 0.4, 2.5, 1.5, 0.085);
+    // Dartscheibe, altes Fahrrad, Weihnachtskisten
+    const dart = new THREE.Mesh(new THREE.CircleGeometry(0.22, 24), mat('dart', { map: textTexture([{ text: '◎', font: 'bold 220px Arial', color: '#c22' }], { w: 256, h: 256, bg: '#1a1a1a' }), roughness: 0.8 })); dart.position.set(5.3, 1.6, 0.085); S.back.add(dart);
+    const bike = new THREE.Group(); bike.position.set(6.6, 0, 3.6); bike.rotation.y = Math.PI / 2; g.add(bike);
+    for (const x of [-0.5, 0.5]) { const wh = new THREE.Mesh(new THREE.TorusGeometry(0.33, 0.025, 8, 24), M.rubber()); wh.position.set(x, 0.35, 0); bike.add(wh); }
+    const fr = mat('bikeFrame', { color: 0x2266aa, roughness: 0.4, metalness: 0.6 });
+    for (const [x, y, rz, l] of [[-0.12, 0.55, 0.9, 0.75], [0.25, 0.55, -0.6, 0.6], [0.05, 0.75, 0, 0.7]]) { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, l, 6), fr); b.position.set(x, y, 0); b.rotation.z = rz + Math.PI / 2 * (rz === 0 ? 1 : 0); bike.add(b); }
+    B.blocked.push(blk(6.2, 2.8, 7.0, 4.4));
+    for (let i = 0; i < 3; i++) box(g, 0.55, 0.35, 0.4, mat('xmasBox' + i, { color: [0xa83232, 0x2f7d3a, 0xc9a227][i], roughness: 0.8 }), 4.6 + (i % 2) * 0.1, i * 0.35, 4.75);
+    B.blocked.push(blk(4.3, 4.5, 5.0, 5.0));
     B.outside = 'garden';
   } else if (def.style === 'workshop') {
     S = shell(def, {

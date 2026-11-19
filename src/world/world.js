@@ -116,7 +116,7 @@ export class World {
     const span = Math.max(def.w, def.d);
     this.controls.target.set(def.w / 2, 0, def.d / 2);
     this.controls.minDistance = Math.max(1.2, span * 0.15); this.controls.maxDistance = span * 2.6 + 6;
-    const dist = span * 1.15 + 2.5;
+    const dist = def.tier === 0 ? span * 1.15 + 2.5 : span * 1.0 + 2.2;
     const endPos = new THREE.Vector3(def.w / 2 + dist * 0.55, dist * 0.78, def.d / 2 + dist * 0.75);
     if (cinematic) {
       const startPos = new THREE.Vector3(def.w / 2 + 1, 1.4, def.d / 2 + 1.5);
