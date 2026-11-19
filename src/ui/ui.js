@@ -17,14 +17,22 @@ export class UI {
     this.g = game; this.w = world; this.cat = 'rigs'; this.marketCoin = 'BTC'; this.lastBuildDay = -1;
     this.dock(); this.speedBar();
     world.onSelect = (uid) => this.inspect(uid);
-    world.onHover = (uid, pos) => this.tip(uid, pos);
     world.onHeat = () => this.sites();
-    world.onEmpire = (on) => { this.dock(); this.hint(on ? 'Imperium: alle deine Standorte im Größenvergleich · Rechts ziehen = drehen · Rad = Zoom' : null); document.body.classList.toggle('empire', on); };
-    world.onFPError = () => this.toast('Der Rundgang braucht Maus-Steuerung (Pointer Lock) – auf diesem Gerät nicht verfügbar.', 'bad');
-    world.onPlacing = (on) => this.hint(on ? 'Linksklick = platzieren · R = drehen · Shift = mehrfach · Rechtsklick/ESC = abbrechen' : null);
-    world.onFP = (on) => { this.hint(on ? 'Rundgang: WASD laufen · Shift = rennen · Maus = umsehen · Klick = Gerät ansehen · ESC = zurück' : null); $('#crosshair').classList.toggle('hidden', !on); };
+    world.onEmpire = (on) => { this.dock(); this.hint(on ? 'Karte: alle deine Standorte im Größenvergleich · Ziehen = drehen · Rad = Zoom · K/ESC = zurück' : null); document.body.classList.toggle('empire', on); };
+    world.onPlacing = (on) => { this.placingHint = on; this.prompt(null); this.hint(on ? 'Klick = platzieren · R = drehen · Shift = mehrfach · Rechtsklick/X = abbrechen' : null); };
+    world.onAim = (aim) => this.prompt(aim);
+    world.onInteract = (uid) => this.openInspector(uid);
+    world.onDoor = (door) => this.travel(door);
+    world.onPause = () => this.pause(true);
+    world.onCanvasClickInUI = () => this.resume();
+    world.onPlaced = (o) => { const d = PLACEABLE[o.type]; if (d.kind === 'rig' || d.kind === 'holder') this.toast(`✅ ${esc(d.name)} steht. Schau es an und drück <b>[E]</b>, um es zu bestücken.`, 'good', 5000); };
+    world.onModeChange = (m) => { document.body.dataset.mode = m; this.dock(); };
+    world.onLockChange = (locked) => { $('#clickhint').classList.toggle('hidden', locked || this.w.mode !== 'play' || this.w.touchMode || !!this.paused); };
     $('#modal .modal-x').onclick = () => this.closeModal();
     $('#modal').addEventListener('pointerdown', (e) => { if (e.target.id === 'modal') this.closeModal(); });
+    $('#pause-resume').onclick = () => this.resume();
+    $('#pause-menu').onclick = () => { this.pause(false); this.menu(); };
+    $('#clickhint').onclick = () => this.w.requestLock();
     game.on('toast', (t, k, ms) => this.toast(t, k, ms));
     game.on('message', (m) => { this.toast(`${FACE[m.from] || '💬'} <b>${esc(m.from)}:</b> ${esc(m.text.length > 90 ? m.text.slice(0, 88) + '…' : m.text)}`, 'msg', 7000); this.dock(); });
     game.on('news', () => this.ticker());
@@ -103,7 +111,14 @@ export class UI {
     const br = g.brokenIn(g.s.current);
     if (br.n) { const b = h(`<div class="site fix" title="Alle defekten Geräte hier reparieren"><div class="n">🔧 ${br.n} defekt</div><div class="m">Alle reparieren: ${fmtUSD(br.c)}</div></div>`); b.onclick = () => { const n = g.repairAll(g.s.current); this.toast(n ? `🔧 ${n} Gerät(e) repariert` : 'Nicht genug Geld.', n ? 'good' : 'bad'); this.sites(); }; el.append(b); }
   }
-  switchSite(id, cinematic = false) { if (this.w.empire) { this.w.scene.remove(this.w.empire); this.w.empire = null; this.w.empireHidden.forEach((o) => (o.visible = true)); this.w.roomLights.forEach((l) => (l.visible = true)); this.w.onEmpire?.(false); } this.g.s.current = id; this.w.loadFacility(id, { cinematic }); this.inspect(null); this.refresh(); }
+  switchSite(id) {
+    this.fade();
+    if (this.w.empire) this.w.hideEmpire();
+    this.g.s.current = id; this.w.loadFacility(id);
+    if (this.inspUid) { this.inspUid = null; $('#inspector').classList.add('hidden'); }
+    this.refresh(); this.toast(`📍 ${esc(FACILITY[id].name)} – ${esc(FACILITY[id].place)}`, 'info', 3000);
+  }
+  fade() { const f = $('#fade'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); }
 
   // ---------- Baumenü ----------
   build(force = false) {
@@ -128,7 +143,7 @@ export class UI {
       card.onclick = () => {
         if (it.hydro) { this.toast('Hydro-Miner brauchen Wasserkühlung: in ein Rack oder einen Container einsetzen.', 'bad'); return; }
         if (price > g.s.cash) { this.toast('Nicht genug Geld.', 'bad'); return; }
-        this.w.startPlacement(it.id); document.body.classList.remove('show-build');
+        this.resume(); this.w.startPlacement(it.id);
       };
       list.append(card);
     }
@@ -145,6 +160,59 @@ export class UI {
     el.append(list);
   }
 
+  // ---------- Ego-Steuerung: Panels öffnen/schließen ----------
+  anyPanelOpen() { return !$('#modal').classList.contains('hidden') || !!this.inspUid || document.body.classList.contains('show-build'); }
+  openUI() { this.pause(false); if (this.w.mode === 'play') this.w.setMode('ui'); }
+  resume() {
+    this.pause(false);
+    if (!$('#modal').classList.contains('hidden')) { this.modalKind = null; $('#modal').classList.add('hidden'); this.onModalClose?.(); this.onModalClose = null; }
+    document.body.classList.remove('show-build', 'show-goals');
+    if (this.inspUid) { this.inspUid = null; $('#inspector').classList.add('hidden'); this.w.select(null); }
+    if (this.w.mode === 'ui' || this.w.mode === 'play') this.w.setMode('play');
+  }
+  pause(on) {
+    this.paused = on;
+    $('#pause').classList.toggle('hidden', !on);
+    if (on) { $('#clickhint').classList.add('hidden'); this.prompt(null); }
+  }
+  openInspector(uid) { this.openedAt = performance.now(); this.w.select(uid); this.openUI(); }
+  toggleBuild() {
+    if (document.body.classList.contains('show-build')) { this.resume(); return; }
+    this.resume(); document.body.classList.add('show-build'); this.build(true); this.openUI();
+  }
+  prompt(aim) {
+    const el = $('#prompt');
+    if (!aim || this.w.mode !== 'play') { el.classList.add('hidden'); return; }
+    let html = '';
+    if (aim.door) {
+      html = `<b>[E]</b> ${esc(aim.door.label)} <span>– Standort wechseln</span>`;
+    } else {
+      const o = this.g.findObj(aim.uid); if (!o) { el.classList.add('hidden'); return; }
+      const def = PLACEABLE[o.type], sm = this.g.summary[this.g.facOf(aim.uid)], a = sm?.per.get(aim.uid);
+      let line = '';
+      if (a && a.units.length) { const rev = a.units.reduce((x, u) => x + u.rev, 0) * sm.throttle; const cost = a.watt / 1000 * 24 * sm.elec; line = `${a.units.filter((u) => u.h).map((u) => fmtHash(u.h * sm.throttle, u.algo)).join(' · ') || 'pausiert'} · <span class="${rev - cost >= 0 ? 'pos' : 'neg'}">${rev - cost >= 0 ? '+' : ''}${fmtUSD(rev - cost)}/Tag</span>`; }
+      else if (def.kind === 'cooling') line = `kühlt ${fmtWatt(def.cool)}`;
+      const st = { broken: '🔥 Defekt – reparieren', partial: '🔥 Teilweise defekt', psu: '⚠️ Netzteil zu schwach', incomplete: '⚠️ Teile fehlen – bestücken', empty: '➕ Leer – Geräte einsetzen', idle: '💤 pausiert (unrentabel)', off: '⏻ aus' }[a?.status];
+      html = `<b>[E]</b> ${esc(def.name)}${st ? `<div class="st">${st}</div>` : ''}${line ? `<div>${line}</div>` : ''}`;
+    }
+    el.innerHTML = html; el.classList.remove('hidden');
+  }
+  travel(door) {
+    const g = this.g;
+    const body = h(`<div><h2>🚪 ${esc(door.label)}</h2><p style="color:#94a0b2;margin-top:-6px">Wohin willst du?</p><div class="cards"></div></div>`);
+    const cards = body.querySelector('.cards');
+    for (const f of FACILITIES) {
+      const un = g.s.unlocked.includes(f.id), here = g.s.current === f.id, can = g.canUnlock(f.id);
+      if (!un && !can) continue;
+      const sm = g.summary[f.id];
+      const c = h(`<div class="card"><h3>${here ? '📍 ' : ''}${esc(f.name)}</h3><div class="sub">${esc(f.place)}</div>${un && sm ? `<div style="font-size:12px;color:#94a0b2">${fmtWatt(sm.watt)} · ${sm.temp.toFixed(1)} °C · ${g.facObjects(f.id).length} Objekte</div>` : ''}</div>`);
+      const b = h(`<button class="btn small ${here ? '' : 'primary'}" style="margin-top:6px">${here ? 'Hierbleiben' : un ? 'Hingehen' : `Übernehmen (${fmtUSD(f.cost)})`}</button>`);
+      b.onclick = () => { this.closeModal(); if (here) return; if (!un) { this.unlock(f.id); return; } this.switchSite(f.id); };
+      c.append(b); cards.append(c);
+    }
+    this.openModal(body, 'narrow', 'travel');
+  }
+
   // ---------- Inspektor ----------
   inspect(uid, keep = false) {
     const el = $('#inspector');
@@ -153,7 +221,8 @@ export class UI {
     const o = this.g.findObj(uid); if (!o) { el.classList.add('hidden'); this.inspUid = null; return; }
     el.classList.remove('hidden');
     const def = PLACEABLE[o.type], g = this.g;
-    el.innerHTML = `<div class="insp-h"><h3>${esc(def.name)}</h3><span id="insp-badge"></span></div><div id="insp-stats"></div><div id="insp-ctrl"></div>`;
+    el.innerHTML = `<div class="insp-h"><h3>${esc(def.name)}</h3><span id="insp-badge"></span><button class="modal-x insp-x" title="Schließen (E/ESC)">✕</button></div><div id="insp-stats"></div><div id="insp-ctrl"></div>`;
+    el.querySelector('.insp-x').onclick = () => this.resume();
     this.inspectStats();
     const c = $('#insp-ctrl');
     if (def.kind === 'rig' || def.kind === 'device' || def.kind === 'holder') {
@@ -174,10 +243,10 @@ export class UI {
     const row = h('<div class="row sec"></div>');
     const st = g.summary[g.facOf(uid)]?.per.get(uid);
     if (o.broken || (o.items && o.items.some((i) => i.b))) { const rc = g.repairCost(o); const b = h(`<button class="btn good">🔧 Reparieren (${fmtUSD(rc)})</button>`); b.onclick = () => { if (!g.repair(uid)) this.toast('Nicht genug Geld.', 'bad'); else this.inspect(uid); }; row.append(b); }
-    const mv = h('<button class="btn">✥ Verschieben</button>'); mv.onclick = () => this.w.startPlacement(o.type, uid); row.append(mv);
+    const mv = h('<button class="btn">✥ Verschieben</button>'); mv.onclick = () => { this.resume(); this.w.startPlacement(o.type, uid); }; row.append(mv);
     const rt = h('<button class="btn">⟳ Drehen</button>'); rt.onclick = () => { const r0 = o.rot; o.rot = (o.rot + 1) % 4; if (!this.w.canPlace(def, o.x, o.z, o.rot, uid)) { o.rot = r0; this.toast('Kein Platz zum Drehen.', 'bad'); } this.w.syncObjects(); }; row.append(rt);
-    if (def.kind !== 'decor') { const dp = h(`<button class="btn" title="Gleiches Objekt inkl. Teilen noch mal kaufen">⧉ Duplizieren (${fmtUSD(this.g.cloneCost ? this.g.cloneCost(o) : 0)})</button>`); dp.onclick = () => this.w.startPlacement(o.type, null, o); row.append(dp); }
-    const sell = h(`<button class="btn danger">Verkaufen (+${fmtUSD(g.objectValue(o))})</button>`); sell.onclick = () => { g.removeObject(uid); this.inspect(null); }; row.append(sell);
+    if (def.kind !== 'decor') { const dp = h(`<button class="btn" title="Gleiches Objekt inkl. Teilen noch mal kaufen">⧉ Duplizieren (${fmtUSD(this.g.cloneCost ? this.g.cloneCost(o) : 0)})</button>`); dp.onclick = () => { this.resume(); this.w.startPlacement(o.type, null, o); }; row.append(dp); }
+    const sell = h(`<button class="btn danger">Verkaufen (+${fmtUSD(g.objectValue(o))})</button>`); sell.onclick = () => { g.removeObject(uid); this.resume(); }; row.append(sell);
     c.append(row);
   }
   hashProfile(o) {
@@ -312,10 +381,9 @@ export class UI {
   unlock(id) {
     const f = FACILITY[id];
     if (!this.g.unlockFacility(id)) { this.toast(`Du brauchst ${fmtUSD(f.cost)}.`, 'bad'); return; }
-    this.switchSite(id, true);
+    this.switchSite(id);
     const ci = CHAPTERS.findIndex((c) => c.unlock === id);
     const next = CHAPTERS[ci + 1];
-    this.onModalClose = () => { if (this.w.transition) this.w.transition.hold = false; };
     this.story(next?.title || f.name, `${next?.intro || ''}<br/><br/><b>${esc(f.name)}</b> – ${esc(f.place)}<br/>${f.w} × ${f.d} m · ${f.power[0].kw.toLocaleString('de-DE')} kW Anschluss${f.rent ? ` · Miete ${fmtUSD(f.rent)}/Monat` : ''}<br/><i>${esc(f.desc)}</i><br/><br/>📏 <b>${Math.round((f.w * f.d) / 14).toLocaleString('de-DE')}×</b> so groß wie dein Kinderzimmer · ⚡ <b>${Math.round(f.power[0].kw / 1.8).toLocaleString('de-DE')}×</b> so viel Strom.`);
   }
 
@@ -323,19 +391,22 @@ export class UI {
   dock() {
     const el = $('#dock'), g = this.g;
     const unread = g.s.messages.filter((m) => !m.read).length;
+    const techN = TECHS.filter((t) => !(g.s.techs || {})[t.id] && g.techAvailable(t) && g.s.cash >= t.cost).length;
     el.innerHTML = '';
     const btns = [
-      ['📈', 'Markt', () => this.market()], ['📱', 'Handy', () => this.phone(), unread], ['🏢', 'Firma', () => this.company()], ['🔬', 'Technik', () => this.techs(), TECHS.filter((t) => !(g.s.techs || {})[t.id] && g.techAvailable(t) && g.s.cash >= t.cost).length],
-      ['🏆', 'Rangliste', () => this.ranking()], ['🗺️', this.w.empire ? 'Zurück' : 'Imperium', () => (this.w.empire ? this.w.hideEmpire() : this.w.showEmpire())], ['🚶', 'Rundgang', () => this.w.enterFP()], ['⚙️', 'Menü', () => this.menu()],
+      ['🛒', 'Bauen', 'B', () => this.toggleBuild()], ['📈', 'Markt', 'M', () => this.market()], ['📱', 'Handy', 'P', () => this.phone(), unread], ['🏢', 'Firma', 'C', () => this.company()],
+      ['🔬', 'Technik', 'T', () => this.techs(), techN], ['🏆', 'Rangliste', 'L', () => this.ranking()], ['🗺️', this.w.empire ? 'Zurück' : 'Karte', 'K', () => this.toggleMap()], ['⚙️', 'Menü', 'ESC', () => this.menu()],
     ];
-    const tog = (cls) => () => { document.body.classList.toggle(cls); if (cls === 'show-build') document.body.classList.remove('show-goals'); else document.body.classList.remove('show-build'); };
-    for (const [ic, l, fn] of [['🛒', 'Bauen', tog('show-build')], ['🎯', 'Ziele', tog('show-goals')]]) { const e = h(`<button class="mobile-only"><span class="ic">${ic}</span>${l}</button>`); e.onclick = fn; el.append(e); }
-    for (const [ic, l, fn, b] of btns) { const e = h(`<button><span class="ic">${ic}</span>${l}${b ? `<span class="bdg">${b}</span>` : ''}</button>`); e.onclick = fn; el.append(e); }
+    for (const [ic, l, key, fn, b] of btns) { const e = h(`<button title="${l} (${key})"><span class="ic">${ic}</span>${l}<span class="key">${key}</span>${b ? `<span class="bdg">${b}</span>` : ''}</button>`); e.onclick = fn; el.append(e); }
+  }
+  toggleMap() {
+    if (this.w.empire) { this.w.hideEmpire(); this.resume(); }
+    else { this.resume(); this.w.showEmpire(); }
   }
 
   // ---------- Modals ----------
-  openModal(node, cls = '', kind = null) { const m = $('#modal'); m.classList.remove('hidden'); const card = m.querySelector('.modal-card'); card.className = 'modal-card ' + cls; const b = m.querySelector('.modal-body'); b.innerHTML = ''; b.append(node); this.modalKind = kind; }
-  closeModal() { $('#modal').classList.add('hidden'); this.modalKind = null; this.onModalClose?.(); this.onModalClose = null; }
+  openModal(node, cls = '', kind = null) { this.openUI(); const m = $('#modal'); m.classList.remove('hidden'); const card = m.querySelector('.modal-card'); card.className = 'modal-card ' + cls; const b = m.querySelector('.modal-body'); b.innerHTML = ''; b.append(node); this.modalKind = kind; }
+  closeModal() { $('#modal').classList.add('hidden'); this.modalKind = null; const cb = this.onModalClose; this.onModalClose = null; cb?.(); if (!this.inspUid && !document.body.classList.contains('show-build') && $('#modal').classList.contains('hidden') && (this.w.mode === 'ui')) this.w.setMode('play'); }
   story(title, html, btn = 'Los geht’s') {
     const n = h(`<div class="story"><div class="ch">${esc(title)}</div><p>${html}</p><div class="row" style="justify-content:flex-end"><button class="btn primary">${btn}</button></div></div>`);
     n.querySelector('button').onclick = () => this.closeModal();

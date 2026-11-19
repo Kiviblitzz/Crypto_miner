@@ -1,7 +1,7 @@
-// 3D-Welt: Renderer, Kamera, Standort laden, Objekte synchronisieren, Bauen/Auswählen, Tag/Nacht, Rundgang
+// 3D-Welt in Ego-Perspektive: Renderer, Spieler, Standorte, Interaktion per Fadenkreuz, Bauen, Tag/Nacht, Karte
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls.js';
+import { Player } from './player.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
@@ -35,15 +35,26 @@ export class World {
     const pm = new THREE.PMREMGenerator(r);
     this.scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
     this.scene.environmentIntensity = 0.45;
-    this.camera = new THREE.PerspectiveCamera(45, 1, 0.05, 2500);
+    this.camera = new THREE.PerspectiveCamera(72, 1, 0.05, 2500);
+    // Orbit-Steuerung nur für Titelbild und Karte (Imperium)
     this.controls = new OrbitControls(this.camera, canvas);
     this.controls.enableDamping = true; this.controls.dampingFactor = 0.08;
-    this.controls.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };
-    this.controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
-    this.controls.maxPolarAngle = 1.42; this.controls.screenSpacePanning = false;
-    this.fp = new PointerLockControls(this.camera, document.body);
-    this.fp.addEventListener('unlock', () => this.exitFP());
-    document.addEventListener('pointerlockerror', () => { if (this.fpActive) { this.exitFP(); this.onFPError?.(); } });
+    this.controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+    this.controls.maxPolarAngle = 1.42; this.controls.enabled = false;
+    // Ego-Spieler
+    this.player = new Player(this.camera, canvas);
+    this.mode = 'title';
+    this.touchMode = window.matchMedia?.('(pointer: coarse)').matches || false;
+    document.addEventListener('pointerlockchange', () => {
+      const locked = document.pointerLockElement === canvas;
+      this.player.locked = locked;
+      if (!locked && this.mode === 'play' && !this.expectUnlock) { this.cancelPlacement(); this.onPause?.(); }
+      this.expectUnlock = false;
+      this.onLockChange?.(locked);
+    });
+    document.addEventListener('pointerlockerror', () => { this.lockFailed = true; this.onLockChange?.(false); });
+    this.doorGroup = new THREE.Group(); this.scene.add(this.doorGroup);
+    this.aim = null;
 
     // Licht
     this.hemi = new THREE.HemisphereLight(0xcfe6ff, 0x5a4a3a, 0.7); this.scene.add(this.hemi);
@@ -93,7 +104,7 @@ export class World {
   }
 
   // ---------- Standort ----------
-  loadFacility(id, { cinematic = false } = {}) {
+  loadFacility(id) {
     this.cancelPlacement(); this.select(null); this.onHover?.(null);
     if (this.room) { this.scene.remove(this.room.root); this.scene.remove(this.outside); for (const l of this.roomLights) this.scene.remove(l); }
     for (const e of this.entries.values()) this.objGroup.remove(e.group);
@@ -113,18 +124,18 @@ export class World {
     // Schatten-Kamera an Raumgröße anpassen
     const s = Math.max(def.w, def.d) * 0.75 + 2;
     const sc = this.sun.shadow.camera; sc.left = -s; sc.right = s; sc.top = s; sc.bottom = -s; sc.near = 0.5; sc.far = s * 6; sc.updateProjectionMatrix();
-    // Kamera
+    // Spieler an der Tür absetzen, Blick in den Raum
     const span = Math.max(def.w, def.d);
+    const sp = this.room.spawn || { x: def.w / 2, z: def.d - 1, look: [def.w / 2, def.d / 2] };
+    this.player.setPose(sp.x, sp.z, 0); this.player.lookAtPoint(sp.look[0], sp.look[1]); this.player.apply();
+    this.transition = null;
     this.controls.target.set(def.w / 2, 0, def.d / 2);
-    this.controls.minDistance = Math.max(1.2, span * 0.15); this.controls.maxDistance = span * 2.6 + 6;
-    const dist = def.tier === 0 ? span * 1.15 + 2.5 : span * 1.0 + 2.2;
-    const endPos = new THREE.Vector3(def.w / 2 + dist * 0.55, dist * 0.78, def.d / 2 + dist * 0.75);
-    if (cinematic) {
-      const startPos = new THREE.Vector3(def.w / 2 + 1, 1.4, def.d / 2 + 1.5);
-      this.camera.position.copy(startPos);
-      this.transition = { from: startPos, to: endPos, t: 0, dur: 3.6, hold: true };
-    } else { this.transition = null; this.camera.position.copy(endPos); }
-    this.camera.near = span > 30 ? 0.2 : 0.05; this.camera.updateProjectionMatrix();
+    this.camera.near = 0.05; this.camera.updateProjectionMatrix();
+    // Türen als Interaktionsflächen
+    this.doorGroup.clear();
+    for (const d of this.room.doors || []) { const m = new THREE.Mesh(new THREE.BoxGeometry(...d.s), new THREE.MeshBasicMaterial({ visible: false })); m.position.set(...d.c); m.userData.door = d; this.doorGroup.add(m); }
+    for (const wl of this.room.walls) wl.group.visible = true;
+    this.room.ceil.visible = true;
     if (this.people) { this.scene.remove(this.people); this.people = null; }
     this.popups?.forEach((p) => (p.visible = false));
     if (this.xmas) { this.scene.remove(this.xmas); this.xmas = null; }
@@ -157,8 +168,7 @@ export class World {
   }
   updateStatus() {
     const sm = this.game.summary[this.facId]; if (!sm) return;
-    const span = Math.max(this.def.w, this.def.d);
-    const sc = 0.32 * Math.max(1, span / 12);
+    const span = 6; const sc = 0.28;
     for (const [uid, e] of this.entries) {
       const a = sm.per.get(uid); const def = PLACEABLE[e.obj.type];
       let icon = null;
@@ -169,7 +179,7 @@ export class World {
       else if (a?.status === 'idle' || a?.status === 'off') icon = 'sleep';
       e.running = !sm.tripped && a && a.watt > 0;
       e.sprite.visible = !!icon;
-      if (icon) { e.sprite.material.map = this.icons[icon]; const bb = e.group.userData.bbox; e.sprite.position.set(0, (bb ? bb.max.y : 1) + 0.25 * Math.max(1, span / 12), 0); e.sprite.scale.set(sc, sc, sc); }
+      if (icon) { e.sprite.material.map = this.icons[icon]; const bb = e.group.userData.bbox; e.sprite.position.set(0, (bb ? bb.max.y : 1) + 0.22, 0); e.sprite.scale.set(sc, sc, sc); }
     }
     if (this.selected) this.refreshSelBox();
     this.syncPeople();
@@ -219,14 +229,21 @@ export class World {
     for (const o of this.game.facObjects(this.facId)) if (o.uid !== ignoreUid && hit(this.rectOf(o))) return false;
     return true;
   }
+  reach() { return Math.min(8, 3.2 + Math.max(this.def.w, this.def.d) * 0.06); }
   updatePlacement() {
     const p = this.placing; if (!p) return;
-    this.raycaster.setFromCamera(this.mouse, this.camera);
-    if (!this.raycaster.ray.intersectPlane(this.floorPlane, tmpV)) return;
     const [w, d] = this.footprintOf(p.def, p.rot); const g = this.def.grid;
+    this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+    const maxD = this.reach() + Math.max(w, d) / 2;
+    const pl = this.player.pos;
+    let hit = this.raycaster.ray.intersectPlane(this.floorPlane, tmpV);
+    if (!hit || Math.hypot(tmpV.x - pl.x, tmpV.z - pl.z) > maxD) { const f = this.player.forward(); tmpV.set(pl.x + f.x * maxD, 0, pl.z + f.z * maxD); }
     let x = Math.round((tmpV.x - w / 2) / g) * g + w / 2, z = Math.round((tmpV.z - d / 2) / g) * g + d / 2;
     x = Math.min(Math.max(x, w / 2), this.def.w - w / 2); z = Math.min(Math.max(z, d / 2), this.def.d - d / 2);
-    p.x = x; p.z = z; p.valid = this.canPlace(p.def, x, z, p.rot, p.moveUid);
+    p.x = x; p.z = z;
+    const r = this.player.radius + 0.05, pr = this.player.pos;
+    const cx = Math.max(x - w / 2, Math.min(pr.x, x + w / 2)), cz = Math.max(z - d / 2, Math.min(pr.z, z + d / 2));
+    p.valid = this.canPlace(p.def, x, z, p.rot, p.moveUid) && Math.hypot(pr.x - cx, pr.z - cz) > r;
     p.ghost.position.set(x, 0.002, z); p.ghost.rotation.y = -p.rot * Math.PI / 2;
     const m = p.valid ? this.ghostOk : this.ghostBad;
     p.ghost.traverse((o) => { if (o.isMesh) o.material = m; });
@@ -236,87 +253,101 @@ export class World {
     const p = this.placing; if (!p || !p.valid) return;
     if (p.moveUid) {
       const o = this.game.findObj(p.moveUid); o.x = p.x; o.z = p.z; o.rot = p.rot;
-      const uid = p.moveUid; this.cancelPlacement(); this.syncObjects(); this.select(uid); return;
+      this.cancelPlacement(); this.syncObjects(); return;
     }
     const o = this.onPlace?.(p.type, p.x, p.z, p.rot, p.template);
-    if (o && !this.keys.Shift) { this.cancelPlacement(); this.select(o.uid); }
+    if (o && !this.player.keys.Shift) { this.cancelPlacement(); this.onPlaced?.(o); }
+  }
+
+  // ---------- Modi & Pointer Lock ----------
+  setMode(m) {
+    this.mode = m;
+    this.player.enabled = m === 'play';
+    this.controls.enabled = m === 'map';
+    if (m === 'play') this.requestLock();
+    else if (document.pointerLockElement) { this.expectUnlock = true; document.exitPointerLock(); }
+    if (m !== 'play') { this.aim = null; this.onAim?.(null); if (!this.selected) this.selBox.visible = false; }
+    this.onModeChange?.(m);
+  }
+  requestLock() {
+    if (this.touchMode || this.mode !== 'play' || document.pointerLockElement === this.canvas) return;
+    try { const r = this.canvas.requestPointerLock(); if (r && r.catch) r.catch(() => { this.lockFailed = true; this.onLockChange?.(false); }); } catch (e) { this.lockFailed = true; }
+  }
+  // Kollision des Spielers mit Raum, Möbeln und Objekten
+  collides(x, z, r) {
+    const def = this.def;
+    if (x < r || z < r || x > def.w - r || z > def.d - r) return true;
+    const hitRect = (a) => { const cx = Math.max(a.x0, Math.min(x, a.x1)), cz = Math.max(a.z0, Math.min(z, a.z1)); return (x - cx) ** 2 + (z - cz) ** 2 < r * r; };
+    if (this.room.blocked.some(hitRect)) return true;
+    for (const o of this.game.facObjects(this.facId)) if (hitRect(this.rectOf(o))) return true;
+    return false;
   }
 
   // ---------- Eingabe ----------
   bindInput() {
     const c = this.canvas;
-    let downPos = null;
-    c.addEventListener('pointermove', (ev) => {
-      this.mouse.set((ev.clientX / window.innerWidth) * 2 - 1, -(ev.clientY / window.innerHeight) * 2 + 1);
-      this.clientPos = [ev.clientX, ev.clientY];
-      if (this.placing) this.updatePlacement(); else this.hoverCheck();
+    c.addEventListener('pointerdown', (ev) => {
+      if (this.mode === 'ui') { this.onCanvasClickInUI?.(); return; }
+      if (this.mode !== 'play') return;
+      if (!this.player.locked && !this.touchMode && !this.lockFailed) { this.requestLock(); return; }
+      if (ev.button === 2) { if (this.placing) this.cancelPlacement(); return; }
+      if (ev.button !== 0) return;
+      if (this.touchMode) { this.touchDown = [ev.clientX, ev.clientY]; return; }
+      this.primaryAction();
     });
-    c.addEventListener('pointerdown', (ev) => { downPos = [ev.clientX, ev.clientY, ev.button]; });
     c.addEventListener('pointerup', (ev) => {
-      if (!downPos) return; const moved = Math.hypot(ev.clientX - downPos[0], ev.clientY - downPos[1]) > 6; const btn = downPos[2]; downPos = null;
-      if (this.fpActive) { if (btn === 0) this.fpClick(); return; }
-      if (moved) return;
-      if (btn === 2 && this.placing) { this.cancelPlacement(); return; }
-      if (btn !== 0) return;
-      if (this.placing) { this.confirmPlacement(); return; }
-      if (this.empire) return;
-      this.select(this.pick());
+      if (!this.touchMode || !this.touchDown || this.mode !== 'play') return;
+      const moved = Math.hypot(ev.clientX - this.touchDown[0], ev.clientY - this.touchDown[1]); this.touchDown = null;
+      if (moved < 10) this.primaryAction();
     });
     c.addEventListener('contextmenu', (e) => e.preventDefault());
-    c.addEventListener('dblclick', () => {
-      if (this.placing || this.fpActive || this.empire) return;
-      const uid = this.pick(); const e = uid && this.entries.get(uid); if (!e) return;
-      const bb = new THREE.Box3().setFromObject(e.group); const ctr = bb.getCenter(new THREE.Vector3()); const size = bb.getSize(new THREE.Vector3()).length();
-      const dir = new THREE.Vector3().subVectors(this.camera.position, this.controls.target).normalize();
-      const dist = Math.max(this.controls.minDistance, size * 2.2 + 0.6);
-      const to = ctr.clone().addScaledVector(dir, dist); ctr.y = 0;
-      this.focusAnim = { fromT: this.controls.target.clone(), toT: ctr, fromP: this.camera.position.clone(), toP: to, t: 0 };
-    });
     window.addEventListener('keydown', (e) => {
-      if (e.target.tagName === 'INPUT') return;
-      this.keys[e.key.length === 1 ? e.key.toLowerCase() : e.key] = true;
-      if (e.key === 'r' || e.key === 'R') { if (this.placing) { this.placing.rot = (this.placing.rot + 1) % 4; this.updatePlacement(); } }
-      if (e.key === 'Escape') { if (this.placing) this.cancelPlacement(); else this.select(null); }
-      if ((e.key === 'h' || e.key === 'H') && !this.fpActive) { const on = this.toggleHeat(); this.onHeat?.(on); }
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+      const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+      this.player.keys[k] = true;
+      if (this.mode !== 'play') return;
+      if (k === 'r' && this.placing) { this.placing.rot = (this.placing.rot + 1) % 4; this.updatePlacement(); }
+      if (k === 'e' && !this.placing) this.primaryAction();
+      if ((k === 'x' || k === 'Backspace') && this.placing) this.cancelPlacement();
+      if (k === 'h') { const on = this.toggleHeat(); this.onHeat?.(on); }
     });
-    window.addEventListener('keyup', (e) => { this.keys[e.key.length === 1 ? e.key.toLowerCase() : e.key] = false; });
+    window.addEventListener('keyup', (e) => { this.player.keys[e.key.length === 1 ? e.key.toLowerCase() : e.key] = false; });
+    window.addEventListener('blur', () => { this.player.keys = {}; });
   }
-  pick(fromCenter = false) {
-    if (fromCenter) this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera); else this.raycaster.setFromCamera(this.mouse, this.camera);
-    const hits = this.raycaster.intersectObjects(this.objGroup.children, true);
-    for (const h of hits) if (h.object.userData.uid && !h.object.isSprite) return h.object.userData.uid;
-    return null;
+  primaryAction() {
+    if (this.placing) { this.confirmPlacement(); return; }
+    const a = this.aim; if (!a) return;
+    if (a.door) this.onDoor?.(a.door);
+    else if (a.uid) this.onInteract?.(a.uid);
   }
-  hoverCheck() {
-    const uid = this.fpActive || this.empire ? null : this.pick();
-    this.canvas.style.cursor = uid ? 'pointer' : 'default';
-    this.onHover?.(uid, this.clientPos);
+  // Was liegt unter dem Fadenkreuz?
+  updateAim() {
+    if (this.placing) { if (this.aim) { this.aim = null; this.onAim?.(null); } this.selBox.visible = false; return; }
+    this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+    this.raycaster.far = this.reach() + 1.5;
+    const hits = this.raycaster.intersectObjects([...this.objGroup.children, ...this.doorGroup.children, this.room.root], true);
+    this.raycaster.far = Infinity;
+    let aim = null;
+    for (const h of hits) {
+      const o = h.object; if (o.isSprite) continue;
+      if (o.userData.door) { aim = { door: o.userData.door, dist: h.distance }; break; }
+      if (o.userData.uid) { aim = { uid: o.userData.uid, dist: h.distance }; break; }
+      if (o.isMesh && o.visible) break; // Wand/Möbel verdeckt
+    }
+    const key = aim ? (aim.uid || aim.door.label) : null, prev = this.aim ? (this.aim.uid || this.aim.door?.label) : null;
+    this.aim = aim;
+    if (key !== prev) this.onAim?.(aim);
+    const e = aim?.uid && this.entries.get(aim.uid);
+    if (e) { this.selBox.box.setFromObject(e.group); this.selBox.box.expandByScalar(0.03); this.selBox.visible = true; }
+    else if (!this.selected) this.selBox.visible = false;
   }
-
-  // ---------- Rundgang ----------
-  enterFP() {
-    if (this.fpActive) return;
-    if (this.empire) this.hideEmpire();
-    this.cancelPlacement(); this.select(null);
-    this.savedCam = { pos: this.camera.position.clone(), target: this.controls.target.clone() };
-    this.fpActive = true; this.controls.enabled = false;
-    const eye = this.def.tier === 0 ? 1.55 : 1.7;
-    this.camera.position.set(this.def.w / 2, eye, this.def.d * 0.75); this.camera.lookAt(this.def.w / 2, eye, 0);
-    for (const wl of this.room.walls) wl.group.visible = true; this.room.ceil.visible = this.def.tier < 3;
-    try { const r = this.fp.lock(); r?.catch?.(() => { this.exitFP(); this.onFPError?.(); }); } catch (e) { this.exitFP(); this.onFPError?.(); }
-    this.onFP?.(true);
-  }
-  exitFP() {
-    if (!this.fpActive) return;
-    this.fpActive = false; this.controls.enabled = true; this.room.ceil.visible = false;
-    this.camera.position.copy(this.savedCam.pos); this.controls.target.copy(this.savedCam.target); this.camera.lookAt(this.controls.target);
-    this.onFP?.(false);
-  }
-  fpClick() { const uid = this.pick(true); if (uid) { this.fp.unlock(); this.select(uid); } }
+  pick() { return this.aim?.uid || null; }
+  // Alte API (Rundgang) – Ego-Perspektive ist jetzt immer aktiv
+  enterFP() { this.setMode('play'); }
 
   // ---------- Schwebende Ertrags-Einblendungen ----------
   spawnIncome() {
-    if (this.empire || this.fpActive || !this.game.s.speed) return;
+    if (this.empire || this.mode === 'title' || !this.game.s.speed) return;
     const now = this.t; if (this.lastIncome && now - this.lastIncome < 1.1) return; this.lastIncome = now;
     const sm = this.game.summary[this.facId]; if (!sm || sm.tripped) return;
     this.popups ||= [];
@@ -329,15 +360,14 @@ export class World {
       const c = p.userData.c, g = c.getContext('2d'); g.clearRect(0, 0, 256, 64);
       g.font = 'bold 40px Arial'; g.textAlign = 'center'; g.lineWidth = 6; g.strokeStyle = 'rgba(0,0,0,0.75)'; const txt = '+' + fmtUSD(rev); g.strokeText(txt, 128, 46); g.fillStyle = '#5dff9c'; g.fillText(txt, 128, 46);
       p.material.map.needsUpdate = true;
-      const span = Math.max(this.def.w, this.def.d), sc = 0.6 * Math.max(1, span / 6);
+      const sc = 0.5;
       const bb = e.group.userData.bbox; p.position.set(e.group.position.x, (bb ? bb.max.y : 0.6) + 0.15, e.group.position.z);
       p.scale.set(sc, sc / 4, 1); p.visible = true; p.userData.life = 0; p.userData.y0 = p.position.y; p.material.opacity = 1;
     }
   }
   updatePopups(dt) {
     if (!this.popups) return;
-    const span = Math.max(this.def.w, this.def.d);
-    for (const p of this.popups) { if (!p.visible) continue; p.userData.life += dt; p.position.y = p.userData.y0 + p.userData.life * 0.35 * Math.max(1, span / 12); p.material.opacity = Math.max(0, 1 - p.userData.life / 1.6); if (p.userData.life > 1.6) p.visible = false; }
+    for (const p of this.popups) { if (!p.visible) continue; p.userData.life += dt; p.position.y = p.userData.y0 + p.userData.life * 0.35; p.material.opacity = Math.max(0, 1 - p.userData.life / 1.6); if (p.userData.life > 1.6) p.visible = false; }
   }
 
   // ---------- Jahreszeit: Weihnachtsbaum im Dezember ----------
@@ -491,7 +521,9 @@ export class World {
     ground.rotation.x = -Math.PI / 2; ground.position.set(total / 2, -0.12, 0); ground.receiveShadow = true; g.add(ground);
     this.empireDef = { w: total, d: maxD, h: 10, tier: 9, grid: 1 };
     const sc2 = this.sun.shadow.camera; const sz = total * 0.6 + 10; sc2.left = -sz; sc2.right = sz; sc2.top = sz; sc2.bottom = -sz; sc2.far = sz * 6; sc2.updateProjectionMatrix();
-    this.savedCamE = { pos: this.camera.position.clone(), target: this.controls.target.clone(), def: this.def };
+    this.savedPose = { x: this.player.pos.x, z: this.player.pos.z, yaw: this.player.yaw, pitch: this.player.pitch };
+    this.setMode('map'); this.camera.fov = 45; this.camera.updateProjectionMatrix();
+    this.room.ceil.visible = false; if (this.weather) this.weather.visible = false; this.doorGroup.visible = false;
     this.def = { ...this.def, w: total, d: maxD, style: 'empire' };
     this.controls.maxDistance = total * 2 + 40; this.controls.minDistance = 2;
     this.controls.target.set(total / 2, 0, 0);
@@ -505,7 +537,9 @@ export class World {
     if (!this.empire) return;
     this.scene.remove(this.empire); this.empire = null;
     this.empireHidden.forEach((o) => (o.visible = true)); this.roomLights.forEach((l) => (l.visible = true));
+    this.camera.fov = 72; this.camera.updateProjectionMatrix(); this.doorGroup.visible = true;
     this.loadFacility(this.facId);
+    const sp = this.savedPose; if (sp) { this.player.setPose(sp.x, sp.z, sp.yaw, sp.pitch); }
     this.onEmpire?.(false);
   }
 
@@ -534,11 +568,6 @@ export class World {
     if (tier >= 2 && s.flags.gmbh) want = 1;
     if (tier >= 3) want += Math.min(7, s.staff.tech);
     if (tier === 2 && s.flags.debt) want = Math.max(want, 1);
-    if (tier === 0 && !this.people.userData.me) {
-      const me = this.makePerson(0x3a6ea5, false, 0xe8c0a0); me.userData.static = true;
-      me.userData.legL.rotation.x = me.userData.legR.rotation.x = -1.45; me.userData.armL.rotation.x = me.userData.armR.rotation.x = -1.1;
-      me.position.set(2.75, -0.36, 0.72); me.rotation.y = Math.PI; this.scene.add(me); this.people.userData.me = me; this.people.add(me);
-    }
     // Familie: Papa in der Werkstatt, Opa im Keller (nach dem Starkstrom)
     const fam = [];
     if (tier === 2) fam.push(['papa', 0x7a5230, 0xd9a983, 1.4, 0.95, Math.PI]);
@@ -616,41 +645,18 @@ export class World {
   update() {
     const dt = Math.min(0.05, this.clock.getDelta()); this.t += dt;
     const s = this.game.s;
-    // Kamera
-    if (this.focusAnim) {
-      const f = this.focusAnim; f.t = Math.min(1, f.t + dt / 0.6); const k = 1 - Math.pow(1 - f.t, 3);
-      this.controls.target.lerpVectors(f.fromT, f.toT, k); this.camera.position.lerpVectors(f.fromP, f.toP, k);
-      if (f.t >= 1) this.focusAnim = null;
-    }
-    if (this.transition) {
-      const tr = this.transition; if (!tr.hold) tr.t += dt / tr.dur; const k = tr.t >= 1 ? 1 : 1 - Math.pow(1 - tr.t, 3);
-      this.camera.position.lerpVectors(tr.from, tr.to, k); if (tr.t >= 1) this.transition = null;
-    }
-    if (this.fpActive) {
-      const sp = (this.keys.Shift ? 6 : 3) * dt * (this.def.tier >= 3 ? 2.5 : 1);
-      if (this.keys.w) this.fp.moveForward(sp); if (this.keys.s) this.fp.moveForward(-sp);
-      if (this.keys.d) this.fp.moveRight(sp); if (this.keys.a) this.fp.moveRight(-sp);
-      const p = this.camera.position; p.x = Math.min(Math.max(p.x, 0.25), this.def.w - 0.25); p.z = Math.min(Math.max(p.z, 0.25), this.def.d - 0.25);
+    // Kamera / Spieler
+    if (this.mode === 'map') {
+      if (this.transition) { const tr = this.transition; tr.t += dt / tr.dur; const k = tr.t >= 1 ? 1 : 1 - Math.pow(1 - tr.t, 3); this.camera.position.lerpVectors(tr.from, tr.to, k); this.camera.lookAt(this.controls.target); if (tr.t >= 1) this.transition = null; }
+      else this.controls.update();
+    } else if (this.mode === 'title') {
+      this.camera.lookAt(this.controls.target);
     } else {
-      const k = this.keys; const span = Math.max(this.def.w, this.def.d);
-      const pan = (k.w || k.ArrowUp ? 1 : 0) - (k.s || k.ArrowDown ? 1 : 0), side = (k.d || k.ArrowRight ? 1 : 0) - (k.a || k.ArrowLeft ? 1 : 0);
-      if (pan || side) {
-        const dist = this.camera.position.distanceTo(this.controls.target);
-        const fwd = new THREE.Vector3().subVectors(this.controls.target, this.camera.position); fwd.y = 0; fwd.normalize();
-        const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
-        const mv = fwd.multiplyScalar(pan).add(right.multiplyScalar(side)).multiplyScalar(dist * 0.9 * dt);
-        this.controls.target.add(mv); this.camera.position.add(mv);
-      }
-      if (k.q || k.e) { const ang = (k.q ? 1 : -1) * dt * 1.2; const off = new THREE.Vector3().subVectors(this.camera.position, this.controls.target); off.applyAxisAngle(new THREE.Vector3(0, 1, 0), ang); this.camera.position.copy(this.controls.target).add(off); }
-      const t = this.controls.target; t.x = Math.min(Math.max(t.x, -2), this.def.w + 2); t.z = Math.min(Math.max(t.z, -2), this.def.d + 2); t.y = 0;
-      if (!this.transition) this.controls.update();
-      // Wände zur Kamera ausblenden
-      const cp = this.camera.position;
-      if (!this.empire) for (const wl of this.room.walls) {
-        const n = wl.outward; let outside;
-        if (n.z < 0) outside = cp.z < 0; else if (n.z > 0) outside = cp.z > this.def.d; else if (n.x < 0) outside = cp.x < 0; else outside = cp.x > this.def.w;
-        wl.group.visible = !outside || cp.y < 0;
-      }
+      if (this.mode === 'play') {
+        const scale = this.def.tier >= 3 ? 1.6 : 1;
+        this.player.update(dt, (x, z, r) => this.collides(x, z, r), scale);
+        if (this.placing) this.updatePlacement(); else this.updateAim();
+      } else this.player.apply();
     }
     // Tag/Nacht
     this.updateDaylight(s.frac);

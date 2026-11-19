@@ -42,5 +42,14 @@ export class Audio {
   cash() { [1320, 1760, 2640].forEach((f, i) => setTimeout(() => this.blip(f, 0.12, 'triangle', 0.12), i * 70)); }
   bad() { this.blip(180, 0.25, 'sawtooth', 0.12); }
   fanfare() { [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => this.blip(f, i === 3 ? 0.5 : 0.15, 'triangle', 0.16), i * 130)); }
+  step(run) {
+    if (!this.ctx || this.muted) return;
+    const ctx = this.ctx, t = ctx.currentTime, n = Math.floor(ctx.sampleRate * 0.06), b = ctx.createBuffer(1, n, ctx.sampleRate), d = b.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3);
+    const src = ctx.createBufferSource(); src.buffer = b;
+    const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 500 + Math.random() * 300;
+    const g = ctx.createGain(); g.gain.value = run ? 0.22 : 0.15;
+    src.connect(f).connect(g).connect(this.master); src.start(t);
+  }
   message() { this.blip(1046, 0.06, 'sine', 0.15); setTimeout(() => this.blip(1568, 0.1, 'sine', 0.12), 90); }
 }

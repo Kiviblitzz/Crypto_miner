@@ -1,10 +1,11 @@
-// HASHWERK – Einstiegspunkt: Spielschleife, Zeit, Tastatur, Splash
+// HASHWERK – Einstiegspunkt: Spielschleife, Zeit, Tastatur (Ego-Perspektive), Titelbild
 import { Game, fmtDate, fmtUSD } from './sim/game.js';
 import { World } from './world/world.js';
 import { UI } from './ui/ui.js';
 import { CHAPTERS } from './data/world.js';
 import { PLACEABLE } from './data/hardware.js';
 import { Audio } from './ui/audio.js';
+import { initTouch } from './ui/touch.js';
 
 const SEC_PER_DAY = [Infinity, 4.0, 1.6, 0.5, 0.12];
 
@@ -14,7 +15,10 @@ world.loadFacility('kinder');
 const ui = new UI(game, world);
 const audio = new Audio(); ui.audio = audio;
 window.addEventListener('pointerdown', () => audio.init(), { once: true });
+world.player.onStep = (run) => audio.step(run);
 window.__hw = { game, world, ui }; // Debug/Tests
+document.body.dataset.mode = 'title';
+if (world.touchMode) initTouch(world, ui);
 
 world.onPlace = (type, x, z, rot, template) => {
   const fac = game.s.current;
@@ -26,7 +30,7 @@ world.onPlace = (type, x, z, rot, template) => {
   return o;
 };
 
-// Splash
+// Titelbild
 const splash = document.getElementById('splash');
 const hasSave = game.hasSave();
 if (hasSave) {
@@ -36,26 +40,41 @@ if (hasSave) {
 let splashOrbit = true;
 document.getElementById('btn-new').onclick = () => {
   game.newGame(); splash.classList.add('hidden'); splashOrbit = false;
+  world.setMode('ui');
   ui.switchSite('kinder'); ui.speedBar(); ui.ticker();
-  ui.story(CHAPTERS[0].title, `${CHAPTERS[0].intro}<br/><br/>Dein PC steht neben dem Schreibtisch: ein alter <b>Silicor Core Q66</b> mit einer <b>Crimson RHD 4850</b>. Er schürft schon Bitcoin – du musst nur die Zeit laufen lassen (▶ oben).<br/><br/>Klick den PC an, um Teile zu tauschen. Links kannst du neue Rigs, Kühlung und später ASICs kaufen. Pass auf <b>Hitze</b> und <b>Strom</b> auf – Mamas Sicherung hält nur 1,8 kW.`, 'Los geht’s!');
-  ui.onModalClose = () => { ui.setSpeed(1); const pc = game.facObjects('kinder')[0]; if (pc) world.select(pc.uid); ui.toast('👆 Das ist dein PC. Rechts siehst du Ertrag, Stromkosten und die Bauteile – klick einen GPU-Slot, um aufzurüsten.', 'msg', 9000); };
+  ui.story(CHAPTERS[0].title, `${CHAPTERS[0].intro}<br/><br/>Du stehst in deinem Zimmer. Links neben dem Schreibtischstuhl brummt dein alter PC: ein <b>Silicor Core Q66</b> mit einer <b>Crimson RHD 4850</b>. Er schürft schon Bitcoin.<br/><br/><b>WASD</b> laufen, <b>Maus</b> umsehen. Schau den PC an und drück <b>E</b>, um Teile zu tauschen. Mit <b>B</b> kaufst du neue Rigs, Ventilatoren und später ASICs und stellst sie direkt vor dich hin. Die <b>Zimmertür</b> bringt dich später in den Keller und weiter.<br/><br/>Pass auf <b>Hitze</b> und <b>Strom</b> auf – Mamas Sicherung hält nur 1,8 kW.`, 'Los geht’s!');
+  ui.onModalClose = () => { ui.setSpeed(1); ui.toast('🖥️ Dein PC steht links neben dem Stuhl – hingehen, anschauen, <b>[E]</b>.', 'msg', 9000); };
 };
 document.getElementById('btn-continue').onclick = () => {
-  if (game.load()) { splash.classList.add('hidden'); splashOrbit = false; ui.switchSite(game.s.current); ui.speedBar(); ui.ticker(); ui.toast('Willkommen zurück!', 'good'); }
+  if (game.load()) { splash.classList.add('hidden'); splashOrbit = false; ui.switchSite(game.s.current); ui.speedBar(); ui.ticker(); world.setMode('play'); ui.toast('Willkommen zurück!', 'good'); }
 };
 
 // Beim Verlassen speichern
 window.addEventListener('beforeunload', () => { if (splash.classList.contains('hidden')) game.save(); });
 
-// Tastatur
+// Tastatur (Hotkeys)
+const HOT = { b: () => ui.toggleBuild(), m: () => ui.market(), p: () => ui.phone(), c: () => ui.company(), t: () => ui.techs(), l: () => ui.ranking(), k: () => ui.toggleMap() };
 window.addEventListener('keydown', (e) => {
-  if (e.target.tagName === 'INPUT' || !splash.classList.contains('hidden')) return;
-  if (e.code === 'Space') { e.preventDefault(); ui.setSpeed(game.s.speed ? 0 : (ui.lastSpeed || 1)); }
-  if (['1', '2', '3', '4'].includes(e.key)) { ui.setSpeed(+e.key); ui.lastSpeed = +e.key; }
-  if (e.key === 'f' || e.key === 'F') { if (!world.fpActive) world.enterFP(); }
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || !splash.classList.contains('hidden')) return;
+  const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  if (e.code === 'Space') { e.preventDefault(); ui.setSpeed(game.s.speed ? 0 : (ui.lastSpeed || 1)); return; }
+  if (['1', '2', '3', '4'].includes(e.key)) { ui.setSpeed(+e.key); ui.lastSpeed = +e.key; return; }
+  if (k === 'Escape') {
+    if (world.mode === 'map') { ui.toggleMap(); return; }
+    if (world.mode === 'ui') { ui.resume(); return; }
+    if (ui.paused) { ui.resume(); return; }
+    return;
+  }
+  if (world.mode === 'ui' && k === 'e' && ui.inspUid && document.getElementById('modal').classList.contains('hidden') && performance.now() - (ui.openedAt || 0) > 200) { ui.resume(); return; }
+  if (HOT[k] && (world.mode === 'play' || world.mode === 'ui' || ui.paused || world.mode === 'map')) {
+    if (world.mode === 'map' && k !== 'k') return;
+    if (k === 'b' && world.mode === 'ui' && document.body.classList.contains('show-build')) { ui.resume(); return; }
+    if (k !== 'b' && k !== 'k' && ui.modalKind && ui.modalKind === { m: 'market', p: 'phone', c: 'company', t: 'techs', l: 'ranking' }[k]) { ui.resume(); return; }
+    HOT[k](); return;
+  }
   if (e.key === 'Delete' && world.selected) {
     const o = game.findObj(world.selected); if (!o) return;
-    if (ui.delArmed === o.uid) { const v = game.objectValue(o); game.removeObject(o.uid); ui.inspect(null); ui.delArmed = null; ui.toast(`Verkauft für ${v.toLocaleString('de-DE')} $`, 'good', 2500); }
+    if (ui.delArmed === o.uid) { const v = game.objectValue(o); game.removeObject(o.uid); ui.resume(); ui.delArmed = null; ui.toast(`Verkauft für ${v.toLocaleString('de-DE')} $`, 'good', 2500); }
     else { ui.delArmed = o.uid; ui.toast('Nochmal Entf drücken, um das Objekt zu verkaufen.', 'info', 3000); setTimeout(() => { if (ui.delArmed === o.uid) ui.delArmed = null; }, 3000); }
   }
 });
@@ -67,18 +86,18 @@ function loop(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   const s = game.s;
   if (splashOrbit) {
-    // Langsame Kamerafahrt hinter dem Titelbildschirm
-    const t = now / 1000 * 0.08; const d = world.def;
-    world.controls.target.set(d.w / 2, 0.6, d.d / 2);
-    world.camera.position.set(d.w / 2 + Math.cos(t) * 5.2, 3.2, d.d / 2 + Math.sin(t) * 5.2);
-    s.frac = 0.78;
-  } else if (s.speed && document.getElementById('modal').classList.contains('hidden')) {
+    // Langsamer Blick durchs Kinderzimmer hinter dem Titelbild
+    const t = now / 1000 * 0.12;
+    world.camera.position.set(3.3, 1.6, 3.05);
+    world.controls.target.set(1.9 + Math.sin(t) * 1.4, 1.05 + Math.sin(t * 0.7) * 0.15, 0.6 + Math.cos(t) * 0.5);
+    s.frac = 0.8;
+  } else if (s.speed && document.getElementById('modal').classList.contains('hidden') && !ui.paused) {
     s.frac += dt / SEC_PER_DAY[s.speed];
     let n = 0;
     while (s.frac >= 1 && n < 4) { s.frac -= 1; game.advanceDay(); n++; }
     if (s.frac >= 1) s.frac = 0.99;
   }
-  screenTimer -= dt; if (screenTimer <= 0) { screenTimer = 1.5; world.updateStatus(); world.drawScreens(); const sm = game.summary[s.current]; if (sm) audio.setLoad(sm.watt, !sm.tripped && !splashOrbit); }
+  screenTimer -= dt; if (screenTimer <= 0) { screenTimer = 1.0; world.updateStatus(); world.drawScreens(); const sm = game.summary[s.current]; if (sm) audio.setLoad(sm.watt, !sm.tripped && !splashOrbit); if (world.aim) ui.prompt(world.aim); }
   world.update();
   requestAnimationFrame(loop);
 }

@@ -62,7 +62,7 @@ function shell(def, { floorMat, wallMatA, wallMatB, thick = 0.15, holes = {}, ba
   const right = mk('right', d, wallMatB, new THREE.Vector3(w + thick / 2, 0, 0), -Math.PI / 2, new THREE.Vector3(1, 0, 0), holes.right);
   // Decke (nur im Rundgang sichtbar)
   const ceil = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat('ceiling', { color: 0xf2efe8, roughness: 1, side: THREE.DoubleSide }));
-  ceil.rotation.x = Math.PI / 2; ceil.position.set(w / 2, h, d / 2); ceil.visible = false; root.add(ceil);
+  ceil.rotation.x = Math.PI / 2; ceil.position.set(w / 2, h, d / 2); ceil.castShadow = false; root.add(ceil);
   return { root, walls, back, front, left, right, ceil };
 }
 
@@ -126,6 +126,8 @@ export function buildRoom(def) {
     B.blocked.push(blk(3.5, 0, 4.0, 0.5));
     B.lights.push({ pos: [2.0, 2.4, 1.8], color: 0xffd7a0, intensity: 3.5, dist: 8 });
     B.outside = 'town';
+    B.doors = [{ c: [3.98, 1.0, 3.03], s: [0.14, 2.0, 0.85], label: 'Zimmertür' }];
+    B.spawn = { x: 3.3, z: 3.0, look: [1.6, 0.9] };
   } else if (def.style === 'basement') {
     S = shell(def, {
       floorMat: mat('floorBase', { map: TEX.concrete([3, 2], 118), roughness: 0.9 }),
@@ -164,6 +166,8 @@ export function buildRoom(def) {
     for (let i = 0; i < 3; i++) box(g, 0.55, 0.35, 0.4, mat('xmasBox' + i, { color: [0xa83232, 0x2f7d3a, 0xc9a227][i], roughness: 0.8 }), 4.6 + (i % 2) * 0.1, i * 0.35, 4.75);
     B.blocked.push(blk(4.3, 4.5, 5.0, 5.0));
     B.outside = 'garden';
+    B.doors = [{ c: [6.4, 1.2, 1.0], s: [1.2, 2.4, 2.0], label: 'Kellertreppe' }];
+    B.spawn = { x: 5.2, z: 2.7, look: [2.0, 2.6] };
   } else if (def.style === 'workshop') {
     S = shell(def, {
       floorMat: mat('floorWork', { map: TEX.concrete([4, 3], 132), roughness: 0.85 }),
@@ -189,6 +193,8 @@ export function buildRoom(def) {
     for (let x = 2; x < w; x += 3) { box(g, 1.5, 0.05, 0.12, M.tube(), x, h - 0.3, d / 2); B.lights.push({ pos: [x, h - 0.5, d / 2], color: 0xf4f8ff, intensity: 4.5, dist: 9 }); }
     const floorLine = new THREE.Mesh(new THREE.PlaneGeometry(w - 1, 0.08), mat('lineYellow', { color: 0xe6c200, roughness: 0.6 })); floorLine.rotation.x = -Math.PI / 2; floorLine.position.set(w / 2, 0.004, 1.3); g.add(floorLine);
     B.outside = 'yard';
+    B.doors = [{ c: [8.5, 1.05, 0.06], s: [1.0, 2.1, 0.16], label: 'Tür zum Laden' }, { c: [9.95, 1.5, 4.25], s: [0.16, 3.0, 3.5], label: 'Rolltor' }];
+    B.spawn = { x: 8.5, z: 1.4, look: [4.5, 5.0] };
   } else if (def.style === 'warehouse') {
     S = shell(def, {
       floorMat: mat('floorEpoxy', { map: TEX.epoxy([8, 6]), roughness: 0.35, metalness: 0.1 }),
@@ -214,6 +220,8 @@ export function buildRoom(def) {
     for (const z of [3.0, 8.0, 13.0]) { const l = new THREE.Mesh(new THREE.PlaneGeometry(w - 2, 0.12), ln); l.rotation.x = -Math.PI / 2; l.position.set(w / 2, 0.004, z); g.add(l); }
     for (let x = 4; x < w; x += 8) for (let z = 4; z < d; z += 8) { const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.5, 0.25, 16), M.darkMetal()); lamp.position.set(x, h - 0.6, z); g.add(lamp); const lg = new THREE.Mesh(new THREE.CircleGeometry(0.38, 16), M.tube()); lg.rotation.x = Math.PI / 2; lg.position.set(x, h - 0.74, z); g.add(lg); B.lights.push({ pos: [x, h - 1, z], color: 0xf6f8ff, intensity: 18, dist: 16 }); }
     B.outside = 'industrial';
+    B.doors = [{ c: [8, 2.25, 0.1], s: [4, 4.5, 0.2], label: 'Rolltor' }, { c: [16, 2.25, 0.1], s: [4, 4.5, 0.2], label: 'Rolltor' }];
+    B.spawn = { x: 8, z: 1.6, look: [12, 10] };
   } else if (def.style === 'datacenter') {
     S = shell(def, {
       floorMat: mat('floorRaised', { map: TEX.tiles([w / 0.6, d / 0.6]), roughness: 0.5, metalness: 0.05 }),
@@ -236,6 +244,9 @@ export function buildRoom(def) {
     const pm = mat('perfTile', { map: TEX.perfTile([1, 1]), roughness: 0.5 });
     for (let z = 7; z < d - 1; z += 4) { const l = new THREE.Mesh(new THREE.PlaneGeometry(w - 10, 0.6), pm); l.rotation.x = -Math.PI / 2; l.position.set(w / 2 + 4, 0.003, z); g.add(l); }
     B.outside = 'city';
+    { const dr = new THREE.Mesh(new THREE.BoxGeometry(1.0, 2.2, 0.06), mat('dcDoor', { color: 0x8a939e, roughness: 0.4, metalness: 0.5 })); dr.position.set(d - 20, 1.1, 0.16); S.left.add(dr); const pl = textTexture([{ text: 'AUSGANG', font: 'bold 60px Arial', color: '#fff' }], { w: 256, h: 96, bg: '#1a8f3a' }); poster(S.left, pl, 0.6, 0.22, d - 20, 2.45, 0.17); }
+    B.doors = [{ c: [0.08, 1.1, 20], s: [0.16, 2.2, 1.0], label: 'Ausgang' }];
+    B.spawn = { x: 1.3, z: 20, look: [18, 13] };
   } else if (def.style === 'fjord') {
     S = shell(def, {
       floorMat: mat('floorFjord', { map: TEX.concrete([16, 10], 140), roughness: 0.8 }),
@@ -251,7 +262,13 @@ export function buildRoom(def) {
     poster(S.left, logo, 12, 3.8, 20, 8, 0.16);
     for (let x = 8; x < w; x += 16) for (let z = 8; z < d; z += 12) B.lights.push({ pos: [x, h - 1, z], color: 0xeaf4ff, intensity: 60, dist: 30 });
     B.outside = 'fjord';
+    { const dr = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.4, 0.08), mat('fjDoor', { color: 0x3b4450, roughness: 0.4, metalness: 0.6 })); dr.position.set(d - 20, 1.2, 0.18); S.left.add(dr); const pl = textTexture([{ text: 'UTGANG · AUSGANG', font: 'bold 40px Arial', color: '#fff' }], { w: 512, h: 96, bg: '#1a8f3a' }); poster(S.left, pl, 1.2, 0.22, d - 20, 2.7, 0.19); }
+    B.doors = [{ c: [0.1, 1.2, 20], s: [0.2, 2.4, 1.2], label: 'Ausgang' }];
+    B.spawn = { x: 1.6, z: 20, look: [32, 20] };
   }
+  // Decken-Material passend zum Raum
+  const ceilMat = { bedroom: mat('ceilBed', { color: 0xf3f0ea, roughness: 1, side: THREE.DoubleSide }), basement: mat('ceilBase', { map: TEX.concrete([3, 2], 150), roughness: 1, side: THREE.DoubleSide }), workshop: mat('ceilWork', { map: TEX.concrete([4, 3], 120), roughness: 1, side: THREE.DoubleSide }), warehouse: mat('ceilWh', { map: TEX.corrugated([10, 6], '#6f7780'), roughness: 0.8, side: THREE.DoubleSide }), datacenter: mat('ceilDc', { map: TEX.tiles([w / 1.2, d / 1.2]), roughness: 0.9, side: THREE.DoubleSide }), fjord: mat('ceilFj', { color: 0x1e252d, roughness: 0.6, metalness: 0.4, transparent: true, opacity: 0.55, side: THREE.DoubleSide }) }[def.style];
+  if (ceilMat) S.ceil.material = ceilMat;
   S.root.userData.walls = S.walls;
   return { ...B, root: S.root, walls: S.walls, ceil: S.ceil };
 }

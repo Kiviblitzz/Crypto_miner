@@ -57,7 +57,8 @@ button { font: inherit; color: inherit; }
 .bar.hot > div { background: var(--bad); }
 
 /* Bau-Panel */
-#build { position: fixed; top: 128px; left: 10px; width: 300px; bottom: 250px; display: flex; flex-direction: column; z-index: 3; }
+#build { position: fixed; top: 128px; left: 10px; width: 330px; bottom: 60px; display: none; flex-direction: column; z-index: 8; }
+body.show-build #build { display: flex; }
 #build.collapsed { bottom: auto; }
 #build.collapsed .items { display: none; }
 .cats { display: flex; gap: 2px; padding: 6px; border-bottom: 1px solid var(--line); }
@@ -234,3 +235,34 @@ body.empire #build, body.empire #inspector, body.empire #goals { display: none; 
   .intro { font-size: 14px; }
   .controls-help { display: none; }
 }
+
+/* ---------- Ego-Perspektive ---------- */
+#crosshair { position: fixed; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 2px rgba(0,0,0,.55); z-index: 6; pointer-events: none; display: none; }
+body[data-mode="play"] #crosshair { display: block; }
+#prompt { position: fixed; left: 50%; top: calc(50% + 26px); transform: translateX(-50%); background: rgba(10,13,18,.82); border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px; font-size: 13px; text-align: center; z-index: 6; pointer-events: none; max-width: 420px; }
+#prompt b { color: var(--acc); }
+#prompt span { color: var(--dim); }
+#prompt .st { color: #ffcc66; font-size: 12px; }
+#clickhint { position: fixed; left: 50%; top: 58%; transform: translateX(-50%); background: rgba(0,0,0,.72); border-radius: 999px; padding: 8px 16px; z-index: 7; cursor: pointer; }
+#keys { position: fixed; left: 50%; bottom: 110px; transform: translateX(-50%); font-size: 12px; color: rgba(232,237,244,.75); text-shadow: 0 1px 3px #000; z-index: 3; pointer-events: none; white-space: nowrap; display: none; }
+body[data-mode="play"] #keys { display: block; }
+#dock { right: 10px; bottom: 46px; }
+#dock .key { position: absolute; bottom: 2px; right: 4px; font-size: 9px; color: var(--acc); font-weight: 800; }
+#pause { position: fixed; inset: 0; z-index: 35; display: grid; place-items: center; background: rgba(5,7,10,.55); backdrop-filter: blur(4px); }
+.pause-card { background: #121620; border: 1px solid var(--line); border-radius: 16px; padding: 22px 26px; text-align: center; display: flex; flex-direction: column; gap: 10px; align-items: center; max-width: 560px; }
+.logo.small { font-size: 34px; letter-spacing: 4px; }
+.ptitle { color: var(--dim); letter-spacing: 3px; text-transform: uppercase; font-size: 13px; }
+#fade { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; z-index: 34; }
+#fade.go { animation: fadego .9s ease-out; }
+@keyframes fadego { 0% { opacity: 1; } 100% { opacity: 0; } }
+.insp-x { position: static; margin-left: 6px; flex: none; }
+body[data-mode="play"] #goals { opacity: .85; }
+body[data-mode="map"] #goals, body[data-mode="map"] #build { display: none; }
+#touchpad { position: fixed; inset: auto 0 96px 0; height: 0; z-index: 9; }
+#stick { position: fixed; left: 24px; bottom: 120px; width: 130px; height: 130px; border-radius: 50%; background: rgba(255,255,255,.08); border: 2px solid rgba(255,255,255,.25); touch-action: none; }
+#knob { position: absolute; left: 40px; top: 40px; width: 50px; height: 50px; border-radius: 50%; background: rgba(255,255,255,.35); }
+#t-use, #t-build, #t-menu { position: fixed; right: 22px; width: 64px; height: 64px; border-radius: 50%; border: 2px solid rgba(255,255,255,.3); background: rgba(14,17,23,.75); font-size: 22px; font-weight: 900; color: #fff; touch-action: none; }
+#t-use { bottom: 190px; background: rgba(255,176,0,.85); color: #1b1300; } #t-build { bottom: 270px; } #t-menu { bottom: 350px; }
+
+body.show-build #goals { display: none; }
+body[data-mode="ui"] #keys, body[data-mode="ui"] #prompt { display: none; }
