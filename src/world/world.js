@@ -409,14 +409,28 @@ export class World {
       let p = this.popups.find((q) => !q.visible);
       if (!p) { if (this.popups.length >= 14) break; const c = document.createElement('canvas'); c.width = 256; c.height = 64; const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; p = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false })); p.renderOrder = 15; p.userData.c = c; this.scene.add(p); this.popups.push(p); }
       const c = p.userData.c, g = c.getContext('2d'); g.clearRect(0, 0, 256, 64);
-      g.font = 'bold 40px Arial'; g.textAlign = 'center'; g.lineWidth = 6; g.strokeStyle = 'rgba(0,0,0,0.75)'; const txt = '+' + fmtUSD(rev); g.strokeText(txt, 128, 46); g.fillStyle = '#5dff9c'; g.fillText(txt, 128, 46);
+      g.font = '700 40px Barlow, Arial'; g.textAlign = 'center'; g.shadowColor = 'rgba(0,0,0,0.6)'; g.shadowBlur = 10; g.shadowOffsetY = 2; const txt = '+' + fmtUSD(rev); g.fillStyle = '#8af2b4'; g.fillText(txt, 128, 46); g.shadowColor = 'transparent';
       p.material.map.needsUpdate = true;
       const sc = 0.5;
       const bb = e.group.userData.bbox; p.position.set(e.group.position.x, (bb ? bb.max.y : 0.6) + 0.15, e.group.position.z);
       p.scale.set(sc, sc / 4, 1); p.visible = true; p.userData.life = 0; p.userData.y0 = p.position.y; p.material.opacity = 1;
+      this.coinBurst(p.position, 3);
+    }
+  }
+  // Kleine Münzen springen aus dem Gerät (Rückmeldung für Einkommen)
+  coinBurst(pos, n) {
+    if (!this.coinTex) { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'); const gr = g.createRadialGradient(26, 24, 4, 32, 32, 30); gr.addColorStop(0, '#fff3b0'); gr.addColorStop(0.5, '#ffc93a'); gr.addColorStop(1, '#c98a00'); g.fillStyle = gr; g.beginPath(); g.arc(32, 32, 28, 0, 7); g.fill(); g.strokeStyle = 'rgba(120,70,0,.6)'; g.lineWidth = 3; g.stroke(); g.fillStyle = 'rgba(120,70,0,.75)'; g.font = 'bold 34px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('₿', 32, 34); this.coinTex = new THREE.CanvasTexture(c); this.coinTex.colorSpace = THREE.SRGBColorSpace; this.coins = []; }
+    for (let i = 0; i < n; i++) {
+      let k = this.coins.find((q) => !q.visible);
+      if (!k) { if (this.coins.length >= 40) return; k = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.coinTex, transparent: true, depthWrite: false })); k.renderOrder = 9; this.scene.add(k); this.coins.push(k); }
+      const a = Math.random() * Math.PI * 2, sp = 0.35 + Math.random() * 0.35;
+      k.position.copy(pos); k.position.y -= 0.08; k.visible = true; k.scale.setScalar(0.07);
+      k.userData = { v: new THREE.Vector3(Math.cos(a) * sp, 1.3 + Math.random() * 0.6, Math.sin(a) * sp), life: 0, spin: (Math.random() - 0.5) * 12 };
+      k.material.opacity = 1;
     }
   }
   updatePopups(dt) {
+    if (this.coins) for (const k of this.coins) { if (!k.visible) continue; const u = k.userData; u.life += dt; u.v.y -= 4.2 * dt; k.position.addScaledVector(u.v, dt); k.material.rotation += u.spin * dt; k.scale.setScalar(0.07 * (1 - Math.max(0, u.life - 0.6) * 1.5)); k.material.opacity = Math.max(0, 1 - Math.max(0, u.life - 0.55) * 2.2); if (u.life > 1.0) k.visible = false; }
     if (!this.popups) return;
     for (const p of this.popups) { if (!p.visible) continue; p.userData.life += dt; p.position.y = p.userData.y0 + p.userData.life * 0.35; p.material.opacity = Math.max(0, 1 - p.userData.life / 1.6); if (p.userData.life > 1.6) p.visible = false; }
   }

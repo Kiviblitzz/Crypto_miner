@@ -809,3 +809,16 @@ body.lowfx .panel, body.lowfx #inspector, body.lowfx .modal-card, body.lowfx #mo
 body.lowfx .featcard, body.lowfx .pause-card, body.lowfx #dock, body.lowfx #splash .splash-btns .btn, body.lowfx #pause .pause-card .btn, body.lowfx #goals .goal {
   -webkit-backdrop-filter: none; backdrop-filter: none;
 }
+
+/* Bewegung: Fenster und Panels gleiten weich herein (Gefühl wie in Sim-Spielen) */
+@keyframes popIn { from { opacity: 0; transform: translateY(10px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes slideInR { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: none; } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+#modal:not(.hidden) { animation: fadeIn .18s ease-out; }
+#modal:not(.hidden) .modal-card { animation: popIn .26s cubic-bezier(.2,.7,.2,1); }
+#inspector:not(.hidden) { animation: slideInR .24s cubic-bezier(.2,.7,.2,1); }
+@keyframes popInC { from { opacity: 0; transform: translate(-50%, -48%) scale(.985); } to { opacity: 1; transform: translate(-50%, -50%); } }
+@media (min-width: 721px) { body.show-build #build { animation: popInC .24s cubic-bezier(.2,.7,.2,1); } }
+#goals .goal { animation: slideInR .3s cubic-bezier(.2,.7,.2,1); }
+#pause:not(.hidden) .pause-card { animation: popIn .24s cubic-bezier(.2,.7,.2,1); }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
