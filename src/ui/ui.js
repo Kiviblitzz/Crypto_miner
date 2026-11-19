@@ -269,7 +269,7 @@ export class UI {
     const o = this.g.findObj(uid); if (!o) { el.classList.add('hidden'); this.inspUid = null; return; }
     el.classList.remove('hidden');
     const def = PLACEABLE[o.type], g = this.g;
-    el.innerHTML = `<div class="insp-h"><h3>${esc(def.name)}</h3><span id="insp-badge"></span><button class="modal-x insp-x" title="Schließen (E/ESC)">✕</button></div><div id="insp-stats"></div><div id="insp-ctrl"></div>`;
+    el.innerHTML = `<div class="insp-h"><h3>${esc(o.type === 'tower' ? 'Dein PC' : (def.short || def.name.replace(/[-‑]Gehäuse|\s*\(.*\)/g, '')))}</h3><span id="insp-badge"></span><button class="modal-x insp-x" title="Schließen (E/ESC)">✕</button></div><div id="insp-stats"></div><div id="insp-ctrl"></div>`;
     el.querySelector('.insp-x').onclick = () => this.resume();
     this.inspectStats();
     const c = $('#insp-ctrl');
@@ -323,9 +323,9 @@ export class UI {
     for (const u of a.units) { rev += u.rev * sm.throttle; if (u.idle) hs.push(`<span style="color:#94a0b2">pausiert – wäre ${fmtUSD(u.potential)}/Tag mit ${u.coin ? COIN[u.coin].name : '–'}</span>`); else if (u.coin) hs.push(`${fmtHash(u.h * sm.throttle, u.algo)} → ${COIN[u.coin].name}`); else if (Object.keys(u.hash).length) hs.push('kein lohnender Coin'); if (u.note) hs.push(`<span class="neg">${u.note}</span>`); }
     const cost = (a.watt / 1000) * 24 * sm.elec;
     const rows = [];
-    if (a.note) rows.push(['Hinweis', `<span class="neg">${esc(a.note)}</span>`]);
+    if (a.note && a.status !== 'off') rows.push(['Hinweis', `<span class="neg">${esc(a.note)}</span>`]);
     if (hs.length) rows.push(['Leistung', hs.join('<br/>')]);
-    if (def.kind !== 'decor') rows.push(['Verbrauch', fmtWatt(a.watt)]);
+    if (def.kind !== 'decor' && a.watt > 0) rows.push(['Verbrauch', fmtWatt(a.watt)]);
     if (def.kind === 'cooling') { rows.push(['Kühlleistung', fmtWatt(def.cool)]); rows.push(['Auslastung', `${Math.round((a.util ?? 1) * 100)} %`]); }
     if (sm.elec === 0 && g.s.flags.miningStarted) rows.push(['Strom', '<span class="pos">zahlt Mama</span>']);
     if (a.units.length) { rows.push(['Ertrag / Tag', `<span class="pos">${fmtUSD(rev)}</span>`]); rows.push(['Strom / Tag', `<span class="neg">−${fmtUSD(cost)}</span>`]); rows.push(['Gewinn / Tag', `<b class="${rev - cost >= 0 ? 'pos' : 'neg'}">${fmtUSD(rev - cost)}</b>`]); }

@@ -822,3 +822,4 @@ body.lowfx .featcard, body.lowfx .pause-card, body.lowfx #dock, body.lowfx #spla
 #goals .goal { animation: slideInR .3s cubic-bezier(.2,.7,.2,1); }
 #pause:not(.hidden) .pause-card { animation: popIn .24s cubic-bezier(.2,.7,.2,1); }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+@media (min-width: 721px) { #inspector { top: 128px; } }

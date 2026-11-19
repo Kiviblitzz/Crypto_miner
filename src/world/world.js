@@ -241,8 +241,9 @@ export class World {
   }
   refreshSelBox() {
     const e = this.selected && this.entries.get(this.selected);
-    if (!e) { this.selBox.visible = false; return; }
-    this.selBox.box.setFromObject(e.group); this.selBox.box.expandByScalar(0.03); this.selBox.visible = true;
+    this.selBox.visible = false;
+    if (this.outline) this.outline.selectedObjects = e ? [e.group] : [];
+    if (!e) return;
   }
 
   // ---------- Bauen ----------
