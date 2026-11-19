@@ -192,7 +192,7 @@ export class Game {
     if (day < item.releaseDay) return false;
     const years = (day - item.releaseDay) / 365;
     if (item.type === 'gpu' || item.type === 'cpu') return years < 7;
-    if (item.type === 'mobo' || item.type === 'psu') return years < 9;
+    // Netzteile, Mainboards, Rahmen, Regale, Kühlung, Deko laufen nie aus (sonst ist der Handel im Endlosmodus leer)
     if (item.kind === 'device') return years < 5.5;
     return true;
   }
@@ -240,7 +240,7 @@ export class Game {
     if (!free) { const p = this.itemPrice(def); if (!this.canAfford(p)) return null; this.s.cash -= p; this.s.stats.spentHW += p; if (this.s.skills) this.addXp('hw', 10); }
     this.s.fac[facId].objects.push(o);
     if (def.kind === 'device' && def.look !== 'fpga' && def.look !== 'usb') this.s.flags.boughtAsic = true;
-    this.dayUpdate(true);
+    this.dayUpdate(true); if (!free) this.capWarn(facId);
     this.emit('objects', facId);
     return o;
   }
@@ -305,7 +305,7 @@ export class Game {
       if (slot === 'mobo') { const cap = this.rigGpuCap(o); if (o.parts.gpus.length > cap) { for (const g of o.parts.gpus.slice(cap)) this.s.cash += Math.round(this.itemPrice(PART[g]) * 0.5); o.parts.gpus = o.parts.gpus.slice(0, cap); } }
     }
     if (!this.s.flags.miningStarted && o.type === 'tower' && this.pcReady(o)) this.s.flags.pcBuilt = true;
-    this.dayUpdate(true); this.emit('objects', this.facOf(uid));
+    this.dayUpdate(true); if (partId && slot === 'gpu') this.capWarn(this.facOf(uid)); this.emit('objects', this.facOf(uid));
     return true;
   }
   psuCount(o) { return PLACEABLE[o.type].maxGpu >= 8 ? 2 : 1; }
@@ -333,7 +333,7 @@ export class Game {
   fillGpus(uid, gpuId) {
     const o = this.findObj(uid); if (!o || !o.parts?.mobo) return 0;
     const cap = this.rigGpuCap(o); let n = 0;
-    const maxCap = Math.max(...this.partList('psu').map((x) => x.cap)) * this.psuCount(o);
+    const maxCap = Math.max(0, o.parts.psu ? PART[o.parts.psu].cap : 0, ...this.partList('psu').map((x) => x.cap)) * this.psuCount(o); // ohne Netzteil im Handel kein -Infinity
     while (o.parts.gpus.length < cap && this.canAfford(this.itemPrice(PART[gpuId]))) {
       if (this.rigWatt(o) + PART[gpuId].watt > maxCap) { this.toast(`Mehr GPUs schafft kein verfügbares Netzteil (max. ${maxCap} W).`, 'info'); break; }
       if (!this.setPart(uid, 'gpu', gpuId, o.parts.gpus.length)) break; n++;
@@ -347,14 +347,20 @@ export class Game {
     if (o.items) for (const it of o.items) c += this.itemPrice(PLACEABLE[it.id]);
     return Math.round(c);
   }
+  // Duplizieren nur mit Hardware, die es noch zu kaufen gibt: Name des ersten ausgelaufenen Teils, sonst null
+  cloneBlocked(o) {
+    const items = [PLACEABLE[o.type], ...(o.parts ? this.partIds(o).map((id) => PART[id]) : []), ...(o.items || []).map((it) => PLACEABLE[it.id])];
+    const it = items.find((x) => x && !this.available(x)); return it ? it.name : null;
+  }
   cloneObject(src, facId, x, z, rot) {
+    if (this.cloneBlocked(src)) return null;
     const cost = this.cloneCost(src); if (!this.canAfford(cost)) return null;
     const def = PLACEABLE[src.type];
     const o = { uid: this.s.nextUid++, type: src.type, x, z, rot, coin: src.coin, broken: false, bought: this.s.day };
     if (src.parts) o.parts = JSON.parse(JSON.stringify(src.parts));
     if (src.items) o.items = src.items.map((i) => ({ id: i.id, b: 0 }));
     this.s.cash -= cost; this.s.stats.spentHW += cost;
-    this.s.fac[facId].objects.push(o); this.dayUpdate(true); this.emit('objects', facId); return o;
+    this.s.fac[facId].objects.push(o); this.dayUpdate(true); this.capWarn(facId); this.emit('objects', facId); return o;
   }
   holderAdd(uid, devId, n = 1) {
     const o = this.findObj(uid); if (!o || !o.items) return 0;
@@ -364,7 +370,7 @@ export class Game {
     while (added < n && o.items.length < def.slots && this.canAfford(price)) {
       o.items.push({ id: devId, b: 0 }); this.s.cash -= price; this.s.stats.spentHW += price; added++;
     }
-    if (added) { if (dev.look !== 'fpga' && dev.look !== 'usb') this.s.flags.boughtAsic = true; this.dayUpdate(true); this.emit('objects', this.facOf(uid)); }
+    if (added) { if (dev.look !== 'fpga' && dev.look !== 'usb') this.s.flags.boughtAsic = true; this.dayUpdate(true); this.capWarn(this.facOf(uid)); this.emit('objects', this.facOf(uid)); }
     return added;
   }
   holderRemove(uid, idx) {
@@ -429,7 +435,7 @@ export class Game {
       for (const [id, n] of Object.entries(groups)) {
         const d = PLACEABLE[id]; const ap = this.fx('asicPower'), ah = this.fx('asicHash');
         r.watt += d.watt * n * ap;
-        r.units.push({ hash: { [d.algo]: d.hash * n * ah }, vram: d.vram || 99, w: d.watt * n * ap });
+        r.units.push({ hash: { [d.algo]: d.hash * n * ah }, vram: d.vram || 99, w: d.watt * n * ap, n });
       }
       r.heat = def.selfCooled ? r.watt * 0.03 : r.watt;
       if (def.selfCooled) r.watt *= 1.06; // Pumpen/Lüfter
@@ -468,8 +474,10 @@ export class Game {
     let watt = 0, heat = 0, cool = fd.baseCool * this.fx('cool', facId), rev = 0; const per = new Map(); const hashByAlgo = {};
     const elecP = this.elecPrice(facId, day);
     let coolCap = 0, coolW = 0; const coolers = [];
+    for (const o of f.objects) per.set(o.uid, this.analyze(o, day, elecP));
+    this.autoLimit(facId, per, elecP, day);
     for (const o of f.objects) {
-      const a = this.analyze(o, day, elecP); per.set(o.uid, a);
+      const a = per.get(o.uid);
       if (PLACEABLE[o.type].kind === 'cooling') { coolCap += a.cool; coolW += a.watt; coolers.push(a); continue; }
       watt += a.watt; heat += a.heat;
       for (const u of a.units) { rev += u.rev; if (u.algo) hashByAlgo[u.algo] = (hashByAlgo[u.algo] || 0) + u.h; }
@@ -480,10 +488,64 @@ export class Game {
     watt += coolW * util; heat += coolW * util; cool += coolCap;
     const capKw = fd.power[f.power].kw * this.fx('cap', facId);
     const ambient = 21 + fd.ambient + seasonOffset(day) * (fd.style === 'basement' ? 0.4 : 1);
-    const temp = ambient + 12 * (heat / Math.max(1, cool));
+    const tripped = watt / 1000 > capKw;
+    const temp = tripped ? ambient : ambient + 12 * (heat / Math.max(1, cool)); // Sicherung raus: nichts läuft, keine Abwärme
     const throttle = (temp > 38 ? Math.max(0.35, 1 - (temp - 38) * 0.05) : 1) * this.fx('hash', facId);
     const elec = this.elecPrice(facId, day);
-    return { watt, heat, cool, rev, per, capKw, tripped: watt / 1000 > capKw, temp, throttle, elec, hashByAlgo };
+    return { watt, heat, cool, rev, per, capKw, tripped, temp, throttle, elec, hashByAlgo };
+  }
+  // Auto-Betrieb: nur so viele Geräte hochfahren, wie Anschluss und Kühlung hergeben – rentabelste zuerst,
+  // Drosselung durch Hitze zählt mit. Der Rest pausiert ('full' = Anschluss voll, sonst zu heiß).
+  autoLimit(facId, per, elec, day) {
+    const f = this.s.fac[facId], fd = FACILITY[facId];
+    const capW = fd.power[f.power].kw * this.fx('cap', facId) * 1000, cool0 = fd.baseCool * this.fx('cool', facId), fxh = this.fx('hash', facId);
+    const ambient = 21 + fd.ambient + seasonOffset(day) * (fd.style === 'basement' ? 0.4 : 1);
+    let W = 0, H = 0, R = 0, coolCap = 0, coolW = 0; const cand = [];
+    for (const o of f.objects) {
+      const a = per.get(o.uid), def = PLACEABLE[o.type];
+      if (def.kind === 'cooling') { coolCap += a.cool; coolW += a.watt; continue; }
+      const auto = (o.mode || 'auto') === 'auto', sc = !!def.selfCooled; let aw = a.watt, ah = a.heat;
+      for (const u of a.units) {
+        if (!auto || u.idle) { R += u.rev; continue; }
+        const we = u.w * (sc ? 1.06 : 1), he = sc ? u.w * 0.03 : u.w;
+        cand.push({ a, u, we, he, n: u.n || 1, rev: u.rev, cost: (we / 1000) * 24 * elec }); aw -= we; ah -= he;
+      }
+      W += Math.max(0, aw); H += Math.max(0, ah);
+    }
+    if (!cand.length) return;
+    const util = (h) => (coolCap ? Math.min(1, Math.max(0.05, (h - fd.baseCool * 0.6) / coolCap)) : 0);
+    const thr = (h) => { const t = ambient + 12 * ((h + coolW * util(h)) / Math.max(1, cool0 + coolCap)); return t > 38 ? Math.max(0.35, 1 - (t - 38) * 0.05) : 1; };
+    cand.sort((x, y) => (y.rev - y.cost) / (y.we || 1) - (x.rev - x.cost) / (x.we || 1));
+    let t0 = thr(H);
+    for (const c of cand) {
+      // Wie viele Geräte der Einheit dürfen laufen? (Regal/Container: auch nur ein Teil)
+      const room = capW - W - coolW * util(H + c.he), jmax = c.we <= room ? c.n : c.n > 1 ? Math.floor((c.n * Math.max(0, room)) / c.we) : 0;
+      const gain = (j) => { const kk = j / c.n; return (R + c.rev * kk) * thr(H + c.he * kk) * fxh - c.cost * kk - R * t0 * fxh; };
+      let j = jmax;
+      if (j > 0 && gain(j) < 0) { let best = 0; j = 0; for (let i = 1; i < jmax; i++) { const gi = gain(i); if (gi > best) { best = gi; j = i; } } }
+      const k = j / c.n, why = j < jmax ? 'heat' : jmax < c.n ? 'full' : '';
+      if (k > 0) { W += c.we * k; H += c.he * k; R += c.rev * k; t0 = thr(H); }
+      if (k >= 1) continue;
+      const a = c.a, u = c.u; a.watt = Math.max(0, a.watt - c.we * (1 - k)); a.heat = Math.max(0, a.heat - c.he * (1 - k));
+      if (k > 0) { u.rev *= k; u.h *= k; u.part = k; } else { u.idle = true; u.potential = u.rev; u.rev = 0; u.h = 0; }
+      a.limit = a.limit === 'full' ? 'full' : why;
+    }
+    for (const a of per.values()) {
+      if (!a.limit) continue;
+      if (a.units.every((u) => u.idle) && (a.status === 'ok' || a.status === 'partial')) { a.status = a.limit === 'full' ? 'full' : 'idle'; a.note = a.limit === 'full' ? 'Pausiert: Anschluss voll' : 'Pausiert: zu heiß, Drosselung frisst den Ertrag'; }
+      else if (!a.note) a.note = a.limit === 'full' ? 'Teilweise pausiert: Anschluss voll' : 'Teilweise pausiert: zu heiß';
+    }
+  }
+  // Warnung beim Kauf: Volllast (alle Geräte an) übersteigt den Anschluss
+  capWarn(facId) {
+    const f = this.s.fac[facId], fd = FACILITY[facId], sm = this.summary?.[facId]; if (!f || !sm) return;
+    let w = 0;
+    for (const o of f.objects) { const a = sm.per.get(o.uid), def = PLACEABLE[o.type]; if (!a) continue; if (def.kind === 'cooling') { w += a.status === 'off' ? 0 : def.watt; continue; } w += a.watt; for (const u of a.units) if (u.idle || u.part) w += u.w * (u.idle ? 1 : 1 - u.part) * (def.selfCooled ? 1.06 : 1); }
+    const cap = fd.power[f.power].kw * this.fx('cap', facId) * 1000; this.capWarned ||= {};
+    if (w <= cap) { delete this.capWarned[facId]; return; }
+    if (this.capWarned[facId] && w < this.capWarned[facId] * 1.1) return;
+    this.capWarned[facId] = w;
+    this.toast(`Volllast ${fmtWatt(w)} – mehr als der Anschluss (${fmtWatt(cap)}). Im Auto-Betrieb laufen nur so viele Geräte, wie Strom da ist.`, 'info', 7000);
   }
 
   // ---------- Kennzahlen ----------
@@ -517,7 +579,7 @@ export class Game {
     // Vorab gutgeschrieben wurde nur der behaltene Anteil eines Coins (s.accr.coin) – Auto-Verkauf und andere Coins laufen voll weiter
     const accrC = s.accr?.day === D ? s.accr.coin || 'BTC' : null, keepK = (c) => (c === accrC && startK > 0 ? Math.max(0, 1 - Math.max(f0, s.accr.f || 0)) / startK : 1);
     let elecCost = 0;
-    const netOwn = {};
+    const netOwn = {}, perH = {}, coinPerH = (c) => (perH[c] ??= COIN[c].emission(day) * this.fx('rev') / (this.netHash(c, day) + (s.lastNet[c] || 0))); // je Coin einmal pro Tag
     for (const id of s.unlocked) {
       const f = s.fac[id], sm = this.facSummary(id, day);
       const wasTripped = f.tripped;
@@ -531,7 +593,7 @@ export class Game {
         for (const u of a.units) {
           if (!u.coin || !u.rev) continue;
           const c = u.coin;
-          const coins = (u.h * sm.throttle) / (this.netHash(c, day) + (s.lastNet[c] || 0)) * COIN[c].emission(day) * this.fx('rev') * startK;
+          const coins = u.h * sm.throttle * coinPerH(c) * startK;
           minedByCoin[c] = (minedByCoin[c] || 0) + coins;
           netOwn[c] = (netOwn[c] || 0) + u.h * sm.throttle;
           if (c === 'LTC' && day >= COIN.DOGE.mergedFrom) { const w = (u.h * sm.throttle) / (this.netHash('DOGE', day) + (s.lastNet.DOGE || 0)) * COIN.DOGE.emission(day); minedByCoin.DOGE = (minedByCoin.DOGE || 0) + w; netOwn.DOGE = (netOwn.DOGE || 0) + u.h * sm.throttle; }
@@ -541,6 +603,8 @@ export class Game {
       }
     }
     s.lastNet = netOwn;
+    // Defekte des Tages: höchstens eine Meldung
+    if (this.broke?.length) { const br = this.broke; this.broke = null; for (const fid of new Set(br.map((o) => this.facOf(o.uid)))) this.emit('objects', fid); this.toast(br.length === 1 ? `${PLACEABLE[br[0].type].name} ist kaputt!` : `${br.length} Geräte kaputt${s.staff.tech ? ' – die Techniker reparieren …' : ' – reparieren nicht vergessen'}`, 'bad'); }
     // Coins gutschreiben & Auto-Verkauf
     let sold = 0, minedUSD = 0;
     s.stats.coins ||= {};
@@ -596,7 +660,7 @@ export class Game {
       this.emit('release', it, text);
     }
     // Story
-    this.checkMessages(); this.checkGoals(); this.checkEvents();
+    this.checkMessages(); this.checkGoals(true); this.checkEvents();
     if (day % 7 === 0) this.checkAchievements();
     if (day % 30 === 0) s.mods = s.mods.filter((m) => m.until > day);
     if (day === toDay('2021-05-26') && !s.flags.offerMade && s.unlocked.length >= 4) { s.flags.offerMade = true; this.emit('offer', Math.max(40e6, Math.round(this.netWorthFast() * 1.4 / 1e6) * 1e6)); }
@@ -616,7 +680,7 @@ export class Game {
     for (const [v, l] of [[1e9, '1 GH/s'], [1e10, '10 GH/s'], [1e11, '100 GH/s'], [1e12, '1 TH/s'], [1e13, '10 TH/s'], [1e14, '100 TH/s'], [1e15, '1 PH/s'], [1e16, '10 PH/s'], [1e17, '100 PH/s'], [1e18, '1 EH/s'], [1e19, '10 EH/s']]) {
       if (sha >= v && !ms['h' + v]) { ms['h' + v] = this.s.day; this.emit('milestone', `${l} Hashrate`, 'Deine SHA-256-Leistung wächst und wächst.'); }
     }
-    const nw = this.netWorthFast();
+    const nw = this.s.day % 7 ? -Infinity : this.netWorthFast(); // Vermögen (alle Geräte bewerten) nur wöchentlich prüfen
     for (const [v, l, t] of [[1e4, '10.000 $ Vermögen', 'Mehr als Papas Laden im Jahr umsetzt.'], [1e5, '100.000 $ Vermögen', 'Sechsstellig. Mit Internetgeld.'], [1e6, 'Millionär!', 'Die erste Million. Mama glaubt es immer noch nicht.'], [1e7, '10 Mio. $ Vermögen', 'Hashwerk ist ein echtes Unternehmen.'], [1e8, '100 Mio. $ Vermögen', 'Die Wirtschaftspresse ruft an.'], [1e9, 'Milliardär!', 'Vom Kinderzimmer zur Milliarde.']]) {
       if (nw >= v && !ms['n' + v]) { ms['n' + v] = this.s.day; this.emit('milestone', l, t); }
     }
@@ -636,7 +700,7 @@ export class Game {
       if (o.broken) return;
       const age = day - (o.bought || day);
       const p = 0.0009 * heatMul * (age > life ? 2.2 : 1) * (def.kind === 'rig' ? 1 + (o.parts.gpus.length * 0.15) : 1);
-      if (Math.random() < p) { o.broken = true; this.toast(`${def.name} ist kaputt!`, 'bad'); this.emit('objects', this.facOf(o.uid)); }
+      if (Math.random() < p) { o.broken = true; (this.broke ||= []).push(o); } // Meldung gesammelt am Tagesende (advanceDay)
     }
   }
   techRepairs() {
@@ -768,10 +832,16 @@ export class Game {
   unlockAch(id) { const s = this.s; s.ach ||= {}; if (s.ach[id]) return false; s.ach[id] = s.day || 1; this.emit('achievement', id); return true; }
   relLv(k) { return this.s.rel?.[k] || 0; }
   chapter() { return CHAPTERS[Math.min(this.s.chapter, CHAPTERS.length - 1)]; }
-  checkGoals() {
+  // eod = Tagesabschluss: Ziele mit eod:true zählen nur dort (z. B. Techniker eingestellt und bezahlt)
+  checkGoals(eod = false) {
     const s = this.s, h = this.helpers();
     const ch = CHAPTERS[s.chapter]; if (!ch) return;
-    for (const g of ch.goals) if (!s.goals[g.id] && g.check(s, h)) { s.goals[g.id] = true; if (g.doneText !== '') this.toast(g.doneText || `Geschafft: ${g.text}`, 'good'); this.emit('goal', g); }
+    for (const g of ch.goals) {
+      if (g.live && s.goals[g.id] && !g.check(s, h)) { delete s.goals[g.id]; continue; } // live: gilt nur, solange es erfüllt ist (z. B. vor MONOLITH liegen)
+      if (s.goals[g.id] || (g.eod && !eod) || !g.check(s, h)) continue;
+      s.goals[g.id] = true; const again = g.live && s.flags['goal:' + g.id]; if (g.live) s.flags['goal:' + g.id] = s.day || 1; // erneut erreicht: keine zweite Meldung
+      if (g.doneText !== '' && !again) this.toast(g.doneText || `Geschafft: ${g.text}`, 'good'); if (!again) this.emit('goal', g);
+    }
     const done = ch.goals.every((g) => s.goals[g.id]);
     if (done && s.day >= toDay(ch.minDate)) {
       if (ch.unlock) {
