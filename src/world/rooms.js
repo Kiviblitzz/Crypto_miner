@@ -83,9 +83,9 @@ export function buildRoom(def) {
     windowFrame(S.back, 1.0, 2.0, 0.9, 2.15, 0.15);
     // Tür (rechts, nahe vorne)
     box(S.right, 0.86, 2.06, 0.04, mat('door', { color: 0xb98d63, roughness: 0.55 }), 3.03, 0, 0.02, 0, 0.004);
-    for (const [y, h] of [[0.16, 0.78], [1.1, 0.78]]) box(S.right, 0.6, h, 0.012, mat('doorPanel', { color: 0xa47b54, roughness: 0.55 }), 3.03, y, 0.045, 0, 0.004);
-    for (const x of [2.575, 3.475]) box(S.right, 0.06, 2.112, 0.075, mat('doorFrame', { color: 0xf6f1e6, roughness: 0.45 }), x, 0, 0.0375, 0, 0.006);
-    box(S.right, 0.96, 0.07, 0.075, mat('doorFrame', { color: 0xf6f1e6, roughness: 0.45 }), 3.025, 2.042, 0.0375, 0, 0.006);
+    for (const [y, h] of [[0.16, 0.78], [1.1, 0.78]]) box(S.right, 0.6, h, 0.006, mat('doorPanel', { color: 0xa47b54, roughness: 0.55 }), 3.03, y, 0.045, 0, 0.004);
+    for (const x of [2.575, 3.475]) box(S.right, 0.06, 2.042, 0.075, mat('doorFrame', { color: 0xf6f1e6, roughness: 0.45 }), x, 0, 0.0375, 0, 0.004);
+    box(S.right, 0.96, 0.07, 0.075, mat('doorFrame', { color: 0xf6f1e6, roughness: 0.45 }), 3.025, 2.042, 0.0375, 0, 0.004);
     cyl(S.right, 0.026, 0.026, 0.012, X.chrome(), 3.36, 1.0, 0.046, 20, 'z');
     box(S.right, 0.13, 0.02, 0.02, X.chrome(), 3.31, 0.99, 0.07, 0, 0.008);
     cyl(S.right, 0.008, 0.008, 0.03, X.chrome(), 3.36, 1.0, 0.06, 10, 'z');
@@ -518,11 +518,11 @@ export function buildDustyClutter(def) {
     const pl = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.6), web); pl.position.set(x + (ry === 0 ? 0.3 : ry < 0 ? -0.0 : 0), h - 0.3, z + (ry === 0 ? 0 : 0.3)); pl.rotation.y = ry; pl.raycast = () => {}; g.add(pl);
   }
   // Schwebender Staub
-  const n = 260, pos = new Float32Array(n * 3);
+  const n = 150, pos = new Float32Array(n * 3);
   for (let i = 0; i < n; i++) pos.set([0.3 + Math.random() * (def.w - 0.6), 0.2 + Math.random() * (h - 0.4), 0.3 + Math.random() * (def.d - 0.6)], i * 3);
   const dg = new THREE.BufferGeometry(); dg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   const dc = document.createElement('canvas'); dc.width = dc.height = 32; const dg2 = dc.getContext('2d'); const rg = dg2.createRadialGradient(16, 16, 0, 16, 16, 16); rg.addColorStop(0, 'rgba(255,240,215,1)'); rg.addColorStop(1, 'rgba(255,240,215,0)'); dg2.fillStyle = rg; dg2.fillRect(0, 0, 32, 32);
-  const dust = new THREE.Points(dg, new THREE.PointsMaterial({ map: new THREE.CanvasTexture(dc), color: 0xffe4c0, size: 0.014, transparent: true, opacity: 0.45, depthWrite: false, blending: THREE.AdditiveBlending }));
+  const dust = new THREE.Points(dg, new THREE.PointsMaterial({ map: new THREE.CanvasTexture(dc), color: 0xffe4c0, size: 0.01, transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending }));
   dust.raycast = () => {}; g.add(dust); g.userData.dust = dust;
   return { group: g, blocked };
 }

@@ -119,12 +119,12 @@ export class World {
     this.composer.addPass(this.gtao);
     // Weiche Kontur um das anvisierte Objekt
     this.outline = new OutlinePass(new THREE.Vector2(1280, 720), this.scene, this.camera);
-    Object.assign(this.outline, { edgeStrength: 1.8, edgeGlow: 0, edgeThickness: 1, pulsePeriod: 0 });
-    this.outline.visibleEdgeColor.set(0xffdda0); this.outline.hiddenEdgeColor.set(0x4a4030);
+    Object.assign(this.outline, { edgeStrength: 1.15, edgeGlow: 0, edgeThickness: 1, pulsePeriod: 0 });
+    this.outline.visibleEdgeColor.set(0xffdaa0); this.outline.hiddenEdgeColor.set(0x4a4030);
     this.composer.addPass(this.outline);
     // Leuchten für herumliegende Teile (nur am Anfang aktiv)
     this.glow = new OutlinePass(new THREE.Vector2(1280, 720), this.scene, this.camera);
-    Object.assign(this.glow, { edgeStrength: 1.6, edgeGlow: 0.25, edgeThickness: 1.2, pulsePeriod: 2.6, enabled: false });
+    Object.assign(this.glow, { edgeStrength: 0.9, edgeGlow: 0.2, edgeThickness: 1.0, pulsePeriod: 2.6, enabled: false });
     this.glow.visibleEdgeColor.set(0xffb547); this.glow.hiddenEdgeColor.set(0x5a3a10);
     this.composer.addPass(this.glow);
     { const vp = new RenderPass(this.vm.scene, this.camera); vp.clear = false; vp.clearDepth = true; this.composer.addPass(vp); }
@@ -344,7 +344,7 @@ export class World {
   updateDusty(dt) {
     if (!this.dusty) return;
     // dunkler, staubiger Keller: weniger Umgebungslicht, Sonne kaum durch die verdreckten Fenster
-    this.hemi.intensity *= 0.15; this.sun.intensity *= 0.25; this.moon.intensity *= 0.4; this.scene.environmentIntensity *= 0.2;
+    this.hemi.intensity *= 0.22; this.sun.intensity *= 0.25; this.moon.intensity *= 0.4; this.scene.environmentIntensity *= 0.2;
     const L = this.roomLights?.[0]; if (L) { const f = Math.sin(this.t * 23) * Math.sin(this.t * 7.3) > 0.82 ? 0.3 : 1; L.intensity *= f; }
     if (this.dustPts) { const a = this.dustPts.geometry.attributes.position, h = this.def.h; for (let i = 0; i < a.count; i++) { let y = a.getY(i) + Math.sin(this.t * 0.4 + i) * dt * 0.02 - dt * 0.006; if (y < 0.15) y = h - 0.3; a.setY(i, y); a.setX(i, a.getX(i) + Math.cos(this.t * 0.3 + i * 1.7) * dt * 0.01); } a.needsUpdate = true; }
   }
@@ -379,7 +379,7 @@ export class World {
   updateLoose(dt) {
     if (!this.looseItems) return;
     for (const [t, g] of Object.entries(this.looseItems)) {
-      const h = g.userData.haloMesh; if (h) h.material.opacity = g.userData.flying ? 0 :  (t === this.markLoose ? 0.17 : 0.07) + (t === this.markLoose ? 0.03 : 0.02) * Math.sin(this.t * 2.4 + g.position.x * 3);
+      const h = g.userData.haloMesh; if (h) h.material.opacity = g.userData.flying ? 0 :  (t === this.markLoose ? 0.16 : 0.06) + (t === this.markLoose ? 0.03 : 0.02) * Math.sin(this.t * 2.4 + g.position.x * 3);
       if (g.userData.flying) {
         const f = (g.userData.flying += dt), k = Math.min(1, f / 0.42), tgt = this.camera.position.clone().addScaledVector(this.camera.getWorldDirection(new THREE.Vector3()), 0.3).add(new THREE.Vector3(0, -0.45, 0));
         g.position.lerp(tgt, k * 0.35); g.scale.setScalar(Math.max(0.001, 1 - 1.6 * k)); g.rotation.y += dt * 6;
@@ -971,8 +971,8 @@ export class World {
         if (f) { if (!this.fc) this.fc = { pos: f.pos.clone(), q: f.q.clone(), light: f.light.clone() }; const a = 1 - Math.exp(-dt * 3.2); this.fc.pos.lerp(f.pos, a); this.fc.q.slerp(f.q, a); this.fc.light.lerp(f.light, a); }
         this.camera.position.lerp(this.fc.pos, k); this.camera.quaternion.slerp(this.fc.q, k);
         if (this.focusLight) { this.focusLight.position.copy(this.fc.light); this.focusLight.intensity = 1.9 * k; }
-        if (this.outline && !this.outline.pulsePeriod) this.outline.edgeStrength = 1.8 - 1.35 * k;
-      } else { this.fc = null; if (this.focusLight) this.focusLight.intensity = 0; if (this.outline) this.outline.edgeStrength = 1.8; }
+        if (this.outline && !this.outline.pulsePeriod) this.outline.edgeStrength = 1.15 - 0.7 * k;
+      } else { this.fc = null; if (this.focusLight) this.focusLight.intensity = 0; if (this.outline) this.outline.edgeStrength = 1.15; }
     }
     this.vm.update(dt, { moving: this.player.moving && this.mode === 'play', bob: this.player.bob, placing: !!this.placing, visible: this.mode === 'play' || this.mode === 'ui', uiOpen: this.mode === 'ui' });
     // Tag/Nacht

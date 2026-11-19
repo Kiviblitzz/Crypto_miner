@@ -1516,3 +1516,17 @@ body[data-modal="market"] :is(#st-cash, #st-profit, #st-wallet) { visibility: hi
 /* Katalog: Produkt füllt die Bühne */
 #build .item .thumb img { width: 100%; height: 100%; object-fit: contain; transform: scale(1.12); }
 #build .item .thumb { overflow: hidden; }
+/* ===== Runde 15 ===== */
+/* HUD: Kontostand etwas kleiner, rechts Datum, Kurs und Tempo in einer Fläche */
+#rbox { display: contents; }
+@media (min-width: 721px) {
+  #st-cash .v { font-size: 32px !important; }
+  #goals, body.has-wallet #goals { top: 112px !important; }
+  #rbox { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; position: absolute; top: -4px; right: -4px; padding: 10px 12px; border-radius: 16px; background: rgba(38,28,22,.62); backdrop-filter: blur(10px); box-shadow: 0 4px 14px rgba(0,0,0,.2); }
+  #rbox > #date, #rbox > #st-btc, #rbox > #speed { position: static !important; grid-area: auto !important; margin: 0 !important; background: none !important; box-shadow: none !important; backdrop-filter: none !important; padding: 0 !important; }
+  #rbox > #st-btc { display: flex !important; }
+}
+/* Katalog: gemeinsame Standlinie mit weichem Kontaktschatten */
+#build .item .thumb { position: relative; }
+#build .item .thumb img { transform: none !important; position: relative; z-index: 1; }
+#build .item .thumb::after { content: ''; position: absolute; left: 28%; right: 28%; bottom: 12px; height: 14px; background: radial-gradient(closest-side, rgba(0,0,0,.2), transparent); z-index: 0; pointer-events: none; }
