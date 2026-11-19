@@ -35,7 +35,7 @@ const splash = document.getElementById('splash');
 const hasSave = game.hasSave();
 if (hasSave) {
   const b = document.getElementById('btn-continue'); b.classList.remove('hidden');
-  const info = game.saveInfo(); if (info) b.innerHTML = `▶ Weiterspielen <small style="display:block;font-size:12px;font-weight:400;opacity:.8">${fmtDate(info.day, true)} · ${info.sites} Standort${info.sites > 1 ? 'e' : ''} · ${fmtUSD(info.cash)}</small>`;
+  const info = game.saveInfo(); if (info) b.innerHTML = `Weiterspielen <small>${fmtDate(info.day)} · ${fmtUSD(info.cash)}</small>`;
 }
 let splashOrbit = true;
 document.getElementById('btn-new').onclick = () => {
@@ -70,7 +70,7 @@ window.addEventListener('keydown', (e) => {
     if (k === 'b' && world.mode === 'ui' && document.body.classList.contains('show-build')) { ui.resume(); return; }
     if (k !== 'b' && k !== 'k' && ui.modalKind && ui.modalKind === { m: 'market', p: 'phone', c: 'company', t: 'techs', l: 'ranking' }[k]) { ui.resume(); return; }
     const NEED = { b: 'build', m: 'market', p: 'phone', c: 'company', t: 'techs', l: 'ranking', k: 'map' };
-    if (NEED[k] && !game.has(NEED[k])) { ui.toast('Das kannst du noch nicht – es wird später freigeschaltet.', 'info', 2500); return; }
+    if (NEED[k] && !game.has(NEED[k])) { ui.toast('Noch nicht freigeschaltet.', 'info', 1800); return; }
     HOT[k](); return;
   }
   if (e.key === 'Delete' && world.selected) {

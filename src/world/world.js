@@ -72,7 +72,7 @@ export class World {
     this.composer = new EffectComposer(r, rt);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     { const vp = new RenderPass(this.vm.scene, this.camera); vp.clear = false; vp.clearDepth = true; this.composer.addPass(vp); }
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(512, 512), 0.45, 0.3, 0.97);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(512, 512), 0.28, 0.35, 0.97);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
     this.quality = 'high';
@@ -82,7 +82,7 @@ export class World {
     this.icons = { broken: iconTexture('🔥', '#d33'), warn: iconTexture('⚠️', '#e9a400'), power: iconTexture('⚡', '#444'), empty: iconTexture('➕', '#2b6cd6'), sleep: iconTexture('💤', '#5a6475') };
     this.raycaster = new THREE.Raycaster(); this.mouse = new THREE.Vector2(); this.floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     this.keys = {}; this.placing = null; this.selected = null; this.hoverUid = null;
-    this.selBox = new THREE.Box3Helper(new THREE.Box3(), 0x35d0ff); this.selBox.visible = false; this.scene.add(this.selBox);
+    this.selBox = new THREE.Box3Helper(new THREE.Box3(), 0xffffff); this.selBox.material.transparent = true; this.selBox.material.opacity = 0.18; this.selBox.material.depthWrite = false; this.selBox.visible = false; this.scene.add(this.selBox);
     this.ghostOk = new THREE.MeshStandardMaterial({ color: 0x30ff90, transparent: true, opacity: 0.45, emissive: 0x10ff60, emissiveIntensity: 0.4, depthWrite: false });
     this.ghostBad = new THREE.MeshStandardMaterial({ color: 0xff3030, transparent: true, opacity: 0.45, emissive: 0xff1010, emissiveIntensity: 0.4, depthWrite: false });
     this.footprint = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: 0x30ff90, transparent: true, opacity: 0.25, depthWrite: false }));
@@ -180,7 +180,7 @@ export class World {
   }
   updateStatus() {
     const sm = this.game.summary[this.facId]; if (!sm) return;
-    const span = 6; const sc = 0.28;
+    const span = 6; const sc = 0.2;
     for (const [uid, e] of this.entries) {
       const a = sm.per.get(uid); const def = PLACEABLE[e.obj.type];
       let icon = null;

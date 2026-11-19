@@ -71,7 +71,7 @@ export class Game {
   fx(key) { let m = 1; const u = this.s.techs || {}; for (const t of TECHS) if (u[t.id] && t.fx[key]) m *= t.fx[key]; return m; }
   techAvailable(t) { return this.s.day >= toDay(t.date) && (!t.minTier || Math.max(...this.s.unlocked.map((id) => FACILITY[id].tier)) >= t.minTier); }
   buyTech(id) { const t = TECHS.find((x) => x.id === id); if (!t || (this.s.techs ||= {})[id] || !this.techAvailable(t) || !this.canAfford(t.cost)) return false; this.s.cash -= t.cost; this.s.techs[id] = this.s.day;
-    if (id === 'ico') { const usd = Math.min(30e6, 600000 + this.netWorthFast() * 0.25); const p = this.price('ETH') || 1; this.s.wallet.ETH.ex += usd / p; this.toast(`ICO ausverkauft! ${fmtUSD(usd)} in Ethereum eingenommen – liegt jetzt in deiner Wallet.`, 'good', 9000); }
+    if (id === 'ico') { const usd = Math.min(30e6, 600000 + this.netWorthFast() * 0.25); const p = this.price('ETH') || 1; this.s.wallet.ETH.ex += usd / p; this.toast(`ICO ausverkauft: ${fmtUSD(usd)} in Ethereum`, 'good', 9000); }
     this.dayUpdate(true); return true; }
 
   // ---------- Markt ----------
@@ -452,7 +452,7 @@ export class Game {
       const f = s.fac[id], sm = this.facSummary(id, day);
       const wasTripped = f.tripped;
       f.tripped = sm.tripped; f.temp = sm.temp;
-      if (sm.tripped && !wasTripped) { this.toast(`Sicherung raus in „${FACILITY[id].name}"! Last ${(sm.watt / 1000).toFixed(1)} kW > ${sm.capKw} kW – Geräte ausschalten, verkaufen oder Anschluss ausbauen (Firma).`, 'bad', 9000); s.flags.everTripped = true; }
+      if (sm.tripped && !wasTripped) { this.toast(`Sicherung raus! ${(sm.watt / 1000).toFixed(1)} von ${sm.capKw} kW`, 'bad', 9000); s.flags.everTripped = true; }
       if (!sm.tripped && wasTripped) this.toast(`Strom in „${FACILITY[id].name}" wieder da`, 'good');
       if (sm.tripped) continue;
       elecCost += Math.max(0, (sm.watt / 1000) * 24 - this.solarKwh(id, day)) * sm.elec;
@@ -494,7 +494,7 @@ export class Game {
       // Automatisch Coins von der Börse verkaufen, um das Minus auszugleichen
       let need = -s.cash + 50;
       for (const c of COINS) { const w = s.wallet[c.id], p = this.price(c.id, day); if (need <= 0 || !p || w.ex <= 0) continue; const n = Math.min(w.ex, need / (p * 0.995)); w.ex -= n; s.cash += n * p * 0.995; need -= n * p * 0.995; }
-      if (s.cash < 0) { s.cash -= Math.min(-s.cash * 0.15 / 365, 5e6); if (!s.flags.warnedNeg || day - s.flags.warnedNeg > 30) { s.flags.warnedNeg = day; this.toast('Dein Konto ist im Minus! Verkaufe Hardware oder schalte unrentable Geräte ab.', 'bad', 8000); } }
+      if (s.cash < 0) { s.cash -= Math.min(-s.cash * 0.15 / 365, 5e6); if (!s.flags.warnedNeg || day - s.flags.warnedNeg > 30) { s.flags.warnedNeg = day; this.toast('Konto im Minus!', 'bad', 8000); } }
     }
     // Techniker reparieren
     this.techRepairs(day);
@@ -511,7 +511,7 @@ export class Game {
       if (Math.abs(ch) > 0.22 && (!s.flags.lastAlarm || day - s.flags.lastAlarm > 25)) {
         s.flags.lastAlarm = day;
         const held = (s.wallet.BTC.ex + s.wallet.BTC.cold) * p1;
-        this.toast(ch > 0 ? `Bitcoin +${Math.round(ch * 100)} % in einer Woche (${fmtUSD(p1)})${held > 100 ? ` – deine BTC sind ${fmtUSD(held)} wert. Gewinne mitnehmen?` : ''}` : `Bitcoin ${Math.round(ch * 100)} % in einer Woche (${fmtUSD(p1)}) – Panik oder Kaufgelegenheit?`, ch > 0 ? 'good' : 'bad', 8000);
+        this.toast(ch > 0 ? `Bitcoin +${Math.round(ch * 100)} % diese Woche!` : `Bitcoin ${Math.round(ch * 100)} % diese Woche.`, ch > 0 ? 'good' : 'bad', 8000);
       }
     }
     // Neue Hardware im Handel
@@ -561,7 +561,7 @@ export class Game {
       if (o.broken) return;
       const age = day - (o.bought || day);
       const p = 0.0009 * heatMul * (age > life ? 2.2 : 1) * (def.kind === 'rig' ? 1 + (o.parts.gpus.length * 0.15) : 1);
-      if (Math.random() < p) { o.broken = true; this.toast(`${def.name} ist ausgefallen – anklicken zum Reparieren`, 'bad'); this.emit('objects', this.facOf(o.uid)); }
+      if (Math.random() < p) { o.broken = true; this.toast(`${def.name} ist kaputt!`, 'bad'); this.emit('objects', this.facOf(o.uid)); }
     }
   }
   techRepairs() {
@@ -617,7 +617,7 @@ export class Game {
   checkGoals() {
     const s = this.s, h = this.helpers();
     const ch = CHAPTERS[s.chapter]; if (!ch) return;
-    for (const g of ch.goals) if (!s.goals[g.id] && g.check(s, h)) { s.goals[g.id] = true; this.toast(`✔ Ziel erreicht: ${g.text}`, 'good'); }
+    for (const g of ch.goals) if (!s.goals[g.id] && g.check(s, h)) { s.goals[g.id] = true; this.toast(`✔ ${g.text}`, 'good'); }
     const done = ch.goals.every((g) => s.goals[g.id]);
     if (done && s.day >= toDay(ch.minDate)) {
       if (ch.unlock) {
