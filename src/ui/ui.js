@@ -8,7 +8,7 @@ import { toDay, BTC_HASH, inHeatwave, HALVINGS, BTC_REWARD } from '../data/histo
 const $ = (s) => document.querySelector(s);
 const h = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const SPEEDS = [{ l: '⏸', v: 0 }, { l: '▶', v: 1 }, { l: '▶▶', v: 2 }, { l: '▶▶▶', v: 3 }, { l: '⏩', v: 4 }];
+const SPEEDS = [{ l: '⏸', v: 0, t: 'Pause (Leertaste)' }, { l: '▶', v: 1, t: '1 Tag = 4 Sekunden (Taste 1)' }, { l: '▶▶', v: 2, t: '1 Tag = 1,6 Sekunden (Taste 2)' }, { l: '▶▶▶', v: 3, t: '2 Tage pro Sekunde (Taste 3)' }, { l: '⏩', v: 4, t: '8 Tage pro Sekunde (Taste 4)' }];
 const pctDE = (x) => (x * 100).toPrecision(3).replace('.', ',');
 const FACE = { Deniz: '🎮', Mama: '👩', Papa: '👨‍🔧', 'Opa Heinz': '👴', 'Viktor Kral': '🕴️' };
 
@@ -54,7 +54,7 @@ export class UI {
   // ---------- Topbar ----------
   speedBar() {
     const el = $('#speed'); el.innerHTML = '';
-    SPEEDS.forEach((s) => { const b = h(`<button title="Tempo ${s.v}">${s.l}</button>`); b.onclick = () => this.setSpeed(s.v); el.append(b); });
+    SPEEDS.forEach((s) => { const b = h(`<button title="${s.t}">${s.l}</button>`); b.onclick = () => this.setSpeed(s.v); el.append(b); });
     this.setSpeed(this.g.s.speed ?? 0);
   }
   setSpeed(v) { this.g.s.speed = v; this.g.s.paused = v === 0; [...$('#speed').children].forEach((b, i) => b.classList.toggle('on', SPEEDS[i].v === v)); }

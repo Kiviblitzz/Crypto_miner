@@ -1,5 +1,5 @@
 // HASHWERK – Einstiegspunkt: Spielschleife, Zeit, Tastatur, Splash
-import { Game } from './sim/game.js';
+import { Game, fmtDate, fmtUSD } from './sim/game.js';
 import { World } from './world/world.js';
 import { UI } from './ui/ui.js';
 import { CHAPTERS } from './data/world.js';
@@ -29,7 +29,10 @@ world.onPlace = (type, x, z, rot, template) => {
 // Splash
 const splash = document.getElementById('splash');
 const hasSave = game.hasSave();
-if (hasSave) document.getElementById('btn-continue').classList.remove('hidden');
+if (hasSave) {
+  const b = document.getElementById('btn-continue'); b.classList.remove('hidden');
+  const info = game.saveInfo(); if (info) b.innerHTML = `▶ Weiterspielen <small style="display:block;font-size:12px;font-weight:400;opacity:.8">${fmtDate(info.day, true)} · ${info.sites} Standort${info.sites > 1 ? 'e' : ''} · ${fmtUSD(info.cash)}</small>`;
+}
 let splashOrbit = true;
 document.getElementById('btn-new').onclick = () => {
   game.newGame(); splash.classList.add('hidden'); splashOrbit = false;

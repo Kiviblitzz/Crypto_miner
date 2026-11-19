@@ -44,6 +44,7 @@ export class Game {
   // ---------- Speichern / Laden ----------
   save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(this.s)); return true; } catch (e) { return false; } }
   hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; } }
+  saveInfo() { try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); return s ? { day: s.day, cash: s.cash, sites: s.unlocked.length } : null; } catch (e) { return null; } }
   load() {
     try {
       const raw = localStorage.getItem(SAVE_KEY); if (!raw) return false;
