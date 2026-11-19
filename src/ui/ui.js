@@ -28,6 +28,7 @@ export class UI {
     game.on('news', () => this.ticker());
     game.on('milestone', (t, sub) => this.milestone(t, sub));
     game.on('won', () => this.ending());
+    game.on('offer', (usd) => this.offer(usd));
     game.on('release', (it, text) => { this.toast(`🆕 ${esc(text)}`, 'info', 6000); this.ticker(); this.lastBuildDay = -99; });
     game.on('update', () => this.onDay());
     game.on('refresh', () => this.refresh());
@@ -106,6 +107,7 @@ export class UI {
     for (const c of CATEGORIES) { const b = h(`<button class="${this.cat === c.id ? 'on' : ''}"><span class="ic">${c.icon}</span>${c.name}</button>`); b.onclick = () => { this.cat = c.id; this.build(true); }; cats.append(b); }
     el.append(cats);
     const list = h('<div class="items"></div>');
+    if (this.cat === 'rigs') list.append(h('<div style="font-size:12px;color:#94a0b2;padding:2px 4px 8px">💡 Grafikkarten, CPUs, Mainboards und Netzteile kaufst du direkt im Rig: Rig anklicken → Slot wählen.</div>'));
     const items = g.shopList(this.cat, fac).sort((a, b) => b.releaseDay - a.releaseDay);
     if (!items.length) list.append(h('<div class="empty">Hier gibt es (noch) nichts zu kaufen.<br/>Größere Standorte schalten mehr frei.</div>'));
     for (const it of items) {
@@ -434,6 +436,25 @@ export class UI {
     const nwc = h('<div class="sec"><h4>Vermögensverlauf (log)</h4><canvas class="nwchart" width="1100" height="260"></canvas></div>'); st.append(nwc); requestAnimationFrame(() => this.nwChart(nwc.querySelector('canvas')));
     st.append(h(`<div class="sec"><h4>Bilanz pro Tag</h4><div class="kv"><div class="k">Mining-Ertrag</div><div class="v pos">${fmtUSD(p.rev)}</div><div class="k">Strom, Miete, Löhne</div><div class="v neg">−${fmtUSD(p.cost)}</div><div class="k">Gesamt geschürft</div><div class="v">${fmtUSD(s.stats.minedUSD)}</div><div class="k">Stromkosten bisher</div><div class="v">${fmtUSD(s.stats.elec)}</div><div class="k">In Hardware investiert</div><div class="v">${fmtUSD(s.stats.spentHW)}</div></div></div>`));
     this.openModal(body, '', 'company');
+  }
+
+  offer(usd) {
+    const g = this.g;
+    const body = h(`<div class="story"><div class="ch">Ein Anruf aus Zug</div>
+      <p>🕴️ <b>Viktor Kral, MONOLITH Hash AG:</b> „China hat die halbe Branche abgeschaltet. Ich kaufe jetzt. <b>${fmtUSD(usd)}</b> in bar für die Hashwerk GmbH – alle Standorte, alle Maschinen. Sie wären mit Anfang dreißig fertig mit Arbeiten."</p>
+      <p style="color:#94a0b2">Dein aktuelles Vermögen: ${fmtUSD(g.netWorth())}. Deniz schaut dich an und sagt nichts.</p>
+      <div class="row" style="justify-content:flex-end"><button class="btn danger" data-a="yes">Verkaufen</button><button class="btn primary" data-a="no">Ablehnen – wir machen weiter</button></div></div>`);
+    body.querySelector('[data-a=no]').onclick = () => { g.s.flags.offerDeclined = true; this.closeModal(); this.toast('🎮 <b>Deniz:</b> JA! Ich wusste es. Wir holen ihn ein.', 'msg', 7000); };
+    body.querySelector('[data-a=yes]').onclick = () => {
+      g.s.flags.soldOut = true; this.closeModal();
+      const b2 = h(`<div class="story" style="text-align:center"><div class="ch">Ende: Verkauft</div><div style="font-size:34px;font-weight:900;margin:6px 0">💼 ${fmtUSD(usd)}</div>
+        <p>Du unterschreibst in Zug. MONOLITH übernimmt Hashwerk – und Viktor Kral bekommt seinen Rekord. Elektro Brandt gibt es immer noch; Papa hat dir einen Schlüssel für die Werkstatt hinterlegt.</p>
+        <p style="color:#94a0b2">Willst du es lieber noch einmal versuchen? Du kannst den Vertrag zerreißen und weiterspielen.</p>
+        <div class="row" style="justify-content:center"><button class="btn primary">Vertrag zerreißen & weiterspielen</button></div></div>`);
+      b2.querySelector('button').onclick = () => { g.s.flags.offerDeclined = true; this.closeModal(); };
+      this.openModal(b2, 'narrow', 'story');
+    };
+    this.openModal(body, 'narrow', 'story');
   }
 
   ending() {

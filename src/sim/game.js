@@ -477,6 +477,7 @@ export class Game {
     }
     // Story
     this.checkMessages(); this.checkGoals();
+    if (day === toDay('2021-05-26') && !s.flags.offerMade && s.unlocked.length >= 4) { s.flags.offerMade = true; this.emit('offer', Math.max(40e6, Math.round(this.netWorthFast() * 1.4 / 1e6) * 1e6)); }
     // Statistik
     const d = new Date(day * 86400000);
     if (d.getUTCDay() === 1 || s.stats.history.length === 0) {
