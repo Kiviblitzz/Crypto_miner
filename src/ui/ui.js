@@ -9,6 +9,7 @@ const $ = (s) => document.querySelector(s);
 const h = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const SPEEDS = [{ l: '⏸', v: 0 }, { l: '▶', v: 1 }, { l: '▶▶', v: 2 }, { l: '▶▶▶', v: 3 }, { l: '⏩', v: 4 }];
+const pctDE = (x) => (x * 100).toPrecision(3).replace('.', ',');
 const FACE = { Deniz: '🎮', Mama: '👩', Papa: '👨‍🔧', 'Opa Heinz': '👴', 'Viktor Kral': '🕴️' };
 
 export class UI {
@@ -480,7 +481,7 @@ export class UI {
     const devs = s.unlocked.reduce((n, id) => n + s.fac[id].objects.reduce((k, o) => k + (o.items ? o.items.length : 1), 0), 0);
     const body = h(`<div class="story" style="text-align:center"><div class="ch">Finale</div>
       <div style="font-size:40px;font-weight:900;margin:6px 0">🏆 MONOLITH überholt!</div>
-      <p>Vor ${years} Jahren stand ein alter PC neben deinem Bett. Heute rechnet Hashwerk mit <b>${fmtHash(sha)}</b> – das sind <b>${((sha / net) * 100).toPrecision(3)} %</b> aller Bitcoin-Blöcke weltweit.</p>
+      <p>Vor ${years} Jahren stand ein alter PC neben deinem Bett. Heute rechnet Hashwerk mit <b>${fmtHash(sha)}</b> – das sind <b>${pctDE(sha / net)} %</b> aller Bitcoin-Blöcke weltweit.</p>
       <div class="kv" style="max-width:420px;margin:14px auto;text-align:left"><div class="k">Vermögen</div><div class="v">${fmtUSD(g.netWorth())}</div><div class="k">Geräte</div><div class="v">${devs.toLocaleString('de-DE')}</div><div class="k">Standorte</div><div class="v">${s.unlocked.length}</div><div class="k">Insgesamt geschürft</div><div class="v">${fmtUSD(s.stats.minedUSD)}</div><div class="k">Stromkosten</div><div class="v">${fmtUSD(s.stats.elec)}</div></div>
       <p style="color:#94a0b2">Papa hat den Laden übrigens behalten. Er repariert immer noch Radios – aus Spaß.</p>
       <div class="row" style="justify-content:center"><button class="btn primary big">Endlos weiterspielen</button></div></div>`);
@@ -514,9 +515,28 @@ export class UI {
     entries.push({ name: 'Hashwerk (Du)', h: mine, me: true });
     entries.sort((a, b) => b.h - a.h);
     const rank = entries.findIndex((e) => e.me) + 1;
-    const body = h(`<div><h2>🏆 Rangliste der Bitcoin-Miner</h2><p style="color:#94a0b2;margin-top:-6px">Netz-Hashrate: <b style="color:#fff">${fmtHash(net)}</b> · Dein Anteil: <b style="color:#ffb000">${((mine / net) * 100).toPrecision(3)} %</b> · Platz <b>${rank}</b> von ${entries.length}</p>
-      <table class="tbl"><tr><th>#</th><th>Miner</th><th>Hashrate</th><th>Anteil</th></tr>${entries.map((e, i) => `<tr class="${e.me ? 'me' : ''} ${e.rival ? 'rival' : ''}"><td>${i + 1}</td><td>${esc(e.name)}</td><td>${fmtHash(e.h)}</td><td>${((e.h / net) * 100).toPrecision(3)} %</td></tr>`).join('')}</table>
-      <p style="font-size:12px;color:#94a0b2">Ziel im Endspiel: MONOLITH Hash AG überholen.</p></div>`);
+    const body = h(`<div><h2>🏆 Rangliste der Bitcoin-Miner</h2><p style="color:#94a0b2;margin-top:-6px">Netz-Hashrate: <b style="color:#fff">${fmtHash(net)}</b> · Dein Anteil: <b style="color:#ffb000">${pctDE(mine / net)} %</b> · Platz <b>${rank}</b> von ${entries.length}</p>
+      <table class="tbl"><tr><th>#</th><th>Miner</th><th>Hashrate</th><th>Anteil</th></tr>${entries.map((e, i) => `<tr class="${e.me ? 'me' : ''} ${e.rival ? 'rival' : ''}"><td>${i + 1}</td><td>${esc(e.name)}</td><td>${fmtHash(e.h)}</td><td>${pctDE(e.h / net)} %</td></tr>`).join('')}</table>
+      <p style="font-size:12px;color:#94a0b2">Ziel im Endspiel: MONOLITH Hash AG überholen.</p>
+      <div class="sec"><h4>Deine Hashrate (SHA-256, log)</h4><canvas class="nwchart" width="1000" height="240"></canvas></div>
+      <div class="sec"><h4>Dein Weg</h4><div class="path"></div></div></div>`);
+    const ms = Object.entries(s.milestones || {}).sort((a, b) => a[1] - b[1]);
+    const label = (k) => { const v = +k.slice(1); return k[0] === 'h' ? `${fmtHash(v)} Hashrate` : v >= 1e9 ? 'Milliardär' : v >= 1e6 ? (v === 1e6 ? 'Millionär' : fmtUSD(v) + ' Vermögen') : fmtUSD(v) + ' Vermögen'; };
+    const unl = s.unlocked.map((id) => [FACILITY[id].name, null]);
+    body.querySelector('.path').innerHTML = (ms.length ? ms.map(([k, d]) => `<div style="display:flex;gap:10px;font-size:13px;padding:2px 0"><span style="color:#ffb000;min-width:86px">${fmtDate(d)}</span><span>🏆 ${label(k)}</span></div>`).join('') : '<div class="empty">Noch keine Meilensteine.</div>') + `<div style="font-size:12px;color:#94a0b2;margin-top:6px">Standorte: ${unl.map((u) => u[0]).join(' → ')}</div>`;
+    requestAnimationFrame(() => {
+      const cv = body.querySelector('canvas'); if (!cv) return; const ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
+      const hist = s.stats.history.filter((p) => p.h > 0);
+      if (hist.length < 3) { ctx.fillStyle = '#94a0b2'; ctx.font = '24px sans-serif'; ctx.fillText('Noch zu wenig Daten.', 30, 60); return; }
+      const lg = (v) => Math.log10(Math.max(1, v)); const net = hist.map((p) => g.netHash('BTC', p.d));
+      const mn = lg(Math.min(...hist.map((p) => p.h))), mx = lg(Math.max(...net)) + 0.2;
+      const x = (i) => 70 + (i / (hist.length - 1)) * (W - 90), y = (v) => H - 28 - ((lg(v) - mn) / (mx - mn || 1)) * (H - 50);
+      ctx.fillStyle = '#7d8aa0'; ctx.font = '18px sans-serif'; ctx.strokeStyle = 'rgba(255,255,255,.07)';
+      for (let k = 0; k <= 3; k++) { const v = Math.pow(10, mn + ((mx - mn) * k) / 3), yy = y(v); ctx.beginPath(); ctx.moveTo(70, yy); ctx.lineTo(W - 10, yy); ctx.stroke(); ctx.fillText(fmtHash(v), 2, yy - 4); }
+      ctx.beginPath(); net.forEach((v, i) => (i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v)))); ctx.strokeStyle = '#5d687a'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.beginPath(); hist.forEach((p, i) => (i ? ctx.lineTo(x(i), y(p.h)) : ctx.moveTo(x(i), y(p.h)))); ctx.strokeStyle = '#ffb000'; ctx.lineWidth = 3; ctx.stroke();
+      ctx.fillStyle = '#ffb000'; ctx.fillText('Du', W - 50, y(hist[hist.length - 1].h) - 8); ctx.fillStyle = '#94a0b2'; ctx.fillText('Netz', W - 60, y(net[net.length - 1]) - 8);
+    });
     this.openModal(body, 'narrow', 'ranking');
   }
 
