@@ -1,6 +1,6 @@
 # Recherche: Vorbild „Crypto Miner Tycoon Simulator" + Echtdaten
 
-> Phase 1 (ca. 1 Stunde). Ziel: verstehen, was das Vorbild gut macht, und echte
+> Phase 1 (Recherche). Ziel: verstehen, was das Vorbild gut macht, und echte
 > historische Daten sammeln, damit unser Spiel „wie in echt" abläuft.
 >
 > Hinweis: Steam-, Steam-Community- und MobyGames-Seiten waren aus der

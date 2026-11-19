@@ -57,7 +57,9 @@ export class Game {
   // ---------- Technologien ----------
   fx(key) { let m = 1; const u = this.s.techs || {}; for (const t of TECHS) if (u[t.id] && t.fx[key]) m *= t.fx[key]; return m; }
   techAvailable(t) { return this.s.day >= toDay(t.date) && (!t.minTier || Math.max(...this.s.unlocked.map((id) => FACILITY[id].tier)) >= t.minTier); }
-  buyTech(id) { const t = TECHS.find((x) => x.id === id); if (!t || (this.s.techs ||= {})[id] || !this.techAvailable(t) || this.s.cash < t.cost) return false; this.s.cash -= t.cost; this.s.techs[id] = this.s.day; this.dayUpdate(true); return true; }
+  buyTech(id) { const t = TECHS.find((x) => x.id === id); if (!t || (this.s.techs ||= {})[id] || !this.techAvailable(t) || this.s.cash < t.cost) return false; this.s.cash -= t.cost; this.s.techs[id] = this.s.day;
+    if (id === 'ico') { const usd = Math.min(30e6, 600000 + this.netWorthFast() * 0.25); const p = this.price('AET') || 1; this.s.wallet.AET.ex += usd / p; this.toast(`🪙 ICO ausverkauft! ${fmtUSD(usd)} in Aether eingenommen – liegt jetzt in deiner Wallet.`, 'good', 9000); }
+    this.dayUpdate(true); return true; }
 
   // ---------- Markt ----------
   price(id, day = this.s.day) {

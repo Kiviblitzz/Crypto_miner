@@ -59,7 +59,7 @@ Ein-Datei-Version neu bauen: `npm run build:single`.
 * **Story:** Papas Elektronikladen retten, Opa Heinz legt Starkstrom, Kumpel Deniz wird CTO,
   Rivale Viktor Kral (MONOLITH Hash AG) muss überholt werden. Nachrichten aufs Handy, News-Ticker.
 * **Imperium-Ansicht (🗺️):** alle Standorte nebeneinander als Dioramen – vom Kinderzimmer bis zur Fjordhalle.
-* **Technik (🔬):** 9 Technologien wie Undervolting, eigene ASIC-Firmware, Immersionskühlung, Abwärme-Verkauf.
+* **Technik (🔬):** 10 Technologien wie Undervolting, eigene ASIC-Firmware, eigener Coin per ICO (2017, Erlös in Aether), Immersionskühlung, Abwärme-Verkauf.
 * **Wetter & Welt:** echte Hitzewellen (2015–2025) heizen die Räume auf, Schnee im Winter, Polarlicht am Fjord.
 * **Solaranlagen (☀️):** pro Standort ausbaubar, saisonaler Ertrag wie in Deutschland, als Modulfeld in 3D.
 * **Bankkredit:** schneller wachsen mit historischen Zinsen – mit dem Risiko von 2022.
