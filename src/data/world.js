@@ -244,7 +244,8 @@ export const FEATURES = {
 
 // Ausbauten je Standort: einmal kaufen (cost) oder laufend bezahlen (monthly, negativ = Einnahme).
 // fx: Faktoren je Standort – coolMul (Kühlung gesamt), coolAdd (W), rent, elec, cap, hash (über Game.fx(key, fac)).
-// secure: Diebstahlschutz (Game.facSecure), days: läuft nach so vielen Tagen aus, cancel: kündbar, keepRent: Einmotten spart keine Miete.
+// secure: Diebstahlschutz (Game.facSecure), days: läuft nach so vielen Tagen aus, cancel: kündbar, keepRent: Einmotten spart keine Miete,
+// rel: Beziehungen beim Kauf, obsoleteBy: entfällt, sobald dieser Ausbau gekauft ist. Kaufpreise ≈ 10 Jahresmieten (Geld-Senke für später).
 export const UPGRADES = {
   kinder: [
     { id: 'skylight', name: 'Dachfensterlüfter', cost: 80, fx: { coolAdd: 400 }, eff: '+400 W Kühlung', desc: 'Ein kleiner Lüfter im Dachfenster schiebt die warme Luft nach draußen.' },
@@ -256,19 +257,24 @@ export const UPGRADES = {
   werkstatt: [
     { id: 'doorvent', name: 'Rolltor-Lüftung', cost: 1500, fx: { coolMul: 1.25 }, eff: 'Kühlung ×1,25', desc: 'Lamellen im Rolltor und ein Abluftgebläse unterm Dach.' },
     { id: 'alarm', name: 'Alarmanlage', cost: 900, secure: true, eff: 'Diebstahlschutz', desc: 'Bewegungsmelder und eine Sirene, die halb Lindental weckt.' },
+    { id: 'buyshop', name: 'Werkstatt von Papa kaufen', cost: 45000, fx: { rent: 0 }, rel: { papa: 1 }, eff: 'Keine Miete mehr · Papa freut sich', desc: 'Papa verkauft dir die Werkstatt. Das Geld steckt er in den Laden.' },
   ],
   halle: [
-    { id: 'lease5', name: '5-Jahres-Mietvertrag', cost: 4000, days: 1826, keepRent: true, fx: { rent: 0.75 }, eff: 'Miete −25 % für 5 Jahre', desc: 'Lange Bindung, kleinere Miete. Einmotten spart dann aber keine Miete mehr.' },
+    { id: 'lease5', name: '5-Jahres-Mietvertrag', cost: 4000, days: 1826, keepRent: true, obsoleteBy: 'buyhall', fx: { rent: 0.75 }, eff: 'Miete −25 % für 5 Jahre', desc: 'Lange Bindung, kleinere Miete. Einmotten spart dann aber keine Miete mehr.' },
     { id: 'guard', name: 'Wachdienst', monthly: 1200, cancel: true, secure: true, eff: 'Diebstahlschutz', desc: 'Nachts fährt ein Wachmann zweimal ums Gelände. Monatlich kündbar.' },
     { id: 'roofvent', name: 'Dachventilatoren', cost: 25000, fx: { coolMul: 1.3 }, eff: 'Kühlung ×1,3', desc: 'Sechs große Ventilatoren im Hallendach ziehen die Hitze ab.' },
+    { id: 'buyhall', name: 'Halle kaufen', cost: 240000, fx: { rent: 0 }, eff: 'Keine Miete mehr', desc: 'Der Vermieter will in Rente. Die Halle gehört dann dir.' },
   ],
   rz: [
     { id: 'diesel', name: 'Notstromdiesel', cost: 400000, ups: true, fx: { cap: 1.1 }, eff: 'USV · +10 % Anschluss', desc: 'Ein Diesel im Hof fängt Stromausfälle ab und deckt Lastspitzen.' },
     { id: 'green', name: 'Ökostrom-Vertrag', cost: 250000, fx: { elec: 0.88 }, eff: 'Strom −12 %', desc: 'Zehn Jahre Windstrom aus der Nordsee zum Festpreis.' },
+    { id: 'buyrz', name: 'Rechenzentrum kaufen', cost: 3600000, fx: { rent: 0 }, eff: 'Keine Miete mehr', desc: 'Der Betreiber zieht nach Amsterdam und verkauft das Gebäude.' },
   ],
   fjord: [
     { id: 'icechim', name: 'Eiskamin', cost: 1500000, fx: { coolMul: 1.2, hash: 1.03 }, eff: 'Kühlung ×1,2 · +3 % Hashrate', desc: 'Ein Schacht saugt Gletscherluft an. Die Miner takten etwas höher.' },
     { id: 'salmon', name: 'Lachszucht mit Abwärme', cost: 2500000, monthly: -60000, eff: '+60.000 $/Monat', desc: 'Die Abwärme hält die Becken der Lachszucht nebenan warm. Die zahlt dafür.' },
+    { id: 'buyfjord', name: 'Fjordhalle kaufen', cost: 9600000, fx: { rent: 0 }, eff: 'Keine Miete mehr', desc: 'Die Gemeinde Sogn verkauft dir die Halle samt Kai.' },
+    { id: 'hydro', name: 'Anteil am Wasserkraftwerk', cost: 30000000, fx: { elec: 0.6 }, eff: 'Strom −40 % in der Fjordhalle', desc: 'Ein Drittel des Kraftwerks gehört dann Hashwerk. Strom fast zum Selbstkostenpreis.' },
   ],
 };
 

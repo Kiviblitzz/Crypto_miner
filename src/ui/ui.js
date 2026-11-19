@@ -957,7 +957,7 @@ export class UI {
     const loan = s.loan || 0, lim = g.loanLimit();
     const lb = h(`<div class="sec"><h4>Bankkredit</h4><div class="kv"><div class="k">Offener Kredit</div><div class="v ${loan ? 'neg' : ''}">${fmtUSD(loan)}</div><div class="k">Zinssatz</div><div class="v">${(g.loanRate() * 100).toFixed(1).replace('.', ',')} % p. a.</div><div class="k">Zinsen pro Tag</div><div class="v">${fmtUSD(loan * g.loanRate() / 365)}</div><div class="k">Weiterer Rahmen</div><div class="v">${fmtUSD(lim)}</div></div><div class="row"></div></div>`);
     const lr = lb.querySelector('.row');
-    lb.querySelector('.kv').insertAdjacentHTML('beforeend', `<div class="k">Dispo-Rahmen</div><div class="v ${-s.cash > g.dispoLimit() ? 'neg' : ''}">${s.cash < 0 ? fmtUSD(-s.cash) + ' von ' : ''}${fmtUSD(g.dispoLimit())} · ${fmtNum(g.dispoRate() * 100, 0)} %</div>${s.loanHi > 0 && loan > 0 ? `<div class="k">davon Umschuldung</div><div class="v">${fmtUSD(Math.min(s.loanHi, loan))} · 13 %</div>` : ''}`);
+    lb.querySelector('.kv').insertAdjacentHTML('beforeend', `<div class="k">Dispo-Rahmen</div><div class="v ${-s.cash > g.dispoLimit() ? 'neg' : ''}">${s.cash < 0 ? fmtUSD(-s.cash) + ' von ' : ''}${fmtUSD(g.dispoLimit())} · ${fmtNum(g.dispoRate() * 100, 0)} %</div>${loan > 0 ? `<div class="k">Tilgung</div><div class="v">${fmtUSD(g.loanPayment())}/Monat</div>` : ''}${s.loanHi > 0 && loan > 0 ? `<div class="k">davon Umschuldung</div><div class="v">${fmtUSD(Math.min(s.loanHi, loan))} · 13 %</div>` : ''}`);
     for (const f of [0.25, 1]) { const amt = Math.round(lim * f / 100) * 100; const b = h(`<button class="btn small">${fmtUSD(amt)} leihen</button>`); b.disabled = amt <= 0; b.onclick = () => { const u = g.takeLoan(amt); if (u) { this.audio?.cash(); this.toast(`Kredit über ${fmtUSD(u)} aufgenommen`, 'good'); } this.company(); }; lr.append(b); }
     const rp = h(`<button class="btn small good">Tilgen (${fmtUSD(Math.min(loan, Math.max(0, s.cash)))})</button>`); rp.disabled = !loan || s.cash <= 0; rp.onclick = () => { const u = g.repayLoan(loan); if (u) this.toast(`${fmtUSD(u)} getilgt`, 'good'); this.company(); }; lr.append(rp);
     if (g.has('loan')) st.append(lb);
@@ -976,6 +976,7 @@ export class UI {
     if (ups.length) {
       box.append(h('<div class="fx-h">Ausbauten</div>'));
       for (const u of ups) {
+        if (g.upObsolete(fid, u)) continue;
         const on = g.upActive(fid, u), was = !!f.up?.[u.id];
         const price = u.cost ? fmtUSD(u.cost) : u.monthly > 0 ? `${fmtUSD(u.monthly)}/Monat` : '';
         const r = h(`<div class="fx-row ${on ? 'on' : ''}" title="${esc(u.desc)}"><div class="fx-t"><b>${esc(u.name)}</b><small>${esc(u.eff)}${u.monthly > 0 && u.cost ? ` · ${fmtUSD(u.monthly)}/Monat` : ''}</small></div></div>`);
