@@ -122,8 +122,8 @@ export function buildRoom(def) {
     const sm = new THREE.Mesh(new THREE.PlaneGeometry(0.49, 0.285), new THREE.MeshStandardMaterial({ map: scr, emissive: 0xffffff, emissiveMap: scr, emissiveIntensity: 0.9, roughness: 0.95 })); sm.position.set(2.6, 0.74 + 0.32, 0.152); g.add(sm);
     B.blocked.push(blk(2.0, 0, 3.5, 0.5));
     // Stuhl
-    put('chair', 3.05, 0.86, 0.42);
-    B.blocked.push(blk(2.8, 0.61, 3.3, 1.11));
+    put('chair', 3.3, 0.95, 0.42 + 0.45);
+    B.blocked.push(blk(3.05, 0.7, 3.55, 1.2));
     // Teppich
     const rug = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.3), mat('rug', { map: TEX.carpet([1, 1], 18), roughness: 1 })); rug.rotation.x = -Math.PI / 2; rug.position.set(2.0, 0.005, 2.3); rug.receiveShadow = true; g.add(rug);
     // Regal rechts hinten an der Wand

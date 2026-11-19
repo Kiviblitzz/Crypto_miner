@@ -1424,3 +1424,50 @@ body:has(#inspector:not(.hidden)) #xpbox { right: 28px; left: auto; top: auto; b
 .pause-set .ps-t { justify-content: flex-start !important; }
 #splash .disclaimer { color: #f0e2cf !important; text-shadow: 0 1px 3px rgba(0,0,0,.75) !important; }
 body.visiting #sites { display: none !important; }
+
+/* ===== Runde 12 ===== */
+/* Fähigkeiten: aktiver Bonus klar, nächste Stufe ruhiger */
+.skills .sk-row { align-items: baseline; }
+.skills .sk-now { color: var(--text); font-weight: 700; }
+.skills .sk-now em, .skills .sk-next em { font-style: normal; font: 700 11px var(--font); letter-spacing: .04em; text-transform: uppercase; margin-right: 6px; padding: 1px 6px; border-radius: 6px; }
+.skills .sk-now em { background: rgba(255,194,58,.16); color: var(--acc); }
+.skills .sk-next { color: var(--dim); font-size: 13px; margin-top: 2px; }
+.skills .sk-next em { background: rgba(255,236,210,.07); color: var(--dim); }
+.skills .sk-bar { height: 10px !important; }
+/* Bau-Katalog: sichtbare Aktion mit Preis */
+#build .item { display: flex; flex-direction: column; }
+#build .item .thumb { height: 132px !important; padding: 8px !important; }
+#build .item .place { margin-top: auto; min-height: 40px; width: 100%; justify-content: center; }
+#build .item .miss:empty { display: none; }
+#build .item.dis .place { opacity: .55; }
+/* Live-Zähler mit Tabellenziffern */
+.pcb-live b { font-size: 34px !important; font-variant-numeric: tabular-nums; }
+/* Taschen-Labels lesbarer */
+#goals .goal .bag i em { font-size: 13px !important; }
+/* Börse: Ticket kompakter, Chart höher */
+.ticket { gap: 8px !important; }
+.mk-left canvas.chart { height: clamp(300px, 42vh, 420px) !important; }
+/* Pause: Regler bekommt eine eigene Zeile */
+.pause-set .ps-s { display: grid !important; grid-template-columns: 1fr auto; align-items: center; row-gap: 4px; padding-block: 8px !important; }
+.pause-set .ps-s input { grid-column: 1 / -1; grid-row: 2; width: 100%; min-height: 24px; }
+/* Handelsfenster: kein Springen, keine Fantasiewerte, HUD nicht über dem Fenster */
+.ticket .tk-msg { min-height: 18px; }
+.ticket .tk-msg:empty { display: block !important; }
+.ticket .tk-sum.bad { opacity: .45; }
+body:has(#modal:not(.hidden)) :is(#goals, #speed, #st-btc, #objmark) { visibility: hidden; }
+.mk-wrap { align-items: stretch !important; }
+.mk-left { display: flex; flex-direction: column; }
+.mk-left canvas.chart { flex: 1 1 auto; height: auto !important; min-height: 300px; }
+@media (max-height: 760px) {
+  .mk-left canvas.chart { min-height: 200px; }
+  .ticket { padding: 12px !important; gap: 6px !important; }
+}
+body:has(#inspector:not(.hidden)) #xpbox { bottom: 78px !important; }
+.mk-left canvas.chart { flex: 1 1 0 !important; min-height: 300px; }
+@media (max-height: 760px) {
+  .mk-left canvas.chart { min-height: 180px !important; }
+  .ticket .tk-note { display: none; }
+  .ticket .tk-bal > div { padding-block: 6px !important; }
+  .ticket .tk-sum { padding-block: 6px !important; gap: 2px !important; }
+  .ticket .tk-go { min-height: 44px !important; }
+}

@@ -283,7 +283,7 @@ export class World {
     const right = new THREE.Vector3().subVectors(look, pos).cross(new THREE.Vector3(0, 1, 0)).normalize();
     look.addScaledVector(right, 0.12);
     const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(pos, look, new THREE.Vector3(0, 1, 0)));
-    this.focus = { pos, q, light: rotV(0.32, 0.48, 0.18) };
+    this.focus = { pos, q, light: rotV(0.4, 0.55, 0.12) };
     if (!this.focusLight) { this.focusLight = new THREE.PointLight(0xfff2df, 0, 0.75, 1.6); this.scene.add(this.focusLight); }
     if (e.sprite) e.sprite.visible = false;
   }
@@ -579,7 +579,7 @@ export class World {
       p.material.map.needsUpdate = true;
       const bb = e.group.userData.bbox, sc = Math.min(0.38, Math.max(0.2, this.camera.position.distanceTo(e.group.position) * 0.2)); p.position.set(e.group.position.x, (bb ? bb.max.y : 0.6) + 0.28, e.group.position.z);
       p.scale.set(sc, sc / 4, 1); p.visible = true; p.userData.life = 0; p.userData.y0 = p.position.y; p.material.opacity = 1;
-      this.coinBurst(new THREE.Vector3(e.group.position.x, (bb ? bb.max.y : 0.6) + 0.02, e.group.position.z), 3); this.onIncome?.();
+      this.coinBurst(new THREE.Vector3(e.group.position.x, (bb ? bb.max.y : 0.6) - 0.14, e.group.position.z), 3); this.onIncome?.();
     }
   }
   pulse(uid) { const e = this.entries.get(uid); if (!e || !this.outline) return; this.outline.selectedObjects = [e.group]; this.outline.pulsePeriod = 0.5; this.outline.visibleEdgeColor.set(0xffc23a); clearTimeout(this.pulseT); this.pulseT = setTimeout(() => { this.outline.pulsePeriod = 0; this.outline.visibleEdgeColor.set(0xffdda0); }, 1500); }
@@ -1042,7 +1042,7 @@ export class World {
         }
         let i = 0;
         for (const o of this.game.facObjects(this.facId)) { const a = sm?.per.get(o.uid); if (!a || !a.units.length) continue; const u = a.units[0]; lines.push(`RIG${i++}: ${u.h ? fmtHash(u.h, u.algo) : 'idle'} ${u.coin || ''}`); if (lines.length >= 4) break; }
-        lines.push(`BTC ${fmtUSD(this.game.price('BTC'))}  T ${sm ? sm.temp.toFixed(1) : '--'}C`);
+        lines.push(`BTC ${fmtUSD(this.game.price('BTC'))}  T ${sm ? sm.temp.toFixed(1).replace('.', ',') : '--'} °C`);
         lines.push(`> ${Math.floor(this.t * 2) % 2 ? '_' : ' '}`);
         lines.forEach((l, k) => g.fillText(l, 14, 76 + k * 34, W - 28));
         sc.tex.needsUpdate = true; continue;

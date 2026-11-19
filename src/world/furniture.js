@@ -103,9 +103,9 @@ export function furniture(type) {
     }
     rod(g, [0, 0.44, 0.2], [0, 0.6, 0.27], 0.02, M.black(), 10);
     const back = new THREE.Group(); back.position.set(0, 0.55, 0.27); back.rotation.x = -0.12; g.add(back);
-    soft(back, 0.46, 0.62, 0.08, fab, 0, 0.0, 0, 0.04);
-    soft(back, 0.3, 0.12, 0.05, acc, 0, 0.5, 0.025, 0.022);
-    soft(back, 0.14, 0.42, 0.012, acc, 0, 0.08, -0.04, 0.005);
+    soft(back, 0.46, 0.5, 0.08, fab, 0, -0.04, 0, 0.04);
+    soft(back, 0.3, 0.1, 0.05, acc, 0, 0.38, 0.025, 0.022);
+    soft(back, 0.14, 0.34, 0.012, acc, 0, 0.02, -0.04, 0.005);
   } else if (type === 'lampion') {
     // Papier-Lampion mit Kabel (Deckenleuchte)
     cyl(g, 0.004, 0.004, 0.32, M.cable(), 0, 0.16, 0, 8);

@@ -203,7 +203,7 @@ export class Game {
     const o = { uid: this.s.nextUid++, type, x, z, rot, coin: 'auto', broken: false, bought: this.s.day };
     if (def.kind === 'rig') o.parts = parts || { mobo: null, cpu: null, psu: null, gpus: [] };
     if (def.kind === 'holder') o.items = [];
-    if (!free) { const p = this.itemPrice(def); if (!this.canAfford(p)) return null; this.s.cash -= p; this.s.stats.spentHW += p; if (this.s.skills) this.addXp('hw', 15); }
+    if (!free) { const p = this.itemPrice(def); if (!this.canAfford(p)) return null; this.s.cash -= p; this.s.stats.spentHW += p; if (this.s.skills) this.addXp('hw', 10); }
     this.s.fac[facId].objects.push(o);
     if (def.kind === 'device' && def.look !== 'fpga' && def.look !== 'usb') this.s.flags.boughtAsic = true;
     this.dayUpdate(true);
@@ -726,7 +726,7 @@ export function fmtUSD(v, compact = true) {
   if (compact && a >= 1e6) return `${sign}${nf(2).format(a / 1e6)} Mio. $`;
   if (a >= 100) return `${sign}${nf(0).format(a)} $`;
   if (a >= 1) return `${sign}${nf(2).format(a)} $`;
-  if (a === 0) return '0 $';
+  if (a < 1e-5) return '0 $';
   return `${sign}${a.toPrecision(3).replace('.', ',')} $`;
 }
 export function fmtNum(v, d = 2) { return nf(d).format(v); }
