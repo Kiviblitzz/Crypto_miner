@@ -334,7 +334,7 @@ export class World {
     const vm = this.vm; if (!vm?.lampOn || !this.room) return;
     if (!this._lampRay) { this._lampRay = new THREE.Raycaster(); this._lampRay.far = 8; this._lampD = 3; this._lampN = 0; }
     if ((this._lampN = (this._lampN + 1) % 5) === 0) {
-      this._lampRay.setFromCamera({ x: 0.04, y: -0.08 }, this.camera);
+      this._lampRay.setFromCamera({ x: 0, y: 0 }, this.camera);
       const hit = this._lampRay.intersectObject(this.room.root, true).find((h) => h.object.visible && !h.object.isPoints);
       this._lampD = hit ? hit.distance : 6;
     }
@@ -379,7 +379,7 @@ export class World {
   updateLoose(dt) {
     if (!this.looseItems) return;
     for (const [t, g] of Object.entries(this.looseItems)) {
-      const h = g.userData.haloMesh; if (h) h.material.opacity = g.userData.flying ? 0 :  (t === this.markLoose ? 0.2 : 0.08) + (t === this.markLoose ? 0.04 : 0.02) * Math.sin(this.t * 2.4 + g.position.x * 3);
+      const h = g.userData.haloMesh; if (h) h.material.opacity = g.userData.flying ? 0 :  (t === this.markLoose ? 0.17 : 0.07) + (t === this.markLoose ? 0.03 : 0.02) * Math.sin(this.t * 2.4 + g.position.x * 3);
       if (g.userData.flying) {
         const f = (g.userData.flying += dt), k = Math.min(1, f / 0.42), tgt = this.camera.position.clone().addScaledVector(this.camera.getWorldDirection(new THREE.Vector3()), 0.3).add(new THREE.Vector3(0, -0.45, 0));
         g.position.lerp(tgt, k * 0.35); g.scale.setScalar(Math.max(0.001, 1 - 1.6 * k)); g.rotation.y += dt * 6;

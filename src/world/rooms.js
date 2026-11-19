@@ -82,10 +82,10 @@ export function buildRoom(def) {
     });
     windowFrame(S.back, 1.0, 2.0, 0.9, 2.15, 0.15);
     // Tür (rechts, nahe vorne)
-    box(S.right, 0.86, 2.06, 0.04, mat('door', { color: 0xf4f1ea, roughness: 0.5 }), 3.03, 0, 0.02, 0, 0.004);
-    for (const [y, h] of [[0.16, 0.78], [1.1, 0.78]]) box(S.right, 0.6, h, 0.012, mat('doorPanel', { color: 0xe6e1d6, roughness: 0.5 }), 3.03, y, 0.045, 0, 0.004);
-    for (const x of [2.575, 3.475]) box(S.right, 0.06, 2.112, 0.07, M.white(), x, 0, 0.035, 0, 0.006);
-    box(S.right, 0.96, 0.07, 0.07, M.white(), 3.025, 2.042, 0.035, 0, 0.006);
+    box(S.right, 0.86, 2.06, 0.04, mat('door', { color: 0xb98d63, roughness: 0.55 }), 3.03, 0, 0.02, 0, 0.004);
+    for (const [y, h] of [[0.16, 0.78], [1.1, 0.78]]) box(S.right, 0.6, h, 0.012, mat('doorPanel', { color: 0xa47b54, roughness: 0.55 }), 3.03, y, 0.045, 0, 0.004);
+    for (const x of [2.575, 3.475]) box(S.right, 0.06, 2.112, 0.075, mat('doorFrame', { color: 0xf6f1e6, roughness: 0.45 }), x, 0, 0.0375, 0, 0.006);
+    box(S.right, 0.96, 0.07, 0.075, mat('doorFrame', { color: 0xf6f1e6, roughness: 0.45 }), 3.025, 2.042, 0.0375, 0, 0.006);
     cyl(S.right, 0.026, 0.026, 0.012, X.chrome(), 3.36, 1.0, 0.046, 20, 'z');
     box(S.right, 0.13, 0.02, 0.02, X.chrome(), 3.31, 0.99, 0.07, 0, 0.008);
     cyl(S.right, 0.008, 0.008, 0.03, X.chrome(), 3.36, 1.0, 0.06, 10, 'z');
@@ -204,6 +204,8 @@ export function buildRoom(def) {
       x.fillStyle = '#f5efe0'; x.fillRect(0, 210, 320, 46); x.fillStyle = '#4a3a2c'; x.font = 'bold 22px Nunito, sans-serif'; x.textAlign = 'center'; x.fillText('Urlaub 1998', 160, 242);
       const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
       poster(S.left, t, 0.4, 0.32, 2.5, 1.5, 0.09);
+      box(S.left, 1.0, 0.04, 0.22, mat('wallShelf', { map: TEX.wood([1, 0.3]), color: 0x8c6a48, roughness: 0.75 }), 2.5, 1.13, 0.11, 0, 0.006);
+      for (const [px, r, hh, col] of [[2.15, 0.05, 0.12, 0x7d8c94], [2.82, 0.065, 0.18, 0x9c4a3a], [2.98, 0.04, 0.1, 0xc9b98f]]) cyl(S.left, r, r, hh, mat('wallCan' + col, { color: col, roughness: 0.55, metalness: col === 0x7d8c94 ? 0.6 : 0.1 }), px, 1.17 + hh / 2, 0.11, 16);
       const fr = mat('photoFrame', { color: 0x4a3222, roughness: 0.6 });
       for (const [w2, h2, px, py] of [[0.46, 0.03, 2.5, 1.66], [0.46, 0.03, 2.5, 1.34], [0.03, 0.35, 2.27, 1.5], [0.03, 0.35, 2.73, 1.5]]) box(S.left, w2, h2, 0.025, fr, px, py - h2 / 2, 0.085, 0, 0.004);
     }

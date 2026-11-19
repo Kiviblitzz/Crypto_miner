@@ -34,7 +34,7 @@ export class ViewModel {
     this.tablet.visible = false; this.left.visible = false;
     // Taschenlampe (beleuchtet die Welt, hängt an der Kamera)
     this.lamp = new THREE.SpotLight(0xfff2d8, 0, 22, 0.46, 0.6, 1.4);
-    this.lamp.position.set(0.12, -0.08, 0); camera.add(this.lamp); camera.add(this.lamp.target); this.lamp.target.position.set(0.05, -0.1, -3);
+    this.lamp.position.set(0.12, -0.08, 0); camera.add(this.lamp); camera.add(this.lamp.target); this.lamp.target.position.set(0, 0, -2.5);
     this.lampOn = false;
     this.t = 0; this.raise = 0;
     this.root.traverse((o) => { o.frustumCulled = false; });

@@ -154,7 +154,7 @@ export class UI {
     const el = $('#objmark'); if (!el) return;
     const g = this.g, s = g.s, w = this.w; let pos = null, label = '', aimed = false;
     const inKeller = w.facId === 'keller' && this.visiting, door = w.room?.doors?.[0];
-    if (s.chapter === 0 && w.mode === 'play' && !this.paused && !s.flags.miningStarted && door && ((w.facId === 'kinder' && Object.keys(s.loose || {}).length) || (inKeller && !Object.keys(s.loose || {}).length))) { pos = inKeller ? [door.c[0] - 0.2, 0.75, door.c[2] + door.s[2] / 2 + 0.15] : [door.c[0] - 0.1, 1.55, door.c[2]]; label = inKeller ? 'Hoch in dein Zimmer' : 'Keller'; aimed = w.aim?.door === door; }
+    if (s.chapter === 0 && w.mode === 'play' && !this.paused && !s.flags.miningStarted && door && ((w.facId === 'kinder' && Object.keys(s.loose || {}).length) || (inKeller && !Object.keys(s.loose || {}).length))) { pos = inKeller ? [door.c[0] - 0.2, 1.45, door.c[2] + door.s[2] / 2 + 0.15] : [door.c[0] - 0.1, 1.55, door.c[2]]; label = inKeller ? 'Hoch in dein Zimmer' : 'Keller'; aimed = w.aim?.door === door; }
     else if (s.chapter === 0 && w.mode === 'play' && !this.paused && (w.facId === 'kinder' || inKeller)) {
       const pc = w.facId === 'kinder' ? g.facObjects('kinder').find((o) => o.type === 'tower') : { x: 0, z: 0, uid: -1 };
       const spots = w.room?.looseSpots || {}, lying = Object.keys(s.loose || {}).filter((t) => spots[t]);
@@ -649,11 +649,11 @@ export class UI {
       const done = !!s.goals[go.id];
       if (done || shown >= 1) continue; shown++;
       let prog = '';
-      if (!done && go.progress) { const [cur, tgt, kind] = go.progress(s, g.helpers()); if (kind === 'parts') { const lp = this.lastPick && performance.now() - this.lastPick.at < 1200 ? `<span class="lastpick">+ ${PNAME[this.lastPick.t]}</span>` : ''; prog = `<span class="cnt">${cur} / ${tgt}</span>${lp}`; } else { const f = (v) => (kind === 'hash' ? fmtHash(v) : fmtUSD(v)); const pc = Math.max(0, Math.min(100, tgt ? (cur / tgt) * 100 : 0)); prog = `<div style="font-size:11px;color:var(--dim)">${f(Math.max(0, cur))} / ${f(tgt)}</div><div class="bar" style="width:180px"><div style="width:${pc}%;background:#ffb000"></div></div>`; } }
+      if (!done && go.progress && !(go.id === 'pcbuild' && this.w.facId === 'keller')) { const [cur, tgt, kind] = go.progress(s, g.helpers()); if (kind === 'parts') { const lp = this.lastPick && performance.now() - this.lastPick.at < 1200 ? `<span class="lastpick">+ ${PNAME[this.lastPick.t]}</span>` : ''; prog = `<span class="cnt">${cur} / ${tgt}</span>${lp}`; } else { const f = (v) => (kind === 'hash' ? fmtHash(v) : fmtUSD(v)); const pc = Math.max(0, Math.min(100, tgt ? (cur / tgt) * 100 : 0)); prog = `<div style="font-size:11px;color:var(--dim)">${f(Math.max(0, cur))} / ${f(tgt)}</div><div class="bar" style="width:180px"><div style="width:${pc}%;background:#ffb000"></div></div>`; } }
       const gk = s.chapter + ':' + go.id, enter = gk !== this.goalKey; this.goalKey = gk;
       const bag = s.loose && !s.flags.miningStarted && go.id === 'collect' ? `<span class="bag">${['mobo', 'cpu', 'gpu', 'psu'].map((t) => `<i class="${s.loose[t] ? 'miss' : 'got'}" title="${PNAME[t]}${s.loose[t] ? ' – noch nicht gefunden' : ' – eingesammelt'}">${partSvg(t, 16)}${s.loose[t] ? '' : '<b class="tk"></b>'}<em>${{ mobo: 'Board', cpu: 'CPU', gpu: 'GPU', psu: 'Netzteil' }[t]}</em></i>`).join('')}</span>` : '';
-      const gtext = go.id === 'sell' && !g.has('market') ? 'Lass deinen PC ein paar Tage schürfen' : go.id === 'pcbuild' && this.w.facId === 'keller' ? 'Bring die Teile hoch in dein Zimmer' : go.text;
-      const row = h(`<div class="goal ${done ? 'done' : ''} ${enter ? 'enter' : ''}"><div class="ck">${done ? '✓' : ''}</div><div>${esc(gtext)}${prog}${bag}</div></div>`);
+      const gtext = go.id === 'sell' && !g.has('market') ? 'Lass deinen PC ein paar Tage schürfen' : go.id === 'pcbuild' && this.w.facId === 'keller' ? 'Alle 4 Teile gefunden · zurück ins Zimmer' : go.text;
+      const row = h(`<div class="goal ${done ? 'done' : ''} ${enter ? 'enter' : ''}"><div class="ck">${done ? '✓' : ''}</div><div>${bag ? `<div class="goal-line">${esc(gtext)}${prog}</div>${bag}` : `${esc(gtext)}${prog}`}</div></div>`);
       if (!done && go.action) { const b = h(`<button class="btn small primary"><kbd>G</kbd>${esc(go.action.label)}</button>`); b.disabled = !g.canPayGoal(go); b.onclick = () => { if (g.goalAction(go)) { this.toast('✔ Erledigt!', 'good'); this.goals(); } }; row.lastElementChild.append(h('<br/>'), b); }
       el.append(row);
     }
@@ -795,7 +795,6 @@ export class UI {
       <div class="tk-bal"><div><span>Du hast</span><b>${fmtCoin(have)} ${c.id}</b><small>≈ ${fmtUSD(have * p)}</small></div><div><span>Kontostand</span><b>${fmtUSD(s.cash)}</b></div></div>
       <label class="tk-amt"><span class="lab">${T.mode === 'sell' ? 'Menge verkaufen' : 'Menge kaufen'}</span><span class="field"><input type="text" inputmode="decimal" autocomplete="off" placeholder="0"/><button class="unit" title="Einheit wechseln">${T.unit === 'BTC' ? c.id : '$'}</button></span></label>
       <div class="tk-chips"><button class="btn small" data-p="0.25">25 %</button><button class="btn small" data-p="0.5">50 %</button><button class="btn small" data-p="1">100 %</button></div>
-      <input class="tk-range" type="range" min="0" max="100" step="1" value="0" aria-label="Anteil"/>
       <div class="tk-sum"><div><span>Kurs</span><b>${fmtUSD(p)}</b></div><div><span>Menge</span><b class="q">–</b></div><div><span>Gebühr (${feeTxt} %)</span><b class="f">–</b></div><div class="tot"><span class="tl">${T.mode === 'sell' ? 'Du bekommst' : 'Du zahlst'}</span><b class="t">–</b></div></div>
       <div class="tk-msg"></div>
       <button class="btn primary big wide tk-go" disabled>${T.mode === 'sell' ? 'Verkaufen' : 'Kaufen'}</button>
@@ -818,16 +817,16 @@ export class UI {
       msg.textContent = over ? (T.mode === 'sell' ? `So viel hast du nicht – höchstens ${fmtIn(floorIn(mx, T.unit), T.unit)} ${T.unit === 'BTC' ? c.id : '$'}.` : `Dafür reicht dein Geld nicht – höchstens ${fmtIn(floorIn(mx, T.unit), T.unit)} ${T.unit === 'BTC' ? c.id : '$'}.`) : (mx <= 0 ? (T.mode === 'sell' ? (s.stats.sold > 0 ? 'Alles verkauft – dein PC schürft schon weiter.' : 'Noch keine Bitcoin – dein PC schürft gerade.') : 'Kein Geld zum Kaufen da.') : (small ? 'Mindestens 0,01 $ pro Auftrag.' : v > 0 ? '' : 'Menge eingeben oder 25 %, 50 % oder 100 % wählen.'));
       msg.classList.toggle('bad', over || small); inp.closest('.field').classList.toggle('bad', over); tk.querySelector('.tk-sum').classList.toggle('bad', over); tk.querySelector('.tk-sum').classList.toggle('empty', !(v > 0) || over);
       go.disabled = !ok; go.textContent = ok ? (T.mode === 'sell' ? `Verkaufen · ${t}` : `Kaufen · ${q}`) : (T.mode === 'sell' ? 'Verkaufen' : 'Kaufen');
-      if (document.activeElement !== rng) rng.value = mx > 0 ? (over || T.all ? 100 : Math.round(Math.min(1, v / mx) * 100)) : 0;
+      if (rng && document.activeElement !== rng) rng.value = mx > 0 ? (over || T.all ? 100 : Math.round(Math.min(1, v / mx) * 100)) : 0;
       tk.querySelectorAll('.tk-chips .btn').forEach((b) => b.classList.toggle('on', mx > 0 && !over && (+b.dataset.p === 1 ? T.all : !T.all && Math.abs(v / mx - +b.dataset.p) < 0.004)));
     };
     const setPct = (k) => { const mx = maxIn(); T.all = k >= 1 && mx > 0; inp.value = fmtIn(floorIn(k >= 1 ? mx : mx * k, T.unit), T.unit); calc(); };
     inp.oninput = () => { T.all = false; calc(); }; inp.onkeydown = (e) => { if (e.key === 'Enter' && !go.disabled) go.click(); if (e.key === 'Escape') inp.blur(); };
-    rng.oninput = () => setPct(+rng.value / 100);
+    if (rng) rng.oninput = () => setPct(+rng.value / 100);
     tk.querySelectorAll('.tk-chips .btn').forEach((b) => (b.onclick = () => setPct(+b.dataset.p)));
     tk.querySelectorAll('.tk-tabs .btn').forEach((b) => (b.onclick = () => { T.mode = b.dataset.m; this.market(); }));
     tk.querySelector('.unit').onclick = (e) => { e.preventDefault(); if (T.all) { T.unit = T.unit === 'BTC' ? 'USD' : 'BTC'; e.currentTarget.textContent = T.unit === 'BTC' ? c.id : '$'; setPct(1); return; } const v = num(inp.value), k = T.mode === 'buy' ? 1 - fee : 1, coins = T.unit === 'BTC' ? v / k : v / p; T.unit = T.unit === 'BTC' ? 'USD' : 'BTC'; e.currentTarget.textContent = T.unit === 'BTC' ? c.id : '$'; inp.value = fmtIn(floorIn(T.unit === 'BTC' ? coins * k : coins * p, T.unit), T.unit); calc(); };
-    if (maxIn() <= 0) { inp.disabled = true; rng.disabled = true; tk.querySelectorAll('.tk-chips .btn').forEach((b) => (b.disabled = true)); }
+    if (maxIn() <= 0) { inp.disabled = true; if (rng) rng.disabled = true; tk.querySelectorAll('.tk-chips .btn').forEach((b) => (b.disabled = true)); }
     go.onclick = () => {
       const v = num(inp.value); if (!(v > 0)) return;
       if (T.mode === 'sell') {

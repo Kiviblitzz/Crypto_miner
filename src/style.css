@@ -1499,3 +1499,20 @@ body[data-modal="market"] :is(#st-cash, #st-profit, #st-wallet) { visibility: hi
 .ticket .tk-sum .tot { align-items: baseline; }
 .ticket .tk-sum.empty .tot b, .ticket .tk-sum.empty b { color: var(--dim) !important; }
 .ticket .tk-sum.empty .tot b { font-size: 17px !important; }
+/* ===== Runde 14 ===== */
+/* Titel: Münze + Wortmarke bündig über dem Knopfstapel */
+#splash .logo-wrap { display: grid !important; grid-template-columns: 72px minmax(0, 1fr); gap: 6px !important; width: 330px; align-items: center; }
+#splash .logo-coin { width: 72px !important; height: 72px !important; }
+#splash .logo-svg { width: 100% !important; height: auto; }
+#splash .splash-btns .btn { width: 330px; box-sizing: border-box; }
+/* Zielleiste mit Tasche: Text oben, Chips darunter */
+#goals .goal:has(.bag) > div:last-child { display: grid !important; row-gap: 6px; }
+#goals .goal .goal-line { display: flex; align-items: center; gap: 8px; }
+#goals .goal .bag i { min-height: 30px; position: relative; padding-right: 20px !important; }
+#goals .goal .bag i .tk { width: 14px !important; height: 14px !important; right: 4px !important; bottom: auto !important; top: 50% !important; transform: translateY(-50%); }
+#goals .goal .bag i .tk::after { left: 4.6px !important; top: 2.2px !important; }
+/* Handelsticket: Prozent-Knöpfe als Hauptweg */
+.ticket .tk-chips .btn { min-height: 36px; }
+/* Katalog: Produkt füllt die Bühne */
+#build .item .thumb img { width: 100%; height: 100%; object-fit: contain; transform: scale(1.12); }
+#build .item .thumb { overflow: hidden; }
