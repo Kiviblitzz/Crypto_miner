@@ -31,6 +31,8 @@ const rev = (g) => Math.max(1, g.dailyProfit().rev);
 // ---------- Hilfen ----------
 const nice = (v) => { if (!(v > 0)) return 0; const p = Math.pow(10, Math.max(0, Math.floor(Math.log10(v)) - 1)); return Math.round(v / p) * p; };
 const amt = (g, days, min = 0) => nice(Math.max(min, rev(g) * days));
+// Private Ausgaben (Geschenke, Feiern, Reisen) wachsen mit, aber nicht ins Absurde
+const fam = (g, min, days, cap) => nice(Math.min(cap, Math.max(min, rev(g) * days)));
 // Wert einmal pro offenem Ereignis festhalten (Text, Kosten und Wirkung zeigen dieselbe Zahl)
 const memo = (name, f) => (g) => {
   const ev = g.s.ev, k = ev.open?.key;
@@ -206,7 +208,7 @@ export const EVENTS = [
     id: 'xmas', from: 'Mama', title: 'Weihnachten bei Brandts', when: { yearly: '12-23', from: '2010', window: 5 }, expire: 10,
     text: (s) => `${XMAS[year(s)] || 'Wieder ein Jahr. Die Familie sitzt zusammen, draußen schneit es.'} „Und was legst du dieses Jahr unter den Baum?“`,
     choices: [
-      { label: 'Ein großes Fest für alle', cost: memo('xmas', (g) => amt(g, 3, 60)), hint: 'Alle, die dir gerade grollen oder fremdeln (unter Stufe 2): +1', fx: (g, s) => ({ rel: Object.fromEntries(FAMILY.filter((k) => (s.rel[k] || 0) < 2).map((k) => [k, 1])) }), reply: '<b>Mama:</b> So voll war das Wohnzimmer noch nie. Opa singt. Opa singt nie.' },
+      { label: 'Ein großes Fest für alle', cost: memo('xmas', (g) => fam(g, 60, 3, 40000)), hint: 'Alle, die dir gerade grollen oder fremdeln (unter Stufe 2): +1', fx: (g, s) => ({ rel: Object.fromEntries(FAMILY.filter((k) => (s.rel[k] || 0) < 2).map((k) => [k, 1])) }), reply: '<b>Mama:</b> So voll war das Wohnzimmer noch nie. Opa singt. Opa singt nie.' },
       { label: 'Selbstgebastelte Geschenke', hint: 'Mama +1 · Hardware-Erfahrung', fx: { rel: { mama: 1 }, xp: { hw: 15 } }, reply: '<b>Mama:</b> Ein Stern aus alten Lüftern, der leuchtet! Der kommt an die Spitze.' },
       { label: 'Heiligabend bei den Rigs', hint: 'Mama −1, Papa −1 · eine Woche +8 % Ertrag', fx: { rel: { mama: -1, papa: -1 }, mod: [{ key: 'rev', mult: 1.08, days: 7 }] }, reply: '<b>Mama:</b> Wir heben dir Kartoffelsalat auf. Wie jedes Jahr.' },
     ],
@@ -368,7 +370,7 @@ export const EVENTS = [
     id: 'mamaurlaub', from: 'Mama', title: 'Urlaub? Wir?', when: { date: '2013-07-25', window: 14 },
     text: '„Papa und ich waren seit vierzehn Jahren nicht im Urlaub. Der Laden … du weißt schon. Eine Woche Ostsee wäre schön. Aber wer passt auf den Laden auf?“',
     choices: [
-      { label: 'Ich schenk euch die Reise', cost: memo('urlaub', (g) => nice(Math.max(1200, rev(g) * 2))), hint: 'Mama +2, Papa +2', fx: { rel: { mama: 2, papa: 2 }, flag: 'ostsee', log: 'Sommer 2013: Eltern an die Ostsee geschickt' }, reply: '<b>Mama:</b> Papa hat am ersten Tag gefragt, ob der Laden noch steht. Ab Tag drei nicht mehr.' },
+      { label: 'Ich schenk euch die Reise', cost: memo('urlaub', (g) => fam(g, 1200, 2, 8000)), hint: 'Mama +2, Papa +2', fx: { rel: { mama: 2, papa: 2 }, flag: 'ostsee', log: 'Sommer 2013: Eltern an die Ostsee geschickt' }, reply: '<b>Mama:</b> Papa hat am ersten Tag gefragt, ob der Laden noch steht. Ab Tag drei nicht mehr.' },
       { label: 'Ich übernehme den Laden', hint: 'Mama +1, Papa +1 · 14 Tage −20 % Hashrate (keine Zeit zum Optimieren)', fx: { rel: { mama: 1, papa: 1 }, mod: [{ key: 'hash', mult: 0.8, days: 14 }], log: 'Sommer 2013: zwei Wochen Papas Laden geschmissen' }, reply: '<b>Papa:</b> Du hast drei Fernseher verkauft? Ich verkaufe drei im Monat!' },
       { label: 'Keine Zeit, Goldrausch!', hint: 'Mama −1', fx: { rel: { mama: -1 } }, reply: '<b>Mama:</b> Dann eben nächstes Jahr. Wie letztes Jahr.' },
     ],
@@ -426,7 +428,7 @@ export const EVENTS = [
     text: '„Opa ist von der Leiter gefallen. Hüfte. Er liegt im Kreiskrankenhaus, schimpft auf das Essen und fragt nach dir.“',
     choices: [
       { label: 'Jeden Tag besuchen', hint: 'Opa +2 · 14 Tage −20 % Hashrate', fx: { rel: { opa: 2 }, mod: [{ key: 'hash', mult: 0.8, days: 14 }], log: 'August 2014: Opa jeden Tag im Krankenhaus besucht' }, reply: '<b>Opa:</b> Die Schwestern sagen, ich wär ein Musterpatient. Lügnerinnen.' },
-      { label: 'Einzelzimmer und Tablet spendieren', cost: memo('krank', (g) => nice(Math.max(500, rev(g) * 1.5))), hint: 'Opa +1, Papa +1', fx: { rel: { opa: 1, papa: 1 }, log: 'August 2014: Opa ein Einzelzimmer spendiert' }, reply: '<b>Opa:</b> Was soll ich mit dem Ding? … Wie macht man da Skat an?' },
+      { label: 'Einzelzimmer und Tablet spendieren', cost: memo('krank', (g) => fam(g, 500, 1.5, 6000)), hint: 'Opa +1, Papa +1', fx: { rel: { opa: 1, papa: 1 }, log: 'August 2014: Opa ein Einzelzimmer spendiert' }, reply: '<b>Opa:</b> Was soll ich mit dem Ding? … Wie macht man da Skat an?' },
       { label: 'Eine Karte schicken', hint: 'Mehr nicht', fx: {}, reply: '<b>Papa:</b> Er hat sie ans Bett geklebt. Neben den Schaltplan vom Krankenhaus.' },
     ],
     fallback: 2,
@@ -458,7 +460,7 @@ export const EVENTS = [
     id: 'papaonline', from: 'Papa', title: 'Papa gegen das Internet', when: { date: '2015-03-08', window: 14 },
     text: '„Die Leute schauen sich bei mir Fernseher an und bestellen sie dann online. Deniz meint, ich brauche einen Webshop. Ich weiß nicht mal, was ein Warenkorb ist.“',
     choices: [
-      { label: 'Webshop bauen lassen', cost: memo('shop', (g) => nice(Math.max(2500, rev(g) * 3))), hint: 'Papa +2 · Papa zahlt dir zwei Jahre lang monatlich etwas zurück', fx: (g) => ({ rel: { papa: 2 }, mod: [{ key: 'monthly', mult: -Math.round(memo('shop', () => 0)(g) / 12), days: 730 }], flag: 'webshop', log: 'März 2015: Webshop für Elektro Brandt' }), reply: '<b>Papa:</b> Drei Bestellungen über Nacht! Aus Bayern! Wer kauft in Bayern Kabel bei mir?' },
+      { label: 'Webshop bauen lassen', cost: memo('shop', (g) => fam(g, 2500, 3, 25000)), hint: 'Papa +2 · Papa zahlt dir zwei Jahre lang monatlich etwas zurück', fx: (g) => ({ rel: { papa: 2 }, mod: [{ key: 'monthly', mult: -Math.round(memo('shop', () => 0)(g) / 12), days: 730 }], flag: 'webshop', log: 'März 2015: Webshop für Elektro Brandt' }), reply: '<b>Papa:</b> Drei Bestellungen über Nacht! Aus Bayern! Wer kauft in Bayern Kabel bei mir?' },
       { label: 'Deniz baut ihn am Wochenende', hint: 'Papa +1, Deniz +1 · kostet nichts', fx: { rel: { papa: 1, deniz: 1 }, flag: 'webshop', log: 'März 2015: Deniz baut Papas Webshop' }, reply: '<b>Deniz:</b> Pizza und eine Steckdosenleiste als Lohn. Faires Geschäft.' },
       { label: 'Online gewinnt sowieso', hint: 'Papa −1', fx: { rel: { papa: -1 } }, reply: '<b>Papa:</b> Danke für die Ermutigung.' },
     ],
@@ -479,8 +481,8 @@ export const EVENTS = [
     id: 'kita15', from: 'Opa Heinz', title: 'Abwärme für die Kita', when: { date: '2015-10-10', window: 14 }, cond: (s) => tier(s) >= 2,
     text: (s) => `„Die Kita Sonnenschein friert jeden Winter, die Ölheizung ist von 1979. ${poss(top(s), 'nom', 'Dein')} macht Wärme ohne Ende. Ich könnte eine Leitung legen.“`,
     choices: [
-      { label: 'Leitung legen, Kita zahlt Heizgeld', cost: memo('kita', (g) => nice(Math.max(3000, rev(g) * 3))), hint: 'Opa +1, Mama +1 · drei Jahre monatliches Heizgeld', fx: (g) => ({ rel: { opa: 1, mama: 1 }, mod: [{ key: 'monthly', mult: -Math.round(memo('kita', () => 0)(g) / 12), days: 1095 }], flag: 'kita', log: 'Oktober 2015: Abwärme heizt die Kita' }), reply: '<b>Opa:</b> Fünfzehn Meter Rohr, und die Kinder haben es warm. So muss Technik.' },
-      { label: 'Leitung legen, Wärme gratis', cost: memo('kita', (g) => nice(Math.max(3000, rev(g) * 3))), hint: 'Opa +2, Mama +2', fx: { rel: { opa: 2, mama: 2 }, flag: 'kita', log: 'Oktober 2015: Abwärme heizt die Kita – gratis' }, reply: '<b>Mama:</b> Die Kinder haben dir ein Bild gemalt. Ein Computer mit Sonne drin.' },
+      { label: 'Leitung legen, Kita zahlt Heizgeld', cost: memo('kita', (g) => fam(g, 3000, 3, 80000)), hint: 'Opa +1, Mama +1 · drei Jahre monatliches Heizgeld', fx: (g) => ({ rel: { opa: 1, mama: 1 }, mod: [{ key: 'monthly', mult: -Math.round(memo('kita', () => 0)(g) / 12), days: 1095 }], flag: 'kita', log: 'Oktober 2015: Abwärme heizt die Kita' }), reply: '<b>Opa:</b> Fünfzehn Meter Rohr, und die Kinder haben es warm. So muss Technik.' },
+      { label: 'Leitung legen, Wärme gratis', cost: memo('kita', (g) => fam(g, 3000, 3, 80000)), hint: 'Opa +2, Mama +2', fx: { rel: { opa: 2, mama: 2 }, flag: 'kita', log: 'Oktober 2015: Abwärme heizt die Kita – gratis' }, reply: '<b>Mama:</b> Die Kinder haben dir ein Bild gemalt. Ein Computer mit Sonne drin.' },
       { label: 'Keine Zeit', hint: 'Opa −1', fx: { rel: { opa: -1 } }, reply: '<b>Opa:</b> Dann friert die Kita halt noch ein Jahr.' },
     ],
     fallback: 2,
@@ -512,7 +514,7 @@ export const EVENTS = [
     id: 'mama50', from: 'Papa', title: 'Mama wird 50', when: { date: '2016-08-28', window: 14 },
     text: '„Mama wird nächsten Monat 50. Ich hab keine Idee. Sie wünscht sich ‚nichts‘, was bei uns ‚was Großes‘ heißt.“',
     choices: [
-      { label: 'Wellness-Wochenende für beide', cost: memo('m50', (g) => nice(Math.max(1500, rev(g) * 2))), hint: 'Mama +2, Papa +1', fx: { rel: { mama: 2, papa: 1 }, log: 'Mamas 50. Geburtstag: Wellness-Wochenende' }, reply: '<b>Mama:</b> Ein Bademantel mit meinem Namen drauf. Ich zieh ihn nie wieder aus.' },
+      { label: 'Wellness-Wochenende für beide', cost: memo('m50', (g) => fam(g, 1500, 2, 15000)), hint: 'Mama +2, Papa +1', fx: { rel: { mama: 2, papa: 1 }, log: 'Mamas 50. Geburtstag: Wellness-Wochenende' }, reply: '<b>Mama:</b> Ein Bademantel mit meinem Namen drauf. Ich zieh ihn nie wieder aus.' },
       { label: 'Ein Fotobuch: 50 Jahre Sabine', cost: 80, hint: 'Mama +1, Opa +1 (er hat die alten Fotos)', fx: { rel: { mama: 1, opa: 1 }, log: 'Mamas 50. Geburtstag: Fotobuch' }, reply: '<b>Opa:</b> Seite 12 – da hat sie mir mit fünf den Lötkolben geklaut.' },
       { label: 'Das überlasse ich Papa', hint: 'Mama −1', fx: { rel: { mama: -1 } }, reply: '<b>Papa:</b> Ich hab ihr einen Wasserkocher geschenkt. Bitte sag nichts.' },
     ],
@@ -545,7 +547,7 @@ export const EVENTS = [
     choices: [
       { label: 'Alle GPU-Rigs verkaufen', hint: 'Doppelt so viel wie sonst beim Verkauf · dein erster PC bleibt', fx: (g) => { const v = sellRigs(g); return { log: `Juni 2017: GPU-Rigs für ${usd(v)} nach Leipzig verkauft` }; }, reply: '<b>Deniz:</b> Ein Transporter voller Karten. Der Typ hat bar bezahlt. In einer Sporttasche.' },
       { label: 'Die Hälfte verkaufen', hint: 'Halb Geld, halb Ethereum', fx: (g) => { const v = sellRigs(g, 0.5); return { log: `Juni 2017: halbe GPU-Rigs für ${usd(v)} verkauft` }; }, reply: '<b>Deniz:</b> Kompromiss. Mama wäre stolz.' },
-      { label: 'Behalten und Alarmanlage einbauen', cost: memo('alarm', (g) => nice(Math.max(900, rev(g) * 0.5))), hint: 'Schützt deine Standorte vor Einbrüchen', fx: { flag: 'alarm', log: 'Juni 2017: Alarmanlage eingebaut' }, reply: '<b>Opa:</b> Die piept, wenn eine Maus furzt. Gut so.' },
+      { label: 'Behalten und Alarmanlage einbauen', cost: memo('alarm', (g) => fam(g, 900, 0.5, 60000)), hint: 'Schützt deine Standorte vor Einbrüchen', fx: { flag: 'alarm', log: 'Juni 2017: Alarmanlage eingebaut' }, reply: '<b>Opa:</b> Die piept, wenn eine Maus furzt. Gut so.' },
       { label: 'Behalten', hint: 'Ethereum läuft gerade gut', fx: {}, reply: '<b>Deniz:</b> Recht hast du. Die Dinger drucken gerade Geld.' },
     ],
     fallback: 3,
@@ -555,7 +557,7 @@ export const EVENTS = [
     cond: (s) => GPU_BOOM(s.day) > 1.4 && gpuCount(s, LINDENTAL) >= 12 && !s.flags.alarm,
     text: (s, h, g) => { const p = memo('theft', theftPlan)(g); return `„Heute Nacht hat jemand das Rolltor aufgehebelt. <b>${p.n} Grafikkarten</b> sind weg – Wert ${usd(p.v)}. Die Polizei sagt: Mining-Karten sind gerade begehrter als Autoradios.“`; },
     choices: [
-      { label: 'Anzeige, Versicherung, Alarmanlage', cost: memo('alarm2', (g) => nice(Math.max(1500, rev(g) * 0.5))), hint: 'Versicherung zahlt 40 % · nie wieder Einbruch', fx: (g) => { const v = steal(g, memo('theft', theftPlan)(g).take); return { cash: v * 0.4, flag: 'alarm', log: `Einbruch: ${usd(v)} Grafikkarten gestohlen, Alarmanlage eingebaut` }; }, reply: '<b>Papa:</b> Kameras an jeder Ecke. Jetzt sieht uns sogar die Katze zu.' },
+      { label: 'Anzeige, Versicherung, Alarmanlage', cost: memo('alarm2', (g) => fam(g, 1500, 0.5, 60000)), hint: 'Versicherung zahlt 40 % · nie wieder Einbruch', fx: (g) => { const v = steal(g, memo('theft', theftPlan)(g).take); return { cash: v * 0.4, flag: 'alarm', log: `Einbruch: ${usd(v)} Grafikkarten gestohlen, Alarmanlage eingebaut` }; }, reply: '<b>Papa:</b> Kameras an jeder Ecke. Jetzt sieht uns sogar die Katze zu.' },
       { label: 'Deniz sucht auf Kleinanzeigen', hint: 'Mit Glück kommt die Hälfte zurück', fx: (g, s) => { const p = memo('theft', theftPlan)(g); const lucky = Math.random() < 0.5; s.flags.theftLucky = lucky ? 1 : 0; const v = steal(g, lucky ? p.take.slice(0, Math.ceil(p.take.length / 2)) : p.take); return { rel: { deniz: 1 }, log: `Einbruch: ${usd(v)} Grafikkarten gestohlen${lucky ? ' – Deniz fand einen Teil wieder' : ''}` }; }, reply: (g) => (g.s.flags.theftLucky ? '<b>Deniz:</b> „Gebrauchte Karten, Abholung Lindental“ – der Depp hat sie bei uns um die Ecke angeboten. Die Hälfte ist zurück!' : '<b>Deniz:</b> Nichts. Die sind wahrscheinlich schon in Polen.') },
       { label: 'Abhaken', hint: 'Die Karten sind weg', fx: (g) => { const v = steal(g, memo('theft', theftPlan)(g).take); return { log: `Einbruch: ${usd(v)} Grafikkarten gestohlen` }; }, reply: '<b>Papa:</b> Ich häng wenigstens ein neues Schloss dran.' },
     ],
@@ -615,7 +617,7 @@ export const EVENTS = [
     id: 'opa80', from: 'Mama', title: 'Opa wird 80', when: { date: '2018-03-08', window: 14 },
     text: (s) => `„Opa wird 80! Er will ‚kein Theater‘. Also machen wir Theater. Die halbe Straße kommt, und er will unbedingt ${poss(top(s), 'akk')} sehen.“`,
     choices: [
-      { label: (g) => `Ein Fest ${inn(top(g.s))}`, cost: memo('o80', (g) => nice(Math.max(2000, rev(g) * 2))), hint: 'Opa +2, Mama +1, Papa +1', fx: { rel: { opa: 2, mama: 1, papa: 1 }, log: 'März 2018: Opas 80. zwischen den Minern gefeiert' }, reply: '<b>Opa:</b> Achtzig Jahre, und das hier ist das Lauteste, was ich je gehört hab. Herrlich.' },
+      { label: (g) => `Ein Fest ${inn(top(g.s))}`, cost: memo('o80', (g) => fam(g, 2000, 2, 40000)), hint: 'Opa +2, Mama +1, Papa +1', fx: { rel: { opa: 2, mama: 1, papa: 1 }, log: 'März 2018: Opas 80. zwischen den Minern gefeiert' }, reply: '<b>Opa:</b> Achtzig Jahre, und das hier ist das Lauteste, was ich je gehört hab. Herrlich.' },
       { label: 'Sein altes Röhrenradio restaurieren', hint: 'Opa +2 · Hardware-Erfahrung', fx: { rel: { opa: 2 }, xp: { hw: 40 }, flag: 'radio', log: 'März 2018: Opas Röhrenradio von 1962 restauriert' }, reply: '<b>Opa:</b> Das spielt ja wieder! Da lief 1962 die Nachricht, dass ich die Meisterprüfung hab.' },
       { label: 'Nur kurz vorbeischauen', hint: 'Opa −1', fx: { rel: { opa: -1 } }, reply: '<b>Mama:</b> Er hat zweimal gefragt, wo du bist.' },
     ],
@@ -656,8 +658,8 @@ export const EVENTS = [
     id: 'silberhochzeit', from: 'Opa Heinz', title: 'Silberhochzeit', when: { date: '2019-03-08', window: 14 },
     text: '„Deine Eltern sind 25 Jahre verheiratet. Sabine wollte immer nach Norwegen, Fjorde gucken. Frank sagt, das ist zu teuer. Frank sagt immer, das ist zu teuer.“',
     choices: [
-      { label: 'Eine Norwegen-Reise schenken', cost: memo('silber', (g) => nice(Math.max(4000, rev(g) * 2))), hint: 'Mama +2, Papa +2 · Mama bringt Ideen mit', fx: { rel: { mama: 2, papa: 2 }, flag: 'norwegen', log: 'März 2019: Eltern zur Silberhochzeit nach Norwegen geschickt' }, reply: '<b>Mama</b> (Postkarte): „Wasserfälle, Wasserkraft, kalte Luft. Wär das nicht was für deine Computer?“' },
-      { label: 'Ein Fest im Garten organisieren', cost: memo('garten', (g) => nice(Math.max(500, rev(g) * 0.5))), hint: 'Mama +1, Papa +1, Opa +1', fx: { rel: { mama: 1, papa: 1, opa: 1 }, log: 'März 2019: Silberhochzeit im Garten gefeiert' }, reply: '<b>Opa:</b> Ich hab die Lichterkette gelegt. Nur einmal ist die Sicherung geflogen.' },
+      { label: 'Eine Norwegen-Reise schenken', cost: memo('silber', (g) => fam(g, 4000, 2, 30000)), hint: 'Mama +2, Papa +2 · Mama bringt Ideen mit', fx: { rel: { mama: 2, papa: 2 }, flag: 'norwegen', log: 'März 2019: Eltern zur Silberhochzeit nach Norwegen geschickt' }, reply: '<b>Mama</b> (Postkarte): „Wasserfälle, Wasserkraft, kalte Luft. Wär das nicht was für deine Computer?“' },
+      { label: 'Ein Fest im Garten organisieren', cost: memo('garten', (g) => fam(g, 500, 0.5, 8000)), hint: 'Mama +1, Papa +1, Opa +1', fx: { rel: { mama: 1, papa: 1, opa: 1 }, log: 'März 2019: Silberhochzeit im Garten gefeiert' }, reply: '<b>Opa:</b> Ich hab die Lichterkette gelegt. Nur einmal ist die Sicherung geflogen.' },
       { label: 'Karte und Blumen', hint: 'Nichts Besonderes', fx: {}, reply: '<b>Mama:</b> Danke, Schatz. Die Tulpen sind schön.' },
     ],
     fallback: 2,
@@ -666,7 +668,7 @@ export const EVENTS = [
     id: 'denizhochzeit', from: 'Deniz', title: 'Deniz heiratet', when: { date: '2019-08-05', window: 14 },
     text: '„Ayla hat Ja gesagt! Du bist mein Trauzeuge, keine Widerrede. Die Feier wird klein. Also, für meine Familie klein: 200 Leute.“',
     choices: [
-      { label: 'Die Feier bezahlen', cost: memo('hz', (g) => nice(Math.max(5000, rev(g) * 3))), hint: 'Deniz +2', fx: { rel: { deniz: 2 }, log: 'August 2019: Deniz’ Hochzeit bezahlt' }, reply: '<b>Deniz:</b> Meine Mutter will dich adoptieren. Ernsthaft. Sie hat gefragt.' },
+      { label: 'Die Feier bezahlen', cost: memo('hz', (g) => fam(g, 5000, 3, 60000)), hint: 'Deniz +2', fx: { rel: { deniz: 2 }, log: 'August 2019: Deniz’ Hochzeit bezahlt' }, reply: '<b>Deniz:</b> Meine Mutter will dich adoptieren. Ernsthaft. Sie hat gefragt.' },
       { label: 'Einen Bitcoin schenken', need: (s) => btc(s) >= 1, hint: 'Deniz +2 · ein Bitcoin weniger', fx: { coin: { BTC: -1 }, rel: { deniz: 2 }, log: 'August 2019: Deniz einen Bitcoin zur Hochzeit geschenkt' }, reply: '<b>Deniz:</b> Den verkaufe ich nie. NIE. Na gut, vielleicht bei einer Million.' },
       { label: 'Trauzeuge sein reicht', hint: 'Deniz +1', fx: { rel: { deniz: 1 } }, reply: '<b>Deniz:</b> Deine Rede war furchtbar. Ich hab geheult.' },
     ],
@@ -726,7 +728,7 @@ export const EVENTS = [
     id: 'autobauer', from: 'Papa', title: 'Papa und das E-Auto', when: { date: '2021-03-08', window: 14 },
     text: (s, h, g) => `„Ein Autobauer hat für Milliarden Bitcoin gekauft, und man kann jetzt Autos mit Bitcoin bezahlen! Unser Lieferwagen ist 22 Jahre alt … Bitcoin steht bei <b>${usd(g.price('BTC'))}</b>.“`,
     choices: [
-      { label: 'Papa einen E-Transporter schenken', cost: memo('auto', (g) => nice(Math.max(45000, rev(g) * 0.5))), hint: 'Papa +2 · Hardware dauerhaft 3 % billiger (ihr holt selbst ab)', fx: { rel: { papa: 2 }, mod: [{ key: 'price', mult: 0.97 }], log: 'März 2021: Papa einen E-Transporter geschenkt' }, reply: '<b>Papa:</b> Der fährt ja ganz leise! Ich hab dreimal gehupt, um sicherzugehen, dass er an ist.' },
+      { label: 'Papa einen E-Transporter schenken', cost: memo('auto', (g) => fam(g, 45000, 0.5, 120000)), hint: 'Papa +2 · Hardware dauerhaft 3 % billiger (ihr holt selbst ab)', fx: { rel: { papa: 2 }, mod: [{ key: 'price', mult: 0.97 }], log: 'März 2021: Papa einen E-Transporter geschenkt' }, reply: '<b>Papa:</b> Der fährt ja ganz leise! Ich hab dreimal gehupt, um sicherzugehen, dass er an ist.' },
       { label: 'Ein Viertel der Bitcoin verkaufen', need: (s) => btc(s) > 1e-4, hint: 'Hoher Kurs – mitnehmen', fx: (g) => sellDo('BTC', 0.25, 'März 2021: Bitcoin bei fast 50.000 $ verkauft')(g), reply: '<b>Papa:</b> Gut. Dann fahre ich den alten Bus halt, bis er auseinanderfällt.' },
       { label: 'Der Bus fährt doch noch', hint: 'Nichts tun', fx: {}, reply: '<b>Papa:</b> Stimmt. Meistens.' },
     ],
@@ -766,7 +768,7 @@ export const EVENTS = [
     text: '„Ayla ist schwanger! Im Juni ist es so weit. Ich will zwei Monate Elternzeit nehmen. Ich weiß, gerade ist viel los …“',
     choices: [
       { label: 'Natürlich – volle zwei Monate', hint: 'Deniz +2 · 60 Tage 20 % mehr Ausfälle', fx: { rel: { deniz: 2 }, mod: [{ key: 'fail', mult: 1.2, days: 60 }], flag: 'denizKind', log: 'März 2022: Deniz geht in Elternzeit' }, reply: '<b>Deniz:</b> Ich schick dir jeden Tag ein Foto. Von ihr, nicht von den Windeln.' },
-      { label: 'Elternzeit plus Babyausstattung', cost: memo('baby', (g) => nice(Math.max(3000, rev(g) * 0.3))), hint: 'Deniz +3 · 60 Tage 20 % mehr Ausfälle', fx: { rel: { deniz: 3 }, mod: [{ key: 'fail', mult: 1.2, days: 60 }], flag: 'denizKind', log: 'März 2022: Deniz’ Baby eingekleidet' }, reply: '<b>Deniz:</b> Ein Kinderwagen mit Lüfter?! Du bist irre. Danke.' },
+      { label: 'Elternzeit plus Babyausstattung', cost: memo('baby', (g) => fam(g, 3000, 0.3, 25000)), hint: 'Deniz +3 · 60 Tage 20 % mehr Ausfälle', fx: { rel: { deniz: 3 }, mod: [{ key: 'fail', mult: 1.2, days: 60 }], flag: 'denizKind', log: 'März 2022: Deniz’ Baby eingekleidet' }, reply: '<b>Deniz:</b> Ein Kinderwagen mit Lüfter?! Du bist irre. Danke.' },
       { label: 'Zwei Wochen müssen reichen', hint: 'Deniz −2', fx: { rel: { deniz: -2 }, log: 'März 2022: Deniz nur zwei Wochen frei gegeben' }, reply: '<b>Deniz:</b> … Okay. Du bist der Chef.' },
     ],
     fallback: 0,
@@ -830,8 +832,8 @@ export const EVENTS = [
     id: 'mamarente', from: 'Mama', title: 'Mama geht in Rente', when: { date: '2023-08-01', window: 14 },
     text: (s, h, g) => `„Nach 31 Jahren im Kindergarten ist Schluss! Ich will endlich reisen. Oder ein Gewächshaus. Oder beides.“${s.stats.mamaBtc ? ` Ihre Bitcoin von 2020 sind heute ${usd(s.stats.mamaBtc * g.price('BTC'))} wert. „Ist das viel?“` : ''}`,
     choices: [
-      { label: 'Gewächshaus mit Abwärme aus dem Keller', cost: memo('gh', (g) => nice(Math.max(3000, rev(g) * 0.3))), hint: 'Mama +2 · Keller dauerhaft 20 % besser gekühlt', fx: { rel: { mama: 2 }, mod: [{ key: 'cool', mult: 1.2, fac: 'keller' }], flag: 'gewaechshaus', log: 'August 2023: Mamas Gewächshaus heizt mit Keller-Abwärme' }, reply: '<b>Mama:</b> Tomaten im Oktober! Die Nachbarn halten mich für eine Hexe.' },
-      { label: 'Eine Weltreise schenken', cost: memo('welt', (g) => nice(Math.max(15000, rev(g) * 1))), hint: 'Mama +3', fx: { rel: { mama: 3 }, log: 'August 2023: Mama auf Weltreise geschickt' }, reply: '<b>Mama</b> (Postkarte aus Japan): „Hier gibt es Toiletten mit mehr Knöpfen als deine Computer.“' },
+      { label: 'Gewächshaus mit Abwärme aus dem Keller', cost: memo('gh', (g) => fam(g, 3000, 0.3, 25000)), hint: 'Mama +2 · Keller dauerhaft 20 % besser gekühlt', fx: { rel: { mama: 2 }, mod: [{ key: 'cool', mult: 1.2, fac: 'keller' }], flag: 'gewaechshaus', log: 'August 2023: Mamas Gewächshaus heizt mit Keller-Abwärme' }, reply: '<b>Mama:</b> Tomaten im Oktober! Die Nachbarn halten mich für eine Hexe.' },
+      { label: 'Eine Weltreise schenken', cost: memo('welt', (g) => fam(g, 15000, 1, 80000)), hint: 'Mama +3', fx: { rel: { mama: 3 }, log: 'August 2023: Mama auf Weltreise geschickt' }, reply: '<b>Mama</b> (Postkarte aus Japan): „Hier gibt es Toiletten mit mehr Knöpfen als deine Computer.“' },
       { label: 'Zur Abschiedsfeier kommen', hint: 'Mama +1', fx: { rel: { mama: 1 } }, reply: '<b>Mama:</b> Die Kinder haben ein Lied gesungen. Ich hab geheult. Du auch, gib’s zu.' },
     ],
     fallback: 2,
@@ -840,7 +842,7 @@ export const EVENTS = [
     id: 'schule23', from: 'Gymnasium Lindental', title: 'Dein altes Gymnasium', when: { date: '2023-10-15', window: 14 },
     text: '„Lieber ehemaliger Schüler, unsere Informatik-AG möchte verstehen, was Bitcoin-Mining ist. Hätten Sie Zeit für einen Vortrag? Ihr alter Mathelehrer, Herr Behrens, lässt grüßen.“',
     choices: [
-      { label: 'Vortrag halten und Rechner spenden', cost: memo('schule', (g) => nice(Math.max(2000, rev(g) * 0.3))), hint: 'Mama +1, Opa +1 · Nachwuchs für später', fx: { rel: { mama: 1, opa: 1 }, xp: { trade: 30 }, flag: 'schule', log: 'Oktober 2023: Vortrag am Gymnasium, Rechner gespendet' }, reply: '<b>Herr Behrens:</b> Sie waren in Mathe eine Katastrophe. Ich bin sehr stolz.' },
+      { label: 'Vortrag halten und Rechner spenden', cost: memo('schule', (g) => fam(g, 2000, 0.3, 40000)), hint: 'Mama +1, Opa +1 · Nachwuchs für später', fx: { rel: { mama: 1, opa: 1 }, xp: { trade: 30 }, flag: 'schule', log: 'Oktober 2023: Vortrag am Gymnasium, Rechner gespendet' }, reply: '<b>Herr Behrens:</b> Sie waren in Mathe eine Katastrophe. Ich bin sehr stolz.' },
       { label: 'Nur den Vortrag halten', hint: 'Mama +1 · Handels-Erfahrung', fx: { rel: { mama: 1 }, xp: { trade: 30 }, log: 'Oktober 2023: Vortrag am Gymnasium' }, reply: '<b>Mama:</b> Die Lehrerin hat mich angerufen. Du warst ein Hit.' },
       { label: 'Keine Zeit', hint: 'Absagen', fx: {}, reply: '<b>Herr Behrens:</b> Schade. Vielleicht nächstes Jahr.' },
     ],
@@ -910,7 +912,7 @@ export const EVENTS = [
     id: 'ladenzukunft', from: 'Papa', title: 'Elektro Brandt', when: { date: '2025-08-01', window: 14 },
     text: '„Ich bin 68. Der Laden war mein Leben, aber meine Knie wollen nicht mehr. Zweirad Öztürk würde die Räume mieten. Oder … du machst was draus?“',
     choices: [
-      { label: 'Hashwerk übernimmt den Laden', cost: memo('laden', (g) => nice(Math.max(20000, rev(g) * 0.3))), hint: 'Papa +2 · Showroom und Reparatur-Café: −10 % Reparaturkosten, Werkstatt +25 % Kühlung', fx: { rel: { papa: 2 }, mod: [{ key: 'repair', mult: 0.9 }, { key: 'cool', mult: 1.25, fac: 'werkstatt' }], flag: 'ladenHashwerk', log: 'August 2025: Hashwerk übernimmt Elektro Brandt' }, reply: '<b>Papa:</b> Das Schild bleibt aber hängen. „Elektro Brandt, seit 1988.“ Darauf bestehe ich.' },
+      { label: 'Hashwerk übernimmt den Laden', cost: memo('laden', (g) => fam(g, 20000, 0.3, 250000)), hint: 'Papa +2 · Showroom und Reparatur-Café: −10 % Reparaturkosten, Werkstatt +25 % Kühlung', fx: { rel: { papa: 2 }, mod: [{ key: 'repair', mult: 0.9 }, { key: 'cool', mult: 1.25, fac: 'werkstatt' }], flag: 'ladenHashwerk', log: 'August 2025: Hashwerk übernimmt Elektro Brandt' }, reply: '<b>Papa:</b> Das Schild bleibt aber hängen. „Elektro Brandt, seit 1988.“ Darauf bestehe ich.' },
       { label: 'An Zweirad Öztürk vermieten', hint: 'Papa +1 · Papa hat seine Ruhe', fx: { rel: { papa: 1 }, log: 'August 2025: Papas Laden an Zweirad Öztürk vermietet' }, reply: '<b>Papa:</b> Herr Öztürk hat mir ein E-Bike geschenkt. Für die Knie.' },
       { label: 'Laden schließen, Werkstatt vergrößern', hint: 'Werkstatt +50 % Anschluss · Papa −1', fx: { rel: { papa: -1 }, mod: [{ key: 'cap', mult: 1.5, fac: 'werkstatt' }], log: 'August 2025: Laden geschlossen, Werkstatt vergrößert' }, reply: '<b>Papa:</b> Siebenunddreißig Jahre. Na ja. Es ist ja in der Familie.' },
     ],
@@ -942,8 +944,8 @@ export const EVENTS = [
     id: 'sommerfest26', from: 'Mama', title: 'Lindentaler Sommerfest', when: { date: '2026-08-01', window: 14 },
     text: '„Dem Sommerfest fehlt ein Sponsor, die Brauerei ist abgesprungen. Die halbe Stadt fragt, ob ‚die Hashwerk-Leute‘ nicht … Ich hab gesagt, ich frag mal.“',
     choices: [
-      { label: 'Hauptsponsor werden', cost: memo('fest', (g) => nice(Math.max(25000, rev(g) * 0.5))), hint: 'Papa, Mama, Opa und Deniz +1', fx: { rel: { papa: 1, mama: 1, opa: 1, deniz: 1 }, log: 'August 2026: Hashwerk sponsert das Sommerfest' }, reply: '<b>Mama:</b> Auf dem Banner steht „Hashwerk – aus Lindental in die Welt“. Opa hat es dreimal fotografiert.' },
-      { label: 'Eine Hüpfburg und Freibier', cost: memo('hupf', (g) => nice(Math.max(5000, rev(g) * 0.1))), hint: 'Papa +1, Deniz +1', fx: { rel: { papa: 1, deniz: 1 }, log: 'August 2026: Hüpfburg und Freibier fürs Sommerfest' }, reply: '<b>Deniz:</b> Die Hüpfburg sieht aus wie ein Miner. Meine Tochter will nie wieder runter.' },
+      { label: 'Hauptsponsor werden', cost: memo('fest', (g) => fam(g, 25000, 0.5, 250000)), hint: 'Papa, Mama, Opa und Deniz +1', fx: { rel: { papa: 1, mama: 1, opa: 1, deniz: 1 }, log: 'August 2026: Hashwerk sponsert das Sommerfest' }, reply: '<b>Mama:</b> Auf dem Banner steht „Hashwerk – aus Lindental in die Welt“. Opa hat es dreimal fotografiert.' },
+      { label: 'Eine Hüpfburg und Freibier', cost: memo('hupf', (g) => fam(g, 5000, 0.1, 40000)), hint: 'Papa +1, Deniz +1', fx: { rel: { papa: 1, deniz: 1 }, log: 'August 2026: Hüpfburg und Freibier fürs Sommerfest' }, reply: '<b>Deniz:</b> Die Hüpfburg sieht aus wie ein Miner. Meine Tochter will nie wieder runter.' },
       { label: 'Dieses Jahr nicht', hint: 'Mama −1', fx: { rel: { mama: -1 } }, reply: '<b>Mama:</b> Dann frag ich die Sparkasse. Die sagen bestimmt auch nein.' },
     ],
     fallback: 2,
@@ -972,14 +974,14 @@ export const EVENTS = [
     fallback: 1,
   },
   {
-    id: 'e_hitze', from: 'Deniz', title: 'Hitzesommer', when: { from: '2027-01-01', chance: 0.2, repeat: 365 },
+    id: 'e_hitze', from: 'Deniz', title: 'Hitzesommer', when: { from: '2027-01-01', chance: 0.08, repeat: 365 },
     cond: (s) => month(s) >= 5 && month(s) <= 7,
     text: (s, h, g) => { const f = hottest(g); return `„Schon wieder ein Rekordsommer. Die Außenluft ist so warm, dass alle Kühlungen schwächeln – zwei Wochen lang.“ ${poss(f, 'nom', 'Dein')} hat <b>${nf(0).format(g.summary[f]?.temp || 30)} °C</b>.`; },
     choices: heatChoices(0.8),
     fallback: 2,
   },
   {
-    id: 'e_strom', from: 'Stadtwerke Lindental', title: 'Unruhe an der Strombörse', when: { from: '2027-01-01', chance: 0.1, repeat: 365 },
+    id: 'e_strom', from: 'Stadtwerke Lindental', title: 'Unruhe an der Strombörse', when: { from: '2027-01-01', chance: 0.05, repeat: 730 },
     text: '„Die Großhandelspreise steigen. Für die nächsten sechs Monate rechnen wir mit 20 % teurerem Strom – es sei denn, Sie sichern sich jetzt einen Festpreis.“',
     choices: [
       { label: 'Festpreis sichern', cost: memo('es', (g) => nice(Math.max(2000, elecDay(g, g.s.unlocked) * 15))), hint: '180 Tage: Strom 2 % günstiger statt 20 % teurer', fx: { mod: [{ key: 'elec', mult: 0.98, days: 180 }], log: 'Strombörse: Festpreis gesichert' }, reply: '<b>Papa:</b> Festpreis. Das Wort mag ich.' },
