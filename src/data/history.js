@@ -110,11 +110,15 @@ export const MONOLITH_SHARE = curve([
 export const DAG_AET = curve([['2015-07-30', 1.0], ['2016-12-15', 2.0], ['2018-12-15', 3.0], ['2020-12-10', 4.0], ['2022-09-15', 5.0]], { log: false });
 export const DAG_AEC = curve([['2016-07-20', 1.4], ['2018-12-15', 3.0], ['2020-11-27', 3.9], ['2020-11-28', 2.0], ['2022-06-15', 2.6], ['2024-06-15', 3.3], ['2026-11-15', 4.1]], { log: false });
 
+// Echte Hitzewellen in Mitteleuropa (Spielwirkung: wärmere Umgebung)
+export const HEATWAVES = [['2015-07-01', '2015-07-08'], ['2015-08-05', '2015-08-13'], ['2018-07-24', '2018-08-09'], ['2019-06-25', '2019-07-01'], ['2019-07-23', '2019-07-29'], ['2020-08-07', '2020-08-23'], ['2022-07-17', '2022-07-22'], ['2023-07-09', '2023-07-16'], ['2025-06-30', '2025-07-04']].map(([a, b]) => [toDay(a), toDay(b)]);
+export const inHeatwave = (day) => HEATWAVES.some(([a, b]) => day >= a && day <= b);
+
 // Saisonale Außentemperatur-Abweichung (°C) – Nordhalbkugel
 export function seasonOffset(day) {
   const d = dayToDate(day);
   const doy = (d - Date.UTC(d.getUTCFullYear(), 0, 1)) / DAY_MS;
-  return -Math.cos(((doy - 15) / 365) * Math.PI * 2) * 3.5 + 0.5;
+  return -Math.cos(((doy - 15) / 365) * Math.PI * 2) * 3.5 + 0.5 + (inHeatwave(day) ? 6 : 0);
 }
 
 // Deterministisches Rauschen für tägliche Kursschwankung

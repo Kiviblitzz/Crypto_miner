@@ -3,7 +3,7 @@ import { COINS, COIN, ALGO_LABEL } from '../data/coins.js';
 import { PLACEABLE, PART, CATEGORIES, PLACEABLES, PARTS } from '../data/hardware.js';
 import { FACILITIES, FACILITY, CHAPTERS, TECHS } from '../data/world.js';
 import { fmtUSD, fmtNum, fmtCoin, fmtHash, fmtDate, fmtWatt } from '../sim/game.js';
-import { toDay, BTC_HASH } from '../data/history.js';
+import { toDay, BTC_HASH, inHeatwave } from '../data/history.js';
 
 const $ = (s) => document.querySelector(s);
 const h = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
@@ -60,7 +60,7 @@ export class UI {
   top() {
     const g = this.g, s = g.s;
     const hr = Math.floor(s.frac * 24), mi = Math.floor((s.frac * 24 - hr) * 60);
-    $('#date').innerHTML = `📅 ${fmtDate(s.day, true)}<span class="tod">${String(hr).padStart(2, '0')}:${String(mi).padStart(2, '0')}</span>`;
+    $('#date').innerHTML = `📅 ${fmtDate(s.day, true)}<span class="tod">${String(hr).padStart(2, '0')}:${String(mi).padStart(2, '0')}</span>${inHeatwave(s.day) ? '<span title="Hitzewelle: +6 °C Umgebung" style="margin-left:6px">🔥</span>' : ''}`;
     const p = g.dailyProfit();
     const btc = g.price('BTC'), btc7 = g.price('BTC', s.day - 7) || btc;
     const ch = ((btc / btc7 - 1) * 100);
