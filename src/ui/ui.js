@@ -101,8 +101,9 @@ export class UI {
   setSpeed(v) { if (!this.speedOk(v)) { this.toast('Noch nicht freigeschaltet.', 'info', 1800); return; } this.g.s.speed = v; this.g.s.paused = v === 0; [...$('#speed').children].forEach((b, i) => b.classList.toggle('on', SPEEDS[i].v === v)); }
   top() {
     const g = this.g, s = g.s;
-    const vf = this.w.visFrac ?? s.frac, hr = Math.floor(vf * 24), mi = Math.floor((vf * 24 - hr) * 60 / 10) * 10;
-    $('#date').innerHTML = `${fmtDate(s.day, true)}<span class="tod">${String(hr).padStart(2, '0')}:${String(mi).padStart(2, '0')}</span>${inHeatwave(s.day) ? '<span title="Hitzewelle: +6 °C Umgebung" style="margin-left:6px"></span>' : ''}`;
+    const vf = this.w.visFrac ?? s.frac, day = vf > 0.27 && vf < 0.79;
+    const icon = day ? '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.2" fill="currentColor"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg>' : '<svg viewBox="0 0 24 24" width="18" height="18"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5z" fill="currentColor"/></svg>';
+    $('#date').innerHTML = `${fmtDate(s.day, true)}<span class="tod" title="${day ? 'Tag' : 'Nacht'}">${icon}</span>${inHeatwave(s.day) ? '<span title="Hitzewelle: +6 °C Umgebung" style="margin-left:6px"></span>' : ''}`;
     const p = g.dailyProfit();
     const btc = g.price('BTC'), btc7 = g.price('BTC', s.day - 7) || btc;
     const ch = ((btc / btc7 - 1) * 100);
@@ -141,7 +142,8 @@ export class UI {
       else if (g.has('market') && !(s.stats.sold > 0)) { const pr = w.room?.props?.find((p) => p.action === 'market'); if (pr) { pos = [pr.c[0], pr.c[1] + 0.34, pr.c[2]]; label = 'Börse'; aimed = w.aim?.prop === pr; } }
     }
     const sp = pos && w.toScreen(...pos);
-    if (!sp || aimed) { el.classList.add('hidden'); return; }
+    if (!sp || aimed || (w.aim && !aimed)) { el.classList.add('hidden'); return; }
+    el.classList.toggle('far', sp.dist > 2.2);
     el.classList.remove('hidden'); el.classList.toggle('edge', !sp.on); el.classList.toggle('left', !sp.on && sp.side < 0);
     const ex = sp.side < 0 ? 150 : innerWidth - 150, ey = Math.min(innerHeight - 140, Math.max(200, sp.front ? sp.y : innerHeight * 0.55));
     el.style.transform = sp.on ? `translate(${Math.round(sp.x)}px, ${Math.round(sp.y)}px)` : `translate(${ex}px, ${Math.round(ey)}px)`;
@@ -205,7 +207,7 @@ export class UI {
     if (!force && el.childElementCount) return;
     this.lastBuildDay = g.s.day;
     el.innerHTML = '';
-    const head = h('<div class="bhead"><h2>Bauen</h2><button class="modal-x" title="Schließen (B)">✕</button></div>'); head.querySelector('button').onclick = () => this.resume(); el.append(head);
+    const hwLv = g.skillLv ? g.skillLv('hw') : 1; const head = h(`<div class="bhead"><h2>Bauen${hwLv > 1 ? `<span class="disc">Schrauben −${4 * (hwLv - 1)} %</span>` : ''}</h2><button class="modal-x" title="Schließen (B)">✕</button></div>`); head.querySelector('button').onclick = () => this.resume(); el.append(head);
     const cats = h('<div class="cats"></div>');
     const catOk = (c) => (c.id !== 'rigs' || g.has('rigs')) && g.shopList(c.id, fac).length > 0;
     if (!CATEGORIES.some((c) => c.id === this.cat && catOk(c))) this.cat = (CATEGORIES.find(catOk) || CATEGORIES[0]).id;
@@ -252,6 +254,7 @@ export class UI {
     document.body.classList.remove('show-build', 'show-goals'); this.dock();
     if (this.inspUid) { this.inspUid = null; $('#inspector').classList.add('hidden'); this.w.select(null); }
     this.w.focusObject?.(null); this.pickType = null; this.showRun = false; this.w.ghostPart?.(null);
+    if (this.lvQ) { const [k, lv] = this.lvQ; this.lvQ = null; setTimeout(() => this.levelUp(k, lv), 700); }
     if (this.w.mode === 'ui' || this.w.mode === 'play') this.w.setMode('play');
   }
   pause(on) {
@@ -320,6 +323,7 @@ export class UI {
     else if (p.action === 'ranking') this.ranking();
     else if (p.action === 'sleep') {
       const s = this.g.s;
+      if (s.feat && !s.flags.miningStarted) { this.toast('Erst den PC bauen, dann schlafen.', 'info', 2500); return; }
       const vf = this.w.visFrac ?? s.frac;
       if (vf > 0.25 && vf < 0.8) { this.toast('Noch nicht müde – schlafen kannst du ab 19 Uhr.', 'info', 3000); return; }
       this.fade(); const steps = vf >= 0.8 ? 1 : 0; for (let i = 0; i < steps; i++) this.g.advanceDay(); s.frac = 0.29; this.w.visFrac = 0.29;
@@ -452,7 +456,7 @@ export class UI {
       // Live-Vorschau: was der PC mit den eingebauten Teilen schafft
       const hs = [p.cpu, ...p.gpus].filter(Boolean).reduce((a, id) => a + (PART[id].hash.sha256 || 0), 0), watt = g.rigWatt(o);
       const rev = hs ? g.revenueFor({ sha256: hs }, 'BTC', 99) : 0, px = g.price('BTC') || 1;
-      const rows = [['Rechenleistung', hs ? fmtHash(hs, 'sha256') : '–'], ['Verbrauch', p.psu ? `${watt} W von ${PART[p.psu].cap} W` : `${watt} W`], ['Ertrag / Tag', rev ? `<span class="pos">≈ ${Math.round(rev / px).toLocaleString('de-DE')} BTC</span> <span style="color:var(--dim)">(${fmtUSD(rev)})</span>` : '–']];
+      const rows = [['Rechenleistung', hs ? fmtHash(hs, 'sha256') : '–'], ['Verbrauch', !g.partIds(o).length ? '–' : p.psu ? `${watt} W von ${PART[p.psu].cap} W` : `${watt} W`], ['Ertrag / Tag', rev ? `<span class="pos">≈ ${Math.round(rev / px).toLocaleString('de-DE')} BTC</span> <span style="color:var(--dim)">(${fmtUSD(rev)})</span>` : '–']];
       sec.append(h(`<div class="kv pcb-sum">${rows.map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join('')}</div>`));
       const ready = g.pcReady(o), miss = g.pcMissing(o).length;
       const on = h(`<div class="sec start"><button class="btn primary big wide ${ready ? 'glow' : ''}" ${ready ? '' : 'disabled'}><span class="bi"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg></span><span class="bt">PC einschalten</span></button>${ready ? '' : `<div class="pcb-left">Noch ${miss} ${miss === 1 ? 'Teil' : 'Teile'} bis zum Einschalten</div>`}</div>`);
@@ -976,7 +980,7 @@ export class UI {
   xpPop(k, n, lv) {
     const box = $('#xpbox') || (() => { const b = h('<div id="xpbox"></div>'); document.body.append(b); return b; })();
     const el = h(`<div class="xp"><span class="xi">${skillSvg(k, 16)}</span>+${n} ${SKILL[k].name}</div>`); box.append(el); setTimeout(() => el.remove(), 2400);
-    if (lv) setTimeout(() => this.levelUp(k, lv), 900);
+    if (lv) { if (this.w.focus) this.lvQ = [k, lv]; else setTimeout(() => this.levelUp(k, lv), 900); }
     this.dock();
   }
   levelUp(k, lv) {

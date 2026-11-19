@@ -1236,3 +1236,15 @@ body:has(#pause:not(.hidden)) #top, body:has(#pause:not(.hidden)) #goals, body:h
 .tiles .fee { font: 600 12px var(--font); color: var(--dim); margin-top: 4px; }
 .skills .sk-learn div + div { margin-top: 1px; }
 .goal .ck { margin-top: 7px !important; }
+/* Runde 5b (strengster Reviewer) */
+#objmark.far kbd { display: none; }
+#objmark.far .om-in { padding-left: 12px; }
+@media (min-width: 721px) {
+  #prompt { background: rgba(38,28,22,.9); border-radius: 18px; padding: 6px 14px 7px 6px !important; text-shadow: none !important; font: 600 15px var(--font-fun) !important; color: var(--text); box-shadow: 0 6px 16px rgba(0,0,0,.35); transform: translateX(-50%); left: 50%; }
+  #prompt kbd { min-width: 24px; height: 24px; border-radius: 50%; display: inline-grid; place-items: center; background: var(--acc); color: #3a2300; font: 700 13px var(--font-fun); box-shadow: 0 2px 0 #a66313; border: 0; padding: 0; margin-right: 8px; vertical-align: middle; }
+  #prompt .ln, #prompt .st { padding-left: 32px; text-align: left; color: var(--dim) !important; font: 600 12px var(--font) !important; }
+}
+#date .tod { display: inline-flex; vertical-align: -3px; color: var(--acc); }
+#goals .goal > div:last-child { display: flex; flex-wrap: wrap; align-items: baseline; }
+#goals .goal .bag { flex-basis: 100%; }
+#build .bhead .disc { margin-left: 10px; font: 700 12px var(--font); padding: 3px 10px; border-radius: 999px; background: rgba(95,211,141,.16); color: #9fe8bd; vertical-align: 3px; }

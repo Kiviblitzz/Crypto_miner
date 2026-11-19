@@ -23,7 +23,7 @@ export class Game {
 
   newGame() {
     const s = {
-      version: 1, day: START_DAY, frac: 0.35, cash: 300, nextUid: 1,
+      version: 1, day: START_DAY, frac: 0.83, cash: 300, nextUid: 1,
       wallet: Object.fromEntries(COINS.map((c) => [c.id, { ex: 0, cold: 0 }])),
       autoSell: Object.fromEntries(COINS.map((c) => [c.id, DEFAULT_AUTOSELL])),
       payoutCold: false,

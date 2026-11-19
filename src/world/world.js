@@ -365,7 +365,7 @@ export class World {
   // Kamera zum Monitor (Miner bootet)
   focusMonitor() {
     const pr = this.room?.props?.find((p) => p.action === 'market'); if (!pr) return;
-    const pos = new THREE.Vector3(pr.c[0] - 0.12, pr.c[1] + 0.08, pr.c[2] + 0.95), look = new THREE.Vector3(pr.c[0] + 0.2, pr.c[1] - 0.03, pr.c[2]);
+    const pos = new THREE.Vector3(pr.c[0] + 0.18, pr.c[1] + 0.05, pr.c[2] + 0.62), look = new THREE.Vector3(pr.c[0] + 0.05, pr.c[1], pr.c[2]);
     const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(pos, look, new THREE.Vector3(0, 1, 0)));
     this.focus = { pos, q, light: new THREE.Vector3(pr.c[0], pr.c[1], pr.c[2] + 0.35) }; this.focusUid = null;
     if (!this.focusLight) { this.focusLight = new THREE.PointLight(0xffe2b8, 0, 0.9, 1.6); this.scene.add(this.focusLight); }
@@ -515,9 +515,10 @@ export class World {
     this.raycaster.far = this.reach() + 1.5;
     const hits = this.raycaster.intersectObjects([...this.objGroup.children, ...this.doorGroup.children, ...(this.looseGroup?.children || []), this.room.root], true);
     this.raycaster.far = Infinity;
-    let aim = null;
+    let aim = null; const looseHit = hits.some((x) => x.object.userData.loose);
     for (const h of hits) {
       const o = h.object; if (o.isSprite) continue;
+      if (o.userData.prop && looseHit) continue; // Teile auf dem Bett haben Vorrang vor der Schlafen-Box
       if (o.userData.loose) { aim = { loose: o.userData.loose, dist: h.distance }; break; }
       if (o.userData.door) { aim = { door: o.userData.door, dist: h.distance }; break; }
       if (o.userData.prop) { aim = { prop: o.userData.prop, dist: h.distance }; break; }
@@ -538,7 +539,7 @@ export class World {
   // ---------- Schwebende Ertrags-Einblendungen ----------
   spawnIncome() {
     if (this.empire || this.mode !== 'play' || this.focus || !this.game.s.speed || document.body.classList.contains('show-build')) return;
-    const now = this.t; if (this.lastIncome && now - this.lastIncome < 1.1) return; this.lastIncome = now;
+    const now = this.t; if (this.lastIncome && now - this.lastIncome < 3.0) return; this.lastIncome = now;
     const sm = this.game.summary[this.facId]; if (!sm || sm.tripped) return;
     this.popups ||= [];
     const cand = [];
@@ -549,13 +550,13 @@ export class World {
       if (!p) { if (this.popups.length >= 14) break; const c = document.createElement('canvas'); c.width = 256; c.height = 64; const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; p = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false })); p.renderOrder = 15; p.userData.c = c; this.scene.add(p); this.popups.push(p); }
       const c = p.userData.c, g = c.getContext('2d'); g.clearRect(0, 0, 256, 64); g.fillStyle = 'rgba(38,28,22,.86)'; g.beginPath(); g.roundRect(14, 6, 228, 52, 26); g.fill();
       g.font = '600 34px Fredoka, Nunito, Arial'; g.textAlign = 'center'; g.shadowColor = 'transparent'; const coin = u0?.coin || 'BTC', asCoin = !(this.game.s.autoSell?.[coin] > 0); const px = this.game.price(coin) || 1;
-      const per = 1.1 / ([Infinity, 4.0, 1.6, 0.5, 0.12][this.game.s.speed] || 4); // Anteil eines Tages pro Einblendung
+      const per = 3.0 / ([Infinity, 4.0, 1.6, 0.5, 0.12][this.game.s.speed] || 4); // Anteil eines Tages pro Einblendung
       const txt = asCoin ? `+${fmtCoin((rev / px) * per)} ${coin}` : '+' + fmtUSD(rev * per); g.fillStyle = asCoin ? '#ffc640' : '#6fdc9c'; g.fillText(txt, 128, 44, 210); g.shadowColor = 'transparent';
       p.material.map.needsUpdate = true;
       const sc = 0.6;
       const bb = e.group.userData.bbox; p.position.set(e.group.position.x, (bb ? bb.max.y : 0.6) + 0.15, e.group.position.z);
       p.scale.set(sc, sc / 4, 1); p.visible = true; p.userData.life = 0; p.userData.y0 = p.position.y; p.material.opacity = 1;
-      this.coinBurst(p.position, 3); this.onIncome?.();
+      this.coinBurst(new THREE.Vector3(e.group.position.x, (bb ? bb.max.y : 0.6) + 0.02, e.group.position.z), 3); this.onIncome?.();
     }
   }
   pulse(uid) { const e = this.entries.get(uid); if (!e || !this.outline) return; this.outline.selectedObjects = [e.group]; this.outline.pulsePeriod = 0.5; this.outline.visibleEdgeColor.set(0xffc23a); clearTimeout(this.pulseT); this.pulseT = setTimeout(() => { this.outline.pulsePeriod = 0; this.outline.visibleEdgeColor.set(0xffdda0); }, 1500); }
@@ -1004,6 +1005,7 @@ export class World {
       if (sc.kind === 'pc') {
         // Mining-Konsole auf dem Monitor im Kinderzimmer – mit echten Werten
         const s = this.game.s, sm = this.game.summary[this.facId];
+        if (s.feat && !s.flags.miningStarted) { g.fillStyle = '#050403'; g.fillRect(0, 0, W, H); g.fillStyle = '#3a2a18'; g.beginPath(); g.arc(W - 18, H - 16, 4, 0, 7); g.fill(); sc.tex.needsUpdate = true; continue; }
         g.fillStyle = '#140b04'; g.fillRect(0, 0, W, H); g.font = 'bold 26px monospace'; g.fillStyle = '#ffb347';
         g.fillText('miner v2.' + (s.day % 7) + ' – ' + fmtDate(s.day), 14, 34);
         g.font = '21px monospace';
@@ -1011,7 +1013,7 @@ export class World {
         if (this.bootT != null && this.t - this.bootT < 5.5) {
           const pc = this.game.facObjects(this.facId).find((o) => o.type === 'tower'), gpu = pc?.parts?.gpus?.[0], a = pc && sm?.per.get(pc.uid);
           const boot = ['Starte Miner ...', `GPU gefunden: ${gpu ? PART[gpu].name : '-'}`, 'Verbinde mit dem Bitcoin-Netz ...', `Schürfe! ${a?.units?.[0]?.h ? fmtHash(a.units[0].h, 'sha256') : ''}`];
-          boot.slice(0, 1 + Math.floor((this.t - this.bootT) / 1.1)).forEach((l, k) => g.fillText(l, 14, 76 + k * 34));
+          g.font = 'bold 30px monospace'; boot.slice(0, 1 + Math.floor((this.t - this.bootT) / 1.1)).forEach((l, k) => g.fillText(l, 14, 84 + k * 42));
           sc.tex.needsUpdate = true; continue;
         }
         let i = 0;
