@@ -316,7 +316,7 @@ export class UI {
     const ci = CHAPTERS.findIndex((c) => c.unlock === id);
     const next = CHAPTERS[ci + 1];
     this.onModalClose = () => { if (this.w.transition) this.w.transition.hold = false; };
-    this.story(next?.title || f.name, `${next?.intro || ''}<br/><br/><b>${esc(f.name)}</b> – ${esc(f.place)}<br/>${f.w} × ${f.d} m · ${f.power[0].kw.toLocaleString('de-DE')} kW Anschluss${f.rent ? ` · Miete ${fmtUSD(f.rent)}/Monat` : ''}<br/><i>${esc(f.desc)}</i>`);
+    this.story(next?.title || f.name, `${next?.intro || ''}<br/><br/><b>${esc(f.name)}</b> – ${esc(f.place)}<br/>${f.w} × ${f.d} m · ${f.power[0].kw.toLocaleString('de-DE')} kW Anschluss${f.rent ? ` · Miete ${fmtUSD(f.rent)}/Monat` : ''}<br/><i>${esc(f.desc)}</i><br/><br/>📏 <b>${Math.round((f.w * f.d) / 14).toLocaleString('de-DE')}×</b> so groß wie dein Kinderzimmer · ⚡ <b>${Math.round(f.power[0].kw / 1.8).toLocaleString('de-DE')}×</b> so viel Strom.`);
   }
 
   // ---------- Dock ----------
