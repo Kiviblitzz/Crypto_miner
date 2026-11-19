@@ -50,6 +50,11 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Space') { e.preventDefault(); ui.setSpeed(game.s.speed ? 0 : (ui.lastSpeed || 1)); }
   if (['1', '2', '3', '4'].includes(e.key)) { ui.setSpeed(+e.key); ui.lastSpeed = +e.key; }
   if (e.key === 'f' || e.key === 'F') { if (!world.fpActive) world.enterFP(); }
+  if (e.key === 'Delete' && world.selected) {
+    const o = game.findObj(world.selected); if (!o) return;
+    if (ui.delArmed === o.uid) { const v = game.objectValue(o); game.removeObject(o.uid); ui.inspect(null); ui.delArmed = null; ui.toast(`Verkauft für ${v.toLocaleString('de-DE')} $`, 'good', 2500); }
+    else { ui.delArmed = o.uid; ui.toast('Nochmal Entf drücken, um das Objekt zu verkaufen.', 'info', 3000); setTimeout(() => { if (ui.delArmed === o.uid) ui.delArmed = null; }, 3000); }
+  }
 });
 
 // Spielschleife

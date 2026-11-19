@@ -440,8 +440,9 @@ export class Game {
     s.lastNet = netOwn;
     // Coins gutschreiben & Auto-Verkauf
     let sold = 0, minedUSD = 0;
+    s.stats.coins ||= {};
     for (const [c, n] of Object.entries(minedByCoin)) {
-      const p = this.price(c, day); minedUSD += n * p;
+      const p = this.price(c, day); minedUSD += n * p; s.stats.coins[c] = (s.stats.coins[c] || 0) + n;
       const sell = n * s.autoSell[c];
       sold += sell * p;
       const keep = n - sell;

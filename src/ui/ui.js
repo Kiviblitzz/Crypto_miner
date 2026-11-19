@@ -71,6 +71,7 @@ export class UI {
     const nw = g.netWorthFast();
     const ease = (cur, target) => (cur == null || Math.abs(target - cur) > Math.abs(target) * 0.5 + 1e4 ? target : cur + (target - cur) * 0.35);
     this.dCash = ease(this.dCash, s.cash); this.dNw = ease(this.dNw, nw);
+    $('#st-cash').title = 'Bargeld für Hardware, Strom, Miete und Löhne'; $('#st-nw').title = 'Kontostand + Coins + Wiederverkaufswert der Hardware − Kredit'; $('#st-profit').title = 'Mining-Ertrag minus Strom, Miete, Löhne und Zinsen pro Tag';
     $('#st-cash').innerHTML = `<div class="l">Kontostand</div><div class="v ${s.cash < 0 ? 'neg' : ''}">${fmtUSD(this.dCash)}</div>`;
     $('#st-nw').innerHTML = `<div class="l">Vermögen</div><div class="v">${fmtUSD(this.dNw)}</div>`;
     $('#st-profit').innerHTML = `<div class="l">Gewinn / Tag</div><div class="v ${p.net >= 0 ? 'pos' : 'neg'}">${p.net >= 0 ? '+' : ''}${fmtUSD(p.net)}</div>`;
@@ -369,7 +370,8 @@ export class UI {
     det.append(range);
     this.range ??= 365;
     requestAnimationFrame(() => this.chart(cv, c.id, this.range));
-    const kv = h(`<div class="kv"><div class="k">Auf der Börse</div><div class="v">${fmtCoin(w.ex)} ${c.id} (${fmtUSD(w.ex * p)})</div><div class="k">In der Cold-Wallet</div><div class="v">${fmtCoin(w.cold)} ${c.id} (${fmtUSD(w.cold * p)})</div></div>`);
+    const mined = (s.stats.coins || {})[c.id] || 0;
+    const kv = h(`<div class="kv"><div class="k">Insgesamt geschürft</div><div class="v">${fmtCoin(mined)} ${c.id} (heute ${fmtUSD(mined * p)} wert)</div><div class="k">Auf der Börse</div><div class="v">${fmtCoin(w.ex)} ${c.id} (${fmtUSD(w.ex * p)})</div><div class="k">In der Cold-Wallet</div><div class="v">${fmtCoin(w.cold)} ${c.id} (${fmtUSD(w.cold * p)})</div></div>`);
     det.append(kv);
     const r1 = h('<div class="row"></div>');
     for (const f of [0.25, 0.5, 1]) { const b = h(`<button class="btn small">${f * 100} % verkaufen</button>`); b.disabled = w.ex <= 0; b.onclick = () => { const u = g.sell(c.id, f); this.audio?.cash(); this.toast(`Verkauft für ${fmtUSD(u)}`, 'good', 2500); this.market(); }; r1.append(b); }
