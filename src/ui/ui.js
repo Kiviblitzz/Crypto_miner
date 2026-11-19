@@ -538,7 +538,7 @@ export class UI {
     const m0 = s.messages.find((m) => m.id === 'm0');
     const txt = m0 ? m0.text : MESSAGES.find((m) => m.id === 'm0').text;
     const body = h(`<div class="intro-phone"><div class="ip-date">${fmtDate(s.day)}</div>
-      <div class="phone"><div class="ph-top"><div class="av">D</div><div><b>Deniz</b><span class="on">online</span></div></div>
+      <div class="phone"><div class="ph-top"><div class="av"><svg viewBox="0 0 40 40" width="40" height="40"><circle cx="20" cy="20" r="20" fill="#6fb8ff"/><path d="M6 40c1-8 7-12 14-12s13 4 14 12z" fill="#e2574c"/><circle cx="20" cy="18" r="8.5" fill="#e7b48f"/><path d="M11 17c0-7 5-10 10-10 6 0 9 4 8 9-3-3-7-4-11-3-3 1-5 2-7 4z" fill="#2f241e"/><circle cx="17" cy="19" r="1.1" fill="#2f241e"/><circle cx="23" cy="19" r="1.1" fill="#2f241e"/><path d="M17 22.5q3 2.2 6 0" stroke="#8a4a3a" stroke-width="1.3" fill="none" stroke-linecap="round"/></svg></div><div><b>Deniz</b><span class="on">online</span></div></div>
         <div class="msg f-Deniz">${esc(txt)}</div>
         <div class="msg f-Deniz pricecard"><div class="pc-h"><span class="pc-dot">₿</span>Bitcoin · BTC</div><div class="pc-p">${fmtUSD(p)}</div><canvas class="chart" width="900" height="300"></canvas></div>
         <div class="msg f-Deniz">Probier’s aus! Starte das Mining an deinem PC.</div>
@@ -605,24 +605,26 @@ export class UI {
     this.openModal(body, '', 'market');
   }
   chart(cv, id, range, mini = false) {
-    const g = this.g, s = g.s, ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
-    ctx.clearRect(0, 0, W, H);
+    const g = this.g, s = g.s, ctx = cv.getContext('2d'), dpr = Math.min(2, window.devicePixelRatio || 1);
+    const cw = cv.clientWidth || 600, chh = cv.clientHeight || 220; cv.width = Math.round(cw * dpr); cv.height = Math.round(chh * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const W = cw, H = chh; ctx.clearRect(0, 0, W, H);
     const start = Math.max(COIN[id].start, s.day - range, toDay('2010-07-17')), end = s.day;
-    if (end - start < 2) { ctx.fillStyle = '#94a0b2'; ctx.font = '600 28px Nunito, sans-serif'; ctx.fillText('Noch keine Kursdaten', 40, 60); return; }
+    if (end - start < 2) { ctx.fillStyle = '#94a0b2'; ctx.font = '600 14px Nunito, sans-serif'; ctx.fillText('Noch keine Kursdaten', 40, 60); return; }
     const n = Math.max(2, Math.min(300, end - start)), pts = []; ctx.lineJoin = 'round';
     for (let i = 0; i <= n; i++) { const d = Math.round(start + (end - start) * (i / n)); pts.push([d, g.price(id, d)]); }
     const vals = pts.map((p) => p[1]).filter((v) => v > 0);
     const logScale = Math.max(...vals) / Math.min(...vals) > 30;
     const tf = (v) => (logScale ? Math.log10(Math.max(v, 1e-9)) : v);
     const mn = Math.min(...vals.map(tf)), mx = Math.max(...vals.map(tf));
-    const pad = mini ? 10 : 110, x = (i) => pad + (i / n) * (W - pad * (mini ? 2 : 1.25)), y = (v) => H - (mini ? 14 : 40) - ((tf(v) - mn) / (mx - mn || 1)) * (H - (mini ? 28 : 80));
-    ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.fillStyle = '#bcc6d3'; ctx.font = '600 30px Nunito, sans-serif'; ctx.lineWidth = 1;
-    if (!mini) for (let k = 0; k <= 4; k++) { const v = mn + ((mx - mn) * k) / 4; const yy = H - 40 - (k / 4) * (H - 80); ctx.beginPath(); ctx.moveTo(pad, yy); ctx.lineTo(W - 20, yy); ctx.stroke(); ctx.fillText(fmtUSD(logScale ? Math.pow(10, v) : v), 4, yy - 4); }
-    if (!mini) { ctx.fillText(fmtDate(start), pad, H - 8); ctx.fillText(fmtDate(end), W - 190, H - 8); }
-    const grad = ctx.createLinearGradient(0, 0, 0, H); grad.addColorStop(0, COIN[id].color + '66'); grad.addColorStop(1, COIN[id].color + '00');
-    ctx.beginPath(); pts.forEach(([d, v], i) => (i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v)))); ctx.lineTo(x(n), H - (mini ? 14 : 40)); ctx.lineTo(x(0), H - (mini ? 14 : 40)); ctx.fillStyle = grad; ctx.fill();
-    ctx.beginPath(); pts.forEach(([d, v], i) => (i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v)))); ctx.strokeStyle = COIN[id].color; ctx.lineWidth = 3; ctx.stroke();
-    if (logScale && !mini) { ctx.fillStyle = '#7d8aa0'; ctx.fillText('log', W - 60, 28); }
+    const pad = mini ? 6 : 78, padR = mini ? 6 : 18, padB = mini ? 6 : 24, x = (i) => pad + (i / n) * (W - pad - padR), y = (v) => H - padB - ((tf(v) - mn) / (mx - mn || 1)) * (H - padB - (mini ? 6 : 14));
+    ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.fillStyle = '#bcc6d3'; ctx.font = '600 13px Nunito, sans-serif'; ctx.lineWidth = 1;
+    ctx.fillStyle = '#c9b8a3';
+    if (!mini) for (let k = 0; k <= 4; k++) { const v = mn + ((mx - mn) * k) / 4; const yy = H - padB - (k / 4) * (H - padB - 14); ctx.beginPath(); ctx.moveTo(pad, yy); ctx.lineTo(W - padR, yy); ctx.stroke(); ctx.fillText(fmtUSD(logScale ? Math.pow(10, v) : v), 4, yy - 4); }
+    if (!mini) { ctx.textAlign = 'left'; ctx.fillText(fmtDate(start), pad, H - 6); ctx.textAlign = 'right'; ctx.fillText(fmtDate(end), W - padR, H - 6); ctx.textAlign = 'left'; }
+    const grad = ctx.createLinearGradient(0, 0, 0, H); grad.addColorStop(0, COIN[id].color + '38'); grad.addColorStop(1, COIN[id].color + '00');
+    ctx.beginPath(); pts.forEach(([d, v], i) => (i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v)))); ctx.lineTo(x(n), H - padB); ctx.lineTo(x(0), H - padB); ctx.fillStyle = grad; ctx.fill();
+    ctx.beginPath(); pts.forEach(([d, v], i) => (i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v)))); ctx.strokeStyle = COIN[id].color; ctx.lineWidth = 2; ctx.stroke();
+    if (logScale && !mini) { ctx.fillStyle = '#9a8a78'; ctx.textAlign = 'right'; ctx.fillText('log', W - padR, 14); ctx.textAlign = 'left'; }
   }
 
   phone() {

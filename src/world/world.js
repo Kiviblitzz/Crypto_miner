@@ -442,7 +442,7 @@ export class World {
     if (!this.thumbScene) {
       const sc = (this.thumbScene = new THREE.Scene()); sc.environment = this.scene.environment;
       sc.add(new THREE.HemisphereLight(0xfff4e6, 0x3a3530, 0.7));
-      const k = new THREE.DirectionalLight(0xffffff, 1.3); k.position.set(2, 3, 2.5); sc.add(k);
+      const k = new THREE.DirectionalLight(0xffffff, 1.8); k.position.set(2, 3, 2.5); sc.add(k);
       this.thumbCam = new THREE.PerspectiveCamera(30, W / H, 0.01, 200);
       this.thumbRT = new THREE.WebGLRenderTarget(W, H, { samples: 4 });
     }
