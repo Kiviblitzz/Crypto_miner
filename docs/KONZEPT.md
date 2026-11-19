@@ -73,6 +73,10 @@ Alle Standorte laufen parallel weiter – das Zimmer bleibt als „Museum" deine
   Erscheinungsdatum (Toast + News-Ticker), alte verschwinden nach einigen Jahren aus dem Handel.
 * **Solar, Kredit, Hitzewellen, Übernahmeangebot 2021:** Solaranlagen senken Stromkosten, Bankkredite mit historischen Zinsen,
   echte Hitzewellen heizen die Räume, und Viktor Kral bietet nach dem China-Bann an, Hashwerk zu kaufen (Entscheidung).
+* **Eigener Coin per ICO (2017):** Erlös in Aether – wer nicht vor dem Crash 2018 verkauft, verliert den Großteil.
+* **Imperium-Ansicht:** alle Standorte als Dioramen nebeneinander – das Wachstum auf einen Blick.
+* **Familie & Personal sichtbar:** du am Schreibtisch, Papa an der Werkbank, Opa im Keller, Deniz und Techniker in den Hallen.
+* **Deko:** Neon-Schild „HODL", Aquarium, Kühlschrank, Arcade-Automat, Sofa, Pflanzen.
 * **Meilensteine:** 1 GH/s … 10 EH/s, „Millionär!", „Milliardär!" mit Fanfare.
 * **Leben in der Halle:** Techniker laufen herum, du sitzt im Kinderzimmer am Schreibtisch,
   defekte Geräte qualmen, ab 38 °C glüht der Bildschirmrand rot.
