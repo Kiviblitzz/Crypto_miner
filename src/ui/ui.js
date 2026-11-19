@@ -276,6 +276,8 @@ export class UI {
       for (const d of devs) { const p = g.itemPrice(d); const r = g.revenueFor({ [d.algo]: d.hash }, g.bestCoin({ [d.algo]: d.hash }, d.vram || 99) || 'BTC', d.vram || 99) - d.watt / 1000 * 24 * g.elecPrice(g.facOf(o.uid)); sel.append(h(`<option value="${d.id}">${esc(d.name)} – ${fmtUSD(p)} (${r >= 0 ? '+' : ''}${fmtUSD(r)}/Tag)</option>`)); }
       sec.append(sel);
       const row = h('<div class="row"></div>');
+      const others = g.facObjects(g.facOf(o.uid)).filter((x) => x.type === o.type && x.items.length < def.slots);
+      if (others.length > 1) { const ab = h(`<button class="btn small good" style="margin-top:6px">Alle ${others.length} ${esc(def.name.split(' (')[0])} hier auffüllen</button>`); ab.onclick = () => { let k = 0; for (const x of others) k += g.holderAdd(x.uid, sel.value, def.slots); this.toast(k ? `${k}× ${esc(PLACEABLE[sel.value].name)} eingesetzt` : 'Nicht genug Geld.', k ? 'good' : 'bad', 3000); this.inspect(o.uid); }; sec.append(ab); }
       for (const n of [1, 5, 25, 'max']) { if (n !== 'max' && n > def.slots) continue; const b = h(`<button class="btn small ${n === 'max' ? 'primary' : ''}">${n === 'max' ? 'Auffüllen' : '+' + n}</button>`); b.onclick = () => { const k = g.holderAdd(o.uid, sel.value, n === 'max' ? def.slots : n); if (!k) this.toast('Nicht genug Geld oder kein Platz.', 'bad'); else this.toast(`${k}× ${PLACEABLE[sel.value].name} eingesetzt`, 'good', 2500); this.inspect(o.uid); }; row.append(b); }
       sec.append(row);
       if (!devs.length) sec.append(h('<div class="empty">Keine passenden Geräte im Handel.</div>'));
