@@ -25,7 +25,7 @@ world.onPlace = (type, x, z, rot, template) => {
   const def = PLACEABLE[type];
   if (!game.placeableAllowed(def, fac)) { ui.toast('Das passt hier nicht hin.', 'bad'); return null; }
   const o = template ? game.cloneObject(template, fac, x, z, rot) : game.addObject(fac, type, x, z, rot);
-  if (!o) { ui.toast('Nicht genug Geld.', 'bad'); return null; }
+  if (!o) { const blk = template && game.cloneBlocked(template); ui.toast(blk ? `${blk} gibt es nicht mehr zu kaufen.` : 'Nicht genug Geld.', 'bad'); return null; }
   audio.buy();
   return o;
 };

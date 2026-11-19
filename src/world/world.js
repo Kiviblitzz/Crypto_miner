@@ -282,7 +282,7 @@ export class World {
       else if (a?.status === 'empty') icon = 'empty';
       else if (e.obj.type === 'tower' && e.obj.parts && !this.game.s.flags.miningStarted) icon = null; // dafür gibt es den Zielhinweis am Objekt
       else if (a?.status === 'off' && e.obj.parts && !this.game.pcReady(e.obj)) icon = 'empty';
-      else if (a?.status === 'idle' || a?.status === 'off') icon = 'sleep';
+      else if (a?.status === 'idle' || a?.status === 'full' || a?.status === 'off') icon = 'sleep';
       e.running = !sm.tripped && a && a.watt > 0;
       if (e.obj.type === 'tower') { if (!e.light) { e.light = new THREE.PointLight(0xffa860, 0, 0.7, 2); e.light.position.set(0, 0.34, 0); e.group.add(e.light); } e.light.intensity = e.running ? 0.35 : 0; }
       e.sprite.visible = !!icon && this.mode !== 'title' && !(this.focus && this.focusUid === uid);
