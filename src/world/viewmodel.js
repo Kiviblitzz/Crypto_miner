@@ -11,11 +11,11 @@ export class ViewModel {
     this.camera = camera;
     // Eigene Szene + Licht für die Hände
     this.scene = new THREE.Scene();
-    this.scene.add(new THREE.HemisphereLight(0xfff6ea, 0x3a3f4a, 1.4));
-    const key = new THREE.DirectionalLight(0xffffff, 1.6); key.position.set(0.6, 1, 0.4); this.scene.add(key);
+    this.hemi = new THREE.HemisphereLight(0xfff6ea, 0x3a3f4a, 1.4); this.scene.add(this.hemi);
+    const key = (this.key = new THREE.DirectionalLight(0xffffff, 1.6)); key.position.set(0.6, 1, 0.4); this.scene.add(key);
     this.root = new THREE.Group(); this.scene.add(this.root);
-    const sleeve = new THREE.MeshStandardMaterial({ color: 0x2d4f86, roughness: 0.92 });
-    const cuffM = new THREE.MeshStandardMaterial({ color: 0x24406e, roughness: 0.95 });
+    const sleeve = new THREE.MeshStandardMaterial({ color: 0x4a5160, roughness: 0.92 });
+    const cuffM = new THREE.MeshStandardMaterial({ color: 0x3c4250, roughness: 0.95 });
     const skin = new THREE.MeshStandardMaterial({ color: 0xe0b08a, roughness: 0.62 });
     const nail = new THREE.MeshStandardMaterial({ color: 0xf0cdb6, roughness: 0.35 });
     this.mats = { sleeve, cuffM, skin, nail };

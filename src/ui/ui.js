@@ -45,14 +45,15 @@ export class UI {
     game.on('release', (it, text) => { if (it.type !== 'psu' && it.type !== 'mobo') this.toast(`${esc(text)}`, 'info', 6000); this.ticker(); this.lastBuildDay = -99; });
     game.on('update', () => this.onDay());
     game.on('refresh', () => this.refresh());
-    game.on('unlockable', (id) => { this.toast(`<b>${FACILITY[id].short}</b> ist frei`, 'good', 8000); this.goals(); this.sites(); });
+    game.on('goal', () => { this.audio?.cash(); });
+    game.on('unlockable', (id) => { this.milestone('Kapitel geschafft', `${FACILITY[id].short} ist frei`); this.toast(`<b>${FACILITY[id].short}</b> ist frei`, 'good', 8000); this.goals(); this.sites(); });
     setInterval(() => this.top(), 200);
     this.refresh(); this.ticker();
   }
 
   refresh() { this.top(); this.sites(); this.build(true); this.goals(); this.dock(); if (this.inspUid) this.inspect(this.inspUid, true); }
   onDay() {
-    this.sites(); this.goals();
+    this.sites(); this.goals(); this.keysHint();
     for (const t of TECHS) if (toDay(t.date) === this.g.s.day) { this.toast(`Neue Technologie verfügbar: <b>${esc(t.name)}</b>`, 'good', 7000); this.dock(); }
     if (this.g.s.day % 7 === 0) this.dock();
     if (this.g.s.day - this.lastBuildDay >= 7) this.build(true);
@@ -72,7 +73,7 @@ export class UI {
   setSpeed(v) { if (!this.speedOk(v)) { this.toast('Noch nicht freigeschaltet.', 'info', 1800); return; } this.g.s.speed = v; this.g.s.paused = v === 0; [...$('#speed').children].forEach((b, i) => b.classList.toggle('on', SPEEDS[i].v === v)); }
   top() {
     const g = this.g, s = g.s;
-    const hr = Math.floor(s.frac * 24), mi = Math.floor((s.frac * 24 - hr) * 60);
+    const vf = this.w.visFrac ?? s.frac, hr = Math.floor(vf * 24), mi = Math.floor((vf * 24 - hr) * 60 / 10) * 10;
     $('#date').innerHTML = `${fmtDate(s.day, true)}<span class="tod">${String(hr).padStart(2, '0')}:${String(mi).padStart(2, '0')}</span>${inHeatwave(s.day) ? '<span title="Hitzewelle: +6 °C Umgebung" style="margin-left:6px"></span>' : ''}`;
     const p = g.dailyProfit();
     const btc = g.price('BTC'), btc7 = g.price('BTC', s.day - 7) || btc;
@@ -230,24 +231,26 @@ export class UI {
       if (a && a.units.length) { const rev = a.units.reduce((x, u) => x + u.rev, 0) * sm.throttle; const cost = a.watt / 1000 * 24 * sm.elec; line = `${a.units.filter((u) => u.h).map((u) => fmtHash(u.h * sm.throttle, u.algo)).join(' · ') || 'pausiert'} · <span class="${rev - cost >= 0 ? 'pos' : 'neg'}">${rev - cost >= 0 ? '+' : ''}${fmtUSD(rev - cost)}/Tag</span>`; }
       else if (def.kind === 'cooling') line = `kühlt ${fmtWatt(def.cool)}`;
       const st = { broken: 'Defekt – reparieren', partial: 'Teilweise defekt', psu: 'Netzteil zu schwach', incomplete: 'Teile fehlen – bestücken', empty: '➕ Leer – Geräte einsetzen', idle: 'pausiert (unrentabel)', off: '⏻ aus' }[a?.status];
-      html = `<kbd>E</kbd>${esc(def.short || def.name.replace(/[-‑]Gehäuse|\s*\(.*\)/g, ''))}${st ? `<div class="st">${st}</div>` : line ? `<div class="ln">${line}</div>` : ''}`;
+      html = `<kbd>E</kbd>${esc(o.type === 'tower' ? 'Dein PC' : (def.short || def.name.replace(/[-‑]Gehäuse|\s*\(.*\)/g, '')))}${st ? `<div class="st">${st}</div>` : line ? `<div class="ln">${line}</div>` : ''}`;
     }
     el.innerHTML = html; el.classList.remove('hidden');
   }
   useProp(p) {
-    if (p.action === 'market') { if (!this.g.has('market')) { this.toast('Starte erst das Mining am PC.', 'info', 3500); return; } this.market(); }
+    if (p.action === 'market') { if (!this.g.has('market')) { this.toast(this.g.s.flags.miningStarted ? 'Noch nichts zu verkaufen – lass den PC arbeiten.' : 'Starte erst das Mining am PC.', 'info', 3000); return; } this.market(); }
     else if (p.action === 'company') this.company();
     else if (p.action === 'techs') this.techs();
     else if (p.action === 'ranking') this.ranking();
     else if (p.action === 'sleep') {
       const s = this.g.s;
-      if (s.frac > 0.25 && s.frac < 0.8) { this.toast('Noch nicht müde – schlafen kannst du ab 19 Uhr.', 'info', 3000); return; }
-      this.fade(); const steps = s.frac >= 0.8 ? 1 : 0; for (let i = 0; i < steps; i++) this.g.advanceDay(); s.frac = 0.29;
+      const vf = this.w.visFrac ?? s.frac;
+      if (vf > 0.25 && vf < 0.8) { this.toast('Noch nicht müde – schlafen kannst du ab 19 Uhr.', 'info', 3000); return; }
+      this.fade(); const steps = vf >= 0.8 ? 1 : 0; for (let i = 0; i < steps; i++) this.g.advanceDay(); s.frac = 0.29; this.w.visFrac = 0.29;
       this.toast('Guten Morgen!', 'good', 2500);
     }
   }
   travel(door) {
     const g = this.g;
+    if (!FACILITIES.some((f) => f.id !== g.s.current && (g.s.unlocked.includes(f.id) || g.canUnlock(f.id)))) { this.toast('Die Tür bleibt erst mal zu.', 'info', 2200); return; }
     const body = h(`<div><h2>${esc(door.label)}</h2><p style="color:#94a0b2;margin-top:-6px">Wohin willst du?</p><div class="cards"></div></div>`);
     const cards = body.querySelector('.cards');
     for (const f of FACILITIES) {
@@ -378,7 +381,21 @@ export class UI {
       if (type === 'mobo') s = `${it.slots} GPU-Slots (Rahmen: max. ${PLACEABLE[o.type].maxGpu})`;
       const price = g.itemPrice(it);
       const row = h(`<div class="picker-row ${it.id === cur ? 'cur' : ''}"><div><b>${esc(it.name)}</b>${it.id === bestId ? ' <span class="new">BESTER WERT</span>' : ''}${price > g.s.cash ? ' <span style="color:#ff6b6b;font-size:11px">zu teuer</span>' : ''}<div class="s">${s}</div></div><div class="p" style="color:#ffb000;font-weight:700">${fmtUSD(price)}</div><button class="btn small primary" ${price > g.s.cash ? 'disabled' : ''}>${cur ? 'Tauschen' : 'Kaufen'}</button></div>`);
-      row.querySelector('button').onclick = () => { if (!g.setPart(o.uid, type, it.id, idx)) { this.toast('Nicht genug Geld.', 'bad'); return; } this.closeModal(); this.inspect(o.uid); };
+      row.querySelector('button').onclick = () => {
+        const revOf = () => { const sm = g.summary[g.facOf(o.uid)], a = sm?.per.get(o.uid); return a ? a.units.reduce((x, u) => x + u.rev, 0) * sm.throttle : 0; };
+        const before = revOf();
+        let ps = null, extra = 0;
+        if (type === 'gpu' && o.parts.psu) {
+          const oldW = cur ? PART[cur].watt || 0 : 0, add = (it.watt || 0) - oldW, n = g.psuCount(o);
+          if (g.rigWatt(o) + add > PART[o.parts.psu].cap * n) { ps = g.fitPsu(o, add); extra = g.itemPrice(ps) * n - Math.round(g.itemPrice(PART[o.parts.psu]) * 0.5 * n); }
+        }
+        if (g.s.cash < price + extra) { this.toast(ps ? `Dafür brauchst du auch ein stärkeres Netzteil (+${fmtUSD(extra)}).` : 'Nicht genug Geld.', 'bad'); return; }
+        if (!g.setPart(o.uid, type, it.id, idx)) { this.toast('Nicht genug Geld.', 'bad'); return; }
+        if (ps && ps.id !== o.parts.psu) g.setPart(o.uid, 'psu', ps.id);
+        this.closeModal(); this.inspect(o.uid);
+        const after = revOf(); this.audio?.powerOn(); this.w.pulse?.(o.uid);
+        if (after > before + 0.005) this.toast(`Eingebaut · ${fmtUSD(before)} → <b>${fmtUSD(after)}</b> pro Tag${ps ? ' (mit neuem Netzteil)' : ''}`, 'good', 4500);
+      };
       list.append(row);
     }
     this.openModal(body, 'narrow');
@@ -425,8 +442,9 @@ export class UI {
       if (done || shown >= 1) continue; shown++;
       let prog = '';
       if (!done && go.progress) { const [cur, tgt, kind] = go.progress(s, g.helpers()); const f = (v) => (kind === 'hash' ? fmtHash(v) : fmtUSD(v)); const pc = Math.max(0, Math.min(100, tgt ? (cur / tgt) * 100 : 0)); prog = `<div style="font-size:11px;color:#94a0b2">${f(Math.max(0, cur))} / ${f(tgt)}</div><div class="bar" style="width:180px"><div style="width:${pc}%;background:#ffb000"></div></div>`; }
-      const row = h(`<div class="goal ${done ? 'done' : ''}"><div class="ck">${done ? '✓' : ''}</div><div>${esc(go.text)}${prog}</div></div>`);
-      if (!done && go.action) { const b = h(`<button class="btn small primary"><kbd>G</kbd>${esc(go.action.label)}</button>`); b.disabled = s.cash < go.action.cost; b.onclick = () => { if (g.goalAction(go)) { this.toast('✔ Erledigt!', 'good'); this.goals(); } }; row.lastElementChild.append(h('<br/>'), b); }
+      const gk = s.chapter + ':' + go.id, enter = gk !== this.goalKey; this.goalKey = gk;
+      const row = h(`<div class="goal ${done ? 'done' : ''} ${enter ? 'enter' : ''}"><div class="ck">${done ? '✓' : ''}</div><div>${esc(go.text)}${prog}</div></div>`);
+      if (!done && go.action) { const b = h(`<button class="btn small primary"><kbd>G</kbd>${esc(go.action.label)}</button>`); b.disabled = !g.canPayGoal(go); b.onclick = () => { if (g.goalAction(go)) { this.toast('✔ Erledigt!', 'good'); this.goals(); } }; row.lastElementChild.append(h('<br/>'), b); }
       el.append(row);
     }
     const allDone = ch.goals.every((go) => s.goals[go.id]);
@@ -437,7 +455,7 @@ export class UI {
     const s = this.g.s, ch = CHAPTERS[s.chapter]; if (!ch) return false;
     const go = ch.goals.find((x) => !s.goals[x.id] && x.action);
     if (!go) { this.toast('Nichts zu bezahlen.', 'info', 2000); return false; }
-    if (s.cash < go.action.cost) { this.toast(`Du brauchst ${fmtUSD(go.action.cost)}.`, 'bad'); return false; }
+    if (!this.g.canPayGoal(go)) { this.toast(`Du brauchst ${fmtUSD(go.action.cost)}.`, 'bad'); return false; }
     if (this.g.goalAction(go)) { this.toast(`✔ ${esc(go.action.label)} – erledigt!`, 'good'); this.audio?.cash(); this.goals(); this.top(); return true; }
     return false;
   }
@@ -562,7 +580,7 @@ export class UI {
     const r3 = h(`<div class="sec"><h4>Auto-Verkauf: <span id="as-v">${Math.round(s.autoSell[c.id] * 100)} %</span></h4><input type="range" min="0" max="100" step="5" value="${Math.round(s.autoSell[c.id] * 100)}"/></div>`);
     r3.querySelector('input').oninput = (e) => { s.autoSell[c.id] = e.target.value / 100; r3.querySelector('#as-v').textContent = e.target.value + ' %'; };
     const all = h('<button class="btn small" style="margin-top:6px">Für alle</button>'); all.onclick = () => { for (const k of COINS) s.autoSell[k.id] = s.autoSell[c.id]; this.toast('Übernommen', 'good', 1500); }; r3.append(all);
-    if (g.has('autosell')) det.append(r3); else 
+    if (g.has('autosell')) det.append(r3);
     this.openModal(body, '', 'market');
   }
   chart(cv, id, range, mini = false) {

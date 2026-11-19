@@ -50,7 +50,7 @@ export const CHAPTERS = [
       { id: 'look', text: 'Starte das Mining an deinem PC', check: (s) => s.flags.miningStarted },
       { id: 'sell', text: 'Verkauf deine Bitcoin am Monitor', check: (s) => s.stats.sold > 0 },
       { id: 'gpu', text: 'Bau eine zweite Grafikkarte ein', check: (s) => s.flags.boughtGpu },
-      { id: 'earn', text: 'Verdiene 1.000 $', check: (s) => s.stats.minedUSD >= 1000, progress: (s) => [s.stats.minedUSD, 1000, 'usd'] },
+      { id: 'earn', text: 'Schürfe Bitcoin im Wert von 1.000 $', check: (s) => s.stats.minedUSD >= 1000, progress: (s) => [s.stats.minedUSD, 1000, 'usd'] },
       { id: 'papa1', text: 'Bezahl Papas Stromrechnung', action: { label: '2.000 $ geben', cost: 2000, flag: 'papa1' }, check: (s) => s.flags.papa1 },
     ],
   },
@@ -102,7 +102,7 @@ export const CHAPTERS = [
 // Handy-Nachrichten. when: Datum ODER cond(state, helpers)
 export const MESSAGES = [
   { id: 'm0', date: '2010-10-01', from: 'Deniz', text: 'Alter, kennst du Bitcoin? Das ist Internetgeld, das Computer selbst herstellen. Dein PC kann das auch!' },
-  { id: 'm1', date: '2010-10-02', from: 'Papa', text: 'Die Bank will 15.000 $ bis Ende 2013. Sonst ist der Laden weg. Nicht dein Problem, Kind.' },
+  { id: 'm1', date: '2010-10-04', from: 'Papa', text: 'Die Bank will 15.000 $ bis Ende 2013. Sonst ist der Laden weg. Nicht dein Problem, Kind.' },
   { id: 'm2', date: '2010-10-09', from: 'Deniz', text: 'Tipp: Crimson-Karten minen viel schneller als Verdant. Die RHD 5870 ist gerade der Hit.' },
   { id: 'm3', cond: (s, h) => h.maxTemp() > 32, from: 'Mama', text: 'Warum ist es bei dir so warm? Und was brummt da?' },
   { id: 'm4', date: '2010-11-06', from: 'Deniz', text: '0,39 $ pro Bitcoin!! 😳' },

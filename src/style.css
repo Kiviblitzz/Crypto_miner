@@ -819,7 +819,7 @@ body.lowfx .featcard, body.lowfx .pause-card, body.lowfx #dock, body.lowfx #spla
 #inspector:not(.hidden) { animation: slideInR .24s cubic-bezier(.2,.7,.2,1); }
 @keyframes popInC { from { opacity: 0; transform: translate(-50%, -48%) scale(.985); } to { opacity: 1; transform: translate(-50%, -50%); } }
 @media (min-width: 721px) { body.show-build #build { animation: popInC .24s cubic-bezier(.2,.7,.2,1); } }
-#goals .goal { animation: slideInR .3s cubic-bezier(.2,.7,.2,1); }
+#goals .goal.enter { animation: slideInR .3s cubic-bezier(.2,.7,.2,1); }
 #pause:not(.hidden) .pause-card { animation: popIn .24s cubic-bezier(.2,.7,.2,1); }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 @media (min-width: 721px) { #inspector { top: 128px; } }
@@ -829,3 +829,5 @@ body.lowfx .featcard, body.lowfx .pause-card, body.lowfx #dock, body.lowfx #spla
 .cashfly { position: fixed; left: 34px; top: 68px; z-index: 40; font: 700 22px var(--font-c); color: #8af2b4; text-shadow: 0 2px 10px rgba(0,0,0,.6); pointer-events: none; animation: cashfly 1.4s ease-out forwards; }
 @keyframes cashfly { 0% { opacity: 0; transform: translateY(14px); } 20% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-26px); } }
 #build .item .miss { margin-top: 6px; font-size: 12px; color: rgba(255,122,114,.85); }
+
+@media (min-width: 721px) { body[data-mode="play"] #sites .site.fix { display: block !important; } }

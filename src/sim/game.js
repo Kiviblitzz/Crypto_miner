@@ -35,6 +35,7 @@ export class Game {
       feat: { phone: 1 },
     };
     for (const c of COINS) s.autoSell[c.id] = 0;
+    const m0 = MESSAGES.find((m) => m.id === 'm0'); if (m0) s.messages.push({ id: 'm0', day: START_DAY, from: m0.from, text: m0.text, read: true }); // Start-Nachricht (im Intro gezeigt)
     this.s = s;
     this.cache = {};
     // Startausstattung: alter Tower-PC mit Q66 + RHD 4850
@@ -178,7 +179,7 @@ export class Game {
   checkFeatures() {
     const s = this.s; if (!s.feat) return;
     const btc = s.wallet.BTC ? s.wallet.BTC.ex + s.wallet.BTC.cold : 0;
-    if (s.flags.miningStarted && btc * this.price('BTC') >= 4) this.grant('market');
+    if (s.flags.miningStarted && btc * this.price('BTC') >= 12) this.grant('market');
     if (s.flags.boughtGpu) { this.grant('build'); this.grant('speed2'); }
     if (this.has('build')) { let hot = false; for (const id of s.unlocked) if ((this.summary[id]?.temp || 0) > 30) hot = true; if (hot) this.grant('heat'); }
     if (s.chapter >= 1) { this.grant('rigs'); this.grant('autosell'); this.grant('speed3'); this.grant('company'); this.grant('build'); this.grant('speed2'); this.grant('market'); }
@@ -551,6 +552,7 @@ export class Game {
   netWorthFast() { return this.s.cash + this.walletValue() + this.hardwareValue() - (this.s.loan || 0); }
 
   wear(o, temp, day) {
+    if (this.s.chapter === 0 && this.s.feat) return; // im Kinderzimmer geht nichts kaputt
     const def = PLACEABLE[o.type];
     const heatMul = (temp < 30 ? 1 : temp < 38 ? 1 + (temp - 30) / 8 : 2 + (temp - 38) * 0.5) * this.fx('fail');
     const life = (def.life || 6) * 365;
@@ -617,7 +619,7 @@ export class Game {
   checkGoals() {
     const s = this.s, h = this.helpers();
     const ch = CHAPTERS[s.chapter]; if (!ch) return;
-    for (const g of ch.goals) if (!s.goals[g.id] && g.check(s, h)) { s.goals[g.id] = true; this.toast(`✔ ${g.text}`, 'good'); }
+    for (const g of ch.goals) if (!s.goals[g.id] && g.check(s, h)) { s.goals[g.id] = true; this.toast(`✔ ${g.text}`, 'good'); this.emit('goal', g); }
     const done = ch.goals.every((g) => s.goals[g.id]);
     if (done && s.day >= toDay(ch.minDate)) {
       if (ch.unlock) {
@@ -626,7 +628,10 @@ export class Game {
       } else if (!s.flags.won) { s.flags.won = true; this.emit('won'); s.chapter++; }
     }
   }
+  canPayGoal(g) { return this.canAfford(g.action.cost) || this.s.cash + this.exchangeValue() >= g.action.cost; }
+  exchangeValue() { let v = 0; for (const c of COINS) { const w = this.s.wallet[c.id]; if (w && w.ex > 0) v += w.ex * this.price(c.id) * 0.995; } return v; }
   goalAction(g) {
+    if (!this.canAfford(g.action.cost) && this.canPayGoal(g)) { let need = g.action.cost - this.s.cash + 0.01; for (const c of COINS) { const w = this.s.wallet[c.id], p = this.price(c.id); if (need <= 0 || !p || !(w.ex > 0)) continue; const n = Math.min(w.ex, need / (p * 0.995)); w.ex -= n; this.s.cash += n * p * 0.995; this.s.stats.sold += n * p * 0.995; need -= n * p * 0.995; } }
     if (!this.canAfford(g.action.cost)) return false;
     this.s.cash -= g.action.cost; this.s.flags[g.action.flag] = true;
     this.checkGoals(); this.checkFeatures(); this.dayUpdate(true); return true;

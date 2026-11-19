@@ -15,11 +15,12 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 
 // Farbgebung: leichte Wärme, etwas Sättigung, weiche Vignette (läuft nach dem Tonemapping)
 const GradeShader = {
-  uniforms: { tDiffuse: { value: null }, vignette: { value: 0.26 }, sat: { value: 1.04 }, warm: { value: 0.006 } },
+  uniforms: { tDiffuse: { value: null }, vignette: { value: 0.2 }, sat: { value: 0.98 }, warm: { value: 0.0 } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
   fragmentShader: 'uniform sampler2D tDiffuse; uniform float vignette; uniform float sat; uniform float warm; varying vec2 vUv;\n' +
     'void main(){ vec4 c = texture2D(tDiffuse, vUv); float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722)); c.rgb = mix(vec3(l), c.rgb, sat);\n' +
-    ' c.rgb += vec3(warm, warm * 0.35, -warm * 0.8); vec2 d = (vUv - 0.5) * vec2(1.0, 0.82); float v = smoothstep(0.78, 0.22, length(d));\n' +
+    ' c.rgb += vec3(-0.012, 0.0, 0.016) * (1.0 - smoothstep(0.0, 0.45, l)); c.rgb = mix(c.rgb, c.rgb * vec3(1.035, 1.0, 0.95), smoothstep(0.35, 1.0, l)); c.rgb = mix(c.rgb, c.rgb * c.rgb * (3.0 - 2.0 * c.rgb), 0.22);\n' +
+    ' vec2 d = (vUv - 0.5) * vec2(1.0, 0.82); float v = smoothstep(0.78, 0.22, length(d));\n' +
     ' c.rgb *= mix(1.0 - vignette, 1.0, v); gl_FragColor = c; }',
 };
 import { buildRoom, buildOutside } from './rooms.js';
@@ -54,7 +55,7 @@ export class World {
     const pm = new THREE.PMREMGenerator(r);
     this.scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
     this.scene.environmentIntensity = 0.45;
-    this.camera = new THREE.PerspectiveCamera(72, 1, 0.05, 2500);
+    this.camera = new THREE.PerspectiveCamera(60, 1, 0.05, 2500);
     // Orbit-Steuerung nur für Titelbild und Karte (Imperium)
     this.controls = new OrbitControls(this.camera, canvas);
     this.controls.enableDamping = true; this.controls.dampingFactor = 0.08;
@@ -77,7 +78,8 @@ export class World {
     this.aim = null;
 
     // Licht
-    this.hemi = new THREE.HemisphereLight(0xcfe6ff, 0x5a4a3a, 0.7); this.scene.add(this.hemi);
+    this.hemi = new THREE.HemisphereLight(0xfff0dc, 0x6b5440, 0.5); this.scene.add(this.hemi);
+    this.moon = new THREE.DirectionalLight(0x9db4ff, 0); this.scene.add(this.moon); this.scene.add(this.moon.target);
     this.sun = new THREE.DirectionalLight(0xfff1dc, 2.5); this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048); this.sun.shadow.bias = -0.0004; this.sun.shadow.normalBias = 0.02;
     this.scene.add(this.sun); this.scene.add(this.sun.target);
@@ -93,11 +95,12 @@ export class World {
     this.gtao.updateGtaoMaterial({ radius: 0.38, distanceExponent: 1.2, thickness: 1.0, scale: 1.0, samples: 12 });
     this.gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6 });
     this.gtao.blendIntensity = 0.75;
+    { const ov = this.gtao.overrideVisibility.bind(this.gtao); this.gtao.overrideVisibility = () => { ov(); this.scene.traverse((o) => { if (o.visible && (o.isSprite || (o.isMesh && o.material && o.material.transparent && !o.material.depthWrite))) { o.visible = false; (this.gtao._hiddenExtra ||= []).push(o); } }); }; const rv = this.gtao.restoreVisibility.bind(this.gtao); this.gtao.restoreVisibility = () => { rv(); (this.gtao._hiddenExtra || []).forEach((o) => (o.visible = true)); this.gtao._hiddenExtra = []; }; }
     this.composer.addPass(this.gtao);
     // Weiche Kontur um das anvisierte Objekt
     this.outline = new OutlinePass(new THREE.Vector2(1280, 720), this.scene, this.camera);
     Object.assign(this.outline, { edgeStrength: 2.6, edgeGlow: 0.35, edgeThickness: 1.6, pulsePeriod: 0 });
-    this.outline.visibleEdgeColor.set(0xfff4d6); this.outline.hiddenEdgeColor.set(0x6a5a3a);
+    this.outline.visibleEdgeColor.set(0xffc46b); this.outline.hiddenEdgeColor.set(0x6a5a3a); this.outline.edgeStrength = 3.5;
     this.composer.addPass(this.outline);
     { const vp = new RenderPass(this.vm.scene, this.camera); vp.clear = false; vp.clearDepth = true; this.composer.addPass(vp); }
     this.bloom = new UnrealBloomPass(new THREE.Vector2(512, 512), 0.28, 0.55, 1.1);
@@ -112,9 +115,9 @@ export class World {
     this.raycaster = new THREE.Raycaster(); this.mouse = new THREE.Vector2(); this.floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     this.keys = {}; this.placing = null; this.selected = null; this.hoverUid = null;
     this.selBox = new THREE.Box3Helper(new THREE.Box3(), 0xffffff); this.selBox.material.transparent = true; this.selBox.material.opacity = 0.18; this.selBox.material.depthWrite = false; this.selBox.visible = false; this.scene.add(this.selBox);
-    this.ghostOk = new THREE.MeshStandardMaterial({ color: 0x30ff90, transparent: true, opacity: 0.45, emissive: 0x10ff60, emissiveIntensity: 0.4, depthWrite: false });
-    this.ghostBad = new THREE.MeshStandardMaterial({ color: 0xff3030, transparent: true, opacity: 0.45, emissive: 0xff1010, emissiveIntensity: 0.4, depthWrite: false });
-    this.footprint = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: 0x30ff90, transparent: true, opacity: 0.25, depthWrite: false }));
+    this.ghostOk = new THREE.MeshStandardMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0.35, emissive: 0x6fb8ff, emissiveIntensity: 0.25, depthWrite: false });
+    this.ghostBad = new THREE.MeshStandardMaterial({ color: 0xff7a72, transparent: true, opacity: 0.38, emissive: 0xff4a40, emissiveIntensity: 0.2, depthWrite: false });
+    this.footprint = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0.2, depthWrite: false }));
     this.footprint.rotation.x = -Math.PI / 2; this.footprint.visible = false; this.scene.add(this.footprint);
     this.gridHelper = null;
     this.clock = new THREE.Clock(); this.t = 0; this.transition = null;
@@ -159,7 +162,7 @@ export class World {
     for (let x = 0; x <= def.w + 1e-6; x += step) gpts.push(x, 0, 0, x, 0, def.d);
     for (let z = 0; z <= def.d + 1e-6; z += step) gpts.push(0, 0, z, def.w, 0, z);
     const gg = new THREE.BufferGeometry(); gg.setAttribute('position', new THREE.Float32BufferAttribute(gpts, 3));
-    this.gridHelper = new THREE.LineSegments(gg, new THREE.LineBasicMaterial({ color: 0x6ad1ff, transparent: true, opacity: 0.22 }));
+    this.gridHelper = new THREE.LineSegments(gg, new THREE.LineBasicMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0.12 }));
     this.gridHelper.position.y = 0.006;
     this.gridHelper.visible = false; this.scene.add(this.gridHelper);
     // Schatten-Kamera an Raumgröße anpassen
@@ -296,7 +299,7 @@ export class World {
     p.ghost.position.set(x, 0.002, z); p.ghost.rotation.y = -p.rot * Math.PI / 2;
     const m = p.valid ? this.ghostOk : this.ghostBad;
     p.ghost.traverse((o) => { if (o.isMesh) o.material = m; });
-    this.footprint.position.set(x, 0.01, z); this.footprint.scale.set(w, d, 1); this.footprint.material.color.set(p.valid ? 0x30ff90 : 0xff3030);
+    this.footprint.position.set(x, 0.01, z); this.footprint.scale.set(w, d, 1); this.footprint.material.color.set(p.valid ? 0xbfe6ff : 0xff7a72);
   }
   confirmPlacement() {
     const p = this.placing; if (!p || !p.valid) return;
@@ -410,9 +413,9 @@ export class World {
       let p = this.popups.find((q) => !q.visible);
       if (!p) { if (this.popups.length >= 14) break; const c = document.createElement('canvas'); c.width = 256; c.height = 64; const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; p = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false })); p.renderOrder = 15; p.userData.c = c; this.scene.add(p); this.popups.push(p); }
       const c = p.userData.c, g = c.getContext('2d'); g.clearRect(0, 0, 256, 64);
-      g.font = '700 40px Barlow, Arial'; g.textAlign = 'center'; g.shadowColor = 'rgba(0,0,0,0.6)'; g.shadowBlur = 10; g.shadowOffsetY = 2; const coin = u0?.coin || 'BTC', asCoin = !(this.game.s.autoSell?.[coin] > 0); const px = this.game.price(coin) || 1;
+      g.font = '700 42px "Barlow Condensed", Barlow, Arial'; g.textAlign = 'center'; g.shadowColor = 'rgba(0,0,0,0.6)'; g.shadowBlur = 10; g.shadowOffsetY = 2; const coin = u0?.coin || 'BTC', asCoin = !(this.game.s.autoSell?.[coin] > 0); const px = this.game.price(coin) || 1;
       const per = 1.1 / ([Infinity, 4.0, 1.6, 0.5, 0.12][this.game.s.speed] || 4); // Anteil eines Tages pro Einblendung
-      const txt = asCoin ? `+${fmtCoin((rev / px) * per)} ${coin}` : '+' + fmtUSD(rev * per); g.fillStyle = asCoin ? '#ffcf5a' : '#8af2b4'; g.fillText(txt, 128, 46); g.shadowColor = 'transparent';
+      const txt = asCoin ? `+${fmtCoin((rev / px) * per)} ${coin}` : '+' + fmtUSD(rev * per); g.fillStyle = asCoin ? '#ffc640' : '#6fdc9c'; g.fillText(txt, 128, 46); g.shadowColor = 'transparent';
       p.material.map.needsUpdate = true;
       const sc = 0.5;
       const bb = e.group.userData.bbox; p.position.set(e.group.position.x, (bb ? bb.max.y : 0.6) + 0.15, e.group.position.z);
@@ -420,7 +423,7 @@ export class World {
       this.coinBurst(p.position, 3);
     }
   }
-  pulse(uid) { const e = this.entries.get(uid); if (!e || !this.outline) return; this.outline.selectedObjects = [e.group]; this.outline.pulsePeriod = 0.5; this.outline.visibleEdgeColor.set(0xffc23a); clearTimeout(this.pulseT); this.pulseT = setTimeout(() => { this.outline.pulsePeriod = 0; this.outline.visibleEdgeColor.set(0xfff4d6); }, 1500); const bb = e.group.userData.bbox; this.coinBurst(new THREE.Vector3(e.group.position.x, (bb ? bb.max.y : 0.5) + 0.1, e.group.position.z), 6); }
+  pulse(uid) { const e = this.entries.get(uid); if (!e || !this.outline) return; this.outline.selectedObjects = [e.group]; this.outline.pulsePeriod = 0.5; this.outline.visibleEdgeColor.set(0xffc23a); clearTimeout(this.pulseT); this.pulseT = setTimeout(() => { this.outline.pulsePeriod = 0; this.outline.visibleEdgeColor.set(0xffc46b); }, 1500); const bb = e.group.userData.bbox; this.coinBurst(new THREE.Vector3(e.group.position.x, (bb ? bb.max.y : 0.5) + 0.1, e.group.position.z), 6); }
   // Kleine Münzen springen aus dem Gerät (Rückmeldung für Einkommen)
   coinBurst(pos, n) {
     if (!this.coinTex) { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'); const gr = g.createRadialGradient(26, 24, 4, 32, 32, 30); gr.addColorStop(0, '#fff3b0'); gr.addColorStop(0.5, '#ffc93a'); gr.addColorStop(1, '#c98a00'); g.fillStyle = gr; g.beginPath(); g.arc(32, 32, 28, 0, 7); g.fill(); g.strokeStyle = 'rgba(120,70,0,.6)'; g.lineWidth = 3; g.stroke(); g.fillStyle = 'rgba(120,70,0,.75)'; g.font = 'bold 34px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('₿', 32, 34); this.coinTex = new THREE.CanvasTexture(c); this.coinTex.colorSpace = THREE.SRGBColorSpace; this.coins = []; }
@@ -607,7 +610,7 @@ export class World {
     if (!this.empire) return;
     this.scene.remove(this.empire); this.empire = null;
     this.empireHidden.forEach((o) => (o.visible = true)); this.roomLights.forEach((l) => (l.visible = true));
-    this.camera.fov = 72; this.camera.updateProjectionMatrix(); this.doorGroup.visible = true;
+    this.camera.fov = 60; this.camera.updateProjectionMatrix(); this.doorGroup.visible = true;
     this.loadFacility(this.facId);
     const sp = this.savedPose; if (sp) { this.player.setPose(sp.x, sp.z, sp.yaw, sp.pitch); }
     this.onEmpire?.(false);
@@ -752,7 +755,10 @@ export class World {
     }
     this.vm.update(dt, { moving: this.player.moving && this.mode === 'play', bob: this.player.bob, placing: !!this.placing, visible: this.mode === 'play' || this.mode === 'ui', uiOpen: this.mode === 'ui' });
     // Tag/Nacht
-    this.updateDaylight(s.frac);
+    // Optik-Uhr: Licht folgt der Spielzeit gedämpft (höchstens ein Tag pro 90 s) – kein Flackern bei hohem Tempo
+    if (this.mode === 'title' || this.visFrac == null) this.visFrac = s.frac;
+    else { const df = (s.frac - this.visFrac + 1) % 1; this.visFrac = (this.visFrac + Math.min(df, dt / 90)) % 1; }
+    this.updateDaylight(this.visFrac);
     this.updatePeople(dt); this.updateSmoke(dt); this.updateWeather(dt); this.updatePopups(dt);
     // Lüfter & LEDs
     const fanSpeed = 28 * dt;
@@ -774,19 +780,22 @@ export class World {
     const day = Math.max(0, elev);
     const def = this.def, span = Math.max(def.w, def.d);
     const az = ((hour - 6) / 12) * Math.PI;
-    this.sun.position.set(def.w / 2 + Math.cos(az) * span * 1.5, Math.max(0.15, elev) * span * 2 + 2, def.d / 2 - Math.sin(az) * span * 0.8 - span);
+    this.sun.position.set(def.w / 2 + Math.cos(az) * span * 1.5, Math.max(0.3, elev) * span * 2 + 2, def.d / 2 - Math.sin(az) * span * 0.8 - span);
     this.sun.target.position.set(def.w / 2, 0, def.d / 2);
-    this.sun.intensity = 0.12 + day * 1.7;
+    const sunUp = THREE.MathUtils.smoothstep(elev, -0.05, 0.1);
+    this.sun.intensity = sunUp * (0.12 + day * 1.7);
+    this.moon.intensity = 0.22 * (1 - THREE.MathUtils.smoothstep(elev, -0.1, 0.1)); this.moon.position.set(def.w / 2 - span * 0.4, span * 2.2, def.d / 2 - span * 1.6); this.moon.target.position.set(def.w / 2, 0, def.d / 2);
     const warm = Math.max(0, 1 - Math.abs(elev) * 3);
     this.sun.color.setRGB(1, 0.92 - warm * 0.25, 0.85 - warm * 0.4);
-    this.hemi.intensity = 0.05 + day * 0.55; this.fill.intensity = 0.04 + day * 0.08;
+    this.hemi.intensity = 0.15 + day * 0.3; this.fill.intensity = 0;
     if (day <= 0) this.sun.color.setRGB(0.55, 0.65, 1.0);
     const night = new THREE.Color(0x0b1226), dayc = new THREE.Color(def.style === 'fjord' ? 0x9cc2e6 : 0x8fbbe8), dusk = new THREE.Color(0xe7925a);
     const sky = night.clone().lerp(dayc, Math.min(1, day * 1.6)); sky.lerp(dusk, warm * 0.45 * (elev > -0.3 ? 1 : 0));
     this.scene.background = sky; if (this.scene.fog) this.scene.fog.color.copy(sky);
-    this.scene.environmentIntensity = 0.07 + day * 0.4;
+    this.scene.environmentIntensity = 0.25 + day * 0.2;
     const lampK = 0.75 + (1 - day) * 0.6;
-    this.renderer.toneMappingExposure = 0.98 + (1 - day) * 0.25;
+    this.renderer.toneMappingExposure = 0.98 + (1 - day) * 0.08;
+    if (this.vm?.hemi) { this.vm.hemi.intensity = 0.45 + day * 0.95; this.vm.key.intensity = 0.35 + day * 1.25; this.vm.hemi.color.set(day > 0.2 ? 0xfff6ea : 0xffd8a8); }
     this.roomLights?.forEach((l, i) => (l.intensity = this.room.lights[i].intensity * lampK));
   }
 

@@ -91,7 +91,7 @@ function loop(now) {
     const t = now / 1000 * 0.12;
     world.camera.position.set(3.3, 1.6, 3.05);
     world.controls.target.set(1.9 + Math.sin(t) * 1.4, 1.05 + Math.sin(t * 0.7) * 0.15, 0.6 + Math.cos(t) * 0.5);
-    s.frac = 0.8;
+    s.frac = 0.83;
   } else if (s.speed && document.getElementById('modal').classList.contains('hidden') && !ui.paused) {
     s.frac += dt / SEC_PER_DAY[s.speed];
     let n = 0;

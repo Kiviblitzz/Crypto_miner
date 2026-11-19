@@ -63,7 +63,7 @@ function shell(def, { floorMat, wallMatA, wallMatB, thick = 0.15, holes = {}, ba
   const right = mk('right', d, wallMatB, new THREE.Vector3(w + thick / 2, 0, 0), -Math.PI / 2, new THREE.Vector3(1, 0, 0), holes.right);
   // Decke (nur im Rundgang sichtbar)
   const ceil = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat('ceiling', { color: 0xf2efe8, roughness: 1, side: THREE.DoubleSide }));
-  ceil.rotation.x = Math.PI / 2; ceil.position.set(w / 2, h, d / 2); ceil.castShadow = false; root.add(ceil);
+  ceil.rotation.x = Math.PI / 2; ceil.position.set(w / 2, h, d / 2); ceil.castShadow = (def.tier ?? 0) <= 2; root.add(ceil); // Sonne nur durchs Fenster
   return { root, walls, back, front, left, right, ceil };
 }
 
@@ -77,7 +77,7 @@ export function buildRoom(def) {
   if (def.style === 'bedroom') {
     S = shell(def, {
       floorMat: mat('floorWood', { map: TEX.wood([3, 3]), roughness: 0.65 }),
-      wallMatA: wallMat('bedA', TEX.plaster([2, 2], '#9fb6c9')), wallMatB: wallMat('bedB', TEX.plaster([2, 2], '#ece4d3')),
+      wallMatA: wallMat('bedA', TEX.plaster([2, 2], '#a3b2b5')), wallMatB: wallMat('bedB', TEX.plaster([2, 2], '#ece4d3')),
       holes: { back: [{ from: 1.0, to: 2.0, y0: 0.9, y1: 2.15 }], right: [{ from: 2.6, to: 3.45, y0: 0, y1: 2.05 }] },
     });
     windowFrame(S.back, 1.0, 2.0, 0.9, 2.15, 0.15);
@@ -111,11 +111,16 @@ export function buildRoom(def) {
     put('chair', 2.75, 0.78, 0.15);
     B.blocked.push(blk(2.5, 0.5, 3.0, 1.0));
     // Teppich
-    const rug = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.3), mat('rug', { map: TEX.carpet([1, 1], 350), roughness: 1 })); rug.rotation.x = -Math.PI / 2; rug.position.set(2.0, 0.005, 2.3); rug.receiveShadow = true; g.add(rug);
+    const rug = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.3), mat('rug', { map: TEX.carpet([1, 1], 18), roughness: 1 })); rug.rotation.x = -Math.PI / 2; rug.position.set(2.0, 0.005, 2.3); rug.receiveShadow = true; g.add(rug);
     // Regal rechts hinten an der Wand
     put('bookshelf', 3.75, 0.16);
+    put('lampion', 2.0, 1.8).position.y = 2.36;
+    put('desklamp', 2.12, 0.12).position.y = 0.74;
+    put('fairy', 2.0, 0.09).position.y = 2.42;
+    put('radiator', 1.5, 0.1).position.y = 0.12;
     B.blocked.push(blk(3.5, 0, 4.0, 0.5));
-    B.lights.push({ pos: [2.0, 1.9, 1.8], color: 0xffdcb0, intensity: 2.6, dist: 8 });
+    B.lights.push({ pos: [2.0, 2.05, 1.8], color: 0xffdcb0, intensity: 2.6, dist: 8 });
+    B.lights.push({ pos: [2.32, 1.02, 0.2], color: 0xffb46b, intensity: 1.1, dist: 2.2 }); // Schreibtischlampe
     B.lights.push({ pos: [1.5, 1.5, 0.45], color: 0xcfe0ff, intensity: 1.1, dist: 4 }); // kühles Fensterlicht auf Tisch und PC
     B.outside = 'town';
     B.doors = [{ c: [3.98, 1.0, 3.03], s: [0.14, 2.0, 0.85], label: 'Zimmertür' }];
@@ -134,7 +139,7 @@ export function buildRoom(def) {
     for (const z of [0.6, 1.3]) { const ring = new THREE.Mesh(new THREE.TorusGeometry(0.19, 0.025, 10, 32), M.alu()); ring.rotation.y = Math.PI / 2; ring.position.set(0.61, 0.42, z); g.add(ring); cyl(g, 0.03, 0.03, 0.03, M.offwhite(), 0.6, 0.76, z + 0.18, 20, 'x'); box(g, 0.02, 0.06, 0.18, M.offwhite(), 0.6, 0.73, z - 0.12); box(g, 0.01, 0.02, 0.05, M.ledGreen(), 0.61, 0.77, z + 0.05); }
     B.blocked.push(blk(0, 0.3, 0.6, 1.6));
     // Heizkessel
-    box(g, 0.7, 1.6, 0.6, mat('boiler', { color: 0xd65d2a, roughness: 0.5, metalness: 0.3 }), 0.35, 0, 4.4);
+    box(g, 0.7, 1.6, 0.6, mat('boiler', { color: 0xe6e1d6, roughness: 0.45, metalness: 0.1 }), 0.35, 0, 4.4);
     cyl(g, 0.05, 0.05, 0.9, M.copper(), 0.3, 1.95, 4.4, 10);
     B.blocked.push(blk(0, 4.0, 0.7, 5.0));
     // Treppe
