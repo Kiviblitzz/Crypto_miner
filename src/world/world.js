@@ -246,9 +246,10 @@ export class World {
       else if (a?.status === 'broken' || a?.status === 'partial') icon = 'broken';
       else if (a?.status === 'incomplete' || a?.status === 'psu') icon = 'warn';
       else if (a?.status === 'empty') icon = 'empty';
+      else if (a?.status === 'off' && e.obj.parts && !this.game.pcReady(e.obj)) icon = 'empty';
       else if (a?.status === 'idle' || a?.status === 'off') icon = 'sleep';
       e.running = !sm.tripped && a && a.watt > 0;
-      e.sprite.visible = !!icon && this.mode !== 'title';
+      e.sprite.visible = !!icon && this.mode !== 'title' && !(this.focus && this.focusUid === uid);
       if (icon) { e.sprite.material.map = this.icons[icon]; const bb = e.group.userData.bbox; e.sprite.position.set(0, (bb ? bb.max.y : 1) + 0.22, 0); e.sprite.scale.set(sc, sc, sc); }
     }
     if (this.selected) this.refreshSelBox();
@@ -258,6 +259,20 @@ export class World {
   }
 
   // ---------- Auswahl ----------
+  // Nahansicht beim PC-Zusammenbau: Kamera fährt an die Glasseite des Gehäuses
+  focusObject(uid) {
+    const e = uid && this.entries.get(uid);
+    this.focusUid = e ? uid : null;
+    if (!e) { this.focus = null; this.updateStatus(); return; }
+    const o = e.obj, rot = -(o.rot || 0) * Math.PI / 2, rotV = (x, y, z) => new THREE.Vector3(x, y, z).applyAxisAngle(new THREE.Vector3(0, 1, 0), rot).add(new THREE.Vector3(o.x, 0, o.z));
+    const pos = rotV(0.78, 0.62, 0.42), look = rotV(0, 0.27, 0);
+    const right = new THREE.Vector3().subVectors(look, pos).cross(new THREE.Vector3(0, 1, 0)).normalize();
+    look.addScaledVector(right, 0.17);
+    const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(pos, look, new THREE.Vector3(0, 1, 0)));
+    this.focus = { pos, q, light: rotV(0.02, 0.36, 0) };
+    if (!this.focusLight) { this.focusLight = new THREE.PointLight(0xffe2b8, 0, 0.9, 1.6); this.scene.add(this.focusLight); }
+    if (e.sprite) e.sprite.visible = false;
+  }
   select(uid) {
     this.selected = uid; this.refreshSelBox();
     this.onSelect?.(uid);
@@ -813,6 +828,13 @@ export class World {
         this.player.update(dt, (x, z, r) => this.collides(x, z, r), scale);
         if (this.placing) this.updatePlacement(); else this.updateAim();
       } else this.player.apply();
+      // Weiche Fahrt zur Nahansicht und zurück
+      this.focusK = Math.max(0, Math.min(1, (this.focusK || 0) + (this.focus && this.mode === 'ui' ? dt : -dt) / 0.6));
+      if (this.focusK > 0 && (this.focus || this.lastFocus)) {
+        const f = this.focus || this.lastFocus, k = this.focusK * this.focusK * (3 - 2 * this.focusK);
+        this.camera.position.lerp(f.pos, k); this.camera.quaternion.slerp(f.q, k); this.lastFocus = f;
+        if (this.focusLight) { this.focusLight.position.copy(f.light); this.focusLight.intensity = 1.4 * k; }
+      } else if (this.focusLight) this.focusLight.intensity = 0;
     }
     this.vm.update(dt, { moving: this.player.moving && this.mode === 'play', bob: this.player.bob, placing: !!this.placing, visible: this.mode === 'play' || this.mode === 'ui', uiOpen: this.mode === 'ui' });
     // Tag/Nacht

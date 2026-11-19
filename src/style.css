@@ -1093,3 +1093,48 @@ body:has(#pause:not(.hidden)) #top, body:has(#pause:not(.hidden)) #goals, body:h
 .mk-head h3 { font-size: 18px !important; }
 .mk-head .px { font-size: 30px !important; color: var(--acc); }
 @media (min-width: 721px) { #top #st-btc, #top #speed { grid-area: auto !important; } }
+/* Erster PC-Zusammenbau */
+.pcb { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.pcb-step { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 16px; background: var(--surface-1); box-shadow: inset 0 0 0 1px var(--stroke); transition: background .2s; }
+.pcb-step .ic { position: relative; width: 40px; height: 40px; flex: none; border-radius: 12px; display: grid; place-items: center; background: rgba(255,236,210,.08); color: var(--dim); }
+.pcb-step .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.pcb-step .tx b { font: 600 15px var(--font-fun); color: var(--text); }
+.pcb-step .tx span { font: 600 12.5px var(--font); color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pcb-step.next { background: rgba(255,176,0,.10); box-shadow: inset 0 0 0 1.5px rgba(255,176,0,.5); }
+.pcb-step.next .ic { background: rgba(255,176,0,.18); color: var(--acc); }
+.pcb-step.done .ic { background: rgba(95,211,141,.16); color: #9fe8bd; }
+.pcb-step.done .tx span { color: var(--text2); }
+.pcb-step .tick { position: absolute; right: -4px; bottom: -4px; width: 16px; height: 16px; border-radius: 50%; background: #5fd38d; box-shadow: 0 0 0 2px #2a1f18; }
+.pcb-step .tick::after { content: ''; position: absolute; left: 5px; top: 3px; width: 4px; height: 7px; border: solid #123d24; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.pcb-step.locked { opacity: .5; }
+.pcb-step .btn { flex: none; }
+.pcb-sum { margin: 6px 2px 0 !important; font-size: 14px; }
+.pcb-left { text-align: center; font: 600 12.5px var(--font); color: var(--dim); margin-top: 8px; }
+.btn.glow { animation: btnGlow 1.6s ease-in-out infinite; }
+@keyframes btnGlow { 0%, 100% { box-shadow: 0 4px 0 #a66313, 0 0 0 0 rgba(255,190,60,.0); } 50% { box-shadow: 0 4px 0 #a66313, 0 0 0 7px rgba(255,190,60,.22); } }
+/* Ziel: Fortschritt als Punkte */
+.goal .pips { display: inline-flex; gap: 5px; margin-left: 10px; vertical-align: middle; }
+.goal .pips i { width: 9px; height: 9px; border-radius: 50%; background: rgba(255,236,210,.18); }
+.goal .pips i.on { background: var(--acc); box-shadow: 0 0 6px rgba(255,176,0,.5); }
+/* Teile-Auswahl beim ersten Zusammenbau */
+.modal-card.pick { width: min(560px, 92vw); }
+.pick1 h2 { margin: 0 0 4px; }
+.pick1 .pk-hint { margin: 0 0 14px; color: var(--text2); font: 600 15px/1.45 var(--font); }
+.pick1 .pk-budget { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 0 0 12px; padding: 10px 14px; border-radius: 14px; background: var(--surface-1); }
+.pick1 .pk-budget span { font: 700 12px var(--font); color: var(--dim); }
+.pick1 .pk-budget b { font: 700 20px var(--font-fun); color: var(--acc); }
+.pick1 .pk-budget small { font: 600 12.5px var(--font); color: var(--dim); }
+.pick1 .pk-list { display: flex; flex-direction: column; gap: 8px; }
+.pk-card { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 16px; background: var(--surface-1); box-shadow: inset 0 0 0 1px var(--stroke); }
+.pk-card.tip { background: rgba(255,176,0,.08); box-shadow: inset 0 0 0 1.5px rgba(255,176,0,.45); }
+.pk-card.cur { box-shadow: inset 0 0 0 1.5px rgba(95,211,141,.5); }
+.pk-card.dis { opacity: .62; }
+.pk-main { flex: 1; min-width: 0; }
+.pk-name { display: flex; align-items: center; gap: 8px; }
+.pk-name b { font: 600 16px var(--font-fun); }
+.pk-name .tag { font: 700 11px var(--font); padding: 2px 8px; border-radius: 999px; background: var(--acc); color: #3a2300; }
+.pk-card .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.pk-card .chips span { font: 600 12.5px var(--font); color: var(--text2); background: rgba(255,236,210,.07); padding: 2px 8px; border-radius: 999px; }
+.pk-card .why { margin-top: 6px; font: 600 12.5px var(--font); color: #ffb5a7; }
+.pk-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: none; }
+.pk-price { font: 700 17px var(--font-fun); color: var(--acc); }

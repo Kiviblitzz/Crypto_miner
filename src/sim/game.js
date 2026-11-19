@@ -22,7 +22,7 @@ export class Game {
 
   newGame() {
     const s = {
-      version: 1, day: START_DAY, frac: 0.35, cash: 300, nextUid: 1,
+      version: 1, day: START_DAY, frac: 0.35, cash: 400, nextUid: 1,
       wallet: Object.fromEntries(COINS.map((c) => [c.id, { ex: 0, cold: 0 }])),
       autoSell: Object.fromEntries(COINS.map((c) => [c.id, DEFAULT_AUTOSELL])),
       payoutCold: false,
@@ -38,9 +38,9 @@ export class Game {
     const m0 = MESSAGES.find((m) => m.id === 'm0'); if (m0) s.messages.push({ id: 'm0', day: START_DAY, from: m0.from, text: m0.text, read: true }); // Start-Nachricht (im Intro gezeigt)
     this.s = s;
     this.cache = {};
-    // Startausstattung: alter Tower-PC mit Q66 + RHD 4850
-    const pc = this.addObject('kinder', 'tower', 1.75, 0.75, 0, { mobo: 'h55', cpu: 'q66', psu: 'psu400', gpus: ['rhd4850'] }, true);
-    pc.mode = 'off'; // Mining startet der Spieler selbst
+    // Start: leeres Gehäuse – den ersten Mining-PC baut der Spieler selbst zusammen
+    const pc = this.addObject('kinder', 'tower', 1.75, 0.75, 0, { mobo: null, cpu: null, psu: null, gpus: [] }, true);
+    pc.mode = 'off'; // Einschalten erst, wenn alle Teile drin sind
     while (s.newsIdx < NEWS.length && NEWS[s.newsIdx].day < s.day) s.newsIdx++;
     this.dayUpdate(true);
   }
@@ -188,7 +188,7 @@ export class Game {
     if (s.unlocked.length >= 2) this.grant('map');
     if (s.chapter >= 2) { this.grant('techs'); this.grant('ranking'); this.grant('loan'); this.grant('buycoins'); this.grant('coins'); this.grant('cold'); this.grant('heat'); }
   }
-  startMining(uid) { const o = this.findObj(uid); if (!o) return false; o.mode = 'auto'; this.s.flags.miningStarted = true; this.s.flags.seenPc = true; this.checkGoals(); this.dayUpdate(true); this.emit('objects', this.facOf(uid)); return true; }
+  startMining(uid) { const o = this.findObj(uid); if (!o || (o.parts && !this.pcReady(o))) return false; o.mode = 'auto'; this.s.flags.miningStarted = true; this.s.flags.seenPc = true; this.checkGoals(); this.dayUpdate(true); this.emit('objects', this.facOf(uid)); return true; }
   // Zentraler Geld-Check: nur kaufen, was wirklich bezahlt werden kann (kein Kauf bei Minus-Konto)
   canAfford(usd) { return Number.isFinite(usd) && usd >= 0 && Number.isFinite(this.s.cash) && this.s.cash >= usd; }
   addObject(facId, type, x, z, rot, parts, free = false) {
@@ -220,6 +220,10 @@ export class Game {
     return Math.round(v);
   }
   partIds(o) { const p = o.parts; return [p.mobo, p.cpu, p.psu, ...p.gpus].filter(Boolean); }
+  // Erster PC-Zusammenbau: welche Teile fehlen noch, und wie viel Geld muss für sie übrig bleiben?
+  pcMissing(o) { const p = o.parts; return ['mobo', 'cpu', 'gpu', 'psu'].filter((t) => (t === 'gpu' ? !p.gpus.length : !p[t])); }
+  pcReady(o) { return o?.parts && this.pcMissing(o).length === 0; }
+  buildReserve(o, type) { if (this.s.flags.miningStarted || !o?.parts) return 0; let r = 0; for (const t of this.pcMissing(o)) if (t !== type) { const l = this.partList(t); if (l.length) r += Math.min(...l.map((x) => this.itemPrice(x))); } return r; }
 
   // Teil in Rig einbauen (altes wird verkauft)
   setPart(uid, slot, partId, gpuIndex = 0) {
@@ -228,17 +232,18 @@ export class Game {
     const mult = slot === 'psu' ? this.psuCount(o) : 1;
     const price = part ? this.itemPrice(part) * mult : 0;
     let old = slot === 'gpu' ? o.parts.gpus[gpuIndex] : o.parts[slot];
-    const refund = old ? Math.round(this.itemPrice(PART[old]) * 0.5 * mult) : 0;
+    const refund = old ? Math.round(this.itemPrice(PART[old]) * (this.s.flags.miningStarted ? 0.5 : 1) * mult) : 0; // Beim ersten Zusammenbau: voller Umtausch
     if (!Number.isFinite(price) || this.s.cash + refund < price || (price > refund && this.s.cash < 0)) return false;
     this.s.cash += refund - price; this.s.stats.spentHW += price;
     if (slot === 'gpu') {
       if (partId) o.parts.gpus[gpuIndex] = partId; else o.parts.gpus.splice(gpuIndex, 1);
       o.parts.gpus = o.parts.gpus.filter(Boolean);
-      if (partId) this.s.flags.boughtGpu = true;
+      if (partId && this.s.flags.miningStarted) this.s.flags.boughtGpu = true;
     } else {
       o.parts[slot] = partId;
       if (slot === 'mobo') { const cap = this.rigGpuCap(o); if (o.parts.gpus.length > cap) { for (const g of o.parts.gpus.slice(cap)) this.s.cash += Math.round(this.itemPrice(PART[g]) * 0.5); o.parts.gpus = o.parts.gpus.slice(0, cap); } }
     }
+    if (!this.s.flags.miningStarted && o.type === 'tower' && this.pcReady(o)) this.s.flags.pcBuilt = true;
     this.dayUpdate(true); this.emit('objects', this.facOf(uid));
     return true;
   }

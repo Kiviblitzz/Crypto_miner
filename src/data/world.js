@@ -45,9 +45,10 @@ export const FACILITY = Object.fromEntries(FACILITIES.map((f) => [f.id, f]));
 export const CHAPTERS = [
   {
     title: 'Kapitel 1 – Das Kinderzimmer', unlock: 'keller', minDate: '2011-01-01',
-    intro: 'Oktober 2010. Papas Laden steckt in Schulden. Du hast einen alten PC, 300 $ und eine Idee.',
+    intro: 'Oktober 2010. Papas Laden steckt in Schulden. Du hast ein leeres PC-Gehäuse, 400 $ Erspartes und eine Idee.',
     goals: [
-      { id: 'look', text: 'Starte das Mining an deinem PC', check: (s) => s.flags.miningStarted },
+      { id: 'pcbuild', text: 'Bau deinen Mining-PC zusammen', check: (s) => s.flags.miningStarted || !!s.flags.pcBuilt, progress: (s) => { const pc = s.fac.kinder.objects.find((o) => o.type === 'tower'); const p = pc?.parts || {}; return [[p.mobo, p.cpu, p.gpus?.length, p.psu].filter(Boolean).length, 4, 'parts']; } },
+      { id: 'look', text: 'Schalte deinen PC ein', check: (s) => s.flags.miningStarted },
       { id: 'sell', text: 'Verkaufe deine Bitcoin am Monitor', check: (s) => s.stats.sold > 0 },
       { id: 'gpu', text: 'Bau eine zweite Grafikkarte ein', check: (s) => s.flags.boughtGpu },
       { id: 'earn', text: 'Schürfe Bitcoin im Wert von 1.000 $', check: (s) => s.stats.minedUSD >= 1000, progress: (s) => [s.stats.minedUSD, 1000, 'usd'] },
@@ -101,7 +102,7 @@ export const CHAPTERS = [
 
 // Handy-Nachrichten. when: Datum ODER cond(state, helpers)
 export const MESSAGES = [
-  { id: 'm0', date: '2010-10-01', from: 'Deniz', text: 'Alter, kennst du Bitcoin? Das ist Internetgeld, das Computer selbst herstellen. Dein PC kann das auch!' },
+  { id: 'm0', date: '2010-10-01', from: 'Deniz', text: 'Alter, kennst du Bitcoin? Das ist Internetgeld, das Computer selbst herstellen. Mit einer Grafikkarte geht das richtig schnell!' },
   { id: 'm1', date: '2010-10-04', from: 'Papa', text: 'Die Bank will 15.000 $ bis Ende 2013. Sonst ist der Laden weg. Nicht dein Problem, Kind.' },
   { id: 'm2', date: '2010-10-09', from: 'Deniz', text: 'Tipp: Crimson-Karten minen viel schneller als Verdant. Die RHD 5870 ist gerade der Hit.' },
   { id: 'm3', cond: (s, h) => h.maxTemp() > 32, from: 'Mama', text: 'Warum ist es bei dir so warm? Und was brummt da?' },

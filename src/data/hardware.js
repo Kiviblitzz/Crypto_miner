@@ -53,6 +53,7 @@ export const GPUS = [
 // ---------- CPUs ----------
 const cpu = (id, name, release, price, watt, hash) => ({ id, type: 'cpu', name, release, price, watt, hash });
 export const CPUS = [
+  cpu('cel33', 'Silicor Celer E3300', '2009-08', 55, 65, { sha256: 5 * M, cn: 80 }),
   cpu('q66', 'Silicor Core Q66 Quad', '2007-01', 170, 95, { sha256: 12 * M, cn: 250 }),
   cpu('s7920', 'Silicor Core S7-920', '2008-11', 280, 130, { sha256: 18 * M, cn: 320 }),
   cpu('phx6', 'Arix Phaeton X6', '2010-04', 260, 125, { sha256: 22 * M, cn: 350 }),
