@@ -92,14 +92,14 @@ GPU-Knappheit 2021: RTX 3080 (UVP $699) im Schnitt **$1 643** auf eBay (Aug 2021
 ### Altcoins (Start / Algorithmus / Besonderheit)
 | Real | Im Spiel | Start | Algo | Besonderheit |
 |---|---|---|---|---|
-| Litecoin | **Silvercoin (SLV)** | 10/2011 | Scrypt | Scrypt-ASICs ab 2014; ATH ~$410 (05/2021) |
-| Dogecoin | **Wuffcoin (WUF)** | 12/2013 | Scrypt | Meme-Rallye 05/2021 ($0,70) |
-| Monero | **Shadow (SHD)** | 04/2014 | RandomX (CPU) | CPU-Coin; ATH ~$795 (01/2026) |
-| Ethereum | **Aether (AET)** | 07/2015 | Ethash (GPU) | **Merge 15.09.2022 → GPU-Mining endet** |
-| Ethereum Classic | **Aether Classic (AEC)** | 07/2016 | Etchash | bleibt PoW |
-| Zcash | **Zeroproof (ZRP)** | 10/2016 | Equihash | Rallye 2025/26 (>$500) |
-| Ravencoin | **Corvus (CRV)** | 01/2018 | KawPow (GPU) | GPU-Fluchtziel nach dem Merge |
-| Kaspa | **Kaskad (KSK)** | 11/2021 | kHeavyHash | ASICs ab 08/2023; Peak $0,20 (08/2024) |
+| Litecoin | **Litecoin (LTC)** | 10/2011 | Scrypt | Scrypt-ASICs ab 2014; ATH ~$410 (05/2021) |
+| Dogecoin | **Dogecoin (DOGE)** | 12/2013 | Scrypt | Meme-Rallye 05/2021 ($0,70) |
+| Monero | **Monero (XMR)** | 04/2014 | RandomX (CPU) | CPU-Coin; ATH ~$795 (01/2026) |
+| Ethereum | **Ethereum (ETH)** | 07/2015 | Ethash (GPU) | **Merge 15.09.2022 → GPU-Mining endet** |
+| Ethereum Classic | **Ethereum Classic (ETC)** | 07/2016 | Etchash | bleibt PoW |
+| Zcash | **Zcash (ZEC)** | 10/2016 | Equihash | Rallye 2025/26 (>$500) |
+| Ravencoin | **Ravencoin (RVN)** | 01/2018 | KawPow (GPU) | GPU-Fluchtziel nach dem Merge |
+| Kaspa | **Kaspa (KAS)** | 11/2021 | kHeavyHash | ASICs ab 08/2023; Peak $0,20 (08/2024) |
 
 ### Strompreis Deutschland (Haushalt, ct/kWh)
 2010: 23,7 · 2013: 29 · 2020: 32 · 2023: **47** (Rekord) · 2025: 39,3 · 2026: 37.
@@ -109,7 +109,7 @@ Gewerbe deutlich billiger; Norwegen (Wasserkraft) ~4–6 ct.
 Alle Hersteller- und Produktnamen sind **fiktiv** (z. B. „Crimson RHD 5870", „Verdant GFX 1070",
 „Swarm S9", „Silicor", „Arix Zenon"). Die 3D-Modelle sind prozedural im Code gebaut und erinnern
 nur grob an echte Bauformen (Grafikkarte mit Lüftern, ASIC-Kasten mit 2 Lüftern, 42U-Rack …),
-ohne Logos. Coins außer Bitcoin (generischer Protokollname) tragen Parodie-Namen.
+ohne Logos. Coins tragen ihre echten Namen (offene Protokolle); Firmen, Börsen und Hardware-Marken sind fiktiv.
 
 ## Quellen (Auswahl)
 * Steam-Store / Starter Edition (Text über Suche): store.steampowered.com/app/1859290, /app/2304990

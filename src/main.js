@@ -42,11 +42,10 @@ document.getElementById('btn-new').onclick = () => {
   game.newGame(); splash.classList.add('hidden'); splashOrbit = false;
   world.setMode('ui');
   ui.switchSite('kinder'); ui.speedBar(); ui.ticker();
-  ui.story(CHAPTERS[0].title, `${CHAPTERS[0].intro}<br/><br/>Du stehst in deinem Zimmer. Links neben dem Schreibtischstuhl brummt dein alter PC: ein <b>Silicor Core Q66</b> mit einer <b>Crimson RHD 4850</b>. Er schürft schon Bitcoin.<br/><br/><b>WASD</b> laufen, <b>Maus</b> umsehen. Schau den PC an und drück <b>E</b>, um Teile zu tauschen. Mit <b>B</b> kaufst du neue Rigs, Ventilatoren und später ASICs und stellst sie direkt vor dich hin. Die <b>Zimmertür</b> bringt dich später in den Keller und weiter.<br/><br/>Pass auf <b>Hitze</b> und <b>Strom</b> auf – Mamas Sicherung hält nur 1,8 kW.`, 'Los geht’s!');
-  ui.onModalClose = () => { ui.setSpeed(1); ui.toast('🖥️ Dein PC steht links neben dem Stuhl – hingehen, anschauen, <b>[E]</b>.', 'msg', 9000); };
+  ui.introPhone(() => { ui.setSpeed(1); ui.keysHint(); ui.tutorial(); });
 };
 document.getElementById('btn-continue').onclick = () => {
-  if (game.load()) { splash.classList.add('hidden'); splashOrbit = false; ui.switchSite(game.s.current); ui.speedBar(); ui.ticker(); world.setMode('play'); ui.toast('Willkommen zurück!', 'good'); }
+  if (game.load()) { splash.classList.add('hidden'); splashOrbit = false; ui.switchSite(game.s.current); ui.speedBar(); ui.ticker(); ui.keysHint(); world.setMode('play'); ui.toast('Willkommen zurück!', 'good'); }
 };
 
 // Beim Verlassen speichern
@@ -70,6 +69,8 @@ window.addEventListener('keydown', (e) => {
     if (world.mode === 'map' && k !== 'k') return;
     if (k === 'b' && world.mode === 'ui' && document.body.classList.contains('show-build')) { ui.resume(); return; }
     if (k !== 'b' && k !== 'k' && ui.modalKind && ui.modalKind === { m: 'market', p: 'phone', c: 'company', t: 'techs', l: 'ranking' }[k]) { ui.resume(); return; }
+    const NEED = { b: 'build', m: 'market', p: 'phone', c: 'company', t: 'techs', l: 'ranking', k: 'map' };
+    if (NEED[k] && !game.has(NEED[k])) { ui.toast('Das kannst du noch nicht – es wird später freigeschaltet.', 'info', 2500); return; }
     HOT[k](); return;
   }
   if (e.key === 'Delete' && world.selected) {

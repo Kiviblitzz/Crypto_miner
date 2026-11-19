@@ -49,8 +49,8 @@ Ein-Datei-Version neu bauen: `npm run build:single`.
   historischen Stützpunkten, Halvings 2012/16/20/24, GoxBank-Pleite 2014, China-Bann 2021,
   Merge 2022, FXT-Kollaps 2022, ETF 2024, Allzeithoch Okt. 2025. Danach Endlosmodus.
 * **Ertrag wie in echt:** `Coins/Tag = Deine Hashrate / Netz-Hashrate × Emission`. Dazu 8 weitere
-  Coins mit Parodie-Namen (Silvercoin, Wuffcoin, Shadow, Aether, Aether Classic, Zeroproof, Corvus,
-  Kaskad) – inkl. Merged Mining, RandomX-Wechsel, DAG-Grenzen für 3/4-GB-Karten und Ende des
+  echte Coins (Litecoin, Dogecoin, Monero, Ethereum, Ethereum Classic, Zcash, Ravencoin,
+  Kaspa) – inkl. Merged Mining, RandomX-Wechsel, DAG-Grenzen für 3/4-GB-Karten und Ende des
   GPU-Minings beim Merge.
 * **~130 Hardware-Teile** mit fiktiven Marken (Crimson/Verdant-GPUs, Silicor/Arix-CPUs,
   Fieldforge-FPGAs, Swarm/Whirl/Glacier-ASICs), Preise folgen GPU-Boom und Hashprice.
@@ -61,7 +61,7 @@ Ein-Datei-Version neu bauen: `npm run build:single`.
 * **Story:** Papas Elektronikladen retten, Opa Heinz legt Starkstrom, Kumpel Deniz wird CTO,
   Rivale Viktor Kral (MONOLITH Hash AG) muss überholt werden. Nachrichten aufs Handy, News-Ticker.
 * **Imperium-Ansicht (🗺️):** alle Standorte nebeneinander als Dioramen – vom Kinderzimmer bis zur Fjordhalle.
-* **Technik (🔬):** 10 Technologien wie Undervolting, eigene ASIC-Firmware, eigener Coin per ICO (2017, Erlös in Aether), Immersionskühlung, Abwärme-Verkauf.
+* **Technik (🔬):** 10 Technologien wie Undervolting, eigene ASIC-Firmware, eigener Coin per ICO (2017, Erlös in Ethereum), Immersionskühlung, Abwärme-Verkauf.
 * **Wetter & Welt:** echte Hitzewellen (2015–2025) heizen die Räume auf, Schnee im Winter, Polarlicht am Fjord, im Dezember ein Weihnachtsbaum.
 * **Solaranlagen (☀️):** pro Standort ausbaubar, saisonaler Ertrag wie in Deutschland, als Modulfeld in 3D.
 * **Bankkredit:** schneller wachsen mit historischen Zinsen – mit dem Risiko von 2022.

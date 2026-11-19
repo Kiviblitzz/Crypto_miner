@@ -107,7 +107,7 @@ export const MONOLITH_SHARE = curve([
   ['2014-03', 0.0015], ['2015-06', 0.003], ['2017-06', 0.0035], ['2019-06', 0.004], ['2021-06', 0.005], ['2023-06', 0.0045], ['2026-11', 0.004],
 ], { log: false });
 
-// Ether-DAG-Größe in GB (bestimmt, welche Karten Aether minen können)
+// Ether-DAG-Größe in GB (bestimmt, welche Karten Ethereum minen können)
 export const DAG_AET = curve([['2015-07-30', 1.0], ['2016-12-15', 2.0], ['2018-12-15', 3.0], ['2020-12-10', 4.0], ['2022-09-15', 5.0]], { log: false });
 export const DAG_AEC = curve([['2016-07-20', 1.4], ['2018-12-15', 3.0], ['2020-11-27', 3.9], ['2020-11-28', 2.0], ['2022-06-15', 2.6], ['2024-06-15', 3.3], ['2026-11-15', 4.1]], { log: false });
 

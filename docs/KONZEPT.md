@@ -50,7 +50,7 @@ Alle Standorte laufen parallel weiter – das Zimmer bleibt als „Museum" deine
 * `Coins/Tag = H_dein / (H_netz + H_dein) × Emission/Tag` – Netz-Hashrate & Kurs aus echten
   Stützpunkten (log-interpoliert, leichtes Tagesrauschen).
 * Halvings, ASIC-Ära (ab 2013), Scrypt-ASICs (2014/17), **DAG-Limit** (3 GB Ende 2018, 4 GB Ende 2020),
-  **ETC-ECIP-1099** (11/2020), **China-Bann** (05–07/2021), **Merge** (15.09.2022), Kaskad-ASICs (08/2023).
+  **ETC-ECIP-1099** (11/2020), **China-Bann** (05–07/2021), **Merge** (15.09.2022), Kaspa-ASICs (08/2023).
 * Hardware-Preise: GPU-Boom-Faktor (2017/18, 2021/22 bis 2,3×), ASIC-Preise folgen dem Hashprice.
 * Börsen-Crashs „GoxBank" (24.02.2014) und „FXT" (11.11.2022) vernichten Coins, die auf der Börse liegen.
 * Nach November 2026: Endlosmodus mit Zufallsmarkt; Halving 2028.
@@ -73,7 +73,7 @@ Alle Standorte laufen parallel weiter – das Zimmer bleibt als „Museum" deine
   Erscheinungsdatum (Toast + News-Ticker), alte verschwinden nach einigen Jahren aus dem Handel.
 * **Solar, Kredit, Hitzewellen, Übernahmeangebot 2021:** Solaranlagen senken Stromkosten, Bankkredite mit historischen Zinsen,
   echte Hitzewellen heizen die Räume, und Viktor Kral bietet nach dem China-Bann an, Hashwerk zu kaufen (Entscheidung).
-* **Eigener Coin per ICO (2017):** Erlös in Aether – wer nicht vor dem Crash 2018 verkauft, verliert den Großteil.
+* **Eigener Coin per ICO (2017):** Erlös in Ethereum – wer nicht vor dem Crash 2018 verkauft, verliert den Großteil.
 * **Imperium-Ansicht:** alle Standorte als Dioramen nebeneinander – das Wachstum auf einen Blick.
 * **Familie & Personal sichtbar:** du am Schreibtisch, Papa an der Werkbank, Opa im Keller, Deniz und Techniker in den Hallen.
 * **Deko:** Neon-Schild „HODL", Aquarium, Kühlschrank, Arcade-Automat, Sofa, Pflanzen.
@@ -102,5 +102,5 @@ Alle Standorte laufen parallel weiter – das Zimmer bleibt als „Museum" deine
 
 ## 6. Markenrecht
 Fiktive Marken: **Crimson** (rote GPUs), **Verdant** (grüne GPUs), **Silicor**/**Arix** (CPUs),
-**Swarm**/**Whirl**/**Glacier** (ASICs), **Fieldforge** (FPGA). Coins: Bitcoin, Silvercoin, Wuffcoin,
-Shadow, Aether, Aether Classic, Zeroproof, Corvus, Kaskad. Börsen: GoxBank, FXT.
+**Swarm**/**Whirl**/**Glacier** (ASICs), **Fieldforge** (FPGA). Coins: Bitcoin, Litecoin, Dogecoin,
+Monero, Ethereum, Ethereum Classic, Zcash, Ravencoin, Kaspa. Börsen: GoxBank, FXT.

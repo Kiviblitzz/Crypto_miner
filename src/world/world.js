@@ -320,7 +320,7 @@ export class World {
       if (k === 'r' && this.placing) { this.placing.rot = (this.placing.rot + 1) % 4; this.updatePlacement(); }
       if (k === 'e' && !this.placing) this.primaryAction();
       if ((k === 'x' || k === 'Backspace') && this.placing) this.cancelPlacement();
-      if (k === 'h') { const on = this.toggleHeat(); this.onHeat?.(on); }
+      if (k === 'h' && this.game.has('heat')) { const on = this.toggleHeat(); this.onHeat?.(on); }
       if (k === 'f') { const on = this.vm.toggleLamp(); this.onLamp?.(on); }
     });
     window.addEventListener('keyup', (e) => { this.player.keys[e.key.length === 1 ? e.key.toLowerCase() : e.key] = false; });

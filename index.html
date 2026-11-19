@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>HASHWERK – Vom Kinderzimmer zum Rechenzentrum</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%2316181d'/><path d='M18 14v36M46 14v36M18 32h28' stroke='%23ffb000' stroke-width='8' stroke-linecap='round'/></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap" />
   <link rel="stylesheet" href="/src/style.css" />
 </head>
 <body>
@@ -33,12 +36,13 @@
     <div id="hint" class="hidden"></div>
     <div id="crosshair"></div>
     <div id="prompt" class="hidden"></div>
-    <div id="clickhint" class="hidden">🖱️ Klicken, um die Maus zu übernehmen</div>
-    <div id="keys">WASD laufen · Shift rennen · Maus umsehen · <b>E</b> benutzen · <b>B</b> bauen · <b>F</b> Lampe · <b>ESC</b> Pause</div>
-    <div id="touchpad" class="hidden"><div id="stick"><div id="knob"></div></div><button id="t-use">E</button><button id="t-build">🛒</button><button id="t-menu">☰</button></div>
+    <div id="clickhint" class="hidden">Klicken, um die Maus zu übernehmen</div>
+    <div id="keys"><span><kbd>B</kbd>Bauen</span><span><kbd>M</kbd>Markt</span><span><kbd>P</kbd>Handy</span><span><kbd>C</kbd>Firma</span><span><kbd>T</kbd>Technik</span><span><kbd>K</kbd>Karte</span><span><kbd>Esc</kbd>Menü</span></div>
+    <div id="touchpad" class="hidden"><div id="stick"><div id="knob"></div></div><button id="t-use">E</button><button id="t-build">B</button><button id="t-menu">≡</button></div>
   </div>
   <div id="tut" class="hidden"></div>
-  <div id="pause" class="hidden"><div class="pause-card"><div class="logo small">HASH<span>WERK</span></div><div class="ptitle">Pause</div><button id="pause-resume" class="btn big primary">▶ Weiterspielen</button><button id="pause-menu" class="btn">⚙️ Menü · Speichern</button><div class="controls-help"><b>WASD</b> laufen · <b>Shift</b> rennen · <b>Maus</b> umsehen · <b>E</b> Gerät/Tür benutzen<br/><b>B</b> Bauen · <b>R</b> drehen · <b>Rechtsklick</b> abbrechen · <b>M</b> Markt · <b>P</b> Handy · <b>C</b> Firma · <b>T</b> Technik · <b>L</b> Rangliste · <b>K</b> Karte · <b>G</b> Ziel bezahlen · <b>H</b> Wärmebild · <b>F</b> Taschenlampe · <b>Leertaste/1–4</b> Zeit</div></div></div>
+  <div id="featcards"></div>
+  <div id="pause" class="hidden"><div class="pause-card"><div class="logo small">HASH<span>WERK</span></div><div class="ptitle">Pause</div><button id="pause-resume" class="btn big primary">▶ Weiterspielen</button><button id="pause-menu" class="btn">Menü · Speichern</button><div class="controls-help"><b>WASD</b> laufen · <b>Shift</b> rennen · <b>Maus</b> umsehen · <b>E</b> Gerät/Tür benutzen<br/><b>B</b> Bauen · <b>R</b> drehen · <b>Rechtsklick</b> abbrechen · <b>M</b> Markt · <b>P</b> Handy · <b>C</b> Firma · <b>T</b> Technik · <b>L</b> Rangliste · <b>K</b> Karte · <b>G</b> Ziel bezahlen · <b>H</b> Wärmebild · <b>F</b> Taschenlampe · <b>Leertaste/1–4</b> Zeit</div></div></div>
   <div id="fade"></div>
   <div id="modal" class="hidden"><div class="modal-card"><button class="modal-x" title="Schließen">✕</button><div class="modal-body"></div></div></div>
   <div id="splash">

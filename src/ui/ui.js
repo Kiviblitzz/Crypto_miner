@@ -1,16 +1,16 @@
 // DOM-Oberfläche: Topbar, Standorte, Baumenü, Inspektor, Ziele, Dock, Modals (Markt, Handy, Firma, Rangliste, Menü)
 import { COINS, COIN, ALGO_LABEL } from '../data/coins.js';
 import { PLACEABLE, PART, CATEGORIES, PLACEABLES, PARTS } from '../data/hardware.js';
-import { FACILITIES, FACILITY, CHAPTERS, TECHS } from '../data/world.js';
+import { FACILITIES, FACILITY, CHAPTERS, TECHS, FEATURES, MESSAGES } from '../data/world.js';
 import { fmtUSD, fmtNum, fmtCoin, fmtHash, fmtDate, fmtWatt } from '../sim/game.js';
 import { toDay, BTC_HASH, inHeatwave, HALVINGS, BTC_REWARD } from '../data/history.js';
 
 const $ = (s) => document.querySelector(s);
 const h = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const SPEEDS = [{ l: '⏸', v: 0, t: 'Pause (Leertaste)' }, { l: '▶', v: 1, t: '1 Tag = 4 Sekunden (Taste 1)' }, { l: '▶▶', v: 2, t: '1 Tag = 1,6 Sekunden (Taste 2)' }, { l: '▶▶▶', v: 3, t: '2 Tage pro Sekunde (Taste 3)' }, { l: '⏩', v: 4, t: '8 Tage pro Sekunde (Taste 4)' }];
+const SPEEDS = [{ l: 'II', v: 0, t: 'Pause (Leertaste)' }, { l: '1×', v: 1, t: '1 Tag = 4 Sekunden (Taste 1)' }, { l: '2×', v: 2, t: '1 Tag = 1,6 Sekunden (Taste 2)' }, { l: '3×', v: 3, t: '2 Tage pro Sekunde (Taste 3)' }, { l: '4×', v: 4, t: '8 Tage pro Sekunde (Taste 4)' }];
 const pctDE = (x) => (x * 100).toPrecision(3).replace('.', ',');
-const FACE = { Deniz: '🎮', Mama: '👩', Papa: '👨‍🔧', 'Opa Heinz': '👴', 'Viktor Kral': '🕴️' };
+const FACE = { Deniz: '', Mama: '', Papa: '‍', 'Opa Heinz': '', 'Viktor Kral': '' };
 
 export class UI {
   constructor(game, world) {
@@ -24,10 +24,10 @@ export class UI {
     world.onInteract = (uid) => this.openInspector(uid);
     world.onDoor = (door) => this.travel(door);
     world.onProp = (p) => this.useProp(p);
-    world.onLamp = (on) => this.toast(on ? '🔦 Taschenlampe an' : '🔦 Taschenlampe aus', 'info', 1500);
+    world.onLamp = (on) => this.toast(on ? 'Taschenlampe an' : 'Taschenlampe aus', 'info', 1500);
     world.onPause = () => this.pause(true);
     world.onCanvasClickInUI = () => this.resume();
-    world.onPlaced = (o) => { const d = PLACEABLE[o.type]; if (d.kind === 'rig' || d.kind === 'holder') this.toast(`✅ ${esc(d.name)} steht. Schau es an und drück <b>[E]</b>, um es zu bestücken.`, 'good', 5000); };
+    world.onPlaced = (o) => { const d = PLACEABLE[o.type]; if (d.kind === 'rig' || d.kind === 'holder') this.toast(`${esc(d.name)} steht. Schau es an und drück <kbd>E</kbd>, um es zu bestücken.`, 'good', 5000); };
     world.onModeChange = (m) => { document.body.dataset.mode = m; this.dock(); };
     world.onLockChange = (locked) => { $('#clickhint').classList.toggle('hidden', locked || this.w.mode !== 'play' || this.w.touchMode || !!this.paused); };
     $('#modal .modal-x').onclick = () => this.closeModal();
@@ -36,15 +36,16 @@ export class UI {
     $('#pause-menu').onclick = () => { this.pause(false); this.menu(); };
     $('#clickhint').onclick = () => this.w.requestLock();
     game.on('toast', (t, k, ms) => this.toast(t, k, ms));
-    game.on('message', (m) => { this.toast(`${FACE[m.from] || '💬'} <b>${esc(m.from)}:</b> ${esc(m.text.length > 90 ? m.text.slice(0, 88) + '…' : m.text)}`, 'msg', 7000); this.dock(); });
+    game.on('message', (m) => { this.toast(`${FACE[m.from] || ''} <b>${esc(m.from)}:</b> ${esc(m.text.length > 90 ? m.text.slice(0, 88) + '…' : m.text)}`, 'msg', 7000); this.dock(); });
     game.on('news', () => this.ticker());
+    game.on('feature', (f) => this.featureCard(f));
     game.on('milestone', (t, sub) => this.milestone(t, sub));
     game.on('won', () => this.ending());
     game.on('offer', (usd) => this.offer(usd));
-    game.on('release', (it, text) => { if (it.type !== 'psu' && it.type !== 'mobo') this.toast(`🆕 ${esc(text)}`, 'info', 6000); this.ticker(); this.lastBuildDay = -99; });
+    game.on('release', (it, text) => { if (it.type !== 'psu' && it.type !== 'mobo') this.toast(`${esc(text)}`, 'info', 6000); this.ticker(); this.lastBuildDay = -99; });
     game.on('update', () => this.onDay());
     game.on('refresh', () => this.refresh());
-    game.on('unlockable', (id) => { this.toast(`🔓 Neuer Standort verfügbar: <b>${FACILITY[id].name}</b> – geh durch die Tür und drück E`, 'good', 8000); this.goals(); this.sites(); });
+    game.on('unlockable', (id) => { this.toast(`Neuer Standort verfügbar: <b>${FACILITY[id].name}</b> – geh durch die Tür und drück E`, 'good', 8000); this.goals(); this.sites(); });
     setInterval(() => this.top(), 200);
     this.refresh(); this.ticker();
   }
@@ -52,7 +53,7 @@ export class UI {
   refresh() { this.top(); this.sites(); this.build(true); this.goals(); this.dock(); if (this.inspUid) this.inspect(this.inspUid, true); }
   onDay() {
     this.sites(); this.goals();
-    for (const t of TECHS) if (toDay(t.date) === this.g.s.day) { this.toast(`🔬 Neue Technologie verfügbar: <b>${esc(t.name)}</b>`, 'good', 7000); this.dock(); }
+    for (const t of TECHS) if (toDay(t.date) === this.g.s.day) { this.toast(`Neue Technologie verfügbar: <b>${esc(t.name)}</b>`, 'good', 7000); this.dock(); }
     if (this.g.s.day % 7 === 0) this.dock();
     if (this.g.s.day - this.lastBuildDay >= 7) this.build(true);
     if (this.inspUid) this.inspectStats();
@@ -64,14 +65,15 @@ export class UI {
   // ---------- Topbar ----------
   speedBar() {
     const el = $('#speed'); el.innerHTML = '';
-    SPEEDS.forEach((s) => { const b = h(`<button title="${s.t}">${s.l}</button>`); b.onclick = () => this.setSpeed(s.v); el.append(b); });
+    SPEEDS.forEach((s) => { const b = h(`<button title="${s.t}">${s.l}</button>`); b.onclick = () => this.setSpeed(s.v); if (!this.speedOk(s.v)) b.style.display = 'none'; el.append(b); });
     this.setSpeed(this.g.s.speed ?? 0);
   }
-  setSpeed(v) { this.g.s.speed = v; this.g.s.paused = v === 0; [...$('#speed').children].forEach((b, i) => b.classList.toggle('on', SPEEDS[i].v === v)); }
+  speedOk(v) { const g = this.g; return v <= 1 || (v === 2 && g.has('speed2')) || (v >= 3 && g.has('speed3')); }
+  setSpeed(v) { if (!this.speedOk(v)) { this.toast('Dieses Tempo ist noch nicht freigeschaltet.', 'info', 2000); return; } this.g.s.speed = v; this.g.s.paused = v === 0; [...$('#speed').children].forEach((b, i) => b.classList.toggle('on', SPEEDS[i].v === v)); }
   top() {
     const g = this.g, s = g.s;
     const hr = Math.floor(s.frac * 24), mi = Math.floor((s.frac * 24 - hr) * 60);
-    $('#date').innerHTML = `📅 ${fmtDate(s.day, true)}<span class="tod">${String(hr).padStart(2, '0')}:${String(mi).padStart(2, '0')}</span>${inHeatwave(s.day) ? '<span title="Hitzewelle: +6 °C Umgebung" style="margin-left:6px">🔥</span>' : ''}`;
+    $('#date').innerHTML = `${fmtDate(s.day, true)}<span class="tod">${String(hr).padStart(2, '0')}:${String(mi).padStart(2, '0')}</span>${inHeatwave(s.day) ? '<span title="Hitzewelle: +6 °C Umgebung" style="margin-left:6px"></span>' : ''}`;
     const p = g.dailyProfit();
     const btc = g.price('BTC'), btc7 = g.price('BTC', s.day - 7) || btc;
     const ch = ((btc / btc7 - 1) * 100);
@@ -81,6 +83,8 @@ export class UI {
     const nw = g.netWorthFast();
     const ease = (cur, target) => (cur == null || Math.abs(target - cur) > Math.abs(target) * 0.5 + 1e4 ? target : cur + (target - cur) * 0.35);
     this.dCash = ease(this.dCash, s.cash); this.dNw = ease(this.dNw, nw);
+    const mOn = !s.feat || s.flags.miningStarted;
+    for (const [id, ok] of [['#st-profit', mOn], ['#st-hash', mOn], ['#st-nw', g.has('rigs')]]) $(id).style.display = ok ? '' : 'none';
     $('#st-cash').title = 'Bargeld für Hardware, Strom, Miete und Löhne'; $('#st-nw').title = 'Kontostand + Coins + Wiederverkaufswert der Hardware − Kredit'; $('#st-profit').title = 'Mining-Ertrag minus Strom, Miete, Löhne und Zinsen pro Tag';
     $('#st-cash').innerHTML = `<div class="l">Kontostand</div><div class="v ${s.cash < 0 ? 'neg' : ''}">${fmtUSD(this.dCash)}</div>`;
     $('#st-nw').innerHTML = `<div class="l">Vermögen</div><div class="v">${fmtUSD(this.dNw)}</div>`;
@@ -97,28 +101,28 @@ export class UI {
       const un = g.s.unlocked.includes(f.id);
       const sm = g.summary[f.id] || (un ? g.facSummary(f.id) : null);
       if (!un) {
-        if (g.canUnlock(f.id)) { const b = h(`<div class="site" title="Freischalten"><div class="n">🔓 ${f.short}</div><div class="m">${fmtUSD(f.cost)} · freischalten</div></div>`); b.onclick = () => this.company(); el.append(b); }
-        else if (f.tier === g.s.unlocked.length) el.append(h(`<div class="site locked"><div class="n">🔒 ${f.short}</div><div class="m">${esc(f.place.split(',')[0])}</div></div>`));
+        if (g.canUnlock(f.id)) { const b = h(`<div class="site" title="Freischalten"><div class="n">${f.short}</div><div class="m">${fmtUSD(f.cost)} · freischalten</div></div>`); b.onclick = () => this.company(); el.append(b); }
+        else if (f.tier === g.s.unlocked.length) el.append(h(`<div class="site locked"><div class="n">${f.short}</div><div class="m">${esc(f.place.split(',')[0])}</div></div>`));
         continue;
       }
       const kw = sm.watt / 1000, cap = sm.capKw, pct = Math.min(100, (kw / cap) * 100);
-      const b = h(`<div class="site ${g.s.current === f.id ? 'on' : ''}"><div class="n">${f.tier === 0 ? '🛏️' : f.tier === 1 ? '🧺' : f.tier === 2 ? '🔧' : f.tier === 3 ? '🏭' : f.tier === 4 ? '🏢' : '🏔️'} ${f.short} ${sm.tripped ? '⚡' : ''}</div>
+      const b = h(`<div class="site ${g.s.current === f.id ? 'on' : ''}"><div class="n">${f.tier === 0 ? '' : f.tier === 1 ? '' : f.tier === 2 ? '' : f.tier === 3 ? '' : f.tier === 4 ? '' : ''} ${f.short} ${sm.tripped ? '<b class="neg">· Sicherung raus</b>' : ''}</div>
         <div class="m"><span>${kw < 10 ? kw.toFixed(2) : kw.toFixed(0)}/${cap} kW</span><span class="${sm.temp > 38 ? 'neg' : ''}">${sm.temp.toFixed(1)} °C</span></div>
         <div class="bar ${pct > 90 ? 'hot' : ''}"><div style="width:${pct}%"></div></div></div>`);
       b.onclick = () => { if (g.s.current !== f.id) this.switchSite(f.id); };
       el.append(b);
     }
-    const hb = h(`<div class="site ${this.w.heatMode ? 'on' : ''}" title="Wärmebild ein/aus (Taste H)"><div class="n">🌡️ Wärmebild</div><div class="m">Taste H</div></div>`);
-    hb.onclick = () => { this.w.toggleHeat(); this.sites(); }; el.append(hb);
+    const hb = h(`<div class="site ${this.w.heatMode ? 'on' : ''}" title="Wärmebild ein/aus (Taste H)"><div class="n">Wärmebild</div><div class="m">Taste H</div></div>`);
+    hb.onclick = () => { this.w.toggleHeat(); this.sites(); }; if (g.has('heat')) el.append(hb);
     const br = g.brokenIn(g.s.current);
-    if (br.n) { const b = h(`<div class="site fix" title="Alle defekten Geräte hier reparieren"><div class="n">🔧 ${br.n} defekt</div><div class="m">Alle reparieren: ${fmtUSD(br.c)}</div></div>`); b.onclick = () => { const n = g.repairAll(g.s.current); this.toast(n ? `🔧 ${n} Gerät(e) repariert` : 'Nicht genug Geld.', n ? 'good' : 'bad'); this.sites(); }; el.append(b); }
+    if (br.n) { const b = h(`<div class="site fix" title="Alle defekten Geräte hier reparieren"><div class="n">${br.n} defekt</div><div class="m">Alle reparieren: ${fmtUSD(br.c)}</div></div>`); b.onclick = () => { const n = g.repairAll(g.s.current); this.toast(n ? `${n} Gerät(e) repariert` : 'Nicht genug Geld.', n ? 'good' : 'bad'); this.sites(); }; el.append(b); }
   }
   switchSite(id) {
     this.fade();
     if (this.w.empire) this.w.hideEmpire();
     this.g.s.current = id; this.w.loadFacility(id);
     if (this.inspUid) { this.inspUid = null; $('#inspector').classList.add('hidden'); }
-    this.refresh(); this.toast(`📍 ${esc(FACILITY[id].name)} – ${esc(FACILITY[id].place)}`, 'info', 3000);
+    this.refresh(); this.toast(`${esc(FACILITY[id].name)} – ${esc(FACILITY[id].place)}`, 'info', 3000);
   }
   fade() { const f = $('#fade'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); }
 
@@ -129,10 +133,12 @@ export class UI {
     this.lastBuildDay = g.s.day;
     el.innerHTML = '';
     const cats = h('<div class="cats"></div>');
-    for (const c of CATEGORIES) { const b = h(`<button class="${this.cat === c.id ? 'on' : ''}"><span class="ic">${c.icon}</span>${c.name}</button>`); b.onclick = () => { this.cat = c.id; this.build(true); }; cats.append(b); }
+    const catOk = (c) => (c.id !== 'rigs' || g.has('rigs')) && g.shopList(c.id, fac).length > 0;
+    if (!CATEGORIES.some((c) => c.id === this.cat && catOk(c))) this.cat = (CATEGORIES.find(catOk) || CATEGORIES[0]).id;
+    for (const c of CATEGORIES.filter(catOk)) { const b = h(`<button class="${this.cat === c.id ? 'on' : ''}"><span class="ic">${c.icon}</span>${c.name}</button>`); b.onclick = () => { this.cat = c.id; this.build(true); }; cats.append(b); }
     el.append(cats);
     const list = h('<div class="items"></div>');
-    if (this.cat === 'rigs') list.append(h('<div style="font-size:12px;color:#94a0b2;padding:2px 4px 8px">💡 Grafikkarten, CPUs, Mainboards und Netzteile kaufst du direkt im Rig: Rig anklicken → Slot wählen.</div>'));
+    if (this.cat === 'rigs') list.append(h('<div style="font-size:12px;color:#94a0b2;padding:2px 4px 8px">Grafikkarten, CPUs, Mainboards und Netzteile kaufst du direkt im Rig: Rig anklicken → Slot wählen.</div>'));
     const items = g.shopList(this.cat, fac).sort((a, b) => b.releaseDay - a.releaseDay);
     if (!items.length) list.append(h('<div class="empty">Hier gibt es (noch) nichts zu kaufen.<br/>Größere Standorte schalten mehr frei.</div>'));
     for (const it of items) {
@@ -156,7 +162,7 @@ export class UI {
       list.append(h('<div style="font-size:11px;color:#7d8aa0;text-transform:uppercase;letter-spacing:.8px;margin:10px 4px 6px">Demnächst</div>'));
       for (const it of soon) {
         const spec = it.kind === 'device' ? `${fmtHash(it.hash, it.algo)} · ${fmtWatt(it.watt)}` : it.type === 'gpu' ? `${it.vram} GB · ${it.watt} W` : it.type === 'mobo' ? `${it.slots} GPU-Slots` : '';
-        list.append(h(`<div class="item dis" style="cursor:default"><div class="t"><span>🔒 ${esc(it.name)}</span><span class="p" style="color:#7d8aa0">${it.release.slice(5, 7)}/${it.release.slice(0, 4)}</span></div><div class="s">${spec}</div></div>`));
+        list.append(h(`<div class="item dis" style="cursor:default"><div class="t"><span>${esc(it.name)}</span><span class="p" style="color:#7d8aa0">${it.release.slice(5, 7)}/${it.release.slice(0, 4)}</span></div><div class="s">${spec}</div></div>`));
       }
     }
     el.append(list);
@@ -177,7 +183,21 @@ export class UI {
     $('#pause').classList.toggle('hidden', !on);
     if (on) { $('#clickhint').classList.add('hidden'); this.prompt(null); }
   }
-  openInspector(uid) { this.openedAt = performance.now(); this.w.select(uid); this.openUI(); }
+  openInspector(uid) { this.openedAt = performance.now(); if (!this.g.s.flags.seenPc) { this.g.s.flags.seenPc = true; this.g.checkGoals?.(); } this.w.select(uid); this.openUI(); }
+  // „Neu freigeschaltet“-Karte mit kurzer Erklärung
+  featureCard(f) {
+    const d = FEATURES[f]; if (!d) return;
+    this.audio?.message();
+    const el = h(`<div class="featcard"><div class="fc-t">Neu freigeschaltet</div><div class="fc-h">${esc(d.title)}</div><div class="fc-b">${d.text}</div></div>`);
+    $('#featcards').append(el); setTimeout(() => el.classList.add('out'), 11000); setTimeout(() => el.remove(), 11600);
+    this.speedBar(); this.dock(); this.keysHint(); this.sites(); this.goals();
+  }
+  // Tasten-Hinweise unten rechts: nur, was schon freigeschaltet ist
+  keysHint() {
+    const g = this.g, el = $('#keys'); if (!el) return;
+    const ks = [['build', 'B', 'Bauen'], ['market', 'M', 'Börse'], ['phone', 'P', 'Handy'], ['company', 'C', 'Firma'], ['techs', 'T', 'Technik'], ['map', 'K', 'Karte']].filter(([f]) => g.has(f));
+    el.innerHTML = ks.map(([, k, l]) => `<span><kbd>${k}</kbd>${l}</span>`).join('') + '<span><kbd>Esc</kbd>Menü</span>';
+  }
   toggleBuild() {
     if (document.body.classList.contains('show-build')) { this.resume(); return; }
     this.resume(); document.body.classList.add('show-build'); this.build(true); this.openUI();
@@ -187,41 +207,41 @@ export class UI {
     if (!aim || this.w.mode !== 'play') { el.classList.add('hidden'); return; }
     let html = '';
     if (aim.door) {
-      html = `<b>[E]</b> ${esc(aim.door.label)} <span>– Standort wechseln</span>`;
+      html = `<kbd>E</kbd>${esc(aim.door.label)} <span>– Standort wechseln</span>`;
     } else if (aim.prop) {
-      html = `<b>[E]</b> ${esc(aim.prop.label)} <span>– ${esc(aim.prop.hint)}</span>`;
+      html = `<kbd>E</kbd>${esc(aim.prop.label)} <span>– ${esc(aim.prop.hint)}</span>`;
     } else {
       const o = this.g.findObj(aim.uid); if (!o) { el.classList.add('hidden'); return; }
       const def = PLACEABLE[o.type], sm = this.g.summary[this.g.facOf(aim.uid)], a = sm?.per.get(aim.uid);
       let line = '';
       if (a && a.units.length) { const rev = a.units.reduce((x, u) => x + u.rev, 0) * sm.throttle; const cost = a.watt / 1000 * 24 * sm.elec; line = `${a.units.filter((u) => u.h).map((u) => fmtHash(u.h * sm.throttle, u.algo)).join(' · ') || 'pausiert'} · <span class="${rev - cost >= 0 ? 'pos' : 'neg'}">${rev - cost >= 0 ? '+' : ''}${fmtUSD(rev - cost)}/Tag</span>`; }
       else if (def.kind === 'cooling') line = `kühlt ${fmtWatt(def.cool)}`;
-      const st = { broken: '🔥 Defekt – reparieren', partial: '🔥 Teilweise defekt', psu: '⚠️ Netzteil zu schwach', incomplete: '⚠️ Teile fehlen – bestücken', empty: '➕ Leer – Geräte einsetzen', idle: '💤 pausiert (unrentabel)', off: '⏻ aus' }[a?.status];
-      html = `<b>[E]</b> ${esc(def.name)}${st ? `<div class="st">${st}</div>` : ''}${line ? `<div>${line}</div>` : ''}`;
+      const st = { broken: 'Defekt – reparieren', partial: 'Teilweise defekt', psu: 'Netzteil zu schwach', incomplete: 'Teile fehlen – bestücken', empty: '➕ Leer – Geräte einsetzen', idle: 'pausiert (unrentabel)', off: '⏻ aus' }[a?.status];
+      html = `<kbd>E</kbd>${esc(def.name)}${st ? `<div class="st">${st}</div>` : ''}${line ? `<div>${line}</div>` : ''}`;
     }
     el.innerHTML = html; el.classList.remove('hidden');
   }
   useProp(p) {
-    if (p.action === 'market') this.market();
+    if (p.action === 'market') { if (!this.g.has('market')) { this.toast('Auf dem Monitor läuft die Mining-Konsole. Schau dir zuerst deinen PC an.', 'info', 3500); return; } this.market(); }
     else if (p.action === 'company') this.company();
     else if (p.action === 'techs') this.techs();
     else if (p.action === 'ranking') this.ranking();
     else if (p.action === 'sleep') {
       const s = this.g.s;
-      if (s.frac > 0.25 && s.frac < 0.8) { this.toast('😴 Noch nicht müde – schlafen kannst du ab 19 Uhr.', 'info', 3000); return; }
+      if (s.frac > 0.25 && s.frac < 0.8) { this.toast('Noch nicht müde – schlafen kannst du ab 19 Uhr.', 'info', 3000); return; }
       this.fade(); const steps = s.frac >= 0.8 ? 1 : 0; for (let i = 0; i < steps; i++) this.g.advanceDay(); s.frac = 0.29;
-      this.toast('☀️ Guten Morgen! Die Rigs haben die ganze Nacht geschürft.', 'good', 3500);
+      this.toast('Guten Morgen! Die Rigs haben die ganze Nacht geschürft.', 'good', 3500);
     }
   }
   travel(door) {
     const g = this.g;
-    const body = h(`<div><h2>🚪 ${esc(door.label)}</h2><p style="color:#94a0b2;margin-top:-6px">Wohin willst du?</p><div class="cards"></div></div>`);
+    const body = h(`<div><h2>${esc(door.label)}</h2><p style="color:#94a0b2;margin-top:-6px">Wohin willst du?</p><div class="cards"></div></div>`);
     const cards = body.querySelector('.cards');
     for (const f of FACILITIES) {
       const un = g.s.unlocked.includes(f.id), here = g.s.current === f.id, can = g.canUnlock(f.id);
       if (!un && !can) continue;
       const sm = g.summary[f.id];
-      const c = h(`<div class="card"><h3>${here ? '📍 ' : ''}${esc(f.name)}</h3><div class="sub">${esc(f.place)}</div>${un && sm ? `<div style="font-size:12px;color:#94a0b2">${fmtWatt(sm.watt)} · ${sm.temp.toFixed(1)} °C · ${g.facObjects(f.id).length} Objekte</div>` : ''}</div>`);
+      const c = h(`<div class="card"><h3>${here ? '' : ''}${esc(f.name)}</h3><div class="sub">${esc(f.place)}</div>${un && sm ? `<div style="font-size:12px;color:#94a0b2">${fmtWatt(sm.watt)} · ${sm.temp.toFixed(1)} °C · ${g.facObjects(f.id).length} Objekte</div>` : ''}</div>`);
       const b = h(`<button class="btn small ${here ? '' : 'primary'}" style="margin-top:6px">${here ? 'Hierbleiben' : un ? 'Hingehen' : f.cost ? `Übernehmen (${fmtUSD(f.cost)})` : 'Einziehen'}</button>`);
       b.onclick = () => { this.closeModal(); if (here) return; if (!un) { this.unlock(f.id); return; } this.switchSite(f.id); };
       c.append(b); cards.append(c);
@@ -241,7 +261,12 @@ export class UI {
     el.querySelector('.insp-x').onclick = () => this.resume();
     this.inspectStats();
     const c = $('#insp-ctrl');
-    if (def.kind === 'rig' || def.kind === 'device' || def.kind === 'holder') {
+    if (!g.s.flags.miningStarted && def.kind === 'rig') {
+      const st = h(`<div class="sec"><div style="font-size:14px;margin-bottom:8px">Auf dem PC liegt die Mining-Software, die Deniz dir geschickt hat.</div><button class="btn primary big" style="width:100%">Mining starten</button></div>`);
+      st.querySelector('button').onclick = () => { g.startMining(uid); this.audio?.buy(); this.toast('Die Lüfter drehen hoch – dein PC schürft jetzt Bitcoin!', 'good', 5000); this.inspect(uid); this.tutorial(); };
+      c.append(st);
+    }
+    if ((def.kind === 'rig' || def.kind === 'device' || def.kind === 'holder') && g.has('coins')) {
       const a = g.summary[g.facOf(uid)]?.per.get(uid);
       const sec = h(`<div class="sec"><h4>Coin</h4></div>`);
       const sel = h('<select></select>');
@@ -258,7 +283,8 @@ export class UI {
     if (def.kind === 'holder') c.append(this.holderUI(o));
     const row = h('<div class="row sec"></div>');
     const st = g.summary[g.facOf(uid)]?.per.get(uid);
-    if (o.broken || (o.items && o.items.some((i) => i.b))) { const rc = g.repairCost(o); const b = h(`<button class="btn good">🔧 Reparieren (${fmtUSD(rc)})</button>`); b.onclick = () => { if (!g.repair(uid)) this.toast('Nicht genug Geld.', 'bad'); else this.inspect(uid); }; row.append(b); }
+    if (o.broken || (o.items && o.items.some((i) => i.b))) { const rc = g.repairCost(o); const b = h(`<button class="btn good">Reparieren (${fmtUSD(rc)})</button>`); b.onclick = () => { if (!g.repair(uid)) this.toast('Nicht genug Geld.', 'bad'); else this.inspect(uid); }; row.append(b); }
+    if (!g.has('build')) { if (row.childElementCount) c.append(row); return; }
     const mv = h('<button class="btn">✥ Verschieben</button>'); mv.onclick = () => { this.resume(); this.w.startPlacement(o.type, uid); }; row.append(mv);
     const rt = h('<button class="btn">⟳ Drehen</button>'); rt.onclick = () => { const r0 = o.rot; o.rot = (o.rot + 1) % 4; if (!this.w.canPlace(def, o.x, o.z, o.rot, uid)) { o.rot = r0; this.toast('Kein Platz zum Drehen.', 'bad'); } this.w.syncObjects(); }; row.append(rt);
     if (def.kind !== 'decor') { const dp = h(`<button class="btn" title="Gleiches Objekt inkl. Teilen noch mal kaufen">⧉ Duplizieren (${fmtUSD(this.g.cloneCost ? this.g.cloneCost(o) : 0)})</button>`); dp.onclick = () => { this.resume(); this.w.startPlacement(o.type, null, o); }; row.append(dp); }
@@ -288,7 +314,7 @@ export class UI {
     if (hs.length) rows.push(['Leistung', hs.join('<br/>')]);
     if (def.kind !== 'decor') rows.push(['Verbrauch', fmtWatt(a.watt)]);
     if (def.kind === 'cooling') { rows.push(['Kühlleistung', fmtWatt(def.cool)]); rows.push(['Auslastung (Thermostat)', `${Math.round((a.util ?? 1) * 100)} %`]); }
-    if (sm.elec === 0) rows.push(['Strom', '<span class="pos">zahlen (noch) deine Eltern 😇</span>']);
+    if (sm.elec === 0) rows.push(['Strom', '<span class="pos">zahlen (noch) deine Eltern </span>']);
     if (a.units.length) { rows.push(['Ertrag / Tag', `<span class="pos">${fmtUSD(rev)}</span>`]); rows.push(['Strom / Tag', `<span class="neg">−${fmtUSD(cost)}</span>`]); rows.push(['Gewinn / Tag', `<b class="${rev - cost >= 0 ? 'pos' : 'neg'}">${fmtUSD(rev - cost)}</b>`]); }
     else if (def.kind === 'cooling') rows.push(['Strom / Tag', `<span class="neg">−${fmtUSD(cost)}</span>`]);
     rows.push(['Wiederverkauf', fmtUSD(g.objectValue(o))]);
@@ -307,7 +333,7 @@ export class UI {
     for (let i = 0; i < cap; i++) slot(`GPU ${i + 1}`, p.gpus[i], () => this.partPicker(o, 'gpu', Math.min(i, p.gpus.length)));
     if (!p.mobo) sec.append(h(`<div style="font-size:12px;color:#94a0b2">Erst ein Mainboard einbauen – es bestimmt die Zahl der GPU-Slots (Rahmen max. ${def.maxGpu}).</div>`));
     const row = h('<div class="row"></div>');
-    if (!p.mobo || !p.cpu || !p.psu) { const b = h(`<button class="btn primary small">⚡ Basis-Teile einbauen</button>`); b.onclick = () => { const r = g.quickBase(o.uid); if (!r) this.toast('Nicht genug Geld.', 'bad'); this.inspect(o.uid); }; row.append(b); }
+    if (!p.mobo || !p.cpu || !p.psu) { const b = h(`<button class="btn primary small">Basis-Teile einbauen</button>`); b.onclick = () => { const r = g.quickBase(o.uid); if (!r) this.toast('Nicht genug Geld.', 'bad'); this.inspect(o.uid); }; row.append(b); }
     if (p.mobo && p.gpus.length < cap) {
       const best = this.bestGpu(); if (best) { const n = cap - p.gpus.length; const b = h(`<button class="btn small">Mit ${esc(best.name)} füllen (${n}× ${fmtUSD(g.itemPrice(best))})</button>`); b.onclick = () => { g.fillGpus(o.uid, best.id); this.inspect(o.uid); }; row.append(b); }
     }
@@ -338,7 +364,7 @@ export class UI {
       if (type === 'psu') s = `${it.cap} W Kapazität`;
       if (type === 'mobo') s = `${it.slots} GPU-Slots (Rahmen: max. ${PLACEABLE[o.type].maxGpu})`;
       const price = g.itemPrice(it);
-      const row = h(`<div class="picker-row ${it.id === cur ? 'cur' : ''}"><div><b>${esc(it.name)}</b>${it.id === bestId ? ' <span class="new">★ BESTER WERT</span>' : ''}${price > g.s.cash ? ' <span style="color:#ff6b6b;font-size:11px">zu teuer</span>' : ''}<div class="s">${s}</div></div><div class="p" style="color:#ffb000;font-weight:700">${fmtUSD(price)}</div><button class="btn small primary" ${price > g.s.cash ? 'disabled' : ''}>${cur ? 'Tauschen' : 'Kaufen'}</button></div>`);
+      const row = h(`<div class="picker-row ${it.id === cur ? 'cur' : ''}"><div><b>${esc(it.name)}</b>${it.id === bestId ? ' <span class="new">BESTER WERT</span>' : ''}${price > g.s.cash ? ' <span style="color:#ff6b6b;font-size:11px">zu teuer</span>' : ''}<div class="s">${s}</div></div><div class="p" style="color:#ffb000;font-weight:700">${fmtUSD(price)}</div><button class="btn small primary" ${price > g.s.cash ? 'disabled' : ''}>${cur ? 'Tauschen' : 'Kaufen'}</button></div>`);
       row.querySelector('button').onclick = () => { if (!g.setPart(o.uid, type, it.id, idx)) { this.toast('Nicht genug Geld.', 'bad'); return; } this.closeModal(); this.inspect(o.uid); };
       list.append(row);
     }
@@ -377,18 +403,21 @@ export class UI {
     el.innerHTML = '';
     // Freischaltbare Standorte
     for (const f of FACILITIES) if (g.canUnlock(f.id)) {
-      const b = h(`<div style="margin-bottom:8px"><h3>🔓 ${esc(f.name)} verfügbar!</h3><div style="font-size:12px;color:#94a0b2">${esc(f.desc)}</div><button class="btn primary small" style="margin-top:6px">${f.cost ? `Für ${fmtUSD(f.cost)} übernehmen` : 'Einziehen'}</button></div>`);
+      const b = h(`<div style="margin-bottom:8px"><h3>${esc(f.name)} verfügbar!</h3><div style="font-size:12px;color:#94a0b2">${esc(f.desc)}</div><button class="btn primary small" style="margin-top:6px">${f.cost ? `Für ${fmtUSD(f.cost)} übernehmen` : 'Einziehen'}</button></div>`);
       b.querySelector('button').onclick = () => this.unlock(f.id);
       el.append(b);
     }
     if (!ch) { el.append(h(`<div><h3>Endlosmodus</h3><div style="font-size:13px">Du hast MONOLITH überholt. Wachse weiter – der Markt hat kein Ende.</div></div>`)); return; }
-    el.append(h(`<h3>${esc(ch.title)}</h3>`));
+    const nDone = ch.goals.filter((go) => s.goals[go.id]).length;
+    el.append(h(`<h3>${esc(ch.title)} <span style="color:rgba(220,226,235,.55);letter-spacing:1px">· ${nDone}/${ch.goals.length}</span></h3>`));
+    let shown = 0;
     for (const go of ch.goals) {
       const done = !!s.goals[go.id];
+      if (done || shown >= 1) continue; shown++;
       let prog = '';
       if (!done && go.progress) { const [cur, tgt, kind] = go.progress(s, g.helpers()); const f = (v) => (kind === 'hash' ? fmtHash(v) : fmtUSD(v)); const pc = Math.max(0, Math.min(100, tgt ? (cur / tgt) * 100 : 0)); prog = `<div style="font-size:11px;color:#94a0b2">${f(Math.max(0, cur))} / ${f(tgt)}</div><div class="bar" style="width:180px"><div style="width:${pc}%;background:#ffb000"></div></div>`; }
       const row = h(`<div class="goal ${done ? 'done' : ''}"><div class="ck">${done ? '✓' : ''}</div><div>${esc(go.text)}${prog}</div></div>`);
-      if (!done && go.action) { const b = h(`<button class="btn small primary"><b>[G]</b> ${esc(go.action.label)}</button>`); b.disabled = s.cash < go.action.cost; b.onclick = () => { if (g.goalAction(go)) { this.toast('✔ Erledigt!', 'good'); this.goals(); } }; row.lastElementChild.append(h('<br/>'), b); }
+      if (!done && go.action) { const b = h(`<button class="btn small primary"><kbd>G</kbd>${esc(go.action.label)}</button>`); b.disabled = s.cash < go.action.cost; b.onclick = () => { if (g.goalAction(go)) { this.toast('✔ Erledigt!', 'good'); this.goals(); } }; row.lastElementChild.append(h('<br/>'), b); }
       el.append(row);
     }
     const allDone = ch.goals.every((go) => s.goals[go.id]);
@@ -408,17 +437,21 @@ export class UI {
     const el = $('#tut'); if (!el) return;
     const g = this.g, s = g.s; let t = '';
     if (s.chapter === 0) {
-      if (!s.flags.boughtGpu) t = this.inspUid ? '🛒 Wähle im Fenster den <b>GPU-Slot</b> und kauf eine schnellere Grafikkarte.' : '👀 Dein PC steht links neben dem Schreibtischstuhl: hingehen, anschauen und <b>E</b> drücken.';
-      else if (!s.goals.earn) t = '⏩ Mit <b>1–4</b> stellst du das Tempo ein. Verdiene 1.000 $ – achte auf <b>Hitze</b> (<b>B</b> → Ventilator) und Mamas Sicherung (1,8 kW).';
+      const btc = s.wallet.BTC.ex;
+      if (!s.flags.miningStarted) t = this.inspUid ? 'Klick auf <b>Mining starten</b>.' : 'Dein PC steht neben dem Schreibtischstuhl. Geh hin, schau ihn an und drück <kbd>E</kbd>.';
+      else if (!g.has('market')) t = this.inspUid ? 'Dein PC schürft jetzt Bitcoin. Schließ das Fenster mit <kbd>E</kbd> und lass ihn ein paar Tage arbeiten.' : 'Dein PC schürft Bitcoin. Lass ihn ein paar Tage arbeiten, bis sich etwas angesammelt hat …';
+      else if (!(s.stats.sold > 0)) t = this.modalKind === 'market' ? 'Klick bei Bitcoin auf <b>100 % verkaufen</b>.' : `Du hast ${fmtCoin(btc)} BTC. Geh zum <b>PC-Monitor</b> auf dem Schreibtisch und drück <kbd>E</kbd>, um sie zu verkaufen.`;
+      else if (!s.flags.boughtGpu) t = this.inspUid ? 'Klick auf den <b>freien GPU-Slot</b> und kauf eine zweite Grafikkarte.' : 'Mehr Grafikkarten = mehr Bitcoin. Schau deinen PC an (<kbd>E</kbd>) und bau eine zweite Karte ein.';
+      else if (!s.goals.earn) t = 'Lass den PC arbeiten (Tempo mit <kbd>1</kbd> <kbd>2</kbd>) und verkauf regelmäßig am Monitor. Ziel: 1.000 $ verdient.';
     }
     if (!t) {
       const ch = CHAPTERS[s.chapter], go = ch && ch.goals.find((x) => !s.goals[x.id] && x.action);
       const rest = ch && ch.goals.filter((x) => !s.goals[x.id] && !x.action).length;
-      if (go && !rest) t = s.cash >= go.action.cost ? `💶 Drück <b>G</b>: ${esc(go.action.label)}.` : `💶 Spare für „${esc(go.action.label)}“ – ${fmtUSD(s.cash)} / ${fmtUSD(go.action.cost)}.`;
+      if (go && !rest) t = s.cash >= go.action.cost ? `Drück <b>G</b>: ${esc(go.action.label)}.` : `Spare für „${esc(go.action.label)}“ – ${fmtUSD(s.cash)} / ${fmtUSD(go.action.cost)}.`;
     }
-    if (!t && FACILITIES.some((f) => g.canUnlock(f.id))) t = '🚪 Ein neuer Standort ist frei: Geh zur <b>Tür</b>, schau sie an und drück <b>E</b>.';
-    if (!t && s.chapter === 1 && !s.goals.openrig) t = '🧰 Drück <b>B</b> → Rigs: Stell eine <b>Milchkiste</b> auf. Dann anschauen, <b>E</b> und bestücken (Mainboard, CPU, Netzteil, GPUs).';
-    if (!t) { const ch = CHAPTERS[s.chapter], go = ch && ch.goals.find((x) => !s.goals[x.id]); if (go) t = `🎯 Nächstes Ziel: ${esc(go.text)}`; }
+    if (!t && FACILITIES.some((f) => g.canUnlock(f.id))) t = 'Ein neuer Standort ist frei: Geh zur <b>Tür</b>, schau sie an und drück <b>E</b>.';
+    if (!t && s.chapter === 1 && !s.goals.openrig) t = 'Drück <b>B</b> → Rigs: Stell eine <b>Milchkiste</b> auf. Dann anschauen, <b>E</b> und bestücken (Mainboard, CPU, Netzteil, GPUs).';
+    if (!t) { const ch = CHAPTERS[s.chapter], go = ch && ch.goals.find((x) => !s.goals[x.id]); if (go) t = `Nächstes Ziel: ${esc(go.text)}`; }
     if (el.dataset.t !== t) { el.dataset.t = t; el.innerHTML = t; el.classList.toggle('hidden', !t); if (t) { el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); } }
   }
   unlock(id) {
@@ -427,7 +460,7 @@ export class UI {
     this.switchSite(id);
     const ci = CHAPTERS.findIndex((c) => c.unlock === id);
     const next = CHAPTERS[ci + 1];
-    this.story(next?.title || f.name, `${next?.intro || ''}<br/><br/><b>${esc(f.name)}</b> – ${esc(f.place)}<br/>${f.w} × ${f.d} m · ${f.power[0].kw.toLocaleString('de-DE')} kW Anschluss${f.rent ? ` · Miete ${fmtUSD(f.rent)}/Monat` : ''}<br/><i>${esc(f.desc)}</i><br/><br/>📏 <b>${Math.round((f.w * f.d) / 14).toLocaleString('de-DE')}×</b> so groß wie dein Kinderzimmer · ⚡ <b>${Math.round(f.power[0].kw / 1.8).toLocaleString('de-DE')}×</b> so viel Strom.`);
+    this.story(next?.title || f.name, `${next?.intro || ''}<br/><br/><b>${esc(f.name)}</b> – ${esc(f.place)}<br/>${f.w} × ${f.d} m · ${f.power[0].kw.toLocaleString('de-DE')} kW Anschluss${f.rent ? ` · Miete ${fmtUSD(f.rent)}/Monat` : ''}<br/><i>${esc(f.desc)}</i><br/><br/><b>${Math.round((f.w * f.d) / 14).toLocaleString('de-DE')}×</b> so groß wie dein Kinderzimmer · <b>${Math.round(f.power[0].kw / 1.8).toLocaleString('de-DE')}×</b> so viel Strom.`);
   }
 
   // ---------- Dock ----------
@@ -437,10 +470,11 @@ export class UI {
     const techN = TECHS.filter((t) => !(g.s.techs || {})[t.id] && g.techAvailable(t) && g.s.cash >= t.cost).length;
     el.innerHTML = '';
     const btns = [
-      ['🛒', 'Bauen', 'B', () => this.toggleBuild()], ['📈', 'Markt', 'M', () => this.market()], ['📱', 'Handy', 'P', () => this.phone(), unread], ['🏢', 'Firma', 'C', () => this.company()],
-      ['🔬', 'Technik', 'T', () => this.techs(), techN], ['🏆', 'Rangliste', 'L', () => this.ranking()], ['🗺️', this.w.empire ? 'Zurück' : 'Karte', 'K', () => this.toggleMap()], ['⚙️', 'Menü', 'ESC', () => this.menu()],
+      ['', 'Bauen', 'B', () => this.toggleBuild()], ['', 'Markt', 'M', () => this.market()], ['', 'Handy', 'P', () => this.phone(), unread], ['', 'Firma', 'C', () => this.company()],
+      ['', 'Technik', 'T', () => this.techs(), techN], ['', 'Rangliste', 'L', () => this.ranking()], ['', this.w.empire ? 'Zurück' : 'Karte', 'K', () => this.toggleMap()], ['', 'Menü', 'ESC', () => this.menu()],
     ];
-    for (const [ic, l, key, fn, b] of btns) { const e = h(`<button title="${l} (${key})"><span class="ic">${ic}</span>${l}<span class="key">${key}</span>${b ? `<span class="bdg">${b}</span>` : ''}</button>`); e.onclick = fn; el.append(e); }
+    const need = { B: 'build', M: 'market', P: 'phone', C: 'company', T: 'techs', L: 'ranking', K: 'map' };
+    for (const [ic, l, key, fn, b] of btns.filter((x) => !need[x[2]] || g.has(need[x[2]]))) { const e = h(`<button title="${l} (${key})"><span class="ic">${ic}</span>${l}<span class="key">${key}</span>${b ? `<span class="bdg">${b}</span>` : ''}</button>`); e.onclick = fn; el.append(e); }
   }
   toggleMap() {
     if (this.w.empire) { this.w.hideEmpire(); this.pause(false); this.w.setMode('play'); }
@@ -450,6 +484,23 @@ export class UI {
   // ---------- Modals ----------
   openModal(node, cls = '', kind = null) { this.openUI(); const m = $('#modal'); m.classList.remove('hidden'); const card = m.querySelector('.modal-card'); card.className = 'modal-card ' + cls; const b = m.querySelector('.modal-body'); b.innerHTML = ''; b.append(node); this.modalKind = kind; }
   closeModal() { $('#modal').classList.add('hidden'); this.modalKind = null; const cb = this.onModalClose; this.onModalClose = null; cb?.(); if (!this.inspUid && !document.body.classList.contains('show-build') && $('#modal').classList.contains('hidden') && (this.w.mode === 'ui')) this.w.setMode('play'); }
+  // Spielstart: Nachricht von Deniz – Bitcoin gibt es jetzt, dein PC kann das. Mit Kurs.
+  introPhone(onClose) {
+    const g = this.g, s = g.s, p = g.price('BTC');
+    const m0 = s.messages.find((m) => m.id === 'm0');
+    const txt = m0 ? m0.text : MESSAGES.find((m) => m.id === 'm0').text;
+    const body = h(`<div class="intro-phone"><div class="ip-date">${fmtDate(s.day, true)} · Lindental</div>
+      <div class="phone"><div class="ph-top"><b>Deniz</b><span>online</span></div>
+        <div class="msg f-Deniz"><div class="fr">Deniz<span>gerade eben</span></div>${esc(txt)}</div>
+        <div class="msg f-Deniz pricecard"><div class="pc-h"><span class="pc-dot">₿</span>Bitcoin · BTC</div><div class="pc-p">${fmtUSD(p)}</div><canvas class="chart" width="900" height="300"></canvas><div class="pc-s">Kurs seit Juli 2010 · Börse GoxBank</div></div>
+        <div class="msg f-Deniz"><div class="fr">Deniz</div>Geh an deinen PC und starte das Mining. Ich will wissen, wie viel du schaffst!</div>
+      </div><div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn primary big">Zum PC</button></div></div>`);
+    if (m0) m0.read = true;
+    body.querySelector('button').onclick = () => this.closeModal();
+    this.onModalClose = onClose;
+    this.openModal(body, 'narrow', 'intro');
+    requestAnimationFrame(() => this.chart(body.querySelector('canvas'), 'BTC', 120));
+  }
   story(title, html, btn = 'Los geht’s') {
     const n = h(`<div class="story"><div class="ch">${esc(title)}</div><p>${html}</p><div class="row" style="justify-content:flex-end"><button class="btn primary">${btn}</button></div></div>`);
     n.querySelector('button').onclick = () => this.closeModal();
@@ -459,10 +510,11 @@ export class UI {
   market(update = false) {
     const g = this.g, s = g.s;
     if (update && this.modalKind !== 'market') return;
-    const body = h(`<div><h2>📈 Markt & Wallet</h2><div class="grid2"><div class="coins"></div><div class="detail"></div></div></div>`);
+    const body = h(`<div><h2>Markt & Wallet</h2><div class="grid2"><div class="coins"></div><div class="detail"></div></div></div>`);
     const list = body.querySelector('.coins');
     let total = 0;
     for (const c of COINS) {
+      if (!g.has('coins') && c.id !== 'BTC') continue;
       const p = g.price(c.id), p30 = g.price(c.id, s.day - 30), w = s.wallet[c.id]; const val = (w.ex + w.cold) * p; total += val;
       const started = s.day >= c.start;
       const ch = p30 ? (p / p30 - 1) * 100 : 0;
@@ -471,16 +523,16 @@ export class UI {
       list.append(row);
     }
     list.append(h(`<div style="padding:8px 10px;color:#94a0b2;font-size:13px">Wallet gesamt: <b style="color:#fff">${fmtUSD(total)}</b></div>`));
-    const sa = h(`<button class="btn small" style="margin:4px 10px">💰 Alles auf der Börse verkaufen</button>`); sa.onclick = () => { const u = g.sellAll(); this.audio?.cash(); this.toast(`Alles verkauft: ${fmtUSD(u)}`, 'good', 3000); this.market(); }; list.append(sa);
+    const sa = h(`<button class="btn small" style="margin:4px 10px">Alles auf der Börse verkaufen</button>`); sa.onclick = () => { const u = g.sellAll(); this.audio?.cash(); this.toast(`Alles verkauft: ${fmtUSD(u)}`, 'good', 3000); this.market(); }; if (g.has('coins')) list.append(sa);
     const pc = h(`<label style="display:flex;gap:8px;align-items:center;padding:4px 10px;font-size:13px"><input type="checkbox" ${s.payoutCold ? 'checked' : ''}/> Neue Coins direkt in die Cold-Wallet (sicher vor Börsenpleiten)</label>`);
     pc.querySelector('input').onchange = (e) => { s.payoutCold = e.target.checked; };
-    list.append(pc);
+    if (g.has('cold')) list.append(pc);
     const c = COIN[this.marketCoin], w = s.wallet[c.id], p = g.price(c.id);
     const det = body.querySelector('.detail');
     det.append(h(`<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">${c.name} <span style="color:#94a0b2">${c.id}</span></h3><div style="font-size:22px;font-weight:800">${fmtUSD(p)}</div></div>`));
     const hp = g.coinActive(c.id) ? g.revPerHash(c.id) : 0; const hpUnit = c.algo(s.day) === 'sha256' ? [1e12, 'TH/s'] : c.algo(s.day) === 'scrypt' ? [1e9, 'GH/s'] : c.algo(s.day) === 'kheavy' ? [1e12, 'TH/s'] : c.algo(s.day) === 'equihash' ? [1e3, 'kSol/s'] : ['rx', 'cn'].includes(c.algo(s.day)) ? [1e3, 'kH/s'] : [1e6, 'MH/s'];
     det.append(h(`<div style="color:#94a0b2;font-size:12px;margin:4px 0 8px">${esc(c.desc)} · Algo: ${ALGO_LABEL[c.algo(s.day)]} · Netz: ${s.day >= c.start ? fmtHash(g.netHash(c.id), c.algo(s.day)) : '—'}${hp ? ` · Hashprice: <b style="color:#e8edf4">${fmtUSD(hp * hpUnit[0])} pro ${hpUnit[1]} und Tag</b>` : ''}${c.end && s.day >= c.end ? ' · <b class="neg">Mining beendet</b>' : ''}</div>`));
-    if (c.id === 'BTC') { const nh = HALVINGS.find((d) => d > s.day); if (nh) det.append(h(`<div style="font-size:13px;margin:-2px 0 8px">⏳ Nächstes Halving: <b>${fmtDate(nh)}</b> (in ${(nh - s.day).toLocaleString('de-DE')} Tagen) – Blockbelohnung ${String(BTC_REWARD(s.day)).replace('.', ',')} → ${String(BTC_REWARD(nh)).replace('.', ',')} BTC</div>`)); }
+    if (c.id === 'BTC') { const nh = HALVINGS.find((d) => d > s.day); if (nh) det.append(h(`<div style="font-size:13px;margin:-2px 0 8px">Nächstes Halving: <b>${fmtDate(nh)}</b> (in ${(nh - s.day).toLocaleString('de-DE')} Tagen) – Blockbelohnung ${String(BTC_REWARD(s.day)).replace('.', ',')} → ${String(BTC_REWARD(nh)).replace('.', ',')} BTC</div>`)); }
     const cv = h('<canvas class="chart" width="1200" height="520"></canvas>'); det.append(cv);
     const range = h(`<div class="row" style="margin-top:6px"></div>`);
     for (const [l, d] of [['30 T', 30], ['1 J', 365], ['5 J', 1825], ['Alles', 99999]]) { const b = h(`<button class="btn small ${this.range === d ? 'primary' : ''}">${l}</button>`); b.onclick = () => { this.range = d; this.market(); }; range.append(b); }
@@ -492,15 +544,15 @@ export class UI {
     det.append(kv);
     const r1 = h('<div class="row"></div>');
     for (const f of [0.25, 0.5, 1]) { const b = h(`<button class="btn small">${f * 100} % verkaufen</button>`); b.disabled = w.ex <= 0; b.onclick = () => { const u = g.sell(c.id, f); this.audio?.cash(); this.toast(`Verkauft für ${fmtUSD(u)}`, 'good', 2500); this.market(); }; r1.append(b); }
-    const tc = h(`<button class="btn small">⇄ ${w.cold > 0 && w.ex === 0 ? 'Auf Börse holen' : 'In Cold-Wallet'}</button>`); tc.onclick = () => { g.transfer(c.id, !(w.cold > 0 && w.ex === 0)); this.market(); }; r1.append(tc);
+    const tc = !g.has('cold') ? null : h(`<button class="btn small">⇄ ${w.cold > 0 && w.ex === 0 ? 'Auf Börse holen' : 'In Cold-Wallet'}</button>`); if (tc) tc.onclick = () => { g.transfer(c.id, !(w.cold > 0 && w.ex === 0)); this.market(); }; if (tc) r1.append(tc);
     det.append(r1);
     const r2 = h(`<div class="row" style="align-items:center"><span style="font-size:13px">Kaufen für</span><input type="number" min="0" step="100" value="${Math.max(0, Math.round(Math.min(s.cash, 1000)))}"/><span>$</span><button class="btn small primary">Kaufen</button></div>`);
     r2.querySelector('button').onclick = () => { const v = +r2.querySelector('input').value; if (g.coinActive(c.id) || s.day >= c.start) { const u = g.buy(c.id, v); if (u) this.toast(`${fmtUSD(u)} in ${c.name} investiert`, 'good', 2500); this.market(); } };
-    det.append(r2);
+    if (g.has('buycoins')) det.append(r2);
     const r3 = h(`<div class="sec"><h4>Auto-Verkauf neu geschürfter ${c.id}: <span id="as-v">${Math.round(s.autoSell[c.id] * 100)} %</span></h4><input type="range" min="0" max="100" step="5" value="${Math.round(s.autoSell[c.id] * 100)}"/><div style="font-size:12px;color:#94a0b2">Der Rest bleibt in der Wallet (HODL). Strom, Miete und Löhne werden vom Kontostand bezahlt!</div></div>`);
     r3.querySelector('input').oninput = (e) => { s.autoSell[c.id] = e.target.value / 100; r3.querySelector('#as-v').textContent = e.target.value + ' %'; };
     const all = h('<button class="btn small" style="margin-top:6px">Für alle Coins übernehmen</button>'); all.onclick = () => { for (const k of COINS) s.autoSell[k.id] = s.autoSell[c.id]; this.toast('Übernommen', 'good', 1500); }; r3.append(all);
-    det.append(r3);
+    if (g.has('autosell')) det.append(r3); else det.append(h(`<div class="sec" style="font-size:13px;color:#8d96a3">Geschürfte Coins landen hier auf deinem Börsenkonto. Verkauf sie, wenn du Dollar brauchst – oder warte auf einen besseren Kurs.</div>`));
     this.openModal(body, '', 'market');
   }
   chart(cv, id, range) {
@@ -527,32 +579,32 @@ export class UI {
   phone() {
     const g = this.g;
     const msgs = [...g.s.messages].sort((a, b) => b.day - a.day);
-    const body = h(`<div><h2>📱 Handy</h2><div class="phone"></div></div>`);
+    const body = h(`<div><h2>Handy</h2><div class="phone"></div></div>`);
     const ph = body.querySelector('.phone');
     if (!msgs.length) ph.append(h('<div class="empty">Keine Nachrichten.</div>'));
-    for (const m of msgs) { if (m.old) continue; ph.append(h(`<div class="msg f-${m.from.split(' ')[0]} ${m.read ? '' : 'unread'}"><div class="fr">${FACE[m.from] || '💬'} ${esc(m.from)}<span>${fmtDate(m.day)}</span></div>${esc(m.text)}</div>`)); }
+    for (const m of msgs) { if (m.old) continue; ph.append(h(`<div class="msg f-${m.from.split(' ')[0]} ${m.read ? '' : 'unread'}"><div class="fr">${FACE[m.from] || ''} ${esc(m.from)}<span>${fmtDate(m.day)}</span></div>${esc(m.text)}</div>`)); }
     msgs.forEach((m) => (m.read = true));
     this.openModal(body, 'narrow', 'phone'); this.dock();
   }
 
   company() {
     const g = this.g, s = g.s;
-    const body = h(`<div><h2>🏢 Firma & Standorte</h2><div class="cards"></div><div class="sec staff"></div></div>`);
+    const body = h(`<div><h2>Firma & Standorte</h2><div class="cards"></div><div class="sec staff"></div></div>`);
     const cards = body.querySelector('.cards');
     for (const f of FACILITIES) {
       const un = s.unlocked.includes(f.id), can = g.canUnlock(f.id);
       const fs = s.fac[f.id], sm = g.summary[f.id];
-      const c = h(`<div class="card ${!un && !can ? 'lock' : ''}"><h3>${un ? '' : can ? '🔓 ' : '🔒 '}${esc(f.name)}</h3><div class="sub">${esc(f.place)} · ${f.w}×${f.d} m</div>
+      const c = h(`<div class="card ${!un && !can ? 'lock' : ''}"><h3>${un ? '' : can ? '' : ''}${esc(f.name)}</h3><div class="sub">${esc(f.place)} · ${f.w}×${f.d} m</div>
         <div class="kv" style="margin:4px 0"><div class="k">Anschluss</div><div class="v">${fmtNum(f.power[fs.power].kw, 1)} kW</div>
         <div class="k">Strompreis</div><div class="v">${g.elecPrice(f.id) ? fmtUSD(g.elecPrice(f.id)) + '/kWh' : 'zahlen die Eltern'}</div>
         <div class="k">Miete</div><div class="v">${f.rent ? fmtUSD(f.rent) + '/Monat' : 'keine'}</div>
         ${un ? `<div class="k">Last</div><div class="v">${fmtWatt(sm.watt)}</div><div class="k">Temperatur</div><div class="v ${sm.temp > 38 ? 'neg' : ''}">${sm.temp.toFixed(1)} °C</div><div class="k">Geräte</div><div class="v">${fs.objects.length}</div>` : ''}</div></div>`);
       if (un) {
         const nx = f.power[fs.power + 1];
-        if (nx) { const b = h(`<button class="btn small">⚡ ${esc(nx.label)}: ${fmtNum(nx.kw, 0)} kW (${fmtUSD(nx.cost)})</button>`); b.disabled = s.cash < nx.cost; b.onclick = () => { if (g.upgradePower(f.id)) { this.toast('Stromanschluss ausgebaut!', 'good'); this.company(); this.sites(); } }; c.append(b); }
+        if (nx) { const b = h(`<button class="btn small">${esc(nx.label)}: ${fmtNum(nx.kw, 0)} kW (${fmtUSD(nx.cost)})</button>`); b.disabled = s.cash < nx.cost; b.onclick = () => { if (g.upgradePower(f.id)) { this.toast('Stromanschluss ausgebaut!', 'good'); this.company(); this.sites(); } }; c.append(b); }
         else c.append(h('<div style="font-size:12px;color:#94a0b2">Maximaler Anschluss erreicht.</div>'));
         const step = g.solarStep(f.id);
-        if (step) { const cost = step * g.solarPricePerKwp(); const sb = h(`<button class="btn small">☀️ +${step} kWp Solar (${fmtUSD(cost)})${fs.solar ? ` · jetzt ${fs.solar} kWp ≈ ${Math.round(g.solarKwh(f.id))} kWh/Tag` : ''}</button>`); sb.disabled = s.cash < cost; sb.onclick = () => { if (g.buildSolar(f.id)) { this.toast(`☀️ Solaranlage erweitert (${f.short})`, 'good'); this.company(); } }; c.append(sb); }
+        if (step) { const cost = step * g.solarPricePerKwp(); const sb = h(`<button class="btn small">+${step} kWp Solar (${fmtUSD(cost)})${fs.solar ? ` · jetzt ${fs.solar} kWp ≈ ${Math.round(g.solarKwh(f.id))} kWh/Tag` : ''}</button>`); sb.disabled = s.cash < cost; sb.onclick = () => { if (g.buildSolar(f.id)) { this.toast(`Solaranlage erweitert (${f.short})`, 'good'); this.company(); } }; c.append(sb); }
         if (s.current !== f.id) { const go = h('<button class="btn small" style="margin-left:6px">Hingehen</button>'); go.onclick = () => { this.closeModal(); this.switchSite(f.id); }; c.append(go); }
       } else if (can) { const b = h(`<button class="btn primary small">Übernehmen (${fmtUSD(f.cost)})</button>`); b.onclick = () => { this.closeModal(); this.unlock(f.id); }; c.append(b); }
       else { const ci = CHAPTERS.findIndex((ch) => ch.unlock === f.id); c.append(h(`<div style="font-size:12px;color:#94a0b2">Wird frei nach „${esc(CHAPTERS[ci]?.title || '')}" (frühestens ${fmtDate(toDay(CHAPTERS[ci]?.minDate || '2010-01-01'))}).</div>`)); }
@@ -569,9 +621,9 @@ export class UI {
     const loan = s.loan || 0, lim = g.loanLimit();
     const lb = h(`<div class="sec"><h4>Bankkredit</h4><div class="kv"><div class="k">Offener Kredit</div><div class="v ${loan ? 'neg' : ''}">${fmtUSD(loan)}</div><div class="k">Zinssatz</div><div class="v">${(g.loanRate() * 100).toFixed(1).replace('.', ',')} % p. a.</div><div class="k">Zinsen pro Tag</div><div class="v">${fmtUSD(loan * g.loanRate() / 365)}</div><div class="k">Weiterer Rahmen</div><div class="v">${fmtUSD(lim)}</div></div><div style="font-size:12px;color:#94a0b2">Sicherheit sind deine Hardware und Coins. Achtung: 2022 gingen hoch verschuldete Miner reihenweise pleite.</div><div class="row"></div></div>`);
     const lr = lb.querySelector('.row');
-    for (const f of [0.25, 1]) { const amt = Math.round(lim * f / 100) * 100; const b = h(`<button class="btn small">${fmtUSD(amt)} leihen</button>`); b.disabled = amt <= 0; b.onclick = () => { const u = g.takeLoan(amt); if (u) { this.audio?.cash(); this.toast(`🏦 Kredit über ${fmtUSD(u)} aufgenommen`, 'good'); } this.company(); }; lr.append(b); }
-    const rp = h(`<button class="btn small good">Tilgen (${fmtUSD(Math.min(loan, Math.max(0, s.cash)))})</button>`); rp.disabled = !loan || s.cash <= 0; rp.onclick = () => { const u = g.repayLoan(loan); if (u) this.toast(`🏦 ${fmtUSD(u)} getilgt`, 'good'); this.company(); }; lr.append(rp);
-    st.append(lb);
+    for (const f of [0.25, 1]) { const amt = Math.round(lim * f / 100) * 100; const b = h(`<button class="btn small">${fmtUSD(amt)} leihen</button>`); b.disabled = amt <= 0; b.onclick = () => { const u = g.takeLoan(amt); if (u) { this.audio?.cash(); this.toast(`Kredit über ${fmtUSD(u)} aufgenommen`, 'good'); } this.company(); }; lr.append(b); }
+    const rp = h(`<button class="btn small good">Tilgen (${fmtUSD(Math.min(loan, Math.max(0, s.cash)))})</button>`); rp.disabled = !loan || s.cash <= 0; rp.onclick = () => { const u = g.repayLoan(loan); if (u) this.toast(`${fmtUSD(u)} getilgt`, 'good'); this.company(); }; lr.append(rp);
+    if (g.has('loan')) st.append(lb);
     const nwc = h('<div class="sec"><h4>Vermögensverlauf (log)</h4><canvas class="nwchart" width="1100" height="260"></canvas></div>'); st.append(nwc); requestAnimationFrame(() => this.nwChart(nwc.querySelector('canvas')));
     st.append(h(`<div class="sec"><h4>Bilanz pro Tag</h4><div class="kv"><div class="k">Mining-Ertrag</div><div class="v pos">${fmtUSD(p.rev)}</div><div class="k">Strom, Miete, Löhne</div><div class="v neg">−${fmtUSD(p.cost)}</div><div class="k">Gesamt geschürft</div><div class="v">${fmtUSD(s.stats.minedUSD)}</div><div class="k">Stromkosten bisher</div><div class="v">${fmtUSD(s.stats.elec)}</div><div class="k">In Hardware investiert</div><div class="v">${fmtUSD(s.stats.spentHW)}</div></div></div>`));
     this.openModal(body, '', 'company');
@@ -580,13 +632,13 @@ export class UI {
   offer(usd) {
     const g = this.g;
     const body = h(`<div class="story"><div class="ch">Ein Anruf aus Zug</div>
-      <p>🕴️ <b>Viktor Kral, MONOLITH Hash AG:</b> „China hat die halbe Branche abgeschaltet. Ich kaufe jetzt. <b>${fmtUSD(usd)}</b> in bar für die Hashwerk GmbH – alle Standorte, alle Maschinen. Sie wären mit Anfang dreißig fertig mit Arbeiten."</p>
+      <p><b>Viktor Kral, MONOLITH Hash AG:</b> „China hat die halbe Branche abgeschaltet. Ich kaufe jetzt. <b>${fmtUSD(usd)}</b> in bar für die Hashwerk GmbH – alle Standorte, alle Maschinen. Sie wären mit Anfang dreißig fertig mit Arbeiten."</p>
       <p style="color:#94a0b2">Dein aktuelles Vermögen: ${fmtUSD(g.netWorth())}. Deniz schaut dich an und sagt nichts.</p>
       <div class="row" style="justify-content:flex-end"><button class="btn danger" data-a="yes">Verkaufen</button><button class="btn primary" data-a="no">Ablehnen – wir machen weiter</button></div></div>`);
-    body.querySelector('[data-a=no]').onclick = () => { g.s.flags.offerDeclined = true; this.closeModal(); this.toast('🎮 <b>Deniz:</b> JA! Ich wusste es. Wir holen ihn ein.', 'msg', 7000); };
+    body.querySelector('[data-a=no]').onclick = () => { g.s.flags.offerDeclined = true; this.closeModal(); this.toast('<b>Deniz:</b> JA! Ich wusste es. Wir holen ihn ein.', 'msg', 7000); };
     body.querySelector('[data-a=yes]').onclick = () => {
       g.s.flags.soldOut = true; this.closeModal();
-      const b2 = h(`<div class="story" style="text-align:center"><div class="ch">Ende: Verkauft</div><div style="font-size:34px;font-weight:900;margin:6px 0">💼 ${fmtUSD(usd)}</div>
+      const b2 = h(`<div class="story" style="text-align:center"><div class="ch">Ende: Verkauft</div><div style="font-size:34px;font-weight:900;margin:6px 0">${fmtUSD(usd)}</div>
         <p>Du unterschreibst in Zug. MONOLITH übernimmt Hashwerk – und Viktor Kral bekommt seinen Rekord. Elektro Brandt gibt es immer noch; Papa hat dir einen Schlüssel für die Werkstatt hinterlegt.</p>
         <p style="color:#94a0b2">Willst du es lieber noch einmal versuchen? Du kannst den Vertrag zerreißen und weiterspielen.</p>
         <div class="row" style="justify-content:center"><button class="btn primary">Vertrag zerreißen & weiterspielen</button></div></div>`);
@@ -601,7 +653,7 @@ export class UI {
     const years = ((s.day - toDay('2010-10-01')) / 365).toFixed(1).replace('.', ',');
     const devs = s.unlocked.reduce((n, id) => n + s.fac[id].objects.reduce((k, o) => k + (o.items ? o.items.length : 1), 0), 0);
     const body = h(`<div class="story" style="text-align:center"><div class="ch">Finale</div>
-      <div style="font-size:40px;font-weight:900;margin:6px 0">🏆 MONOLITH überholt!</div>
+      <div style="font-size:40px;font-weight:900;margin:6px 0">MONOLITH überholt!</div>
       <p>Vor ${years} Jahren stand ein alter PC neben deinem Bett. Heute rechnet Hashwerk mit <b>${fmtHash(sha)}</b> – das sind <b>${pctDE(sha / net)} %</b> aller Bitcoin-Blöcke weltweit.</p>
       <div class="kv" style="max-width:420px;margin:14px auto;text-align:left"><div class="k">Vermögen</div><div class="v">${fmtUSD(g.netWorth())}</div><div class="k">Geräte</div><div class="v">${devs.toLocaleString('de-DE')}</div><div class="k">Standorte</div><div class="v">${s.unlocked.length}</div><div class="k">Insgesamt geschürft</div><div class="v">${fmtUSD(s.stats.minedUSD)}</div><div class="k">Stromkosten</div><div class="v">${fmtUSD(s.stats.elec)}</div></div>
       <p style="color:#94a0b2">Papa hat den Laden übrigens behalten. Er repariert immer noch Radios – aus Spaß.</p>
@@ -612,12 +664,12 @@ export class UI {
 
   techs() {
     const g = this.g, s = g.s;
-    const body = h(`<div><h2>🔬 Technik & Forschung</h2><p style="color:#94a0b2;margin-top:-6px">Einmalige Investitionen mit dauerhafter Wirkung. Neue Technologien werden im Lauf der Geschichte verfügbar.</p><div class="cards"></div></div>`);
+    const body = h(`<div><h2>Technik & Forschung</h2><p style="color:#94a0b2;margin-top:-6px">Einmalige Investitionen mit dauerhafter Wirkung. Neue Technologien werden im Lauf der Geschichte verfügbar.</p><div class="cards"></div></div>`);
     const cards = body.querySelector('.cards');
     for (const t of TECHS) {
       const own = (s.techs || {})[t.id], av = g.techAvailable(t);
-      const c = h(`<div class="card ${!av && !own ? 'lock' : ''}"><h3>${t.icon} ${esc(t.name)}</h3><div class="sub">${own ? `✅ Erforscht am ${fmtDate(own)}` : av ? `Kosten: <b style="color:#ffb000">${fmtUSD(t.cost)}</b>` : `🔒 ab ${fmtDate(toDay(t.date))}${t.minTier ? ` · braucht Standort „${FACILITIES.find((f) => f.tier === t.minTier).name}"` : ''}`}</div><div style="font-size:13px">${esc(t.desc)}</div></div>`);
-      if (!own && av) { const b = h(`<button class="btn primary small" style="margin-top:8px">Erforschen</button>`); b.disabled = s.cash < t.cost; b.onclick = () => { if (g.buyTech(t.id)) { this.audio?.fanfare(); this.toast(`🔬 ${esc(t.name)} erforscht!`, 'good'); this.techs(); this.dock(); } }; c.append(b); }
+      const c = h(`<div class="card ${!av && !own ? 'lock' : ''}"><h3>${t.icon} ${esc(t.name)}</h3><div class="sub">${own ? `Erforscht am ${fmtDate(own)}` : av ? `Kosten: <b style="color:#ffb000">${fmtUSD(t.cost)}</b>` : `ab ${fmtDate(toDay(t.date))}${t.minTier ? ` · braucht Standort „${FACILITIES.find((f) => f.tier === t.minTier).name}"` : ''}`}</div><div style="font-size:13px">${esc(t.desc)}</div></div>`);
+      if (!own && av) { const b = h(`<button class="btn primary small" style="margin-top:8px">Erforschen</button>`); b.disabled = s.cash < t.cost; b.onclick = () => { if (g.buyTech(t.id)) { this.audio?.fanfare(); this.toast(`${esc(t.name)} erforscht!`, 'good'); this.techs(); this.dock(); } }; c.append(b); }
       cards.append(c);
     }
     this.openModal(body, '', 'techs');
@@ -636,7 +688,7 @@ export class UI {
     entries.push({ name: 'Hashwerk (Du)', h: mine, me: true });
     entries.sort((a, b) => b.h - a.h);
     const rank = entries.findIndex((e) => e.me) + 1;
-    const body = h(`<div><h2>🏆 Rangliste der Bitcoin-Miner</h2><p style="color:#94a0b2;margin-top:-6px">Netz-Hashrate: <b style="color:#fff">${fmtHash(net)}</b> · Dein Anteil: <b style="color:#ffb000">${pctDE(mine / net)} %</b> · Platz <b>${rank}</b> von ${entries.length}</p>
+    const body = h(`<div><h2>Rangliste der Bitcoin-Miner</h2><p style="color:#94a0b2;margin-top:-6px">Netz-Hashrate: <b style="color:#fff">${fmtHash(net)}</b> · Dein Anteil: <b style="color:#ffb000">${pctDE(mine / net)} %</b> · Platz <b>${rank}</b> von ${entries.length}</p>
       <table class="tbl"><tr><th>#</th><th>Miner</th><th>Hashrate</th><th>Anteil</th></tr>${entries.map((e, i) => `<tr class="${e.me ? 'me' : ''} ${e.rival ? 'rival' : ''}"><td>${i + 1}</td><td>${esc(e.name)}</td><td>${fmtHash(e.h)}</td><td>${pctDE(e.h / net)} %</td></tr>`).join('')}</table>
       <p style="font-size:12px;color:#94a0b2">Ziel im Endspiel: MONOLITH Hash AG überholen.</p>
       <div class="sec"><h4>Deine Hashrate (SHA-256, log)</h4><canvas class="nwchart" width="1000" height="240"></canvas></div>
@@ -644,7 +696,7 @@ export class UI {
     const ms = Object.entries(s.milestones || {}).sort((a, b) => a[1] - b[1]);
     const label = (k) => { if (k === 'cold') return 'Cold-Wallet-Profi (Börsenpleite überstanden)'; const v = +k.slice(1); return k[0] === 'h' ? `${fmtHash(v)} Hashrate` : v >= 1e9 ? 'Milliardär' : v >= 1e6 ? (v === 1e6 ? 'Millionär' : fmtUSD(v) + ' Vermögen') : fmtUSD(v) + ' Vermögen'; };
     const unl = s.unlocked.map((id) => [FACILITY[id].name, null]);
-    body.querySelector('.path').innerHTML = (ms.length ? ms.map(([k, d]) => `<div style="display:flex;gap:10px;font-size:13px;padding:2px 0"><span style="color:#ffb000;min-width:86px">${fmtDate(d)}</span><span>🏆 ${label(k)}</span></div>`).join('') : '<div class="empty">Noch keine Meilensteine.</div>') + `<div style="font-size:12px;color:#94a0b2;margin-top:6px">Standorte: ${unl.map((u) => u[0]).join(' → ')}</div>`;
+    body.querySelector('.path').innerHTML = (ms.length ? ms.map(([k, d]) => `<div style="display:flex;gap:10px;font-size:13px;padding:2px 0"><span style="color:#ffb000;min-width:86px">${fmtDate(d)}</span><span>${label(k)}</span></div>`).join('') : '<div class="empty">Noch keine Meilensteine.</div>') + `<div style="font-size:12px;color:#94a0b2;margin-top:6px">Standorte: ${unl.map((u) => u[0]).join(' → ')}</div>`;
     requestAnimationFrame(() => {
       const cv = body.querySelector('canvas'); if (!cv) return; const ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
       const hist = s.stats.history.filter((p) => p.h > 0);
@@ -663,20 +715,20 @@ export class UI {
 
   menu() {
     const g = this.g;
-    const body = h(`<div><h2>⚙️ Menü</h2><div class="row"><button class="btn primary" data-a="save">💾 Speichern</button><button class="btn" data-a="load">📂 Laden</button><button class="btn danger" data-a="new">Neues Spiel</button></div>
+    const body = h(`<div><h2>Menü</h2><div class="row"><button class="btn primary" data-a="save">Speichern</button><button class="btn" data-a="load">Laden</button><button class="btn danger" data-a="new">Neues Spiel</button></div>
       <div class="sec"><h4>Grafik</h4><div class="row"><button class="btn small ${this.w.quality === 'high' ? 'primary' : ''}" data-q="high">Hoch (Bloom + Schatten)</button><button class="btn small ${this.w.quality === 'medium' ? 'primary' : ''}" data-q="medium">Mittel</button><button class="btn small ${this.w.quality === 'low' ? 'primary' : ''}" data-q="low">Niedrig</button></div></div>
       <div class="sec"><h4>Spielhilfe</h4><div style="font-size:13px;line-height:1.65">
         <b>Ertrag:</b> Deine Hashrate geteilt durch die Netz-Hashrate mal die Coins pro Tag – mit echten Kursen und Hashraten von 2010 bis heute.<br/>
         <b>Rigs:</b> Rahmen kaufen (links), anklicken, dann Mainboard, CPU, Netzteil und GPUs in die Slots setzen. „Basis-Teile" und „Füllen" sparen Klicks.<br/>
-        <b>Coins:</b> „Auto" wählt täglich den profitabelsten Coin. Neue Coins erscheinen an ihrem echten Startdatum, Aether endet mit dem Merge 2022.<br/>
-        <b>Strom:</b> Jeder Standort hat eine Anschlussleistung. Zu viel Last → Sicherung fliegt. Ausbau unter 🏢 Firma. Unrentable Geräte pausieren automatisch.<br/>
+        <b>Coins:</b> „Auto" wählt täglich den profitabelsten Coin. Neue Coins erscheinen an ihrem echten Startdatum, Ethereum endet mit dem Merge 2022.<br/>
+        <b>Strom:</b> Jeder Standort hat eine Anschlussleistung. Zu viel Last → Sicherung fliegt. Ausbau unter Firma. Unrentable Geräte pausieren automatisch.<br/>
         <b>Hitze:</b> Über 38 °C wird gedrosselt und mehr kaputt. Ventilatoren und Klimageräte helfen; H zeigt das Wärmebild.<br/>
         <b>Wallet:</b> Ein Teil der Coins wird sofort verkauft (einstellbar), der Rest bleibt liegen. Börsen können pleitegehen – die Cold-Wallet ist sicher.<br/>
-        <b>Wachstum:</b> Kapitelziele unten links schalten neue Standorte frei. 🗺️ Imperium zeigt alles nebeneinander.</div></div>
-      <div class="sec"><h4>Ton</h4><div class="row"><button class="btn small" data-a="mute">${this.audio?.muted ? '🔇 Ton an' : '🔊 Ton aus'}</button></div></div>
+        <b>Wachstum:</b> Kapitelziele unten links schalten neue Standorte frei. Imperium zeigt alles nebeneinander.</div></div>
+      <div class="sec"><h4>Ton</h4><div class="row"><button class="btn small" data-a="mute">${this.audio?.muted ? 'Ton an' : 'Ton aus'}</button></div></div>
       <div class="sec"><h4>Steuerung</h4><div style="font-size:13px;line-height:1.8">Links = auswählen/bauen · Doppelklick = heranzoomen · Rechts ziehen = drehen · Mitte ziehen = schieben · Mausrad = Zoom<br/>WASD/Pfeile = Kamera bewegen · Q/E = drehen · R = beim Bauen drehen · Shift = mehrfach bauen<br/>Leertaste = Pause · 1–4 = Tempo · H = Wärmebild · F = Rundgang · ESC = abbrechen</div></div>
       <div class="sec"><h4>Über</h4><div style="font-size:12px;color:#94a0b2">HASHWERK ist ein Fan-Projekt. Alle Marken- und Produktnamen sind fiktiv, die 3D-Modelle prozedural erzeugt. Kurse und Hashraten sind gerundete historische Werte bis November 2026 – danach simuliert. Kein Finanzrat.</div></div></div>`);
-    body.querySelector('[data-a=save]').onclick = () => { this.toast(g.save() ? '💾 Gespeichert' : 'Speichern fehlgeschlagen', 'good', 2000); };
+    body.querySelector('[data-a=save]').onclick = () => { this.toast(g.save() ? 'Gespeichert' : 'Speichern fehlgeschlagen', 'good', 2000); };
     body.querySelector('[data-a=load]').onclick = () => { if (g.load()) { this.closeModal(); this.switchSite(g.s.current); this.speedBar(); this.toast('Spielstand geladen', 'good'); } else this.toast('Kein Spielstand gefunden', 'bad'); };
     const nb = body.querySelector('[data-a=new]');
     nb.onclick = () => {
@@ -694,6 +746,7 @@ export class UI {
     $('#tk-text').innerHTML = t.length ? t.map((n) => `<span class="d">${fmtDate(n.day)}</span>${esc(n.text)}`).join('<span class="sep">◆</span>') : '<span class="d">Lindental</span>Willkommen bei HASHWERK.';
   }
   toast(html, kind = 'info', ms = 4500) {
+    html = String(html).replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{26FF}\u{2B50}\u{23E9}-\u{23FA}\u{2705}\u{2728}\u{2744}\u{274C}]\u{FE0F}?\s?/gu, '');
     if (kind === 'bad') this.audio?.bad(); else if (kind === 'msg') this.audio?.message();
     const el = h(`<div class="toast ${kind}">${html}</div>`); $('#toasts').append(el);
     while ($('#toasts').childElementCount > 5) $('#toasts').firstElementChild.remove();
@@ -715,7 +768,7 @@ export class UI {
   }
   milestone(title, sub) {
     document.getElementById('milestone')?.remove();
-    const el = h(`<div id="milestone"><div class="t1">MEILENSTEIN</div><div class="t2">🏆 ${esc(title)}</div><div class="t3">${esc(sub || '')}</div></div>`);
+    const el = h(`<div id="milestone"><div class="t1">MEILENSTEIN</div><div class="t2">${esc(title)}</div><div class="t3">${esc(sub || '')}</div></div>`);
     document.body.append(el); setTimeout(() => el.remove(), 4300);
     this.audio?.fanfare();
   }
