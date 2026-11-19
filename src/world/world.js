@@ -70,7 +70,7 @@ export class World {
     this.touchMode = window.matchMedia?.('(pointer: coarse)').matches || false;
     document.addEventListener('pointerlockchange', () => {
       const locked = document.pointerLockElement === canvas;
-      this.player.locked = locked;
+      this.player.locked = locked; if (locked) this.player.lockAt = performance.now();
       if (!locked && this.mode === 'play' && !this.expectUnlock) { this.cancelPlacement(); this.onPause?.(); }
       this.expectUnlock = false;
       this.onLockChange?.(locked);
@@ -463,7 +463,10 @@ export class World {
   }
   requestLock() {
     if (this.touchMode || this.mode !== 'play' || document.pointerLockElement === this.canvas) return;
-    try { const r = this.canvas.requestPointerLock(); if (r && r.catch) r.catch(() => { this.lockFailed = true; this.onLockChange?.(false); }); } catch (e) { this.lockFailed = true; }
+    const plain = () => { try { const r = this.canvas.requestPointerLock(); if (r && r.catch) r.catch(() => { this.lockFailed = true; this.onLockChange?.(false); }); } catch (e) { this.lockFailed = true; } };
+    // Rohe Mausbewegung (ohne Beschleunigung) vermeidet Sprünge beim schnellen Drehen; ältere Browser fallen zurück
+    if (this.noRawMouse) { plain(); return; }
+    try { const r = this.canvas.requestPointerLock({ unadjustedMovement: true }); if (r && r.catch) r.catch((err) => { if (err?.name === 'NotSupportedError') { this.noRawMouse = true; plain(); } else { this.lockFailed = true; this.onLockChange?.(false); } }); } catch (e) { this.noRawMouse = true; plain(); }
   }
   // Kollision des Spielers mit Raum, Möbeln und Objekten
   collides(x, z, r) {

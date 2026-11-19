@@ -11,15 +11,37 @@ export class Player {
     this.sens = 0.0022;
     this.touch = { x: 0, y: 0 }; // virtueller Joystick (-1..1)
     this.euler = new THREE.Euler(0, 0, 0, 'YXZ');
+    this.lockAt = 0; this.avgMag = 12;
     document.addEventListener('mousemove', (e) => {
       if (!this.enabled || !this.locked) return;
-      this.look(e.movementX, e.movementY);
+      // Direkt nach dem Einfangen der Maus kommen oft Sprünge – kurz ignorieren
+      if (performance.now() - this.lockAt < 120) return;
+      const mx = e.movementX || 0, my = e.movementY || 0, mag = Math.hypot(mx, my);
+      // Bekannter Browser-Fehler: einzelne, unsinnig große Bewegungswerte verwerfen
+      if (mag > 180 && mag > this.avgMag * 7) return;
+      this.avgMag = this.avgMag * 0.85 + Math.min(mag, 400) * 0.15;
+      this.look(mx, my);
     });
-    // Ziehen zum Umsehen (wenn Pointer Lock nicht verfügbar ist, z. B. Touch)
+    // Ziehen zum Umsehen (wenn Pointer Lock nicht verfügbar ist, z. B. im eingebetteten Fenster oder per Touch)
     let drag = null;
-    dom.addEventListener('pointerdown', (e) => { if (!this.enabled || this.locked) return; if (e.pointerType === 'touch' && e.clientX < window.innerWidth * 0.4 && e.clientY > window.innerHeight * 0.45) return; drag = { x: e.clientX, y: e.clientY, id: e.pointerId, moved: 0 }; });
-    window.addEventListener('pointermove', (e) => { if (!drag || e.pointerId !== drag.id) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.moved += Math.abs(dx) + Math.abs(dy); drag.x = e.clientX; drag.y = e.clientY; this.look(dx * 1.6, dy * 1.6); });
-    window.addEventListener('pointerup', (e) => { if (drag && e.pointerId === drag.id) { this.lastDragMoved = drag.moved; drag = null; } });
+    const endDrag = () => { if (drag) { this.lastDragMoved = drag.moved; drag = null; } };
+    dom.addEventListener('pointerdown', (e) => {
+      if (!this.enabled || this.locked) return;
+      if (e.pointerType === 'touch' && e.clientX < window.innerWidth * 0.4 && e.clientY > window.innerHeight * 0.45) return;
+      drag = { x: e.clientX, y: e.clientY, id: e.pointerId, moved: 0, mouse: e.pointerType === 'mouse' };
+      try { dom.setPointerCapture(e.pointerId); } catch (err) { /* nicht kritisch */ }
+    });
+    window.addEventListener('pointermove', (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      if (this.locked) { endDrag(); return; } // Maus wurde gerade eingefangen: kein doppeltes Drehen
+      if (drag.mouse && e.buttons === 0) { endDrag(); return; } // Taste wurde außerhalb losgelassen
+      let dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY;
+      const mag = Math.hypot(dx, dy); if (mag > 140) { const k = 140 / mag; dx *= k; dy *= k; } // kein Sprung bei verlorenen Ereignissen
+      drag.moved += Math.abs(dx) + Math.abs(dy); this.look(dx * 1.6, dy * 1.6);
+    });
+    window.addEventListener('pointerup', (e) => { if (drag && e.pointerId === drag.id) endDrag(); });
+    window.addEventListener('pointercancel', endDrag); dom.addEventListener('lostpointercapture', endDrag);
+    window.addEventListener('blur', endDrag); document.addEventListener('visibilitychange', endDrag);
   }
   look(mx, my) {
     this.yaw -= mx * this.sens; this.pitch -= my * this.sens;
