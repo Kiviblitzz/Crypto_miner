@@ -470,6 +470,15 @@ export class Game {
       this.emit('news', n);
       if (n.effect?.exchangeLoss) this.exchangeCrash(n.effect.exchangeLoss, n.text);
     }
+    // Kurs-Alarm bei starken Bewegungen (Bitcoin)
+    {
+      const p0 = this.price('BTC', day - 7), p1 = this.price('BTC', day), ch = p0 ? p1 / p0 - 1 : 0;
+      if (Math.abs(ch) > 0.22 && (!s.flags.lastAlarm || day - s.flags.lastAlarm > 25)) {
+        s.flags.lastAlarm = day;
+        const held = (s.wallet.BTC.ex + s.wallet.BTC.cold) * p1;
+        this.toast(ch > 0 ? `📈 Bitcoin +${Math.round(ch * 100)} % in einer Woche (${fmtUSD(p1)})${held > 100 ? ` – deine BTC sind ${fmtUSD(held)} wert. Gewinne mitnehmen?` : ''}` : `📉 Bitcoin ${Math.round(ch * 100)} % in einer Woche (${fmtUSD(p1)}) – Panik oder Kaufgelegenheit?`, ch > 0 ? 'good' : 'bad', 8000);
+      }
+    }
     // Neue Hardware im Handel
     for (const it of RELEASES) {
       if (it.releaseDay !== day) continue;
