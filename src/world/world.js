@@ -127,6 +127,7 @@ export class World {
     this.camera.near = span > 30 ? 0.2 : 0.05; this.camera.updateProjectionMatrix();
     if (this.people) { this.scene.remove(this.people); this.people = null; }
     this.popups?.forEach((p) => (p.visible = false));
+    if (this.xmas) { this.scene.remove(this.xmas); this.xmas = null; }
     this.buildWeather();
     this.scene.fog = def.style === 'fjord' ? new THREE.Fog(0xb8c8d8, 250, 900) : new THREE.Fog(0x9fb8d0, 60 + span * 3, 260 + span * 6);
     this.syncObjects();
@@ -173,7 +174,7 @@ export class World {
     if (this.selected) this.refreshSelBox();
     this.syncPeople();
     if (this.heatMode) this.updateHeat();
-    this.updateSolar();
+    this.updateSolar(); this.updateSeason();
   }
 
   // ---------- Auswahl ----------
@@ -337,6 +338,23 @@ export class World {
     if (!this.popups) return;
     const span = Math.max(this.def.w, this.def.d);
     for (const p of this.popups) { if (!p.visible) continue; p.userData.life += dt; p.position.y = p.userData.y0 + p.userData.life * 0.35 * Math.max(1, span / 12); p.material.opacity = Math.max(0, 1 - p.userData.life / 1.6); if (p.userData.life > 1.6) p.visible = false; }
+  }
+
+  // ---------- Jahreszeit: Weihnachtsbaum im Dezember ----------
+  updateSeason() {
+    const m = new Date(this.game.s.day * 86400000).getUTCMonth();
+    const spots = { 0: [0.3, 1.25], 1: [6.6, 4.7], 2: [9.4, 7.4] };
+    const want = m === 11 && spots[this.def.tier] && !this.empire;
+    if (want && !this.xmas) {
+      const g = (this.xmas = new THREE.Group()); const [x, z] = spots[this.def.tier]; g.position.set(x, 0, z);
+      const green = mat('xmasGreen', { color: 0x1f6b2e, roughness: 0.8 });
+      const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.1, 0.18, 12), mat('pot', { color: 0xb5643c, roughness: 0.8 })); pot.position.y = 0.09; g.add(pot);
+      [[0.32, 0.5, 0.42], [0.25, 0.42, 0.72], [0.17, 0.34, 0.98]].forEach(([r, h, y]) => { const c = new THREE.Mesh(new THREE.ConeGeometry(r, h, 10), green); c.position.y = y; c.castShadow = true; g.add(c); });
+      const star = new THREE.Mesh(new THREE.OctahedronGeometry(0.06), mat('xmasStar', { color: 0x332200, emissive: 0xffd400, emissiveIntensity: 3 })); star.position.y = 1.2; g.add(star);
+      const cols = [M.ledRed(), M.ledBlue(), M.ledAmber(), M.ledGreen2()];
+      for (let i = 0; i < 18; i++) { const a = i * 2.4, y = 0.35 + (i / 18) * 0.75, r = 0.3 * (1 - (y - 0.3) / 0.95) + 0.03; const b = new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 6), cols[i % 4]); b.position.set(Math.cos(a) * r, y, Math.sin(a) * r); g.add(b); }
+      this.scene.add(g);
+    } else if (!want && this.xmas) { this.scene.remove(this.xmas); this.xmas = null; }
   }
 
   // ---------- Solarfeld neben dem Gebäude ----------
