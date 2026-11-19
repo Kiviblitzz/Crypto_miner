@@ -6,6 +6,7 @@ import { fmtUSD, fmtNum, fmtCoin, fmtHash, fmtDate, fmtWatt, SKILL_XP } from '..
 import { toDay, BTC_HASH, inHeatwave, HALVINGS, BTC_REWARD } from '../data/history.js';
 import { EVENT } from '../data/events.js';
 import { ACH } from '../data/achievements.js';
+import { showFinale, endlessGoals, egoalKey, egoalDone } from './finale.js';
 
 const $ = (s) => document.querySelector(s);
 const h = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
@@ -80,6 +81,7 @@ export class UI {
     game.on('feature', (f) => this.featureCard(f));
     game.on('milestone', (t, sub) => this.milestone(t, sub));
     game.on('won', () => this.ending());
+    game.on('egoal', (id) => egoalDone(this, id));
     game.on('event', () => { this.evSnooze = null; this.tryEvent(); });
     game.on('achievement', (id) => { const a = ACH[id]; if (a) setTimeout(() => this.milestone('Erfolg', `${a.name} – ${a.desc}`), 600); });
     game.on('offer', (usd) => this.offer(usd));
@@ -647,7 +649,7 @@ export class UI {
     // Freischaltbarer Standort: eine Zeile
     const fu = FACILITIES.find((f) => g.canUnlock(f.id));
     if (fu) { const b = h(`<div class="goal next"><div class="ck"></div><div>${esc(fu.short)} ist frei · geh durch die Tür</div></div>`); el.append(b); return; }
-    if (!ch) { el.append(h(`<div class="goal"><div class="ck"></div><div>Endlosmodus · wachs weiter</div></div>`)); return; }
+    if (!ch) { endlessGoals(this, el); return; }
     const nDone = ch.goals.filter((go) => s.goals[go.id]).length;
     let shown = 0;
     for (const go of ch.goals) {
@@ -667,7 +669,7 @@ export class UI {
   }
   // Taste G: nächste Ziel-Aktion (z. B. Papa die Stromrechnung geben) – in der Ego-Steuerung ohne Mausklick
   goalActionKey() {
-    const s = this.g.s, ch = CHAPTERS[s.chapter]; if (!ch) return false;
+    const s = this.g.s, ch = CHAPTERS[s.chapter]; if (!ch) return egoalKey(this);
     const go = ch.goals.find((x) => !s.goals[x.id] && x.action);
     if (!go) { this.toast('Nichts zu bezahlen.', 'info', 2000); return false; }
     if (!this.g.canPayGoal(go)) { this.toast(`Du brauchst ${fmtUSD(go.action.cost)}.`, 'bad'); return false; }
@@ -970,32 +972,15 @@ export class UI {
       <p><b>Viktor Kral, MONOLITH Hash AG:</b> „China hat die halbe Branche abgeschaltet. Ich kaufe jetzt. <b>${fmtUSD(usd)}</b> in bar für die Hashwerk GmbH – alle Standorte, alle Maschinen. Sie wären mit Anfang dreißig fertig mit Arbeiten."</p>
       <p style="color:var(--dim)">Dein aktuelles Vermögen: ${fmtUSD(g.netWorth())}. Deniz schaut dich an und sagt nichts.</p>
       <div class="row" style="justify-content:flex-end"><button class="btn danger" data-a="yes">Verkaufen</button><button class="btn primary" data-a="no">Ablehnen – wir machen weiter</button></div></div>`);
-    body.querySelector('[data-a=no]').onclick = () => { g.s.flags.offerDeclined = true; this.closeModal(); this.toast('<b>Deniz:</b> JA! Ich wusste es. Wir holen ihn ein.', 'msg', 7000); };
-    body.querySelector('[data-a=yes]').onclick = () => {
-      g.s.flags.soldOut = true; this.closeModal();
-      const b2 = h(`<div class="story" style="text-align:center"><div class="ch">Ende: Verkauft</div><div style="font-size:34px;font-weight:900;margin:6px 0">${fmtUSD(usd)}</div>
-        <p>Du unterschreibst in Zug. MONOLITH übernimmt Hashwerk – und Viktor Kral bekommt seinen Rekord. Elektro Brandt gibt es immer noch; Papa hat dir einen Schlüssel für die Werkstatt hinterlegt.</p>
-        <p style="color:var(--dim)">Willst du es lieber noch einmal versuchen? Du kannst den Vertrag zerreißen und weiterspielen.</p>
-        <div class="row" style="justify-content:center"><button class="btn primary">Vertrag zerreißen & weiterspielen</button></div></div>`);
-      b2.querySelector('button').onclick = () => { g.s.flags.offerDeclined = true; this.closeModal(); };
-      this.openModal(b2, 'narrow', 'story');
-    };
+    let answered = false;
+    body.querySelector('[data-a=no]').onclick = () => { answered = true; g.declineOffer(usd); this.onModalClose = null; this.closeModal(); this.toast('<b>Deniz:</b> JA! Ich wusste es. Wir holen ihn ein.', 'msg', 7000); };
+    body.querySelector('[data-a=yes]').onclick = () => { answered = true; this.onModalClose = null; this.closeModal(); g.sellOut(usd); showFinale(this, 'sold', usd); }; // echtes Ende mit Abspann
     this.openModal(body, 'narrow', 'story');
+    this.onModalClose = () => { if (!answered) g.declineOffer(usd); };
   }
 
-  ending() {
-    const g = this.g, s = g.s; const sha = g.algoHash('sha256'), net = g.netHash('BTC');
-    const years = ((s.day - toDay('2010-10-01')) / 365).toFixed(1).replace('.', ',');
-    const devs = s.unlocked.reduce((n, id) => n + s.fac[id].objects.reduce((k, o) => k + (o.items ? o.items.length : 1), 0), 0);
-    const body = h(`<div class="story" style="text-align:center"><div class="ch">Finale</div>
-      <div style="font-size:40px;font-weight:900;margin:6px 0">MONOLITH überholt!</div>
-      <p>Vor ${years} Jahren stand ein alter PC neben deinem Bett. Heute rechnet Hashwerk mit <b>${fmtHash(sha)}</b> – das sind <b>${pctDE(sha / net)} %</b> aller Bitcoin-Blöcke weltweit.</p>
-      <div class="kv" style="max-width:420px;margin:14px auto;text-align:left"><div class="k">Vermögen</div><div class="v">${fmtUSD(g.netWorth())}</div><div class="k">Geräte</div><div class="v">${devs.toLocaleString('de-DE')}</div><div class="k">Standorte</div><div class="v">${s.unlocked.length}</div><div class="k">Insgesamt geschürft</div><div class="v">${fmtUSD(s.stats.minedUSD)}</div><div class="k">Stromkosten</div><div class="v">${fmtUSD(s.stats.elec)}</div></div>
-      <p style="color:var(--dim)">Papa hat den Laden übrigens behalten. Er repariert immer noch Radios – aus Spaß.</p>
-      <div class="row" style="justify-content:center"><button class="btn primary big">Endlos weiterspielen</button></div></div>`);
-    body.querySelector('button').onclick = () => this.closeModal();
-    this.audio?.fanfare(); this.openModal(body, 'narrow', 'story');
-  }
+  // Finale: mehrseitige Abschluss-Sequenz (src/ui/finale.js)
+  ending() { showFinale(this, 'won'); }
 
   techs() {
     const g = this.g, s = g.s;
