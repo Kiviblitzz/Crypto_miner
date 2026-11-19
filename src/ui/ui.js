@@ -168,7 +168,7 @@ export class UI {
     el.classList.toggle('far', sp.dist > 2.2);
     el.classList.remove('hidden'); el.classList.toggle('edge', !sp.on); el.classList.toggle('left', !sp.on && sp.side < 0);
     const ex = sp.side < 0 ? 150 : innerWidth - 150, ey = Math.min(innerHeight - 140, Math.max(200, sp.front ? sp.y : innerHeight * 0.55));
-    el.style.transform = sp.on ? `translate(${Math.round(sp.x)}px, ${Math.round(sp.y)}px)` : `translate(${ex}px, ${Math.round(ey)}px)`;
+    el.style.transform = sp.on ? `translate(${Math.round(sp.x)}px, ${Math.round(Math.min(sp.y, innerHeight - 120))}px)` : `translate(${ex}px, ${Math.round(ey)}px)`;
     // nicht mit Meldungen überlappen
     const mr = el.querySelector('.om-in').getBoundingClientRect(); let hit = false; for (const t of document.querySelectorAll('#toasts .toast')) { const r = t.getBoundingClientRect(); if (mr.right > r.left - 12 && mr.left < r.right + 12 && mr.bottom > r.top - 12 && mr.top < r.bottom + 12) { hit = true; break; } } el.style.visibility = hit ? 'hidden' : '';
     const t = el.querySelector('.om-t'), full = label; if (t.textContent !== full) t.textContent = full;
