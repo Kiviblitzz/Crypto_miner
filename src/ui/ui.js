@@ -1,7 +1,7 @@
 // DOM-Oberfläche: Topbar, Standorte, Baumenü, Inspektor, Ziele, Dock, Modals (Markt, Handy, Firma, Rangliste, Menü)
 import { COINS, COIN, ALGO_LABEL } from '../data/coins.js';
-import { PLACEABLE, PART, CATEGORIES } from '../data/hardware.js';
-import { FACILITIES, FACILITY, CHAPTERS } from '../data/world.js';
+import { PLACEABLE, PART, CATEGORIES, PLACEABLES, PARTS } from '../data/hardware.js';
+import { FACILITIES, FACILITY, CHAPTERS, TECHS } from '../data/world.js';
 import { fmtUSD, fmtNum, fmtCoin, fmtHash, fmtDate, fmtWatt } from '../sim/game.js';
 import { toDay, BTC_HASH } from '../data/history.js';
 
@@ -17,6 +17,7 @@ export class UI {
     this.dock(); this.speedBar();
     world.onSelect = (uid) => this.inspect(uid);
     world.onHover = (uid, pos) => this.tip(uid, pos);
+    world.onFPError = () => this.toast('Der Rundgang braucht Maus-Steuerung (Pointer Lock) – auf diesem Gerät nicht verfügbar.', 'bad');
     world.onPlacing = (on) => this.hint(on ? 'Linksklick = platzieren · R = drehen · Shift = mehrfach · Rechtsklick/ESC = abbrechen' : null);
     world.onFP = (on) => { this.hint(on ? 'Rundgang: WASD laufen · Shift = rennen · Maus = umsehen · Klick = Gerät ansehen · ESC = zurück' : null); $('#crosshair').classList.toggle('hidden', !on); };
     $('#modal .modal-x').onclick = () => this.closeModal();
@@ -25,6 +26,7 @@ export class UI {
     game.on('message', (m) => { this.toast(`${FACE[m.from] || '💬'} <b>${esc(m.from)}:</b> ${esc(m.text.length > 90 ? m.text.slice(0, 88) + '…' : m.text)}`, 'msg', 7000); this.dock(); });
     game.on('news', () => this.ticker());
     game.on('milestone', (t, sub) => this.milestone(t, sub));
+    game.on('release', (it, text) => { this.toast(`🆕 ${esc(text)}`, 'info', 6000); this.ticker(); this.lastBuildDay = -99; });
     game.on('update', () => this.onDay());
     game.on('refresh', () => this.refresh());
     game.on('unlockable', (id) => { this.toast(`🔓 Neuer Standort verfügbar: <b>${FACILITY[id].name}</b> – siehe Ziele unten links`, 'good', 8000); this.goals(); this.sites(); });
@@ -35,6 +37,8 @@ export class UI {
   refresh() { this.top(); this.sites(); this.build(true); this.goals(); this.dock(); if (this.inspUid) this.inspect(this.inspUid, true); }
   onDay() {
     this.sites(); this.goals();
+    for (const t of TECHS) if (toDay(t.date) === this.g.s.day) { this.toast(`🔬 Neue Technologie verfügbar: <b>${esc(t.name)}</b>`, 'good', 7000); this.dock(); }
+    if (this.g.s.day % 7 === 0) this.dock();
     if (this.g.s.day - this.lastBuildDay >= 7) this.build(true);
     if (this.inspUid) this.inspectStats();
     if (this.modalKind === 'market') this.market(true);
@@ -115,6 +119,16 @@ export class UI {
         this.w.startPlacement(it.id);
       };
       list.append(card);
+    }
+    // Vorschau: was demnächst erscheint (echte Release-Daten)
+    const soon = (this.cat === 'rigs' ? [...PLACEABLES.filter((p) => p.cat === 'rigs'), ...PARTS.filter((p) => p.type === 'gpu' || p.type === 'mobo')] : PLACEABLES.filter((p) => p.cat === this.cat))
+      .filter((p) => p.releaseDay > g.s.day).sort((a, b) => a.releaseDay - b.releaseDay).slice(0, 3);
+    if (soon.length) {
+      list.append(h('<div style="font-size:11px;color:#7d8aa0;text-transform:uppercase;letter-spacing:.8px;margin:10px 4px 6px">Demnächst</div>'));
+      for (const it of soon) {
+        const spec = it.kind === 'device' ? `${fmtHash(it.hash, it.algo)} · ${fmtWatt(it.watt)}` : it.type === 'gpu' ? `${it.vram} GB · ${it.watt} W` : it.type === 'mobo' ? `${it.slots} GPU-Slots` : '';
+        list.append(h(`<div class="item dis" style="cursor:default"><div class="t"><span>🔒 ${esc(it.name)}</span><span class="p" style="color:#7d8aa0">${it.release.slice(5, 7)}/${it.release.slice(0, 4)}</span></div><div class="s">${spec}</div></div>`));
+      }
     }
     el.append(list);
   }
@@ -295,7 +309,7 @@ export class UI {
     const unread = g.s.messages.filter((m) => !m.read).length;
     el.innerHTML = '';
     const btns = [
-      ['📈', 'Markt', () => this.market()], ['📱', 'Handy', () => this.phone(), unread], ['🏢', 'Firma', () => this.company()],
+      ['📈', 'Markt', () => this.market()], ['📱', 'Handy', () => this.phone(), unread], ['🏢', 'Firma', () => this.company()], ['🔬', 'Technik', () => this.techs(), TECHS.filter((t) => !(g.s.techs || {})[t.id] && g.techAvailable(t) && g.s.cash >= t.cost).length],
       ['🏆', 'Rangliste', () => this.ranking()], ['🚶', 'Rundgang', () => this.w.enterFP()], ['⚙️', 'Menü', () => this.menu()],
     ];
     for (const [ic, l, fn, b] of btns) { const e = h(`<button><span class="ic">${ic}</span>${l}${b ? `<span class="bdg">${b}</span>` : ''}</button>`); e.onclick = fn; el.append(e); }
@@ -420,6 +434,19 @@ export class UI {
     this.openModal(body, '', 'company');
   }
 
+  techs() {
+    const g = this.g, s = g.s;
+    const body = h(`<div><h2>🔬 Technik & Forschung</h2><p style="color:#94a0b2;margin-top:-6px">Einmalige Investitionen mit dauerhafter Wirkung. Neue Technologien werden im Lauf der Geschichte verfügbar.</p><div class="cards"></div></div>`);
+    const cards = body.querySelector('.cards');
+    for (const t of TECHS) {
+      const own = (s.techs || {})[t.id], av = g.techAvailable(t);
+      const c = h(`<div class="card ${!av && !own ? 'lock' : ''}"><h3>${t.icon} ${esc(t.name)}</h3><div class="sub">${own ? `✅ Erforscht am ${fmtDate(own)}` : av ? `Kosten: <b style="color:#ffb000">${fmtUSD(t.cost)}</b>` : `🔒 ab ${fmtDate(toDay(t.date))}${t.minTier ? ` · braucht Standort „${FACILITIES.find((f) => f.tier === t.minTier).name}"` : ''}`}</div><div style="font-size:13px">${esc(t.desc)}</div></div>`);
+      if (!own && av) { const b = h(`<button class="btn primary small" style="margin-top:8px">Erforschen</button>`); b.disabled = s.cash < t.cost; b.onclick = () => { if (g.buyTech(t.id)) { this.audio?.fanfare(); this.toast(`🔬 ${esc(t.name)} erforscht!`, 'good'); this.techs(); this.dock(); } }; c.append(b); }
+      cards.append(c);
+    }
+    this.openModal(body, '', 'techs');
+  }
+
   ranking() {
     const g = this.g, s = g.s, day = s.day;
     const net = g.netHash('BTC');
@@ -448,7 +475,11 @@ export class UI {
       <div class="sec"><h4>Über</h4><div style="font-size:12px;color:#94a0b2">HASHWERK ist ein Fan-Projekt. Alle Marken- und Produktnamen sind fiktiv, die 3D-Modelle prozedural erzeugt. Kurse und Hashraten sind gerundete historische Werte bis November 2026 – danach simuliert. Kein Finanzrat.</div></div></div>`);
     body.querySelector('[data-a=save]').onclick = () => { this.toast(g.save() ? '💾 Gespeichert' : 'Speichern fehlgeschlagen', 'good', 2000); };
     body.querySelector('[data-a=load]').onclick = () => { if (g.load()) { this.closeModal(); this.switchSite(g.s.current); this.speedBar(); this.toast('Spielstand geladen', 'good'); } else this.toast('Kein Spielstand gefunden', 'bad'); };
-    body.querySelector('[data-a=new]').onclick = () => { if (confirm('Wirklich neu anfangen? Der aktuelle Fortschritt geht verloren (außer er ist gespeichert).')) { g.newGame(); this.closeModal(); this.switchSite('kinder'); this.speedBar(); this.ticker(); } };
+    const nb = body.querySelector('[data-a=new]');
+    nb.onclick = () => {
+      if (!nb.dataset.armed) { nb.dataset.armed = '1'; nb.textContent = 'Sicher? Nochmal klicken = neu starten'; setTimeout(() => { if (nb.isConnected) { delete nb.dataset.armed; nb.textContent = 'Neues Spiel'; } }, 4000); return; }
+      g.newGame(); this.closeModal(); this.switchSite('kinder'); this.speedBar(); this.ticker();
+    };
     body.querySelector('[data-a=mute]').onclick = () => { this.audio?.setMuted(!this.audio.muted); this.menu(); };
     body.querySelectorAll('[data-q]').forEach((b) => (b.onclick = () => { this.w.setQuality(b.dataset.q); this.menu(); }));
     this.openModal(body, 'narrow', 'menu');

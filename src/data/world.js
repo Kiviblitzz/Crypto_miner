@@ -58,7 +58,7 @@ export const CHAPTERS = [
     intro: 'Papa staunt. Der Keller gehört dir – solange die Waschmaschine weiterläuft.',
     goals: [
       { id: 'openrig', text: 'Bau ein Milchkisten- oder Open-Frame-Rig', check: (s, h) => h.countPlaced((o) => ['crate', 'frame6', 'frame8', 'frame12'].includes(o.type)) > 0 },
-      { id: 'gh3', text: 'Erreiche 3 GH/s auf SHA-256', check: (s, h) => h.algoHash('sha256') >= 3e9 },
+      { id: 'rev30', text: 'Erreiche 30 $ Mining-Ertrag pro Tag (Tipp: Scrypt-Coins!)', check: (s, h) => h.dailyRev() >= 30 },
       { id: 'debt', text: 'Tilge die Ladenschulden bei der Bank (15.000 $)', action: { label: '15.000 $ überweisen', cost: 15000, flag: 'debt' }, check: (s) => s.flags.debt },
     ],
   },
@@ -196,3 +196,16 @@ export const NEWS = [
 ].map(([d, t, effect]) => ({ day: toDay(d), text: t, effect }));
 
 export const START_DAY = toDay('2010-10-01');
+
+// Technologien (wie die Forschung im Vorbild): einmal kaufen, wirken dauerhaft
+export const TECHS = [
+  { id: 'undervolt', name: 'Undervolting-Guide', icon: '🪫', date: '2010-12-01', cost: 300, desc: 'GPU-Rigs brauchen 12 % weniger Strom bei gleicher Leistung.', fx: { rigPower: 0.88 } },
+  { id: 'pool', name: 'Eigener Pool-Server', icon: '🖧', date: '2011-06-01', cost: 2500, desc: 'Keine Poolgebühren mehr: +2 % Ertrag auf alles.', fx: { rev: 1.02 } },
+  { id: 'dustfilter', name: 'Staubfilter & Wartungsplan', icon: '🧹', date: '2012-06-01', cost: 6000, minTier: 2, desc: '35 % weniger Ausfälle.', fx: { fail: 0.65 } },
+  { id: 'firmware', name: 'Hashwerk-ASIC-Firmware', icon: '💾', date: '2016-01-01', cost: 60000, minTier: 3, desc: 'Eigene Firmware: ASICs +6 % Hashrate, −8 % Strom.', fx: { asicHash: 1.06, asicPower: 0.92 } },
+  { id: 'aisle', name: 'Kalt-/Warmgang-Einhausung', icon: '🧊', date: '2017-06-01', cost: 250000, minTier: 3, desc: '+35 % Kühlleistung in allen Standorten.', fx: { cool: 1.35 } },
+  { id: 'immersion', name: 'Immersionskühlung', icon: '🛢️', date: '2020-09-01', cost: 1500000, minTier: 4, desc: 'Miner baden in Kühlflüssigkeit: +10 % Hashrate (Übertakten), 30 % weniger Ausfälle.', fx: { asicHash: 1.10, fail: 0.7 } },
+  { id: 'heatsale', name: 'Abwärme an Fernwärmenetz', icon: '♨️', date: '2022-01-01', cost: 3000000, minTier: 5, desc: 'Die Fjordhalle heizt das Dorf: −20 % Stromkosten in der Fjordhalle.', fx: { fjordElec: 0.8 } },
+  { id: 'trading', name: 'Stromhandels-Abteilung', icon: '📉', date: '2023-06-01', cost: 8000000, minTier: 4, desc: 'Flexibler Einkauf & Abschalten bei Preisspitzen: −10 % Strom überall.', fx: { elec: 0.9 } },
+  { id: 'predict', name: 'KI-Wartung (Predictive Maintenance)', icon: '🤖', date: '2024-01-01', cost: 5000000, minTier: 4, desc: 'Sensoren erkennen Defekte vorher: −50 % Ausfälle.', fx: { fail: 0.5 } },
+];

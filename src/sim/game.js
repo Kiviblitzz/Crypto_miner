@@ -1,13 +1,15 @@
 // Spielzustand + tägliche Simulation (Mining, Strom, Hitze, Defekte, Markt, Story)
 import { COINS, COIN } from '../data/coins.js';
 import { PLACEABLE, PART, PLACEABLES, PARTS, GPUS } from '../data/hardware.js';
-import { FACILITIES, FACILITY, CHAPTERS, MESSAGES, NEWS, START_DAY } from '../data/world.js';
+import { FACILITIES, FACILITY, CHAPTERS, MESSAGES, NEWS, START_DAY, TECHS } from '../data/world.js';
 import { BTC_HASH, POWER_HOUSEHOLD, GPU_BOOM, MONOLITH_SHARE, DAG_AET, DAG_AEC, seasonOffset, noise, toDay, BTC_PRICE } from '../data/history.js';
 
 const LAST_DATA_DAY = BTC_PRICE.lastDay;
 export const SAVE_KEY = 'hashwerk-save-v1';
 const DEFAULT_AUTOSELL = 0.8;
 
+const RELEASES = [...PLACEABLES, ...PARTS].filter((it) => it.releaseDay > START_DAY && (it.kind === 'device' || it.kind === 'rig' || it.type));
+const fmtHashS = (h, a) => fmtHash(h, a);
 function rnd(seed) { const x = Math.sin(seed * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); }
 function gauss() { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
 
@@ -33,7 +35,7 @@ export class Game {
     this.s = s;
     this.cache = {};
     // Startausstattung: alter Tower-PC mit Q66 + RHD 4850
-    this.addObject('kinder', 'tower', 3.75, 0.75, 0, { mobo: 'h55', cpu: 'q66', psu: 'psu400', gpus: ['rhd4850'] }, true);
+    this.addObject('kinder', 'tower', 1.75, 0.75, 0, { mobo: 'h55', cpu: 'q66', psu: 'psu400', gpus: ['rhd4850'] }, true);
     while (s.newsIdx < NEWS.length && NEWS[s.newsIdx].day < s.day) s.newsIdx++;
     this.dayUpdate(true);
   }
@@ -50,6 +52,11 @@ export class Game {
       this.s = s; this.cache = {}; this.dayUpdate(true); return true;
     } catch (e) { console.warn(e); return false; }
   }
+
+  // ---------- Technologien ----------
+  fx(key) { let m = 1; const u = this.s.techs || {}; for (const t of TECHS) if (u[t.id] && t.fx[key]) m *= t.fx[key]; return m; }
+  techAvailable(t) { return this.s.day >= toDay(t.date) && (!t.minTier || Math.max(...this.s.unlocked.map((id) => FACILITY[id].tier)) >= t.minTier); }
+  buyTech(id) { const t = TECHS.find((x) => x.id === id); if (!t || (this.s.techs ||= {})[id] || !this.techAvailable(t) || this.s.cash < t.cost) return false; this.s.cash -= t.cost; this.s.techs[id] = this.s.day; this.dayUpdate(true); return true; }
 
   // ---------- Markt ----------
   price(id, day = this.s.day) {
@@ -68,8 +75,8 @@ export class Game {
   elecPrice(facId, day = this.s.day) {
     const f = FACILITY[facId];
     if (facId === 'kinder' && !this.s.flags.papa1) return 0; // Mama zahlt – noch.
-    if (f.elec === 'fixed') return f.elecFixed * (day > toDay('2022-03-01') && day < toDay('2023-06-01') ? 1.6 : 1);
-    return POWER_HOUSEHOLD(day) * f.elecMult;
+    if (f.elec === 'fixed') return f.elecFixed * (day > toDay('2022-03-01') && day < toDay('2023-06-01') ? 1.6 : 1) * this.fx('elec') * this.fx('fjordElec');
+    return POWER_HOUSEHOLD(day) * f.elecMult * this.fx('elec');
   }
   // USD pro (H/s) pro Tag für Coin
   revPerHash(id, day = this.s.day) {
@@ -88,7 +95,7 @@ export class Game {
     const algo = this.coinAlgo(coinId, day);
     const h = hash[algo] || 0; if (!h) return 0;
     if (!this.dagOk(vram, coinId, day)) return 0;
-    let r = h * this.revPerHash(coinId, day);
+    let r = h * this.revPerHash(coinId, day) * this.fx('rev');
     const c = COIN[coinId];
     if (coinId === 'SLV' && day >= COIN.WUF.mergedFrom) r += h * this.revPerHash('WUF', day);
     return r;
@@ -297,8 +304,10 @@ export class Game {
       const parts = this.partIds(o).map((id) => PART[id]);
       r.watt = 25 + parts.reduce((a, x) => a + (x.watt || 0), 0);
       const cap = PART[p.psu].cap * this.psuCount(o);
+      const rigPow = this.fx('rigPower');
       if (r.watt > cap) { r.status = 'psu'; r.note = `Netzteil überlastet (${r.watt} W > ${cap} W)`; r.watt = 0; return r; }
       if (o.broken) { r.status = 'broken'; r.watt = 0; return r; }
+      r.watt = Math.round(r.watt * rigPow);
       const hash = {}; let vram = 99;
       for (const id of p.gpus) { const g = PART[id]; for (const [a, h] of Object.entries(g.hash)) hash[a] = (hash[a] || 0) + h; vram = Math.min(vram, g.vram); }
       const cpuH = PART[p.cpu].hash;
@@ -309,23 +318,24 @@ export class Game {
       r.heat = r.watt;
     } else if (def.kind === 'device') {
       if (o.broken) { r.status = 'broken'; return r; }
-      r.watt = def.watt; r.heat = def.watt;
-      r.units.push({ hash: { [def.algo]: def.hash }, vram: def.vram || 99, w: def.watt });
+      const ap = this.fx('asicPower'), ah = this.fx('asicHash');
+      r.watt = def.watt * ap; r.heat = r.watt;
+      r.units.push({ hash: { [def.algo]: def.hash * ah }, vram: def.vram || 99, w: r.watt });
     } else if (def.kind === 'holder') {
       let broken = 0;
       const groups = {};
       for (const it of o.items) { if (it.b) { broken++; continue; } (groups[it.id] ||= 0); groups[it.id]++; }
       for (const [id, n] of Object.entries(groups)) {
-        const d = PLACEABLE[id];
-        r.watt += d.watt * n;
-        r.units.push({ hash: { [d.algo]: d.hash * n }, vram: d.vram || 99, w: d.watt * n });
+        const d = PLACEABLE[id]; const ap = this.fx('asicPower'), ah = this.fx('asicHash');
+        r.watt += d.watt * n * ap;
+        r.units.push({ hash: { [d.algo]: d.hash * n * ah }, vram: d.vram || 99, w: d.watt * n * ap });
       }
       r.heat = def.selfCooled ? r.watt * 0.03 : r.watt;
       if (def.selfCooled) r.watt *= 1.06; // Pumpen/Lüfter
       if (broken) { r.status = broken === o.items.length ? 'broken' : 'partial'; r.note = `${broken} Gerät(e) defekt`; }
       if (!o.items.length) { r.status = 'empty'; r.note = 'Leer – Geräte einsetzen'; }
     } else if (def.kind === 'cooling') {
-      r.watt = def.watt; r.cool = def.cool; r.heat = def.watt;
+      r.watt = def.watt; r.cool = def.cool * this.fx('cool'); r.heat = def.watt;
     }
     // Coin-Wahl
     for (const u of r.units) {
@@ -354,7 +364,7 @@ export class Game {
   // Facility-Zusammenfassung
   facSummary(facId, day = this.s.day) {
     const f = this.s.fac[facId], fd = FACILITY[facId];
-    let watt = 0, heat = 0, cool = fd.baseCool, rev = 0; const per = new Map(); const hashByAlgo = {};
+    let watt = 0, heat = 0, cool = fd.baseCool * this.fx('cool'), rev = 0; const per = new Map(); const hashByAlgo = {};
     const elecP = this.elecPrice(facId, day);
     let coolCap = 0, coolW = 0; const coolers = [];
     for (const o of f.objects) {
@@ -415,7 +425,7 @@ export class Game {
         for (const u of a.units) {
           if (!u.coin || !u.rev) continue;
           const c = u.coin;
-          const coins = (u.h * sm.throttle) / (this.netHash(c, day) + (s.lastNet[c] || 0)) * COIN[c].emission(day);
+          const coins = (u.h * sm.throttle) / (this.netHash(c, day) + (s.lastNet[c] || 0)) * COIN[c].emission(day) * this.fx('rev');
           minedByCoin[c] = (minedByCoin[c] || 0) + coins;
           netOwn[c] = (netOwn[c] || 0) + u.h * sm.throttle;
           if (c === 'SLV' && day >= COIN.WUF.mergedFrom) { const w = (u.h * sm.throttle) / (this.netHash('WUF', day) + (s.lastNet.WUF || 0)) * COIN.WUF.emission(day); minedByCoin.WUF = (minedByCoin.WUF || 0) + w; netOwn.WUF = (netOwn.WUF || 0) + u.h * sm.throttle; }
@@ -456,6 +466,15 @@ export class Game {
       this.emit('news', n);
       if (n.effect?.exchangeLoss) this.exchangeCrash(n.effect.exchangeLoss, n.text);
     }
+    // Neue Hardware im Handel
+    for (const it of RELEASES) {
+      if (it.releaseDay !== day) continue;
+      const kind = { gpu: 'Grafikkarte', cpu: 'Prozessor', mobo: 'Mainboard', psu: 'Netzteil' }[it.type] || (it.kind === 'device' ? 'Miner' : it.kind === 'rig' ? 'Rig-Rahmen' : 'Hardware');
+      const spec = it.kind === 'device' ? ` – ${fmtHashS(it.hash, it.algo)} bei ${it.watt} W` : it.type === 'gpu' ? ` – ${it.vram} GB, ${it.watt} W` : '';
+      const text = `Neu im Handel: ${it.name.includes(kind) ? '' : kind + ' '}${it.name}${spec}`;
+      s.ticker.unshift({ day, text }); s.ticker = s.ticker.slice(0, 30);
+      this.emit('release', it, text);
+    }
     // Story
     this.checkMessages(); this.checkGoals();
     // Statistik
@@ -484,7 +503,7 @@ export class Game {
 
   wear(o, temp, day) {
     const def = PLACEABLE[o.type];
-    const heatMul = temp < 30 ? 1 : temp < 38 ? 1 + (temp - 30) / 8 : 2 + (temp - 38) * 0.5;
+    const heatMul = (temp < 30 ? 1 : temp < 38 ? 1 + (temp - 30) / 8 : 2 + (temp - 38) * 0.5) * this.fx('fail');
     const life = (def.life || 6) * 365;
     if (def.kind === 'holder') {
       const base = def.selfCooled ? 0.0004 : 0.0007 * heatMul;
@@ -527,7 +546,7 @@ export class Game {
   helpers() {
     return {
       countPlaced: (fn) => { let n = 0; for (const id of this.s.unlocked) n += this.s.fac[id].objects.filter(fn).length; return n; },
-      algoHash: (a) => this.algoHash(a), netWorth: () => this.netWorth(), monolithHash: () => this.monolithHash(),
+      algoHash: (a) => this.algoHash(a), netWorth: () => this.netWorth(), monolithHash: () => this.monolithHash(), dailyRev: () => this.dailyProfit().rev,
       maxTemp: () => Math.max(...this.s.unlocked.map((id) => this.s.fac[id].temp || 21)),
       facilityTripped: () => this.s.unlocked.some((id) => this.s.fac[id].tripped),
     };

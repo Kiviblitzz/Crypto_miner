@@ -5,9 +5,22 @@ Ein 3D-Krypto-Mining-Tycoon im Browser (Three.js). Inspiriert von der Mechanik a
 Du startest **Oktober 2010 im Kinderzimmer** mit einem alten PC und baust bis in die Gegenwart
 (November 2026) ein Mining-Imperium bis zur **60-MW-Wasserkrafthalle am Fjord** auf.
 
-![Konzept](docs/KONZEPT.md)
+![Kinderzimmer](docs/img/02_kinderzimmer.jpg)
 
-## Starten
+| | |
+|---|---|
+| ![Keller](docs/img/03_keller.jpg) | ![Werkstatt](docs/img/04_werkstatt.jpg) |
+| ![Lagerhalle](docs/img/05_halle.jpg) | ![Rechenzentrum](docs/img/06_rz.jpg) |
+| ![Fjordhalle](docs/img/07_fjord.jpg) | ![Markt](docs/img/09_markt.jpg) |
+
+Recherche: [docs/RECHERCHE.md](docs/RECHERCHE.md) · Konzept & Story: [docs/KONZEPT.md](docs/KONZEPT.md)
+
+## Spielen
+
+**Ohne Installation:** `play/HASHWERK.html` herunterladen und im Browser (Chrome/Edge/Firefox) öffnen –
+alles steckt in dieser einen Datei.
+
+**Entwicklung:**
 
 ```bash
 npm install
@@ -17,7 +30,8 @@ npm install
 npm run dev
 ```
 
-Dann <http://localhost:5173> öffnen. Für einen statischen Build: `npm run build` (Ausgabe in `dist/`).
+Dann <http://localhost:5173> öffnen. Statischer Build: `npm run build` (Ausgabe in `dist/`),
+Ein-Datei-Version neu bauen: `npm run build:single`.
 
 ## Was drin ist
 

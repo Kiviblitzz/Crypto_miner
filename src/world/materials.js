@@ -31,7 +31,7 @@ export const TEX = {
   }, { repeat: rep }),
   concrete: (rep, tint = 128) => canvasTex('concrete' + tint, 512, 512, (g, w, h) => {
     g.fillStyle = `rgb(${tint},${tint},${tint - 4})`; g.fillRect(0, 0, w, h);
-    for (let i = 0; i < 60; i++) { const v = Math.random() < 0.5 ? 0 : 255; g.fillStyle = `rgba(${v},${v},${v},${R(0.015, 0.05)})`; g.beginPath(); g.arc(R(0, w), R(0, h), R(20, 90), 0, 7); g.fill(); }
+    for (let i = 0; i < 40; i++) { const v = Math.random() < 0.5 ? 0 : 255; g.fillStyle = `rgba(${v},${v},${v},${R(0.008, 0.025)})`; g.beginPath(); g.arc(R(0, w), R(0, h), R(20, 90), 0, 7); g.fill(); }
     speckle(g, w, h, 5000, ['rgba(0,0,0,0.12)', 'rgba(255,255,255,0.08)']);
   }, { repeat: rep }),
   epoxy: (rep) => canvasTex('epoxy', 512, 512, (g, w, h) => {

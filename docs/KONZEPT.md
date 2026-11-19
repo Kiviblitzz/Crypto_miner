@@ -60,6 +60,21 @@ Alle Standorte laufen parallel weiter – das Zimmer bleibt als „Museum" deine
 * Ab 38 °C Drosselung, Ausfallrate steigt stark. Kühlgeräte kosten selbst Strom.
 * Überschreitet die Last die Anschlussleistung → **Sicherung fliegt**, alles steht.
 
+### Weitere Systeme (im Spiel umgesetzt)
+* **Betriebsmodus je Gerät:** „Auto (nur wenn profitabel)", „Immer an", „Aus". Unrentable Geräte
+  pausieren automatisch – wichtig, denn mit deutschem Haushaltsstrom war GPU-Mining 2012 ein Verlustgeschäft.
+* **Thermostat:** Kühlgeräte laufen nur so stark wie nötig.
+* **Story-Kniff:** Im Kinderzimmer zahlen anfangs die Eltern den Strom – bis du Papa die Rechnung erstattest.
+  Den Keller rechnet Papa über den günstigeren Gewerbezähler ab.
+* **Technik/Forschung (🔬):** Undervolting, eigener Pool, Staubfilter, eigene ASIC-Firmware,
+  Kalt-/Warmgang, Immersionskühlung, Abwärme-Verkauf, Stromhandel, KI-Wartung – jeweils ab ihrem
+  historischen Zeitpunkt.
+* **Hardware-Releases:** Neue GPUs, CPUs, Mainboards, Netzteile und Miner erscheinen am echten
+  Erscheinungsdatum (Toast + News-Ticker), alte verschwinden nach einigen Jahren aus dem Handel.
+* **Meilensteine:** 1 GH/s … 10 EH/s, „Millionär!", „Milliardär!" mit Fanfare.
+* **Leben in der Halle:** Techniker laufen herum, du sitzt im Kinderzimmer am Schreibtisch,
+  defekte Geräte qualmen, ab 38 °C glüht der Bildschirmrand rot.
+
 ## 5. 3D & Steuerung
 * Komplett prozedurale, eigene Modelle (keine Logos): Tower-PC mit Glasseite, Milchkisten-Rig,
   Alu-Open-Frame, Grafikkarten mit drehenden Lüftern, FPGA-Boards, USB-Sticks, ASICs, 42U-Racks,

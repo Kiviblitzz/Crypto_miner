@@ -43,6 +43,7 @@ export class World {
     this.controls.maxPolarAngle = 1.42; this.controls.screenSpacePanning = false;
     this.fp = new PointerLockControls(this.camera, document.body);
     this.fp.addEventListener('unlock', () => this.exitFP());
+    document.addEventListener('pointerlockerror', () => { if (this.fpActive) { this.exitFP(); this.onFPError?.(); } });
 
     // Licht
     this.hemi = new THREE.HemisphereLight(0xcfe6ff, 0x5a4a3a, 0.7); this.scene.add(this.hemi);
@@ -92,7 +93,7 @@ export class World {
 
   // ---------- Standort ----------
   loadFacility(id, { cinematic = false } = {}) {
-    this.cancelPlacement(); this.select(null);
+    this.cancelPlacement(); this.select(null); this.onHover?.(null);
     if (this.room) { this.scene.remove(this.room.root); this.scene.remove(this.outside); for (const l of this.roomLights) this.scene.remove(l); }
     for (const e of this.entries.values()) this.objGroup.remove(e.group);
     this.entries.clear();
@@ -284,7 +285,7 @@ export class World {
     const eye = this.def.tier === 0 ? 1.55 : 1.7;
     this.camera.position.set(this.def.w / 2, eye, this.def.d * 0.75); this.camera.lookAt(this.def.w / 2, eye, 0);
     for (const wl of this.room.walls) wl.group.visible = true; this.room.ceil.visible = this.def.tier < 3;
-    this.fp.lock();
+    try { const r = this.fp.lock(); r?.catch?.(() => { this.exitFP(); this.onFPError?.(); }); } catch (e) { this.exitFP(); this.onFPError?.(); }
     this.onFP?.(true);
   }
   exitFP() {
@@ -320,6 +321,12 @@ export class World {
     if (tier >= 2 && s.flags.gmbh) want = 1;
     if (tier >= 3) want += Math.min(7, s.staff.tech);
     if (tier === 2 && s.flags.debt) want = Math.max(want, 1);
+    if (tier === 0 && !this.people.userData.me) {
+      const me = this.makePerson(0x3a6ea5, false, 0xe8c0a0); me.userData.static = true;
+      me.userData.legL.rotation.x = me.userData.legR.rotation.x = -1.45; me.userData.armL.rotation.x = me.userData.armR.rotation.x = -1.1;
+      me.position.set(2.75, -0.36, 0.72); me.rotation.y = Math.PI; this.scene.add(me); this.people.userData.me = me; this.people.add(me);
+    }
+    if (this.people.userData.me) want += 1;
     while (this.people.children.length > want) this.people.remove(this.people.children[this.people.children.length - 1]);
     while (this.people.children.length < want) {
       const first = this.people.children.length === 0;
@@ -343,6 +350,7 @@ export class World {
     const paused = !this.game.s.speed;
     for (const p of this.people.children) {
       const u = p.userData;
+      if (u.static) { u.armR.rotation.x = -1.1 + Math.sin(this.t * 9) * 0.04; u.armL.rotation.x = -1.1 + Math.cos(this.t * 8) * 0.04; continue; }
       if (!u.target || u.wait > 0) {
         u.wait -= dt; if (u.wait <= 0 && !u.target) u.target = this.randomFloorPoint();
         const k = Math.sin(this.t * 2 + u.phase) * 0.05; u.armR.rotation.x = -0.6 + k; u.armL.rotation.x = k; u.legL.rotation.x = u.legR.rotation.x = 0;
