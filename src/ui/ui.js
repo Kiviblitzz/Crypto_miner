@@ -39,6 +39,7 @@ export class UI {
     world.onDoor = (door) => this.travel(door);
     world.onProp = (p) => this.useProp(p);
     world.onSnap = () => this.audio?.install?.();
+    world.onInstalled = (uid) => { this.installing = false; if (this.inspUid === uid) this.inspect(uid); };
     world.onLoose = (t) => { this.w.pickupFx(t); if (!this.g.pickUp(t)) return; this.audio?.install?.(); this.toast(`${PNAME[t]} eingesteckt`, 'good', 2200); this.goals(); };
     game.on('xp', (k, n, lv) => this.xpPop(k, n, lv));
     world.onIncome = () => { this.bumpWallet(); this.audio?.tick?.(); };
@@ -163,7 +164,7 @@ export class UI {
     if (this.rateDay !== s.day || !this.rateT || performance.now() - this.rateT > 1000) { this.rate = this.btcRate(); this.rateDay = s.day; this.rateT = performance.now(); }
     const w = s.wallet.BTC, live = w.ex + w.cold + this.pendingBtc();
     const txt = `<div class="v"><span class="cn">₿</span> ${fmtCoin(live)}</div><div class="l">≈ ${fmtUSD(live * g.price('BTC'))}</div>`;
-    const pl = document.getElementById('pcb-live'); if (pl) { const t2 = '₿ ' + fmtCoin(live); if (pl.textContent !== t2) pl.textContent = t2; }
+    const pl = document.getElementById('pcb-live'); if (pl) { const pb = this.pendingBtc() + (w.ex + w.cold - (this.btcAtStart ?? 0)); const t2 = pb < 0.01 ? 'Miner startet …' : '₿ ' + pb.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); if (pl.textContent !== t2) pl.textContent = t2; }
     if (txt !== this.walletTxt) { el.innerHTML = txt; this.walletTxt = txt; }
   }
   bumpWallet() { const el = $('#st-wallet'); if (!el) return; el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
@@ -275,11 +276,11 @@ export class UI {
     const q = this.featQ || []; this.featQ = []; if (!q.length) return;
     this.audio?.message();
     const box = $('#featcards'); box.innerHTML = '';
-    const el = q.length === 1
-      ? h(`<div class="featcard"><div class="fc-t">Neu</div><div class="fc-h">${esc(FEATURES[q[0]].title)}</div><div class="fc-b">${FEATURES[q[0]].text}</div></div>`)
-      : h(`<div class="featcard"><div class="fc-t">${q.length} neue Funktionen</div><div class="fc-list">${q.map((f) => `<div><span>${esc(FEATURES[f].title)}</span>${FEATURES[f].key && !['E', 'B', 'M', 'P'].includes(FEATURES[f].key) ? `<kbd>${FEATURES[f].key}</kbd>` : ''}</div>`).join('')}</div></div>`);
+    const PRIO = ['market', 'build', 'skills', 'speed2', 'autosell', 'rigs', 'company', 'coins', 'cold', 'heat', 'map', 'techs', 'ranking', 'loan', 'buycoins', 'speed3', 'phone'];
+    const top = [...q].sort((a, b) => (PRIO.indexOf(a) + 99) % 99 - (PRIO.indexOf(b) + 99) % 99)[0], rest = q.filter((f) => f !== top);
+    const el = h(`<div class="featcard"><div class="fc-t">Neu</div><div class="fc-h">${esc(FEATURES[top].title)}</div><div class="fc-b">${FEATURES[top].text}</div>${rest.length ? `<div class="fc-more">Außerdem: ${rest.map((f) => esc(FEATURES[f].title)).join(', ')}</div>` : ''}</div>`);
     box.append(el); clearTimeout(this.featHide);
-    this.featHide = setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 600); }, q.length === 1 ? 6500 : 8000);
+    this.featHide = setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 600); }, 5200);
     this.speedBar(); this.dock(); this.keysHint(); this.sites(); this.goals();
   }
   // Tasten-Hinweise unten rechts: nur, was schon freigeschaltet ist
@@ -436,18 +437,18 @@ export class UI {
     const firstNext = running ? null : steps.map(([t]) => t).find((t) => !cur(t) && s.inv?.includes(t) && !((t === 'cpu' || t === 'gpu') && !p.mobo));
     setTimeout(() => this.w.ghostPart?.(o.uid, firstNext, s.invIds?.[firstNext]), 0);
     const sec = h(`<div class="pcb ${running ? 'running' : ''}"></div>`);
-    if (running) sec.append(h(`<div class="pcb-live"><span class="lab">Schon geschürft</span><b id="pcb-live">₿ 0</b><span class="sub">Dein PC arbeitet jetzt für dich.</span></div>`));
+    if (running) sec.append(h(`<div class="pcb-live"><span class="lab">Schon geschürft</span><b id="pcb-live">Miner startet …</b><span class="sub">Dein PC arbeitet jetzt für dich.</span></div>`));
     steps.forEach(([t, lab]) => {
       const id = cur(t), it = id ? PART[id] : null, carried = s.inv?.includes(t), lying = s.loose?.[t];
       const needMobo = !it && carried && (t === 'cpu' || t === 'gpu') && !p.mobo;
-      const st = it ? 'done' : carried ? (needMobo ? 'wait' : 'next') : 'lying';
+      const st = it ? 'done' : carried ? (needMobo ? 'wait' : t === firstNext ? 'next' : 'ready') : 'lying';
       const sub = it ? esc(it.name) : carried ? (needMobo ? 'Erst das Mainboard einbauen' : 'In deiner Tasche') : lying ? `Liegt ${spots[t]?.[4] || 'im Zimmer'}` : '–';
-      const row = h(`<div class="pcb-step ${st === 'done' ? 'done' : st === 'next' ? 'next' : 'locked'}"><span class="ic">${partSvg(t)}${it ? '<i class="tick"></i>' : ''}</span><div class="tx"><b>${lab}</b><span>${sub}</span></div>${st === 'next' ? '<button class="btn small primary">Einbauen</button>' : ''}</div>`);
+      const row = h(`<div class="pcb-step ${st === 'done' ? 'done' : st === 'next' ? 'next' : st === 'ready' ? 'ready' : 'locked'}"><span class="ic">${partSvg(t)}${it ? '<i class="tick"></i>' : ''}</span><div class="tx"><b>${lab}</b><span>${sub}</span></div>${st === 'next' || st === 'ready' ? `<button class="btn small ${st === 'next' ? 'primary' : ''}" ${this.installing ? 'disabled' : ''}>Einbauen</button>` : ''}</div>`);
       const b = row.querySelector('button');
       if (b) { row.onmouseenter = b.onfocus = () => this.w.ghostPart?.(o.uid, t, s.invIds?.[t]); row.onmouseleave = b.onblur = () => this.w.ghostPart?.(o.uid, firstNext, s.invIds?.[firstNext]); }
       if (b) b.onclick = () => {
-        if (!g.installLoose(o.uid, t)) return;
-        this.w.ghostPart?.(null); this.inspect(o.uid); this.w.animateInstall?.(o.uid, t);
+        if (this.installing || !g.installLoose(o.uid, t)) return;
+        this.installing = true; clearTimeout(this.instT); this.instT = setTimeout(() => { this.installing = false; }, 1600); this.w.ghostPart?.(null); this.inspect(o.uid); this.w.animateInstall?.(o.uid, t);
         this.toast(g.pcReady(o) ? 'Alle Teile sind drin. Schalt deinen PC ein!' : `${lab} eingebaut`, 'good', 2600);
       };
       sec.append(row);
@@ -459,21 +460,19 @@ export class UI {
       const rows = [['Rechenleistung', hs ? fmtHash(hs, 'sha256') : '–'], ['Verbrauch', !g.partIds(o).length ? '–' : p.psu ? `${watt} W von ${PART[p.psu].cap} W` : `${watt} W`], ['Ertrag / Tag', rev ? `<span class="pos">≈ ${Math.round(rev / px).toLocaleString('de-DE')} BTC</span> <span style="color:var(--dim)">(${fmtUSD(rev)})</span>` : '–']];
       sec.append(h(`<div class="kv pcb-sum">${rows.map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join('')}</div>`));
       const ready = g.pcReady(o), miss = g.pcMissing(o).length;
-      const on = h(`<div class="sec start"><button class="btn primary big wide ${ready ? 'glow' : ''}" ${ready ? '' : 'disabled'}><span class="bi"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg></span><span class="bt">PC einschalten</span></button>${ready ? '' : `<div class="pcb-left">Noch ${miss} ${miss === 1 ? 'Teil' : 'Teile'} bis zum Einschalten</div>`}</div>`);
+      const on = h(`<div class="sec start"><button class="btn primary big wide ${ready ? 'glow' : ''}" ${ready && !this.installing ? '' : 'disabled'}><span class="bi"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg></span><span class="bt">PC einschalten</span></button>${ready ? '' : `<div class="pcb-left">Noch ${miss} ${miss === 1 ? 'Teil' : 'Teile'} bis zum Einschalten</div>`}</div>`);
       on.querySelector('button').onclick = () => this.powerOnSequence(o);
       sec.append(on);
     } else {
-      const done = h('<div class="sec start"><button class="btn big wide">Weiter</button></div>'); done.querySelector('button').onclick = () => this.resume(); sec.append(done);
+      const done = h('<div class="sec start two"><button class="btn big">Zum Monitor</button><button class="btn big primary">Weiter</button></div>'); const [bm, bw] = done.querySelectorAll('button'); bm.onclick = () => { const mon = this.w.focusUid == null; if (mon) { this.w.focusObject?.(o.uid); bm.textContent = 'Zum Monitor'; } else { this.w.focusMonitor?.(); bm.textContent = 'Zum PC'; } }; bw.onclick = () => this.resume(); sec.append(done);
     }
     return sec;
   }
   // Der große Moment: Lüfter laufen an, Monitor bootet, erste Coins
   powerOnSequence(o) {
     const g = this.g; if (!g.startMining(o.uid)) return;
+    const w0 = g.s.wallet.BTC; this.btcAtStart = w0.ex + w0.cold;
     this.audio?.powerOn(); this.w.powerOn?.(o.uid); this.showRun = true; this.inspect(o.uid);
-    clearTimeout(this.seqT1); clearTimeout(this.seqT2);
-    this.seqT1 = setTimeout(() => { if (this.inspUid === o.uid) this.w.focusMonitor?.(); }, 1700);
-    this.seqT2 = setTimeout(() => { if (this.inspUid === o.uid) this.w.focusObject?.(o.uid); }, 5200);
   }
   firstPicker(o, type) { this.pickType = type; this.inspect(o.uid); }
   // Teile-Auswahl direkt im Inspektor (das Gehäuse bleibt links sichtbar)
@@ -610,7 +609,7 @@ export class UI {
       let prog = '';
       if (!done && go.progress) { const [cur, tgt, kind] = go.progress(s, g.helpers()); if (kind === 'parts') { prog = `<span class="cnt">${cur} / ${tgt}</span>`; } else { const f = (v) => (kind === 'hash' ? fmtHash(v) : fmtUSD(v)); const pc = Math.max(0, Math.min(100, tgt ? (cur / tgt) * 100 : 0)); prog = `<div style="font-size:11px;color:var(--dim)">${f(Math.max(0, cur))} / ${f(tgt)}</div><div class="bar" style="width:180px"><div style="width:${pc}%;background:#ffb000"></div></div>`; } }
       const gk = s.chapter + ':' + go.id, enter = gk !== this.goalKey; this.goalKey = gk;
-      const bag = (s.inv || []).length && !s.flags.miningStarted ? `<div class="bag"><span>In der Tasche</span>${s.inv.map((t) => `<i title="${PNAME[t]}">${partSvg(t, 16)}</i>`).join('')}</div>` : '';
+      const bag = s.loose && !s.flags.miningStarted && go.id === 'collect' ? `<div class="bag"><span>Tasche</span>${['mobo', 'cpu', 'gpu', 'psu'].map((t) => `<i class="${s.loose[t] ? 'empty' : 'got'}" title="${PNAME[t]}">${partSvg(t, 16)}</i>`).join('')}</div>` : '';
       const row = h(`<div class="goal ${done ? 'done' : ''} ${enter ? 'enter' : ''}"><div class="ck">${done ? '✓' : ''}</div><div>${esc(go.text)}${prog}${bag}</div></div>`);
       if (!done && go.action) { const b = h(`<button class="btn small primary"><kbd>G</kbd>${esc(go.action.label)}</button>`); b.disabled = !g.canPayGoal(go); b.onclick = () => { if (g.goalAction(go)) { this.toast('✔ Erledigt!', 'good'); this.goals(); } }; row.lastElementChild.append(h('<br/>'), b); }
       el.append(row);
@@ -688,8 +687,9 @@ export class UI {
     const txt = m0 ? m0.text : MESSAGES.find((m) => m.id === 'm0').text;
     const body = h(`<div class="intro-phone"><div class="ip-date">${fmtDate(s.day)}</div>
       <div class="phone"><div class="ph-top"><div class="av"><svg viewBox="0 0 40 40" width="40" height="40"><circle cx="20" cy="20" r="20" fill="#ffcf8a"/><path d="M6 40c1-8 7-12 14-12s13 4 14 12z" fill="#e2574c"/><circle cx="20" cy="18" r="8.5" fill="#e7b48f"/><path d="M11 17c0-7 5-10 10-10 6 0 9 4 8 9-3-3-7-4-11-3-3 1-5 2-7 4z" fill="#2f241e"/><circle cx="17" cy="19" r="1.1" fill="#2f241e"/><circle cx="23" cy="19" r="1.1" fill="#2f241e"/><path d="M17 22.5q3 2.2 6 0" stroke="#8a4a3a" stroke-width="1.3" fill="none" stroke-linecap="round"/></svg></div><div><b>Deniz</b><span class="on">online</span></div></div>
-        <div class="msg f-Deniz">${esc(txt)}<div class="pc-line"><span class="pc-dot">₿</span><span>Bitcoin</span><b>${fmtUSD(p)}</b><canvas class="spark"></canvas></div></div>
-        <div class="msg f-Deniz">Bau dir aus deinen alten Teilen im Zimmer einen Mining-PC!</div>
+        <div class="msg f-Deniz">${esc(txt)}</div>
+        <div class="msg f-Deniz link"><div class="pc-line"><span class="pc-dot">₿</span><span>Bitcoin</span><b>${fmtUSD(p)}</b><canvas class="spark"></canvas></div></div>
+        <div class="msg f-Deniz">Die alten Teile liegen noch im Zimmer. Sammel alle vier ein, dann bauen wir den PC.</div>
         <div class="row ip-act"><button class="btn primary big">Los geht’s</button></div>
       </div></div>`);
     if (m0) m0.read = true;
@@ -985,6 +985,7 @@ export class UI {
   }
   levelUp(k, lv) {
     document.getElementById('lvup')?.remove(); this.audio?.fanfare?.();
+    if (this.modalKind === 'skills') { this.skills(); const card = document.querySelector(`.sk[data-skill="${k}"]`); if (card) { card.classList.add('lvl'); setTimeout(() => card.classList.remove('lvl'), 2200); } return; }
     const el = h(`<div id="lvup"><div class="lv-ic">${skillSvg(k, 34)}</div><div class="lv-t1">Neue Stufe</div><div class="lv-t2">${SKILL[k].name} · Stufe ${lv}</div><div class="lv-t3">${SKILL[k].now(lv)}</div></div>`);
     document.body.append(el); setTimeout(() => el.classList.add('out'), 3400); setTimeout(() => el.remove(), 3900);
   }
@@ -994,7 +995,7 @@ export class UI {
     const list = body.querySelector('.sk-list');
     for (const k of ['hw', 'mining', 'trade']) {
       const x = s.skills[k] || 0, lv = g.skillLv(k), lo = SKILL_XP[lv - 1], hi = SKILL_XP[lv], pc = hi ? Math.round(((x - lo) / (hi - lo)) * 100) : 100;
-      list.append(h(`<div class="sk"><div class="sk-ic">${skillSvg(k, 26)}</div><div class="sk-main"><div class="sk-top"><b>${SKILL[k].name}</b><span class="sk-lv">Stufe ${lv}</span></div><div class="sk-bar"><div style="width:${pc}%"></div></div><div class="sk-row"><span>${SKILL[k].now(lv)}</span><span>${hi ? `${x - lo} / ${hi - lo} EP` : 'Höchste Stufe'}</span></div><div class="sk-learn">${hi ? `<div>Stufe ${lv + 1}: ${SKILL[k].next(lv)}</div>` : ''}<div>Lernst du durch: ${SKILL[k].learn}</div></div></div></div>`));
+      list.append(h(`<div class="sk" data-skill="${k}"><div class="sk-ic">${skillSvg(k, 26)}</div><div class="sk-main"><div class="sk-top"><b>${SKILL[k].name}</b><span class="sk-lv">Stufe ${lv}</span></div><div class="sk-bar"><div style="width:${pc}%"></div></div><div class="sk-row"><span>${SKILL[k].now(lv)}</span><span>${hi ? `${x - lo} / ${hi - lo} EP` : 'Höchste Stufe'}</span></div><div class="sk-learn">${hi ? `<div>Stufe ${lv + 1}: ${SKILL[k].next(lv)}</div>` : ''}<div>Lernst du durch: ${SKILL[k].learn}</div></div></div></div>`));
     }
     this.openModal(body, 'narrow', 'skills');
   }

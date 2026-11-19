@@ -124,7 +124,7 @@ export class World {
     this.composer.addPass(this.outline);
     // Leuchten für herumliegende Teile (nur am Anfang aktiv)
     this.glow = new OutlinePass(new THREE.Vector2(1280, 720), this.scene, this.camera);
-    Object.assign(this.glow, { edgeStrength: 4.5, edgeGlow: 1.2, edgeThickness: 2.2, pulsePeriod: 1.8, enabled: false });
+    Object.assign(this.glow, { edgeStrength: 2.4, edgeGlow: 0.45, edgeThickness: 1.2, pulsePeriod: 2.6, enabled: false });
     this.glow.visibleEdgeColor.set(0xffb547); this.glow.hiddenEdgeColor.set(0x5a3a10);
     this.composer.addPass(this.glow);
     { const vp = new RenderPass(this.vm.scene, this.camera); vp.clear = false; vp.clearDepth = true; this.composer.addPass(vp); }
@@ -330,7 +330,7 @@ export class World {
       if (this.looseItems[t]) continue;
       const [x, y, z, ry] = spots[t], g = loosePartModel(t, s.loose[t]);
       g.position.set(x, y, z); g.rotation.y = ry; g.traverse((m) => { m.userData.loose = t; if (m.isMesh) { m.castShadow = true; } });
-      const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.haloTex(), color: 0xffb547, transparent: true, opacity: 0.5, depthWrite: false, blending: THREE.AdditiveBlending }));
+      const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.haloTex(), color: 0xffb547, transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending }));
       halo.scale.set(0.55, 0.55, 1); halo.position.y = 0.06; halo.userData.halo = true; g.add(halo); g.userData.y0 = y;
       this.looseGroup.add(g); this.looseItems[t] = g;
     }
@@ -349,7 +349,7 @@ export class World {
   updateLoose(dt) {
     if (!this.looseItems) return;
     for (const [t, g] of Object.entries(this.looseItems)) {
-      const h = g.children.find((c) => c.userData.halo); if (h) h.material.opacity = 0.32 + 0.22 * Math.sin(this.t * 3.2 + g.position.x * 3);
+      const h = g.children.find((c) => c.userData.halo); if (h) h.material.opacity = 0.2 + 0.1 * Math.sin(this.t * 2.4 + g.position.x * 3);
       if (g.userData.flying) {
         const f = (g.userData.flying += dt), k = Math.min(1, f / 0.42), tgt = this.camera.position.clone().add(new THREE.Vector3(0, -0.25, 0));
         g.position.lerp(tgt, k * 0.35); g.scale.setScalar(Math.max(0.05, 1 - k)); g.rotation.y += dt * 6;
@@ -584,7 +584,7 @@ export class World {
       cam.position.copy(tgt).addScaledVector(dir, dist); cam.lookAt(tgt); cam.near = dist / 50; cam.far = dist * 4; cam.updateProjectionMatrix(); cam.updateMatrixWorld();
       let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const q of corners) { const v = q.clone().project(cam); x0 = Math.min(x0, v.x); x1 = Math.max(x1, v.x); y0 = Math.min(y0, v.y); y1 = Math.max(y1, v.y); }
       ext = [x0, x1, y0, y1];
-      const sx = (x1 - x0) / 2 / 0.86, sy = (y1 - y0) / 2 / 0.82, sc = Math.max(sx, sy);
+      const sx = (x1 - x0) / 2 / 0.86, sy = (y1 - y0) / 2 / 0.78, sc = Math.max(sx, sy);
       const want = new THREE.Vector3((x0 + x1) / 2, y0 + 0.8 * sc, 0.5);
       const off = want.unproject(cam).sub(new THREE.Vector3(0, 0, 0.5).unproject(cam));
       tgt.add(off); dist *= 0.35 + 0.65 * sc;
@@ -944,7 +944,7 @@ export class World {
     if (this.mode === 'title' || this.visFrac == null) this.visFrac = s.frac;
     else { const df = (s.frac - this.visFrac + 1) % 1; this.visFrac = (this.visFrac + Math.min(df, dt / 90)) % 1; }
     this.updateDaylight(this.visFrac);
-    this.updatePeople(dt); this.updateSmoke(dt); this.updateWeather(dt); this.updatePopups(dt); this.updateInstall(dt); this.updateLoose(dt); if (this.ghostMat) this.ghostMat.opacity = 0.2 + 0.14 * Math.sin(this.t * 4);
+    this.updatePeople(dt); this.updateSmoke(dt); this.updateWeather(dt); this.updatePopups(dt); this.updateInstall(dt); this.updateLoose(dt); if (this.ghostMat) this.ghostMat.opacity = 0.15 + 0.07 * Math.sin(this.t * 4);
     // Lüfter & LEDs
     const fanSpeed = 28 * dt;
     for (const e of this.entries.values()) {
