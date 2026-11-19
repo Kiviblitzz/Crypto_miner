@@ -1541,3 +1541,23 @@ body[data-modal="market"] :is(#st-cash, #st-profit, #st-wallet) { visibility: hi
 .story.event .ev-c .ev-cost { font-weight: 600; opacity: .8; }
 .story.event .ev-c small { font: 600 12.5px var(--font); opacity: .78; }
 .phone .msg.decide { border: 1px solid rgba(255,194,58,.45); background: rgba(255,194,58,.08) !important; }
+/* ===== Lebendige Welt: Gespräche & Fundstücke ===== */
+.story.talk .tk-who { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+.story.talk .tk-av { width: 56px; height: 56px; flex: none; border-radius: 50%; overflow: hidden; box-shadow: 0 4px 14px rgba(0,0,0,.3), 0 0 0 3px rgba(255,255,255,.08); }
+.story.talk .tk-av svg { display: block; }
+.story.talk .tk-n b { display: block; font: 700 20px var(--font-fun); color: var(--text); }
+.story.talk .tk-n small { display: block; margin-top: 2px; font: 600 13px var(--font); color: var(--dim); }
+.story.talk .tk-line { position: relative; margin: 4px 0 16px; padding: 14px 16px; border-radius: 14px; background: rgba(255,255,255,.06); font: 500 17px/1.55 var(--font); color: var(--text); }
+.story.talk .tk-line::before { content: ''; position: absolute; left: 20px; top: -9px; border: 9px solid transparent; border-top: 0; border-bottom-color: rgba(255,255,255,.06); }
+.story.talk .tk-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.story.talk .tk-joy { display: inline-flex; align-items: center; gap: 7px; font: 600 13px var(--font); color: #ffb4a6; }
+.story.talk .tk-joy.up { color: var(--good); }
+.story.talk .tk-pips { display: inline-flex; gap: 4px; margin-left: 4px; }
+.story.talk .tk-pips b { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,.16); }
+.story.talk .tk-pips b.on { background: #ff8f80; }
+.story.keep .kp-tag { display: inline-block; padding: 4px 10px; border-radius: 999px; background: rgba(255,194,58,.12); color: var(--acc); font: 700 12px var(--font); letter-spacing: 1.5px; text-transform: uppercase; }
+.story.keep .kp-pic { display: grid; place-items: center; height: 150px; margin: 10px 0 6px; border-radius: 14px; background: radial-gradient(ellipse at 50% 62%, rgba(255,214,140,.16), rgba(255,214,140,0) 70%); }
+.story.keep .kp-pic img { max-width: 100%; max-height: 150px; }
+.story.keep p { line-height: 1.55; }
+.story.keep .kp-gain { display: inline-flex; align-items: center; gap: 8px; margin: 2px 0 12px; padding: 7px 12px; border-radius: 10px; background: rgba(95,211,141,.14); color: #bff2d3; font: 700 14px var(--font); }
+.story.keep .kp-all { margin-bottom: 10px; color: var(--acc); font: 700 14px var(--font); }
