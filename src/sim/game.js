@@ -641,17 +641,12 @@ export class Game {
     for (const c of COINS) {
       const e = s.endless[c.id];
       const vol = c.id === 'BTC' ? 0.028 : 0.045;
-      if (c.id === 'BTC') {
-        // Kurs: Zufallspfad um einen sanften Trend (+9 %/Jahr), weich zurückgezogen – keine endlose Talfahrt
-        e.p *= Math.exp(gauss() * vol + 0.00025 - (Math.log(e.p) - 0.00025 * (s.day - LAST_DATA_DAY)) * 0.0008);
-        // Netz-Hashrate folgt der Rentabilität: Ziel = Ertrag (Belohnung × Kurs) ÷ Effizienz der Netz-Miner, mit gut 5 Monaten Verzögerung
-        s.netEff = (s.netEff || 1) + (this.futureFront() - (s.netEff || 1)) / 900;
-        const target = (c.emission(s.day) / c.emission(LAST_DATA_DAY)) * e.p / s.netEff;
-        e.h *= Math.exp(gauss() * 0.006 + (Math.log(target) - Math.log(e.h)) / 160);
-        continue;
-      }
-      e.p *= Math.exp(gauss() * vol + 0.00025);
-      e.h *= Math.exp(gauss() * 0.006 + (c.id === 'BTC' ? 0.0007 : 0.0003) + (Math.log(e.p) - Math.log(e.h)) * 0.002);
+      // Kurs: Zufallspfad um einen sanften Trend (+9 %/Jahr), weich zurückgezogen – weder endlose Talfahrt noch Dauerrausch
+      e.p *= Math.exp(gauss() * vol + 0.00025 - (Math.log(e.p) - 0.00025 * (s.day - LAST_DATA_DAY)) * 0.0008);
+      // Netz-Hashrate folgt der Rentabilität: Ziel = Ertrag (Belohnung × Kurs) ÷ Effizienz der Netz-Miner, mit gut 5 Monaten Verzögerung
+      if (c.id === 'BTC') s.netEff = (s.netEff || 1) + (this.futureFront() - (s.netEff || 1)) / 900;
+      const em0 = c.emission(LAST_DATA_DAY) || 1, target = Math.max(1e-6, (c.emission(s.day) / em0) * e.p / (c.id === 'BTC' ? s.netEff : 1));
+      e.h *= Math.exp(gauss() * 0.006 + (Math.log(target) - Math.log(e.h)) / 160);
     }
     this.futureStep(); this.endlessNews();
   }
