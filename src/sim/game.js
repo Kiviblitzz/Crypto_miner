@@ -4,8 +4,8 @@ import { PLACEABLE, PART, PLACEABLES, PARTS, GPUS } from '../data/hardware.js';
 import { FACILITIES, FACILITY, CHAPTERS, MESSAGES, NEWS, START_DAY, TECHS } from '../data/world.js';
 import { EVENTS, EVENT } from '../data/events.js';
 import { ACHIEVEMENTS } from '../data/achievements.js';
-import { FUTURE, futureModel, ENDLESS_GOALS, EGOAL } from '../data/endless.js';
-import { BTC_HASH, POWER_HOUSEHOLD, GPU_BOOM, MONOLITH_SHARE, DAG_AET, DAG_AEC, seasonOffset, noise, toDay, BTC_PRICE, curve } from '../data/history.js';
+import { FUTURE, futureModel, ENDLESS_GOALS, EGOAL, ENDLESS_NEWS } from '../data/endless.js';
+import { BTC_HASH, POWER_HOUSEHOLD, GPU_BOOM, MONOLITH_SHARE, DAG_AET, DAG_AEC, seasonOffset, noise, toDay, BTC_PRICE, curve, HALVINGS, BTC_REWARD } from '../data/history.js';
 export const SKILL_XP = [0, 100, 300, 700, 1500]; // Erfahrung für Stufe 1–5
 
 const LAST_DATA_DAY = BTC_PRICE.lastDay;
@@ -40,7 +40,7 @@ export class Game {
       feat: { phone: 1 },
       ev: { done: {}, open: null, log: [], later: [], last: 0 }, rel: { papa: 0, mama: 0, opa: 0, deniz: 0 }, mods: [], ach: {},
     };
-    Object.assign(s, { futureHW: [], netEff: 1, egoals: { done: {}, st: {}, cur: null }, fin: {}, ngPlus: 0 }); // Endlosmodus & Finale
+    Object.assign(s, { futureHW: [], netEff: 1, egoals: { done: {}, st: {}, cur: null }, fin: {}, ngPlus: 0, enews: {} }); // Endlosmodus & Finale
     this.registerFutureHW([]);
     for (const c of COINS) s.autoSell[c.id] = 0;
     const m0 = MESSAGES.find((m) => m.id === 'm0'); if (m0) s.messages.push({ id: 'm0', day: START_DAY, from: m0.from, text: m0.text, read: true }); // Start-Nachricht (im Intro gezeigt)
@@ -77,7 +77,7 @@ export class Game {
       for (const c of COINS) { s.wallet[c.id] ||= { ex: 0, cold: 0 }; if (s.autoSell[c.id] == null) s.autoSell[c.id] = DEFAULT_AUTOSELL; }
       s.ev ||= { done: {}, open: null, log: [], later: [], last: 0 }; s.ev.done ||= {}; s.ev.log ||= []; s.ev.later ||= [];
       s.rel ||= { papa: 0, mama: 0, opa: 0, deniz: 0 }; s.mods ||= []; s.ach ||= {}; s.flags ||= {}; s.stats ||= { minedUSD: 0, sold: 0, spentHW: 0, elec: 0, history: [] };
-      s.futureHW ||= []; s.netEff ||= 1; s.egoals ||= { done: {}, st: {}, cur: null }; s.egoals.done ||= {}; s.egoals.st ||= {}; s.fin ||= {}; s.ngPlus ||= 0; this.registerFutureHW(s.futureHW);
+      s.futureHW ||= []; s.netEff ||= 1; s.egoals ||= { done: {}, st: {}, cur: null }; s.egoals.done ||= {}; s.egoals.st ||= {}; s.fin ||= {}; s.ngPlus ||= 0; s.enews ||= {}; this.registerFutureHW(s.futureHW);
       this.s = s; this.cache = {}; this.dayUpdate(true); return true;
     } catch (e) { console.warn(e); return false; }
   }
@@ -160,6 +160,7 @@ export class Game {
       const h0 = this.cache[k] ??= this.hashprice(item.algo, Math.min(item.releaseDay + 15, LAST_DATA_DAY)) || 1; // Zukunfts-Hardware: Preis kommt aus dem Markt beim Erscheinen
       const d1 = Math.min(day, LAST_DATA_DAY); if (this.hpDay !== d1) { this.hpDay = d1; this.hpC = {}; } // je Tag einmal rechnen (große Flotten)
       const h1 = (this.hpC[item.algo] ??= this.hashprice(item.algo, d1)) || h0;
+      if (item.fut) p = this.futureBase(item, day); // Zukunfts-Hardware: Listenpreis folgt dem aktuellen Hashpreis
       const ratio = Math.min(2.6, Math.max(0.06, Math.pow(h1 / h0, 0.55)));
       p *= ratio * Math.max(0.35, 1 - 0.1 * years);
     } else p *= Math.pow(1.02, Math.max(0, (day - toDay('2010-01-01')) / 365));
@@ -652,7 +653,7 @@ export class Game {
       e.p *= Math.exp(gauss() * vol + 0.00025);
       e.h *= Math.exp(gauss() * 0.006 + (c.id === 'BTC' ? 0.0007 : 0.0003) + (Math.log(e.p) - Math.log(e.h)) * 0.002);
     }
-    this.futureStep();
+    this.futureStep(); this.endlessNews();
   }
 
   // ---------- Endlosmodus: Zukunfts-Hardware ----------
@@ -669,12 +670,18 @@ export class Game {
     const m = futureModel(n), k = m.hydro ? 'hydro' : 'air', ref = m.hydro ? PLACEABLE.s23hyd : PLACEABLE.s23;
     const eff = Math.max(FUTURE.effMin, BASE_EFF * Math.pow(FUTURE.effStep, n + 1) * (m.hydro ? 1 : 1.12));
     const th = Math.min((ref?.hash || (m.hydro ? 580e12 : 318e12)) / 1e12 * Math.pow(FUTURE.hashStep[k], n + 1), FUTURE.maxW[k] / eff);
-    // Preis nach Hashpreis beim Erscheinen (wie am echten Markt): Hersteller verlangen etwa FUTURE.roiDays Tage Reinertrag bei FUTURE.refElec $/kWh
-    const hpTH = COIN.BTC.emission(day) * this.price('BTC', day) / this.netHash('BTC', day) * 1e12; // $ pro TH/s und Tag
-    const usd = Math.min(th * FUTURE.usdPerTH[k], Math.max(th * FUTURE.minPerTH, FUTURE.roiDays * (th * hpTH - th * eff / 1000 * 24 * FUTURE.refElec)));
-    return { id: 'fut' + (n + 1), fut: n + 1, kind: 'device', cat: 'asic', name: m.name, release: new Date(day * 864e5).toISOString().slice(0, 10), releaseDay: day,
-      price: Math.max(500, Math.round(usd / 50) * 50), watt: Math.round(th * eff), algo: 'sha256', hash: Math.round(th) * 1e12,
+    const it = { id: 'fut' + (n + 1), fut: n + 1, kind: 'device', cat: 'asic', name: m.name, release: new Date(day * 864e5).toISOString().slice(0, 10), releaseDay: day,
+      price: 0, watt: Math.round(th * eff), algo: 'sha256', hash: Math.round(th) * 1e12,
       size: [0.5, 0.5], minTier: m.hydro ? 3 : 0, look: m.look, ...(m.hydro ? { hydro: true } : {}), life: 9 };
+    it.price = this.futureBase(it, day); // Listenpreis beim Erscheinen
+    return it;
+  }
+  // Preis nach Hashpreis (wie am echten Markt): Hersteller verlangen etwa FUTURE.roiDays Tage Reinertrag bei FUTURE.refElec $/kWh
+  futureBase(it, day = this.s.day) {
+    if (this.hpNowDay !== day) { this.hpNowDay = day; this.hpNowV = COIN.BTC.emission(day) * this.price('BTC', day) / this.netHash('BTC', day) * 1e12; } // $ pro TH/s und Tag
+    const th = it.hash / 1e12, eff = it.watt / th, k = it.hydro ? 'hydro' : 'air';
+    const usd = Math.min(th * FUTURE.usdPerTH[k], Math.max(th * FUTURE.minPerTH, FUTURE.roiDays * th * (this.hpNowV - eff / 1000 * 24 * FUTURE.refElec)));
+    return Number.isFinite(usd) ? Math.max(500, Math.round(usd / 50) * 50) : it.price || 5000;
   }
   futureStep() {
     const s = this.s, list = (s.futureHW ||= []); let it = null;
@@ -685,6 +692,26 @@ export class Game {
     s.ticker.unshift({ day: s.day, text }); s.ticker = s.ticker.slice(0, 30);
     this.emit('release', it, text);
     this.pushMsg({ from: 'Deniz', text: `Die ${it.name} ist raus! ${jth} J/TH${it.hydro ? ', nur für Rack und Container' : ''}. Unsere alten Kisten sehen dagegen ganz schön alt aus.` });
+  }
+  // Ticker im Endlosmodus: Halvings, Rekorde, Kursstürze und erfundene Marktmeldungen
+  news(text) { const s = this.s, n = { day: s.day, text }; s.ticker.unshift(n); s.ticker = s.ticker.slice(0, 30); this.emit('news', n); }
+  endlessNews() {
+    const s = this.s, day = s.day, e = (s.enews ||= {}), p = this.price('BTC', day), nh = this.netHash('BTC', day);
+    if (!e.ath) { e.ath = 0; e.hrec = 0; for (let d = toDay('2017-01-01'); d <= LAST_DATA_DAY; d += 3) { e.ath = Math.max(e.ath, COIN.BTC.price(d)); e.hrec = Math.max(e.hrec, COIN.BTC.hash(d)); } e.next = day + 25; e.used = []; }
+    const fmtP = (v) => fmtUSD(Math.round(v / 1000) * 1000);
+    for (const hd of HALVINGS) {
+      if (hd <= LAST_DATA_DAY) continue;
+      const r = BTC_REWARD(hd).toLocaleString('de-DE', { maximumFractionDigits: 5 });
+      if (day === hd - 30) this.news(`In 30 Tagen ist Halving: Die Belohnung pro Block sinkt auf ${r} BTC`);
+      if (day === hd) { this.news(`Halving! Ab heute gibt es nur noch ${r} BTC pro Block`); e.hdH = nh; }
+      if (day === hd + 75 && e.hdH) { const ch = Math.round((nh / e.hdH - 1) * 100); this.news(ch < 0 ? `Nach dem Halving: ${-ch} % weniger Netz-Hashrate – alte Miner gehen vom Netz` : `Netz-Hashrate trotz Halving ${ch} % höher – die Miner glauben an den Kurs`); }
+    }
+    if (p > e.ath) { e.ath = p; if (day - (e.athDay || 0) > 45) { e.athDay = day; this.news(`Neues Allzeithoch: Bitcoin bei ${fmtP(p)}`); } }
+    (e.wk ||= []).push(p); if (e.wk.length > 8) e.wk.shift(); // Kurse der letzten Woche (im Endlosmodus gibt es keine Kurshistorie)
+    const ch = e.wk.length >= 8 ? p / e.wk[0] - 1 : 0;
+    if (Math.abs(ch) > 0.2 && day - (e.crashDay || 0) > 40) { e.crashDay = day; this.news(ch < 0 ? `Bitcoin bricht ein: ${Math.round(ch * 100)} % in einer Woche` : `Bitcoin springt um ${Math.round(ch * 100)} % in einer Woche auf ${fmtP(p)}`); }
+    if (nh > e.hrec * 1.15) { e.hrec = nh; this.news(`Rekord: Die Netz-Hashrate steigt auf ${fmtHash(nh, 'sha256')}`); }
+    if (day >= e.next) { let pool = ENDLESS_NEWS.map((_, i) => i).filter((i) => !e.used.includes(i)); if (!pool.length) { e.used = []; pool = ENDLESS_NEWS.map((_, i) => i); } const i = pool[Math.floor(Math.random() * pool.length)]; e.used.push(i); e.next = day + 40 + Math.floor(Math.random() * 40); this.news(ENDLESS_NEWS[i]); }
   }
   pushMsg(m) { const s = this.s, x = { id: 'eg' + s.day + Math.random().toString(36).slice(2, 6), day: s.day, from: m.from, text: m.text, read: false }; s.messages.push(x); this.emit('message', x); }
 
@@ -713,7 +740,7 @@ export class Game {
   }
   endlessAction(id) {
     const goal = EGOAL[id], s = this.s; if (!goal?.action || s.egoals.done[id] || this.endlessGoal() !== goal || !this.canAfford(goal.action.cost)) return false;
-    s.cash -= goal.action.cost; s.stats.donated = (s.stats.donated || 0) + goal.action.cost;
+    s.cash -= goal.action.cost; s.stats.invested = (s.stats.invested || 0) + goal.action.cost; if (goal.fx) this.applyFx(goal.fx);
     this.finishEndlessGoal(goal); this.dayUpdate(true); return true;
   }
   siteRent(id) { return FACILITY[id].rent * this.fx('rent', id); }

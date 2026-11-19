@@ -6,7 +6,7 @@
 //   Modelle: look 'hydro' | 'asic' | 'whirl' (bestehende Modelle aus models.js). Hydro nur in Rack/Container.
 //
 // Endlosziele (ENDLESS_GOALS, geordnet): { id, text(s, g, st), sub?, ready?(s, g, st), check?(s, g, st) | tick?(s, g, st),
-//   progress?(s, g, st) => [cur, tgt, kind('hash'|'usd'|'watt'|'count'|'days'|'btc'|'wait')], action?: {label, cost},
+//   progress?(s, g, st) => [cur, tgt, kind('hash'|'usd'|'watt'|'count'|'days'|'btc'|'wait')], action?: {label, cost}, fx? (wie Ereignisse, beim Bezahlen),
 //   start?: {from, text} (Handy-Nachricht, sobald das Ziel dran ist), done: {from?, text} (Nachricht beim Erreichen), card?: 'stiftung'|'kral' }
 //   st = s.egoals.st[id] – eigener Fortschritt des Ziels (wird gespeichert).
 import { toDay, HALVINGS } from './history.js';
@@ -71,11 +71,6 @@ export const ENDLESS_GOALS = [
     done: { from: 'Deniz', text: '10 Exahash. Weißt du noch, wie wir uns über 100 Megahash gefreut haben? Das ist hundert Milliarden Mal so viel.' },
   },
   {
-    id: 'cold1000', text: 'Leg 1.000 BTC in die Cold-Wallet', sub: () => 'Behalten statt verkaufen – oder an der Börse nachkaufen',
-    check: (s) => s.wallet.BTC.cold >= 1000, progress: (s) => [s.wallet.BTC.cold, 1000, 'btc'],
-    done: { from: 'Mama', text: 'Tausend Bitcoin. Bitte sag mir, dass die nicht in einem Schuhkarton liegen.' },
-  },
-  {
     id: 'allplus', text: 'Alle Standorte gleichzeitig im Plus',
     sub: (s, g) => `Jeder Standort mit Miete verdient mehr, als Strom und Miete kosten (${rentSites(g).map((id) => ({ werkstatt: 'Werkstatt', halle: 'Halle', rz: 'RZ', fjord: 'Fjord' })[id] || id).join(', ')})`,
     ready: (s, g) => rentSites(g).length >= 2,
@@ -91,19 +86,60 @@ export const ENDLESS_GOALS = [
     done: { from: 'Opa Heinz', text: '120 Megawatt. Ich hab 1974 ein ganzes Dorf mit zwei Megawatt versorgt und dachte, das wäre viel.' },
   },
   {
-    id: 'bn1', text: 'Werde Milliardär',
-    check: (s, g) => g.netWorth() >= 1e9, progress: (s, g) => [g.netWorth(), 1e9, 'usd'],
-    done: { from: 'Viktor Kral', text: 'Eine Milliarde. Willkommen im Club, Brandt. Er ist kleiner und kälter, als Sie denken.' },
+    id: 'kraftwerk', text: 'Kauf das Wasserkraftwerk in Sogn', sub: () => 'Eigener Strom: Der Strompreis in der Fjordhalle sinkt für immer um 45 %',
+    ready: (s) => s.unlocked.includes('fjord'),
+    action: { label: 'Kraftwerk kaufen · 120 Mio. $', cost: 120e6 }, fx: { mod: [{ key: 'elec', mult: 0.55, fac: 'fjord', src: 'kraftwerk' }] },
+    done: { from: 'Opa Heinz', text: 'Ein eigenes Kraftwerk. Junge, ich hab früher Sicherungen für 16 Ampere verkauft. Ich fahr nächste Woche hin und guck mir die Turbinen an.' },
   },
   {
     id: 'stiftung', text: 'Gründe die Lindental-Stiftung', sub: () => 'Lehrwerkstatt, Reparatur-Cafés, Gewächshäuser – für die Stadt, in der alles anfing',
     action: { label: '50 Mio. $ stiften', cost: 50e6 }, card: 'stiftung',
   },
   {
+    id: 'campus', text: 'Bau den Hashwerk-Campus in Lindental', sub: () => 'Eigene Chip-Entwicklung mit Deniz: alle Miner brauchen 6 % weniger Strom',
+    action: { label: 'Campus bauen · 80 Mio. $', cost: 80e6 }, fx: { mod: [{ key: 'asicPower', mult: 0.94, src: 'campus' }] },
+    done: { from: 'Deniz', text: 'Unser eigener Chip, entworfen in Lindental. Ich hab ihn „Milchkiste“ getauft. Keine Widerrede.' },
+  },
+  {
+    id: 'cold1000', text: 'Leg 1.000 BTC in die Cold-Wallet', sub: () => 'Behalten statt verkaufen – oder an der Börse nachkaufen',
+    check: (s) => s.wallet.BTC.cold >= 1000, progress: (s) => [s.wallet.BTC.cold, 1000, 'btc'],
+    done: { from: 'Mama', text: 'Tausend Bitcoin. Bitte sag mir, dass die nicht in einem Schuhkarton liegen.' },
+  },
+  {
+    id: 'bn1', text: 'Werde Milliardär',
+    check: (s, g) => g.netWorth() >= 1e9, progress: (s, g) => [g.netWorth(), 1e9, 'usd'],
+    done: { from: 'Viktor Kral', text: 'Eine Milliarde. Willkommen im Club, Brandt. Er ist kleiner und kälter, als Sie denken.' },
+  },
+  {
     id: 'kral', text: 'Überhol KRAL Compute', sub: (s, g) => `Krals KI-Firma macht ${Math.round(kralComputeRev(s.day) / 1000).toLocaleString('de-DE')} Tsd. $ Umsatz am Tag. Mining und KI-Miete zählen.`,
+    ready: (s) => !!s.egoals.done.stiftung, // das letzte Ziel – erst nach der Stiftung
     check: (s, g) => dayRevenue(g) > kralComputeRev(s.day), progress: (s, g) => [dayRevenue(g), kralComputeRev(s.day), 'usd'],
     start: { from: 'Viktor Kral', text: 'MONOLITH heißt jetzt KRAL Compute. Bitcoin war gestern, Brandt – wir rechnen jetzt für KI. Rufen Sie an, wenn Sie wieder zweiter sein wollen.' },
     card: 'kral',
   },
 ];
 export const EGOAL = Object.fromEntries(ENDLESS_GOALS.map((x) => [x.id, x]));
+
+// Endlos-Nachrichten für den Ticker (fiktiv), etwa alle 40–80 Tage eine, ohne Wiederholung bis die Liste durch ist
+export const ENDLESS_NEWS = [
+  'Netzbetreiber zahlen Minern Prämien fürs Abschalten bei Lastspitzen',
+  'EU-Parlament diskutiert Abwärmepflicht für Rechenzentren',
+  'Norwegen senkt die Netzentgelte für Industriekunden',
+  'Erster Supermarkt in Lindental nimmt Bitcoin an der Kasse',
+  'Chiphersteller melden Engpass bei 2-nm-Wafern: Miner-Lieferzeiten steigen',
+  'Pensionsfonds kauft Bitcoin – Analysten streiten über Risiko',
+  'Studie: Bitcoin-Mining nutzt inzwischen zu 70 % erneuerbare Energie',
+  'Solarspitzen im Sommer: Miner schalten mittags ab und verdienen trotzdem',
+  'Zentralbank testet den digitalen Euro in drei Städten',
+  'Kleine Börse „Pelikan Exchange" schließt nach Hack – Kunden warten auf ihr Geld',
+  'Heizungsbauer bietet Wärmepumpe mit eingebautem Miner an',
+  'Lindentaler Gymnasium startet AG „Strom & Code"',
+  'Gebrauchte Miner fluten die Kleinanzeigen – Kilopreise wie Altmetall',
+  'Satellitenfirma will Bitcoin-Blöcke aus dem All verteilen',
+  'Kältewelle in Skandinavien: Wasserkraftwerke laufen auf Hochtouren',
+  'Gericht: Abwärme aus Mining darf als Fernwärme verkauft werden',
+  'MONOLITH Hash AG kündigt eine KI-Sparte an',
+  'Handyspiele zahlen Belohnungen in Satoshi aus',
+  'Island verbietet neue Mining-Farmen – der Strom geht an Aluminiumhütten',
+  'Hafen von Rotterdam testet Container-Miner an der Kaimauer',
+];
