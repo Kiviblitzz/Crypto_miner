@@ -4,6 +4,7 @@ import { World } from './world/world.js';
 import { UI } from './ui/ui.js';
 import { CHAPTERS } from './data/world.js';
 import { PLACEABLE } from './data/hardware.js';
+import { Audio } from './ui/audio.js';
 
 const SEC_PER_DAY = [Infinity, 4.0, 1.6, 0.5, 0.12];
 
@@ -11,6 +12,8 @@ const game = new Game();
 const world = new World(document.getElementById('c'), game);
 world.loadFacility('kinder');
 const ui = new UI(game, world);
+const audio = new Audio(); ui.audio = audio;
+window.addEventListener('pointerdown', () => audio.init(), { once: true });
 window.__hw = { game, world, ui }; // Debug/Tests
 
 world.onPlace = (type, x, z, rot, template) => {
@@ -19,6 +22,7 @@ world.onPlace = (type, x, z, rot, template) => {
   if (!game.placeableAllowed(def, fac)) { ui.toast('Das passt hier nicht hin.', 'bad'); return null; }
   const o = template ? game.cloneObject(template, fac, x, z, rot) : game.addObject(fac, type, x, z, rot);
   if (!o) { ui.toast('Nicht genug Geld.', 'bad'); return null; }
+  audio.buy();
   return o;
 };
 
@@ -63,7 +67,7 @@ function loop(now) {
     while (s.frac >= 1 && n < 4) { s.frac -= 1; game.advanceDay(); n++; }
     if (s.frac >= 1) s.frac = 0.99;
   }
-  screenTimer -= dt; if (screenTimer <= 0) { screenTimer = 1.5; world.updateStatus(); world.drawScreens(); }
+  screenTimer -= dt; if (screenTimer <= 0) { screenTimer = 1.5; world.updateStatus(); world.drawScreens(); const sm = game.summary[s.current]; if (sm) audio.setLoad(sm.watt, !sm.tripped && !splashOrbit); }
   world.update();
   requestAnimationFrame(loop);
 }

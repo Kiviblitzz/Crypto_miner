@@ -16,6 +16,7 @@ export class UI {
     this.g = game; this.w = world; this.cat = 'rigs'; this.marketCoin = 'BTC'; this.lastBuildDay = -1;
     this.dock(); this.speedBar();
     world.onSelect = (uid) => this.inspect(uid);
+    world.onHover = (uid, pos) => this.tip(uid, pos);
     world.onPlacing = (on) => this.hint(on ? 'Linksklick = platzieren · R = drehen · Shift = mehrfach · Rechtsklick/ESC = abbrechen' : null);
     world.onFP = (on) => { this.hint(on ? 'Rundgang: WASD laufen · Shift = rennen · Maus = umsehen · Klick = Gerät ansehen · ESC = zurück' : null); $('#crosshair').classList.toggle('hidden', !on); };
     $('#modal .modal-x').onclick = () => this.closeModal();
@@ -23,6 +24,7 @@ export class UI {
     game.on('toast', (t, k, ms) => this.toast(t, k, ms));
     game.on('message', (m) => { this.toast(`${FACE[m.from] || '💬'} <b>${esc(m.from)}:</b> ${esc(m.text.length > 90 ? m.text.slice(0, 88) + '…' : m.text)}`, 'msg', 7000); this.dock(); });
     game.on('news', () => this.ticker());
+    game.on('milestone', (t, sub) => this.milestone(t, sub));
     game.on('update', () => this.onDay());
     game.on('refresh', () => this.refresh());
     game.on('unlockable', (id) => { this.toast(`🔓 Neuer Standort verfügbar: <b>${FACILITY[id].name}</b> – siehe Ziele unten links`, 'good', 8000); this.goals(); this.sites(); });
@@ -81,6 +83,8 @@ export class UI {
       b.onclick = () => { if (g.s.current !== f.id) this.switchSite(f.id); };
       el.append(b);
     }
+    const br = g.brokenIn(g.s.current);
+    if (br.n) { const b = h(`<div class="site fix" title="Alle defekten Geräte hier reparieren"><div class="n">🔧 ${br.n} defekt</div><div class="m">Alle reparieren: ${fmtUSD(br.c)}</div></div>`); b.onclick = () => { const n = g.repairAll(g.s.current); this.toast(n ? `🔧 ${n} Gerät(e) repariert` : 'Nicht genug Geld.', n ? 'good' : 'bad'); this.sites(); }; el.append(b); }
   }
   switchSite(id, cinematic = false) { this.g.s.current = id; this.w.loadFacility(id, { cinematic }); this.inspect(null); this.refresh(); }
 
@@ -206,6 +210,7 @@ export class UI {
     const list = body.querySelector('.list');
     if (cur) { const rm = h(`<div class="picker-row cur"><div><b>${esc(PART[cur].name)}</b><div class="s">eingebaut</div></div><div></div><button class="btn small danger">Ausbauen (+${fmtUSD(g.itemPrice(PART[cur]) * 0.5)})</button></div>`); rm.querySelector('button').onclick = () => { g.setPart(o.uid, type, null, idx); this.closeModal(); this.inspect(o.uid); }; list.append(rm); }
     const parts = g.partList(type);
+    const bestId = type === 'gpu' ? this.bestGpu()?.id : null;
     for (const it of parts) {
       let s = `ab ${it.release.slice(0, 4)}`;
       if (type === 'gpu' || type === 'cpu') {
@@ -216,7 +221,7 @@ export class UI {
       if (type === 'psu') s = `${it.cap} W Kapazität`;
       if (type === 'mobo') s = `${it.slots} GPU-Slots (Rahmen: max. ${PLACEABLE[o.type].maxGpu})`;
       const price = g.itemPrice(it);
-      const row = h(`<div class="picker-row ${it.id === cur ? 'cur' : ''}"><div><b>${esc(it.name)}</b><div class="s">${s}</div></div><div class="p" style="color:#ffb000;font-weight:700">${fmtUSD(price)}</div><button class="btn small primary">${cur ? 'Tauschen' : 'Kaufen'}</button></div>`);
+      const row = h(`<div class="picker-row ${it.id === cur ? 'cur' : ''}"><div><b>${esc(it.name)}</b>${it.id === bestId ? ' <span class="new">★ BESTER WERT</span>' : ''}${price > g.s.cash ? ' <span style="color:#ff6b6b;font-size:11px">zu teuer</span>' : ''}<div class="s">${s}</div></div><div class="p" style="color:#ffb000;font-weight:700">${fmtUSD(price)}</div><button class="btn small primary" ${price > g.s.cash ? 'disabled' : ''}>${cur ? 'Tauschen' : 'Kaufen'}</button></div>`);
       row.querySelector('button').onclick = () => { if (!g.setPart(o.uid, type, it.id, idx)) { this.toast('Nicht genug Geld.', 'bad'); return; } this.closeModal(); this.inspect(o.uid); };
       list.append(row);
     }
@@ -274,6 +279,7 @@ export class UI {
     this.switchSite(id, true);
     const ci = CHAPTERS.findIndex((c) => c.unlock === id);
     const next = CHAPTERS[ci + 1];
+    this.onModalClose = () => { if (this.w.transition) this.w.transition.hold = false; };
     this.story(next?.title || f.name, `${next?.intro || ''}<br/><br/><b>${esc(f.name)}</b> – ${esc(f.place)}<br/>${f.w} × ${f.d} m · ${f.power[0].kw.toLocaleString('de-DE')} kW Anschluss${f.rent ? ` · Miete ${fmtUSD(f.rent)}/Monat` : ''}<br/><i>${esc(f.desc)}</i>`);
   }
 
@@ -313,6 +319,7 @@ export class UI {
       list.append(row);
     }
     list.append(h(`<div style="padding:8px 10px;color:#94a0b2;font-size:13px">Wallet gesamt: <b style="color:#fff">${fmtUSD(total)}</b></div>`));
+    const sa = h(`<button class="btn small" style="margin:4px 10px">💰 Alles auf der Börse verkaufen</button>`); sa.onclick = () => { const u = g.sellAll(); this.audio?.cash(); this.toast(`Alles verkauft: ${fmtUSD(u)}`, 'good', 3000); this.market(); }; list.append(sa);
     const pc = h(`<label style="display:flex;gap:8px;align-items:center;padding:4px 10px;font-size:13px"><input type="checkbox" ${s.payoutCold ? 'checked' : ''}/> Neue Coins direkt in die Cold-Wallet (sicher vor Börsenpleiten)</label>`);
     pc.querySelector('input').onchange = (e) => { s.payoutCold = e.target.checked; };
     list.append(pc);
@@ -329,7 +336,7 @@ export class UI {
     const kv = h(`<div class="kv"><div class="k">Auf der Börse</div><div class="v">${fmtCoin(w.ex)} ${c.id} (${fmtUSD(w.ex * p)})</div><div class="k">In der Cold-Wallet</div><div class="v">${fmtCoin(w.cold)} ${c.id} (${fmtUSD(w.cold * p)})</div></div>`);
     det.append(kv);
     const r1 = h('<div class="row"></div>');
-    for (const f of [0.25, 0.5, 1]) { const b = h(`<button class="btn small">${f * 100} % verkaufen</button>`); b.disabled = w.ex <= 0; b.onclick = () => { const u = g.sell(c.id, f); this.toast(`Verkauft für ${fmtUSD(u)}`, 'good', 2500); this.market(); }; r1.append(b); }
+    for (const f of [0.25, 0.5, 1]) { const b = h(`<button class="btn small">${f * 100} % verkaufen</button>`); b.disabled = w.ex <= 0; b.onclick = () => { const u = g.sell(c.id, f); this.audio?.cash(); this.toast(`Verkauft für ${fmtUSD(u)}`, 'good', 2500); this.market(); }; r1.append(b); }
     const tc = h(`<button class="btn small">⇄ ${w.cold > 0 && w.ex === 0 ? 'Auf Börse holen' : 'In Cold-Wallet'}</button>`); tc.onclick = () => { g.transfer(c.id, !(w.cold > 0 && w.ex === 0)); this.market(); }; r1.append(tc);
     det.append(r1);
     const r2 = h(`<div class="row" style="align-items:center"><span style="font-size:13px">Kaufen für</span><input type="number" min="0" step="100" value="${Math.max(0, Math.round(Math.min(s.cash, 1000)))}"/><span>$</span><button class="btn small primary">Kaufen</button></div>`);
@@ -402,6 +409,7 @@ export class UI {
     const f1 = h('<button class="btn small danger">−1 entlassen</button>'); f1.disabled = !s.staff.tech; f1.onclick = () => { g.hireTech(-1); this.company(); }; row.append(f1);
     st.append(row);
     const p = g.dailyProfit();
+    const nwc = h('<div class="sec"><h4>Vermögensverlauf (log)</h4><canvas class="nwchart" width="1100" height="260"></canvas></div>'); st.append(nwc); requestAnimationFrame(() => this.nwChart(nwc.querySelector('canvas')));
     st.append(h(`<div class="sec"><h4>Bilanz pro Tag</h4><div class="kv"><div class="k">Mining-Ertrag</div><div class="v pos">${fmtUSD(p.rev)}</div><div class="k">Strom, Miete, Löhne</div><div class="v neg">−${fmtUSD(p.cost)}</div><div class="k">Gesamt geschürft</div><div class="v">${fmtUSD(s.stats.minedUSD)}</div><div class="k">Stromkosten bisher</div><div class="v">${fmtUSD(s.stats.elec)}</div><div class="k">In Hardware investiert</div><div class="v">${fmtUSD(s.stats.spentHW)}</div></div></div>`));
     this.openModal(body, '', 'company');
   }
@@ -429,11 +437,13 @@ export class UI {
     const g = this.g;
     const body = h(`<div><h2>⚙️ Menü</h2><div class="row"><button class="btn primary" data-a="save">💾 Speichern</button><button class="btn" data-a="load">📂 Laden</button><button class="btn danger" data-a="new">Neues Spiel</button></div>
       <div class="sec"><h4>Grafik</h4><div class="row"><button class="btn small ${this.w.quality === 'high' ? 'primary' : ''}" data-q="high">Hoch (Bloom + Schatten)</button><button class="btn small ${this.w.quality === 'medium' ? 'primary' : ''}" data-q="medium">Mittel</button><button class="btn small ${this.w.quality === 'low' ? 'primary' : ''}" data-q="low">Niedrig</button></div></div>
+      <div class="sec"><h4>Ton</h4><div class="row"><button class="btn small" data-a="mute">${this.audio?.muted ? '🔇 Ton an' : '🔊 Ton aus'}</button></div></div>
       <div class="sec"><h4>Steuerung</h4><div style="font-size:13px;line-height:1.8">Links = auswählen/bauen · Rechts ziehen = drehen · Mitte ziehen = schieben · Mausrad = Zoom<br/>WASD/Pfeile = Kamera bewegen · Q/E = drehen · R = beim Bauen drehen · Shift = mehrfach bauen<br/>Leertaste = Pause · 1–4 = Tempo · F = Rundgang · ESC = abbrechen</div></div>
       <div class="sec"><h4>Über</h4><div style="font-size:12px;color:#94a0b2">HASHWERK ist ein Fan-Projekt. Alle Marken- und Produktnamen sind fiktiv, die 3D-Modelle prozedural erzeugt. Kurse und Hashraten sind gerundete historische Werte bis November 2026 – danach simuliert. Kein Finanzrat.</div></div></div>`);
     body.querySelector('[data-a=save]').onclick = () => { this.toast(g.save() ? '💾 Gespeichert' : 'Speichern fehlgeschlagen', 'good', 2000); };
     body.querySelector('[data-a=load]').onclick = () => { if (g.load()) { this.closeModal(); this.switchSite(g.s.current); this.speedBar(); this.toast('Spielstand geladen', 'good'); } else this.toast('Kein Spielstand gefunden', 'bad'); };
     body.querySelector('[data-a=new]').onclick = () => { if (confirm('Wirklich neu anfangen? Der aktuelle Fortschritt geht verloren (außer er ist gespeichert).')) { g.newGame(); this.closeModal(); this.switchSite('kinder'); this.speedBar(); this.ticker(); } };
+    body.querySelector('[data-a=mute]').onclick = () => { this.audio?.setMuted(!this.audio.muted); this.menu(); };
     body.querySelectorAll('[data-q]').forEach((b) => (b.onclick = () => { this.w.setQuality(b.dataset.q); this.menu(); }));
     this.openModal(body, 'narrow', 'menu');
   }
@@ -444,9 +454,41 @@ export class UI {
     $('#tk-text').innerHTML = t.length ? t.map((n) => `<span class="d">${fmtDate(n.day)}</span>${esc(n.text)}`).join('<span class="sep">◆</span>') : '<span class="d">Lindental</span>Willkommen bei HASHWERK.';
   }
   toast(html, kind = 'info', ms = 4500) {
+    if (kind === 'bad') this.audio?.bad(); else if (kind === 'msg') this.audio?.message();
     const el = h(`<div class="toast ${kind}">${html}</div>`); $('#toasts').append(el);
     while ($('#toasts').childElementCount > 5) $('#toasts').firstElementChild.remove();
     setTimeout(() => el.remove(), ms);
+  }
+  tip(uid, pos) {
+    let el = document.getElementById('tip');
+    if (!uid || !pos) { el?.remove(); return; }
+    if (!el) { el = h('<div id="tip"></div>'); document.body.append(el); }
+    const g = this.g, o = g.findObj(uid); if (!o) { el.remove(); return; }
+    const def = PLACEABLE[o.type], sm = g.summary[g.facOf(uid)], a = sm?.per.get(uid);
+    let line = '';
+    if (a && a.units.length) { const rev = a.units.reduce((x, u) => x + u.rev, 0) * sm.throttle; const cost = a.watt / 1000 * 24 * sm.elec; line = `${fmtWatt(a.watt)} · <span class="${rev - cost >= 0 ? 'pos' : 'neg'}">${fmtUSD(rev - cost)}/Tag</span>`; }
+    else if (def.kind === 'cooling') line = `kühlt ${fmtWatt(def.cool)}`;
+    if (a?.status && a.status !== 'ok') line += `<br/><span class="neg">${{ broken: 'Defekt', partial: 'Teilweise defekt', psu: 'Netzteil überlastet', incomplete: 'Unvollständig', empty: 'Leer' }[a.status] || ''}</span>`;
+    if (o.items) line += `<br/>${o.items.length}/${def.slots} belegt`;
+    el.innerHTML = `<b>${esc(def.name)}</b><br/>${line}`;
+    el.style.left = pos[0] + 'px'; el.style.top = pos[1] + 'px';
+  }
+  milestone(title, sub) {
+    document.getElementById('milestone')?.remove();
+    const el = h(`<div id="milestone"><div class="t1">MEILENSTEIN</div><div class="t2">🏆 ${esc(title)}</div><div class="t3">${esc(sub || '')}</div></div>`);
+    document.body.append(el); setTimeout(() => el.remove(), 4300);
+    this.audio?.fanfare();
+  }
+  nwChart(cv) {
+    const hist = this.g.s.stats.history; const ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
+    ctx.clearRect(0, 0, W, H); if (hist.length < 3) { ctx.fillStyle = '#94a0b2'; ctx.font = '26px sans-serif'; ctx.fillText('Noch zu wenig Daten – spiel ein paar Wochen.', 30, 60); return; }
+    const vals = hist.map((p) => Math.max(1, p.n)); const lg = (v) => Math.log10(v);
+    const mn = lg(Math.min(...vals)), mx = lg(Math.max(...vals)) + 0.01;
+    const x = (i) => 70 + (i / (hist.length - 1)) * (W - 90), y = (v) => H - 30 - ((lg(v) - mn) / (mx - mn)) * (H - 60);
+    ctx.strokeStyle = 'rgba(255,255,255,.07)'; ctx.fillStyle = '#7d8aa0'; ctx.font = '20px sans-serif';
+    for (let k = 0; k <= 3; k++) { const v = mn + ((mx - mn) * k) / 3, yy = H - 30 - (k / 3) * (H - 60); ctx.beginPath(); ctx.moveTo(70, yy); ctx.lineTo(W - 10, yy); ctx.stroke(); ctx.fillText(fmtUSD(Math.pow(10, v)), 2, yy - 4); }
+    ctx.fillText(fmtDate(hist[0].d), 70, H - 6); ctx.fillText(fmtDate(hist[hist.length - 1].d), W - 150, H - 6);
+    ctx.beginPath(); hist.forEach((p, i) => (i ? ctx.lineTo(x(i), y(vals[i])) : ctx.moveTo(x(i), y(vals[i])))); ctx.strokeStyle = '#ffb000'; ctx.lineWidth = 3; ctx.stroke();
   }
   hint(text) { const e = $('#hint'); if (!text) e.classList.add('hidden'); else { e.textContent = text; e.classList.remove('hidden'); } }
 }

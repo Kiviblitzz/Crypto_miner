@@ -101,8 +101,12 @@ export class World {
     this.outside = buildOutside(this.room.outside, def); this.scene.add(this.outside);
     this.roomLights = this.room.lights.map((L) => { const p = new THREE.PointLight(L.color, L.intensity, L.dist, 1.6); p.position.set(...L.pos); this.scene.add(p); return p; });
     if (this.gridHelper) this.scene.remove(this.gridHelper);
-    this.gridHelper = new THREE.GridHelper(Math.max(def.w, def.d), Math.max(def.w, def.d) / def.grid, 0x6ad1ff, 0x6ad1ff);
-    this.gridHelper.material.transparent = true; this.gridHelper.material.opacity = 0.18; this.gridHelper.position.set(Math.max(def.w, def.d) / 2, 0.006, Math.max(def.w, def.d) / 2);
+    const gpts = []; const step = def.w * def.d > 600 ? 1 : def.grid;
+    for (let x = 0; x <= def.w + 1e-6; x += step) gpts.push(x, 0, 0, x, 0, def.d);
+    for (let z = 0; z <= def.d + 1e-6; z += step) gpts.push(0, 0, z, def.w, 0, z);
+    const gg = new THREE.BufferGeometry(); gg.setAttribute('position', new THREE.Float32BufferAttribute(gpts, 3));
+    this.gridHelper = new THREE.LineSegments(gg, new THREE.LineBasicMaterial({ color: 0x6ad1ff, transparent: true, opacity: 0.22 }));
+    this.gridHelper.position.y = 0.006;
     this.gridHelper.visible = false; this.scene.add(this.gridHelper);
     // Schatten-Kamera an Raumgröße anpassen
     const s = Math.max(def.w, def.d) * 0.75 + 2;
@@ -116,8 +120,8 @@ export class World {
     if (cinematic) {
       const startPos = new THREE.Vector3(def.w / 2 + 1, 1.4, def.d / 2 + 1.5);
       this.camera.position.copy(startPos);
-      this.transition = { from: startPos, to: endPos, t: 0, dur: 3.2 };
-    } else this.camera.position.copy(endPos);
+      this.transition = { from: startPos, to: endPos, t: 0, dur: 3.6, hold: true };
+    } else { this.transition = null; this.camera.position.copy(endPos); }
     this.camera.near = span > 30 ? 0.2 : 0.05; this.camera.updateProjectionMatrix();
     this.scene.fog = def.style === 'fjord' ? new THREE.Fog(0xb8c8d8, 250, 900) : new THREE.Fog(0x9fb8d0, 60 + span * 3, 260 + span * 6);
     this.syncObjects();
@@ -234,6 +238,7 @@ export class World {
     let downPos = null;
     c.addEventListener('pointermove', (ev) => {
       this.mouse.set((ev.clientX / window.innerWidth) * 2 - 1, -(ev.clientY / window.innerHeight) * 2 + 1);
+      this.clientPos = [ev.clientX, ev.clientY];
       if (this.placing) this.updatePlacement(); else this.hoverCheck();
     });
     c.addEventListener('pointerdown', (ev) => { downPos = [ev.clientX, ev.clientY, ev.button]; });
@@ -262,8 +267,9 @@ export class World {
     return null;
   }
   hoverCheck() {
-    const uid = this.pick();
+    const uid = this.fpActive ? null : this.pick();
     this.canvas.style.cursor = uid ? 'pointer' : 'default';
+    this.onHover?.(uid, this.clientPos);
   }
 
   // ---------- Rundgang ----------
@@ -292,7 +298,7 @@ export class World {
     const s = this.game.s;
     // Kamera
     if (this.transition) {
-      const tr = this.transition; tr.t += dt / tr.dur; const k = tr.t >= 1 ? 1 : 1 - Math.pow(1 - tr.t, 3);
+      const tr = this.transition; if (!tr.hold) tr.t += dt / tr.dur; const k = tr.t >= 1 ? 1 : 1 - Math.pow(1 - tr.t, 3);
       this.camera.position.lerpVectors(tr.from, tr.to, k); if (tr.t >= 1) this.transition = null;
     }
     if (this.fpActive) {
@@ -345,15 +351,17 @@ export class World {
     const az = ((hour - 6) / 12) * Math.PI;
     this.sun.position.set(def.w / 2 + Math.cos(az) * span * 1.5, Math.max(0.15, elev) * span * 2 + 2, def.d / 2 - Math.sin(az) * span * 0.8 - span);
     this.sun.target.position.set(def.w / 2, 0, def.d / 2);
-    this.sun.intensity = 0.1 + day * 1.7;
+    this.sun.intensity = 0.12 + day * 1.7;
     const warm = Math.max(0, 1 - Math.abs(elev) * 3);
     this.sun.color.setRGB(1, 0.92 - warm * 0.25, 0.85 - warm * 0.4);
-    this.hemi.intensity = 0.18 + day * 0.42;
+    this.hemi.intensity = 0.05 + day * 0.55; this.fill.intensity = 0.04 + day * 0.08;
+    if (day <= 0) this.sun.color.setRGB(0.55, 0.65, 1.0);
     const night = new THREE.Color(0x0b1226), dayc = new THREE.Color(def.style === 'fjord' ? 0x9cc2e6 : 0x8fbbe8), dusk = new THREE.Color(0xe7925a);
     const sky = night.clone().lerp(dayc, Math.min(1, day * 1.6)); sky.lerp(dusk, warm * 0.45 * (elev > -0.3 ? 1 : 0));
     this.scene.background = sky; if (this.scene.fog) this.scene.fog.color.copy(sky);
-    this.scene.environmentIntensity = 0.25 + day * 0.3;
-    const lampK = 0.55 + (1 - day) * 0.6;
+    this.scene.environmentIntensity = 0.07 + day * 0.4;
+    const lampK = 0.75 + (1 - day) * 0.6;
+    this.renderer.toneMappingExposure = 0.92 + (1 - day) * 0.25;
     this.roomLights?.forEach((l, i) => (l.intensity = this.room.lights[i].intensity * lampK));
   }
 

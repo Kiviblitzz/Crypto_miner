@@ -224,7 +224,11 @@ export class Game {
   fillGpus(uid, gpuId) {
     const o = this.findObj(uid); if (!o || !o.parts?.mobo) return 0;
     const cap = this.rigGpuCap(o); let n = 0;
-    while (o.parts.gpus.length < cap && this.s.cash >= this.itemPrice(PART[gpuId])) { if (!this.setPart(uid, 'gpu', gpuId, o.parts.gpus.length)) break; n++; }
+    const maxCap = Math.max(...this.partList('psu').map((x) => x.cap)) * this.psuCount(o);
+    while (o.parts.gpus.length < cap && this.s.cash >= this.itemPrice(PART[gpuId])) {
+      if (this.rigWatt(o) + PART[gpuId].watt > maxCap) { this.toast(`Mehr GPUs schafft kein verfügbares Netzteil (max. ${maxCap} W).`, 'info'); break; }
+      if (!this.setPart(uid, 'gpu', gpuId, o.parts.gpus.length)) break; n++;
+    }
     if (o.parts.psu && this.rigWatt(o) > PART[o.parts.psu].cap * this.psuCount(o)) { const ps = this.fitPsu(o); if (ps && ps.id !== o.parts.psu) this.setPart(uid, 'psu', ps.id); }
     return n;
   }
@@ -271,6 +275,8 @@ export class Game {
     if (o.parts) for (const pid of this.partIds(o)) base += this.itemPrice(PART[pid]);
     return Math.max(5, Math.round(base * 0.08));
   }
+  brokenIn(facId) { let n = 0, c = 0; for (const o of this.s.fac[facId].objects) { if (o.broken || (o.items && o.items.some((i) => i.b))) { n++; c += this.repairCost(o); } } return { n, c }; }
+  repairAll(facId) { let n = 0; for (const o of this.s.fac[facId].objects) if ((o.broken || (o.items && o.items.some((i) => i.b))) && this.repair(o.uid)) n++; return n; }
   repair(uid) {
     const o = this.findObj(uid); if (!o) return false;
     const c = this.repairCost(o); if (this.s.cash < c) return false;
@@ -434,6 +440,18 @@ export class Game {
     }
     if (d.getUTCDate() === 1) { this.save(); this.emit('autosave'); }
     this.dayUpdate();
+    this.checkMilestones();
+  }
+  checkMilestones() {
+    const ms = (this.s.milestones ||= {});
+    const sha = this.algoHash('sha256');
+    for (const [v, l] of [[1e9, '1 GH/s'], [1e10, '10 GH/s'], [1e11, '100 GH/s'], [1e12, '1 TH/s'], [1e13, '10 TH/s'], [1e14, '100 TH/s'], [1e15, '1 PH/s'], [1e16, '10 PH/s'], [1e17, '100 PH/s'], [1e18, '1 EH/s'], [1e19, '10 EH/s']]) {
+      if (sha >= v && !ms['h' + v]) { ms['h' + v] = this.s.day; this.emit('milestone', `${l} Hashrate`, 'Deine SHA-256-Leistung wächst und wächst.'); }
+    }
+    const nw = this.netWorthFast();
+    for (const [v, l, t] of [[1e4, '10.000 $ Vermögen', 'Mehr als Papas Laden im Jahr umsetzt.'], [1e5, '100.000 $ Vermögen', 'Sechsstellig. Mit Internetgeld.'], [1e6, 'Millionär!', 'Die erste Million. Mama glaubt es immer noch nicht.'], [1e7, '10 Mio. $ Vermögen', 'Hashwerk ist ein echtes Unternehmen.'], [1e8, '100 Mio. $ Vermögen', 'Die Wirtschaftspresse ruft an.'], [1e9, 'Milliardär!', 'Vom Kinderzimmer zur Milliarde.']]) {
+      if (nw >= v && !ms['n' + v]) { ms['n' + v] = this.s.day; this.emit('milestone', l, t); }
+    }
   }
   algoHashFrom(netOwn) { return netOwn.BTC || 0; }
   netWorthFast() { return this.s.cash + this.walletValue() + this.hardwareValue(); }
@@ -551,6 +569,7 @@ export class Game {
   }
 
   toast(text, kind = 'info', ms = 5000) { this.emit('toast', text, kind, ms); }
+  sellAll() { let u = 0; for (const c of COINS) u += this.sell(c.id, 1); return u; }
 }
 
 // ---------- Formatierung ----------

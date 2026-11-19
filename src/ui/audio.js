@@ -1,0 +1,46 @@
+// Prozeduraler Sound: Lüfter-Brummen (abhängig von der Last), Klicks, Kasse, Meilenstein-Fanfare
+export class Audio {
+  constructor() { this.ctx = null; this.muted = false; this.level = 0; }
+  init() {
+    if (this.ctx) return;
+    try {
+      const C = window.AudioContext || window.webkitAudioContext; if (!C) return;
+      const ctx = (this.ctx = new C());
+      this.master = ctx.createGain(); this.master.gain.value = this.muted ? 0 : 0.5; this.master.connect(ctx.destination);
+      // Rauschen (Lüfter)
+      const len = ctx.sampleRate * 2, buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
+      let last = 0; for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1; last = (last + 0.02 * w) / 1.02; d[i] = last * 3.5; }
+      const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+      this.noiseFilter = ctx.createBiquadFilter(); this.noiseFilter.type = 'lowpass'; this.noiseFilter.frequency.value = 600;
+      this.noiseGain = ctx.createGain(); this.noiseGain.gain.value = 0;
+      src.connect(this.noiseFilter).connect(this.noiseGain).connect(this.master); src.start();
+      // Netzbrummen / Trafo
+      const osc = ctx.createOscillator(); osc.type = 'sawtooth'; osc.frequency.value = 50;
+      const of = ctx.createBiquadFilter(); of.type = 'lowpass'; of.frequency.value = 180;
+      this.humGain = ctx.createGain(); this.humGain.gain.value = 0;
+      osc.connect(of).connect(this.humGain).connect(this.master); osc.start();
+    } catch (e) { this.ctx = null; }
+  }
+  setMuted(m) { this.muted = m; if (this.master) this.master.gain.value = m ? 0 : 0.5; }
+  // watt: Last im aktuellen Raum, scale: Raumgröße
+  setLoad(watt, running) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const lvl = running ? Math.min(1, Math.log10(1 + watt / 50) / 5) : 0;
+    this.noiseGain.gain.setTargetAtTime(lvl * 0.35, t, 0.5);
+    this.noiseFilter.frequency.setTargetAtTime(400 + lvl * 1400, t, 0.5);
+    this.humGain.gain.setTargetAtTime(lvl > 0.5 ? (lvl - 0.5) * 0.08 : 0, t, 0.8);
+  }
+  blip(freq = 880, dur = 0.08, type = 'square', vol = 0.12) {
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime, o = this.ctx.createOscillator(), g = this.ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(this.master); o.start(t); o.stop(t + dur + 0.02);
+  }
+  click() { this.blip(1400, 0.03, 'square', 0.05); }
+  buy() { this.blip(660, 0.06, 'triangle', 0.15); setTimeout(() => this.blip(990, 0.09, 'triangle', 0.15), 60); }
+  cash() { [1320, 1760, 2640].forEach((f, i) => setTimeout(() => this.blip(f, 0.12, 'triangle', 0.12), i * 70)); }
+  bad() { this.blip(180, 0.25, 'sawtooth', 0.12); }
+  fanfare() { [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => this.blip(f, i === 3 ? 0.5 : 0.15, 'triangle', 0.16), i * 130)); }
+  message() { this.blip(1046, 0.06, 'sine', 0.15); setTimeout(() => this.blip(1568, 0.1, 'sine', 0.12), 90); }
+}

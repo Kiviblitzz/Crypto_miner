@@ -92,7 +92,7 @@ export const PARTS = [...GPUS, ...CPUS, ...PSUS, ...MOBOS];
 export const PLACEABLES = [
   // Rig-Rahmen
   { id: 'tower', kind: 'rig', cat: 'rigs', name: 'Tower-PC-Gehäuse', release: '2005-01', price: 60, size: [0.5, 0.5], maxGpu: 3, minTier: 0, maxTier: 2, desc: 'Klassisches Gehäuse mit Glasseite. Max. 3 GPUs.' },
-  { id: 'crate', kind: 'rig', cat: 'rigs', name: 'Milchkisten-Rig', release: '2011-04', price: 15, size: [0.5, 0.5], maxGpu: 4, minTier: 0, maxTier: 3, desc: 'Der Klassiker 2011: Mainboard in der Milchkiste, GPUs an Risern obendrauf. Max. 4.' },
+  { id: 'crate', kind: 'rig', cat: 'rigs', name: 'Milchkisten-Rig', release: '2011-01', price: 15, size: [0.5, 0.5], maxGpu: 4, minTier: 0, maxTier: 3, desc: 'Der Klassiker 2011: Mainboard in der Milchkiste, GPUs an Risern obendrauf. Max. 4.' },
   { id: 'frame6', kind: 'rig', cat: 'rigs', name: 'Alu-Open-Frame 6×', release: '2013-06', price: 70, size: [1.0, 0.5], maxGpu: 6, minTier: 0, desc: 'Offener Alu-Rahmen für 6 Karten.' },
   { id: 'frame8', kind: 'rig', cat: 'rigs', name: 'Alu-Open-Frame 8×', release: '2016-01', price: 90, size: [1.0, 0.5], maxGpu: 8, minTier: 1, desc: 'Breiter Rahmen für 8 Karten.' },
   { id: 'frame12', kind: 'rig', cat: 'rigs', name: 'Stahl-Rahmen 12×', release: '2017-06', price: 150, size: [1.5, 0.5], maxGpu: 12, minTier: 2, desc: 'Profi-Rahmen für 12 GPUs.' },
