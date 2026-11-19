@@ -17,6 +17,7 @@ export class UI {
     this.dock(); this.speedBar();
     world.onSelect = (uid) => this.inspect(uid);
     world.onHover = (uid, pos) => this.tip(uid, pos);
+    world.onHeat = () => this.sites();
     world.onEmpire = (on) => { this.dock(); this.hint(on ? 'Imperium: alle deine Standorte im Größenvergleich · Rechts ziehen = drehen · Rad = Zoom' : null); document.body.classList.toggle('empire', on); };
     world.onFPError = () => this.toast('Der Rundgang braucht Maus-Steuerung (Pointer Lock) – auf diesem Gerät nicht verfügbar.', 'bad');
     world.onPlacing = (on) => this.hint(on ? 'Linksklick = platzieren · R = drehen · Shift = mehrfach · Rechtsklick/ESC = abbrechen' : null);
@@ -92,6 +93,8 @@ export class UI {
       b.onclick = () => { if (g.s.current !== f.id) this.switchSite(f.id); };
       el.append(b);
     }
+    const hb = h(`<div class="site ${this.w.heatMode ? 'on' : ''}" title="Wärmebild ein/aus (Taste H)"><div class="n">🌡️ Wärmebild</div><div class="m">Taste H</div></div>`);
+    hb.onclick = () => { this.w.toggleHeat(); this.sites(); }; el.append(hb);
     const br = g.brokenIn(g.s.current);
     if (br.n) { const b = h(`<div class="site fix" title="Alle defekten Geräte hier reparieren"><div class="n">🔧 ${br.n} defekt</div><div class="m">Alle reparieren: ${fmtUSD(br.c)}</div></div>`); b.onclick = () => { const n = g.repairAll(g.s.current); this.toast(n ? `🔧 ${n} Gerät(e) repariert` : 'Nicht genug Geld.', n ? 'good' : 'bad'); this.sites(); }; el.append(b); }
   }
@@ -508,7 +511,7 @@ export class UI {
     const body = h(`<div><h2>⚙️ Menü</h2><div class="row"><button class="btn primary" data-a="save">💾 Speichern</button><button class="btn" data-a="load">📂 Laden</button><button class="btn danger" data-a="new">Neues Spiel</button></div>
       <div class="sec"><h4>Grafik</h4><div class="row"><button class="btn small ${this.w.quality === 'high' ? 'primary' : ''}" data-q="high">Hoch (Bloom + Schatten)</button><button class="btn small ${this.w.quality === 'medium' ? 'primary' : ''}" data-q="medium">Mittel</button><button class="btn small ${this.w.quality === 'low' ? 'primary' : ''}" data-q="low">Niedrig</button></div></div>
       <div class="sec"><h4>Ton</h4><div class="row"><button class="btn small" data-a="mute">${this.audio?.muted ? '🔇 Ton an' : '🔊 Ton aus'}</button></div></div>
-      <div class="sec"><h4>Steuerung</h4><div style="font-size:13px;line-height:1.8">Links = auswählen/bauen · Rechts ziehen = drehen · Mitte ziehen = schieben · Mausrad = Zoom<br/>WASD/Pfeile = Kamera bewegen · Q/E = drehen · R = beim Bauen drehen · Shift = mehrfach bauen<br/>Leertaste = Pause · 1–4 = Tempo · F = Rundgang · ESC = abbrechen</div></div>
+      <div class="sec"><h4>Steuerung</h4><div style="font-size:13px;line-height:1.8">Links = auswählen/bauen · Rechts ziehen = drehen · Mitte ziehen = schieben · Mausrad = Zoom<br/>WASD/Pfeile = Kamera bewegen · Q/E = drehen · R = beim Bauen drehen · Shift = mehrfach bauen<br/>Leertaste = Pause · 1–4 = Tempo · H = Wärmebild · F = Rundgang · ESC = abbrechen</div></div>
       <div class="sec"><h4>Über</h4><div style="font-size:12px;color:#94a0b2">HASHWERK ist ein Fan-Projekt. Alle Marken- und Produktnamen sind fiktiv, die 3D-Modelle prozedural erzeugt. Kurse und Hashraten sind gerundete historische Werte bis November 2026 – danach simuliert. Kein Finanzrat.</div></div></div>`);
     body.querySelector('[data-a=save]').onclick = () => { this.toast(g.save() ? '💾 Gespeichert' : 'Speichern fehlgeschlagen', 'good', 2000); };
     body.querySelector('[data-a=load]').onclick = () => { if (g.load()) { this.closeModal(); this.switchSite(g.s.current); this.speedBar(); this.toast('Spielstand geladen', 'good'); } else this.toast('Kein Spielstand gefunden', 'bad'); };

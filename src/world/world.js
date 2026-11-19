@@ -169,6 +169,7 @@ export class World {
     }
     if (this.selected) this.refreshSelBox();
     this.syncPeople();
+    if (this.heatMode) this.updateHeat();
   }
 
   // ---------- Auswahl ----------
@@ -262,6 +263,7 @@ export class World {
       this.keys[e.key.length === 1 ? e.key.toLowerCase() : e.key] = true;
       if (e.key === 'r' || e.key === 'R') { if (this.placing) { this.placing.rot = (this.placing.rot + 1) % 4; this.updatePlacement(); } }
       if (e.key === 'Escape') { if (this.placing) this.cancelPlacement(); else this.select(null); }
+      if ((e.key === 'h' || e.key === 'H') && !this.fpActive) { const on = this.toggleHeat(); this.onHeat?.(on); }
     });
     window.addEventListener('keyup', (e) => { this.keys[e.key.length === 1 ? e.key.toLowerCase() : e.key] = false; });
   }
@@ -298,10 +300,40 @@ export class World {
   }
   fpClick() { const uid = this.pick(true); if (uid) { this.fp.unlock(); this.select(uid); } }
 
+  // ---------- Wärmebild (wie die Overlays im Vorbild) ----------
+  heatTex(hot) {
+    const k = hot ? 'hotTex' : 'coldTex'; if (this[k]) return this[k];
+    const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+    const gr = g.createRadialGradient(64, 64, 4, 64, 64, 62);
+    if (hot) { gr.addColorStop(0, 'rgba(255,40,0,0.85)'); gr.addColorStop(0.45, 'rgba(255,170,0,0.45)'); gr.addColorStop(1, 'rgba(255,220,0,0)'); }
+    else { gr.addColorStop(0, 'rgba(40,160,255,0.8)'); gr.addColorStop(1, 'rgba(40,160,255,0)'); }
+    g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+    return (this[k] = new THREE.CanvasTexture(c));
+  }
+  toggleHeat(on = !this.heatMode) { this.heatMode = on; this.updateHeat(); return on; }
+  updateHeat() {
+    if (this.heatGroup) { this.scene.remove(this.heatGroup); this.heatGroup = null; }
+    if (!this.heatMode || this.empire) return;
+    const sm = this.game.summary[this.facId]; if (!sm) return;
+    const g = (this.heatGroup = new THREE.Group()); this.scene.add(g);
+    const hot = new THREE.MeshBasicMaterial({ map: this.heatTex(true), transparent: true, depthWrite: false, toneMapped: false });
+    const cold = new THREE.MeshBasicMaterial({ map: this.heatTex(false), transparent: true, depthWrite: false, toneMapped: false, opacity: 0.8 });
+    const geo = new THREE.PlaneGeometry(1, 1); geo.rotateX(-Math.PI / 2);
+    for (const [uid, e] of this.entries) {
+      const a = sm.per.get(uid); if (!a) continue;
+      const def = PLACEABLE[e.obj.type];
+      if (def.kind === 'cooling') { const r = Math.min(8, Math.sqrt(def.cool) / 22); const m = new THREE.Mesh(geo, cold); m.scale.set(r * 2, 1, r * 2); m.position.set(e.obj.x, 0.02, e.obj.z); g.add(m); continue; }
+      if (a.heat <= 0) continue;
+      const r = Math.min(10, Math.max(0.35, Math.sqrt(a.heat) / 28)) * (0.7 + Math.min(1, Math.max(0, (sm.temp - 25) / 20)) * 0.6);
+      const m = new THREE.Mesh(geo, hot); m.scale.set(r * 2, 1, r * 2); m.position.set(e.obj.x, 0.025, e.obj.z); g.add(m);
+    }
+  }
+
   // ---------- Imperium-Ansicht: alle Standorte nebeneinander ----------
   showEmpire() {
     if (this.empire) return;
     this.cancelPlacement(); this.select(null); this.onHover?.(null);
+    if (this.heatGroup) { this.scene.remove(this.heatGroup); this.heatGroup = null; }
     const vis = [this.room.root, this.outside, this.objGroup, this.people].filter(Boolean);
     vis.forEach((o) => (o.visible = false)); this.roomLights.forEach((l) => (l.visible = false));
     const g = (this.empire = new THREE.Group()); this.scene.add(g); this.empireHidden = vis;
