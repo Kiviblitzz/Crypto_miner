@@ -34,7 +34,7 @@ world.onPlace = (type, x, z, rot, template) => {
 const splash = document.getElementById('splash');
 const hasSave = game.hasSave();
 if (hasSave) {
-  const b = document.getElementById('btn-continue'); b.classList.remove('hidden');
+  const b = document.getElementById('btn-continue'); b.classList.remove('hidden'); b.classList.add('primary'); document.getElementById('btn-new').classList.remove('primary');
   const info = game.saveInfo(); if (info) b.innerHTML = `<span class="bi">▶</span><span class="bt">Weiterspielen<small>${fmtDate(info.day)} · ${fmtUSD(info.cash)}</small></span>`;
 }
 let splashOrbit = true;
@@ -90,7 +90,7 @@ function loop(now) {
     // Langsamer Blick durchs Kinderzimmer hinter dem Titelbild
     const t = now / 1000 * 0.12;
     world.camera.position.set(3.3, 1.6, 3.05);
-    world.controls.target.set(1.9 + Math.sin(t) * 1.4, 1.05 + Math.sin(t * 0.7) * 0.15, 0.6 + Math.cos(t) * 0.5);
+    world.controls.target.set(2.6 + Math.sin(t) * 0.7, 1.05 + Math.sin(t * 0.7) * 0.12, 0.4 + Math.cos(t) * 0.3);
     s.frac = 0.83;
   } else if (s.speed && document.getElementById('modal').classList.contains('hidden') && !ui.paused) {
     s.frac += dt / SEC_PER_DAY[s.speed];

@@ -25,6 +25,7 @@ const GradeShader = {
 };
 import { buildRoom, buildOutside } from './rooms.js';
 import { objectModel } from './models.js';
+import { nightMats } from './rooms.js';
 import { M, mat } from './materials.js';
 import { FACILITY } from '../data/world.js';
 import { PLACEABLE } from '../data/hardware.js';
@@ -84,6 +85,15 @@ export class World {
     this.sun.shadow.mapSize.set(2048, 2048); this.sun.shadow.bias = -0.0004; this.sun.shadow.normalBias = 0.02;
     this.scene.add(this.sun); this.scene.add(this.sun.target);
     this.fill = new THREE.AmbientLight(0xffffff, 0.12); this.scene.add(this.fill);
+    // Himmelskuppel mit Verlauf und Sonnenscheibe, dazu Sterne
+    this.skyU = { top: { value: new THREE.Color(0x6fa3dc) }, horizon: { value: new THREE.Color(0xdfe9f2) }, sunDir: { value: new THREE.Vector3(0, 1, 0) }, sunCol: { value: new THREE.Color(0xfff2d0) } };
+    this.sky = new THREE.Mesh(new THREE.SphereGeometry(400, 32, 16), new THREE.ShaderMaterial({ uniforms: this.skyU, side: THREE.BackSide, depthWrite: false, fog: false,
+      vertexShader: 'varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: 'uniform vec3 top; uniform vec3 horizon; uniform vec3 sunDir; uniform vec3 sunCol; varying vec3 vDir; void main(){ float h = clamp(vDir.y, 0.0, 1.0); vec3 c = mix(horizon, top, pow(h, 0.55)); float s = max(dot(normalize(vDir), normalize(sunDir)), 0.0); c += sunCol * (pow(s, 600.0) * 2.0 + pow(s, 12.0) * 0.18); gl_FragColor = vec4(c, 1.0); }' }));
+    this.sky.renderOrder = -10; this.scene.add(this.sky);
+    { const n = 700, pos = new Float32Array(n * 3); for (let i = 0; i < n; i++) { const u = Math.random() * 2 - 1, t = Math.random() * Math.PI * 2, y = Math.abs(u) * 0.9 + 0.08, r = Math.sqrt(1 - y * y); pos.set([Math.cos(t) * r * 380, y * 380, Math.sin(t) * r * 380], i * 3); }
+      const gs = new THREE.BufferGeometry(); gs.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      this.stars = new THREE.Points(gs, new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false, transparent: true, opacity: 0, depthWrite: false, fog: false })); this.scene.add(this.stars); }
 
     // Postprocessing
     // Multisampling im Composer: glatte Kanten trotz Nachbearbeitung (Bloom)
@@ -99,8 +109,8 @@ export class World {
     this.composer.addPass(this.gtao);
     // Weiche Kontur um das anvisierte Objekt
     this.outline = new OutlinePass(new THREE.Vector2(1280, 720), this.scene, this.camera);
-    Object.assign(this.outline, { edgeStrength: 2.6, edgeGlow: 0.35, edgeThickness: 1.6, pulsePeriod: 0 });
-    this.outline.visibleEdgeColor.set(0xffc46b); this.outline.hiddenEdgeColor.set(0x6a5a3a); this.outline.edgeStrength = 3.5;
+    Object.assign(this.outline, { edgeStrength: 1.8, edgeGlow: 0, edgeThickness: 1, pulsePeriod: 0 });
+    this.outline.visibleEdgeColor.set(0xffdda0); this.outline.hiddenEdgeColor.set(0x4a4030);
     this.composer.addPass(this.outline);
     { const vp = new RenderPass(this.vm.scene, this.camera); vp.clear = false; vp.clearDepth = true; this.composer.addPass(vp); }
     this.bloom = new UnrealBloomPass(new THREE.Vector2(512, 512), 0.28, 0.55, 1.1);
@@ -423,7 +433,7 @@ export class World {
       this.coinBurst(p.position, 3); this.onIncome?.();
     }
   }
-  pulse(uid) { const e = this.entries.get(uid); if (!e || !this.outline) return; this.outline.selectedObjects = [e.group]; this.outline.pulsePeriod = 0.5; this.outline.visibleEdgeColor.set(0xffc23a); clearTimeout(this.pulseT); this.pulseT = setTimeout(() => { this.outline.pulsePeriod = 0; this.outline.visibleEdgeColor.set(0xffc46b); }, 1500); const bb = e.group.userData.bbox; this.coinBurst(new THREE.Vector3(e.group.position.x, (bb ? bb.max.y : 0.5) + 0.1, e.group.position.z), 6); }
+  pulse(uid) { const e = this.entries.get(uid); if (!e || !this.outline) return; this.outline.selectedObjects = [e.group]; this.outline.pulsePeriod = 0.5; this.outline.visibleEdgeColor.set(0xffc23a); clearTimeout(this.pulseT); this.pulseT = setTimeout(() => { this.outline.pulsePeriod = 0; this.outline.visibleEdgeColor.set(0xffdda0); }, 1500); const bb = e.group.userData.bbox; this.coinBurst(new THREE.Vector3(e.group.position.x, (bb ? bb.max.y : 0.5) + 0.1, e.group.position.z), 6); }
   // Vorschaubild für den Bau-Katalog: Modell im kleinen Fotostudio rendern (einmal pro Typ)
   thumbnail(type) {
     this.thumbs ||= new Map(); if (this.thumbs.has(type)) return this.thumbs.get(type);
@@ -818,6 +828,15 @@ export class World {
     const night = new THREE.Color(0x0b1226), dayc = new THREE.Color(def.style === 'fjord' ? 0x9cc2e6 : 0x8fbbe8), dusk = new THREE.Color(0xe7925a);
     const sky = night.clone().lerp(dayc, Math.min(1, day * 1.6)); sky.lerp(dusk, warm * 0.45 * (elev > -0.3 ? 1 : 0));
     this.scene.background = sky; if (this.scene.fog) this.scene.fog.color.copy(sky);
+    if (this.sky) {
+      const nightT = 1 - Math.min(1, day * 2.2);
+      this.skyU.top.value.set(0x6fa3dc).lerp(new THREE.Color(0x51618f), warm * 0.6).lerp(new THREE.Color(0x070b18), nightT);
+      this.skyU.horizon.value.set(def.style === 'fjord' ? 0xd6e6f2 : 0xdfe9f2).lerp(new THREE.Color(0xf2a66a), warm * 0.8).lerp(new THREE.Color(0x1b2340), nightT);
+      this.skyU.sunDir.value.copy(this.sun.position).sub(this.sun.target.position).normalize();
+      this.sky.position.set(def.w / 2, 0, def.d / 2); this.stars.position.copy(this.sky.position);
+      this.stars.material.opacity = Math.max(0, nightT - 0.2) * 0.9;
+      for (const m of nightMats) m.emissiveIntensity = nightT * 1.3;
+    }
     this.scene.environmentIntensity = 0.25 + day * 0.2;
     const lampK = 0.75 + (1 - day) * 0.6;
     this.renderer.toneMappingExposure = 0.98 + (1 - day) * 0.08;

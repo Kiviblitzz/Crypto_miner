@@ -557,7 +557,7 @@ export class UI {
   market(update = false) {
     const g = this.g, s = g.s;
     if (update && this.modalKind !== 'market') return;
-    const body = h(`<div><h2>Börse</h2><div class="grid2"><div class="coins"></div><div class="detail"></div></div></div>`);
+    const body = h(`<div><h2>Börse</h2><div class="grid2 ${g.has('coins') ? '' : 'single'}"><div class="coins"></div><div class="detail"></div></div></div>`);
     const list = body.querySelector('.coins');
     let total = 0;
     for (const c of COINS) {
@@ -613,8 +613,8 @@ export class UI {
     const logScale = Math.max(...vals) / Math.min(...vals) > 30;
     const tf = (v) => (logScale ? Math.log10(Math.max(v, 1e-9)) : v);
     const mn = Math.min(...vals.map(tf)), mx = Math.max(...vals.map(tf));
-    const pad = mini ? 10 : 60, x = (i) => pad + (i / n) * (W - pad * (mini ? 2 : 1.4)), y = (v) => H - (mini ? 14 : 40) - ((tf(v) - mn) / (mx - mn || 1)) * (H - (mini ? 28 : 80));
-    ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.fillStyle = '#7d8aa0'; ctx.font = '500 22px Barlow, sans-serif'; ctx.lineWidth = 1;
+    const pad = mini ? 10 : 110, x = (i) => pad + (i / n) * (W - pad * (mini ? 2 : 1.25)), y = (v) => H - (mini ? 14 : 40) - ((tf(v) - mn) / (mx - mn || 1)) * (H - (mini ? 28 : 80));
+    ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.fillStyle = '#bcc6d3'; ctx.font = '500 30px Barlow, sans-serif'; ctx.lineWidth = 1;
     if (!mini) for (let k = 0; k <= 4; k++) { const v = mn + ((mx - mn) * k) / 4; const yy = H - 40 - (k / 4) * (H - 80); ctx.beginPath(); ctx.moveTo(pad, yy); ctx.lineTo(W - 20, yy); ctx.stroke(); ctx.fillText(fmtUSD(logScale ? Math.pow(10, v) : v), 4, yy - 4); }
     if (!mini) { ctx.fillText(fmtDate(start), pad, H - 8); ctx.fillText(fmtDate(end), W - 190, H - 8); }
     const grad = ctx.createLinearGradient(0, 0, 0, H); grad.addColorStop(0, COIN[id].color + '66'); grad.addColorStop(1, COIN[id].color + '00');
@@ -754,7 +754,7 @@ export class UI {
       const lg = (v) => Math.log10(Math.max(1, v)); const net = hist.map((p) => g.netHash('BTC', p.d));
       const mn = lg(Math.min(...hist.map((p) => p.h))), mx = lg(Math.max(...net)) + 0.2;
       const x = (i) => 70 + (i / (hist.length - 1)) * (W - 90), y = (v) => H - 28 - ((lg(v) - mn) / (mx - mn || 1)) * (H - 50);
-      ctx.fillStyle = '#7d8aa0'; ctx.font = '18px sans-serif'; ctx.strokeStyle = 'rgba(255,255,255,.07)';
+      ctx.fillStyle = '#bcc6d3'; ctx.font = '18px sans-serif'; ctx.strokeStyle = 'rgba(255,255,255,.07)';
       for (let k = 0; k <= 3; k++) { const v = Math.pow(10, mn + ((mx - mn) * k) / 3), yy = y(v); ctx.beginPath(); ctx.moveTo(70, yy); ctx.lineTo(W - 10, yy); ctx.stroke(); ctx.fillText(fmtHash(v), 2, yy - 4); }
       ctx.beginPath(); net.forEach((v, i) => (i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v)))); ctx.strokeStyle = '#5d687a'; ctx.lineWidth = 2; ctx.stroke();
       ctx.beginPath(); hist.forEach((p, i) => (i ? ctx.lineTo(x(i), y(p.h)) : ctx.moveTo(x(i), y(p.h)))); ctx.strokeStyle = '#ffb000'; ctx.lineWidth = 3; ctx.stroke();
@@ -819,7 +819,7 @@ export class UI {
     const vals = hist.map((p) => Math.max(1, p.n)); const lg = (v) => Math.log10(v);
     const mn = lg(Math.min(...vals)), mx = lg(Math.max(...vals)) + 0.01;
     const x = (i) => 70 + (i / (hist.length - 1)) * (W - 90), y = (v) => H - 30 - ((lg(v) - mn) / (mx - mn)) * (H - 60);
-    ctx.strokeStyle = 'rgba(255,255,255,.07)'; ctx.fillStyle = '#7d8aa0'; ctx.font = '20px sans-serif';
+    ctx.strokeStyle = 'rgba(255,255,255,.07)'; ctx.fillStyle = '#bcc6d3'; ctx.font = '20px sans-serif';
     for (let k = 0; k <= 3; k++) { const v = mn + ((mx - mn) * k) / 3, yy = H - 30 - (k / 3) * (H - 60); ctx.beginPath(); ctx.moveTo(70, yy); ctx.lineTo(W - 10, yy); ctx.stroke(); ctx.fillText(fmtUSD(Math.pow(10, v)), 2, yy - 4); }
     ctx.fillText(fmtDate(hist[0].d), 70, H - 6); ctx.fillText(fmtDate(hist[hist.length - 1].d), W - 150, H - 6);
     ctx.beginPath(); hist.forEach((p, i) => (i ? ctx.lineTo(x(i), y(vals[i])) : ctx.moveTo(x(i), y(vals[i])))); ctx.strokeStyle = '#ffb000'; ctx.lineWidth = 3; ctx.stroke();

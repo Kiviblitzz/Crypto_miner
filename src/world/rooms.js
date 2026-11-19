@@ -90,9 +90,23 @@ export function buildRoom(def) {
     box(S.right, 0.13, 0.02, 0.02, X.chrome(), 3.31, 0.99, 0.07, 0, 0.008);
     cyl(S.right, 0.008, 0.008, 0.03, X.chrome(), 3.36, 1.0, 0.06, 10, 'z');
     // Poster
-    poster(S.left, textTexture([{ text: 'SUBNET', font: 'bold 120px Impact, Arial', color: '#ffdd55' }, { text: 'LIVE · TOUR 2010', font: '40px Arial', color: '#fff' }], { bg: '#1b1036', accent: '#ff3d7f', deco: (g, W, H) => { g.fillStyle = '#ff3d7f55'; for (let i = 0; i < 12; i++) { g.beginPath(); g.arc(W / 2, H * 0.62, 30 + i * 22, Math.PI, 0); g.stroke(); } } }), 0.6, 0.85, 1.5, 1.6, 0.085);
+    // Konzertposter (gedeckte Farben, illustriert)
+    { const c = document.createElement('canvas'); c.width = 360; c.height = 512; const g2 = c.getContext('2d');
+      const gr = g2.createLinearGradient(0, 0, 0, 512); gr.addColorStop(0, '#3b2a4a'); gr.addColorStop(1, '#1f1a2e'); g2.fillStyle = gr; g2.fillRect(0, 0, 360, 512);
+      g2.fillStyle = '#e9a65a'; g2.beginPath(); g2.arc(180, 250, 110, 0, Math.PI * 2); g2.fill(); g2.fillStyle = '#3b2a4a'; for (let k = 0; k < 7; k++) g2.fillRect(70, 200 + k * 16, 220, 6);
+      g2.fillStyle = '#2a2236'; g2.beginPath(); g2.moveTo(40, 360); g2.lineTo(110, 300); g2.lineTo(170, 345); g2.lineTo(240, 285); g2.lineTo(320, 360); g2.lineTo(320, 380); g2.lineTo(40, 380); g2.fill();
+      g2.fillStyle = '#f3d9a0'; g2.font = '700 64px Fredoka, Arial'; g2.textAlign = 'center'; g2.fillText('SUBNET', 180, 100); g2.font = '500 22px Fredoka, Arial'; g2.fillStyle = '#e9a65a'; g2.fillText('LIVE · TOUR 2010', 180, 440); g2.fillStyle = 'rgba(243,217,160,.5)'; g2.font = '500 16px Arial'; g2.fillText('Lindental · Stadthalle', 180, 470);
+      const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; poster(S.left, t, 0.5, 0.71, 1.5, 1.6, 0.085); }
     poster(S.right, textTexture([{ text: 'TO THE', font: 'bold 70px Arial' }, { text: 'MOON', font: 'bold 120px Arial', color: '#ffd23f' }, { text: '🚀', font: '120px Arial' }], { bg: '#0b1630', deco: (g, W, H) => { g.fillStyle = '#fff'; for (let i = 0; i < 80; i++) g.fillRect(Math.random() * W, Math.random() * H, 2, 2); } }), 0.6, 0.85, 1.0, 1.6, 0.085);
-    poster(S.back, textTexture([{ text: 'WORLD MAP', font: 'bold 44px Arial', color: '#333' }], { bg: '#e8dcbc', deco: (g, W, H) => { g.fillStyle = '#7da36a'; for (let i = 0; i < 14; i++) { g.beginPath(); g.ellipse(Math.random() * W, H * 0.3 + Math.random() * H * 0.5, 30 + Math.random() * 50, 20 + Math.random() * 30, Math.random(), 0, 7); g.fill(); } } }), 0.9, 0.6, 2.75, 1.85, 0.085);
+    // Pinnwand mit Zetteln und Polaroid (statt Platzhalter-Karte)
+    { const c = document.createElement('canvas'); c.width = 600; c.height = 400; const g2 = c.getContext('2d');
+      g2.fillStyle = '#b98a5a'; g2.fillRect(0, 0, 600, 400); for (let k = 0; k < 2600; k++) { g2.fillStyle = Math.random() < 0.5 ? 'rgba(90,55,25,.25)' : 'rgba(230,190,140,.22)'; g2.fillRect(Math.random() * 600, Math.random() * 400, 2, 2); }
+      g2.strokeStyle = '#8a6440'; g2.lineWidth = 16; g2.strokeRect(8, 8, 584, 384);
+      const note = (x, y, w, h, rot, col, txt, sz = 26) => { g2.save(); g2.translate(x, y); g2.rotate(rot); g2.fillStyle = 'rgba(0,0,0,.18)'; g2.fillRect(4, 5, w, h); g2.fillStyle = col; g2.fillRect(0, 0, w, h); g2.fillStyle = '#3a3226'; g2.font = `600 ${sz}px Fredoka, Arial`; txt.split('|').forEach((l, i) => g2.fillText(l, 12, 38 + i * (sz + 6))); g2.fillStyle = '#d94b4b'; g2.beginPath(); g2.arc(w / 2, 8, 7, 0, 7); g2.fill(); g2.restore(); };
+      note(40, 40, 150, 120, -0.06, '#fff2a8', 'BTC|0,06 $ ?!', 30); note(220, 30, 140, 110, 0.05, '#bfe3c4', 'Mathe|Mo. 8:00'); note(400, 60, 150, 120, -0.03, '#f7c6c0', 'Deniz|anrufen!'); note(70, 220, 140, 110, 0.07, '#c9dcf5', 'Grafik-|karte?');
+      g2.save(); g2.translate(270, 190); g2.rotate(-0.05); g2.fillStyle = 'rgba(0,0,0,.2)'; g2.fillRect(5, 6, 150, 170); g2.fillStyle = '#f7f4ee'; g2.fillRect(0, 0, 150, 170); const sky = g2.createLinearGradient(0, 12, 0, 120); sky.addColorStop(0, '#7fb2e5'); sky.addColorStop(1, '#f6d8a8'); g2.fillStyle = sky; g2.fillRect(12, 12, 126, 110); g2.fillStyle = '#3d6f8f'; g2.fillRect(12, 92, 126, 30); g2.fillStyle = '#2a2a2a'; for (const px of [50, 72, 96]) { g2.beginPath(); g2.arc(px, 82, 7, 0, 7); g2.fill(); g2.fillRect(px - 5, 86, 10, 22); } g2.fillStyle = '#d94b4b'; g2.beginPath(); g2.arc(75, 6, 7, 0, 7); g2.fill(); g2.restore();
+      note(450, 230, 120, 110, 0.04, '#fff2a8', 'GPU|sparen', 24);
+      const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; poster(S.back, t, 0.9, 0.6, 2.75, 1.85, 0.085); }
     // Möbel (modelliert, gebacken)
     const g = S.root;
     const put = (type, x, z, ry = 0) => { const f = instance('furn:' + type, () => furniture(type), { lod: false }); f.position.set(x, 0, z); f.rotation.y = ry; g.add(f); return f; };
@@ -279,6 +293,8 @@ export function buildRoom(def) {
 }
 
 // Umgebung außerhalb des Raums
+const facadeCache = new Map();
+export const nightMats = [];
 export function buildOutside(kind, def) {
   const g = new THREE.Group();
   const { w, d } = def;
@@ -290,12 +306,27 @@ export function buildOutside(kind, def) {
   if (kind === 'town' || kind === 'garden' || kind === 'yard') {
     // Nachbarhäuser & Bäume
     const roofM = mat('roof', { color: 0x8f3b2a, roughness: 0.8 });
-    for (let i = 0; i < 14; i++) {
-      const a = (i / 14) * Math.PI * 2, r = rnd(18, 30);
+    // Fassaden mit Fensterraster; nachts gehen zufällig Fenster an (emissiveMap)
+    const facade = (col) => { const key = 'facade' + col; if (facadeCache.has(key)) return facadeCache.get(key);
+      const c = document.createElement('canvas'); c.width = 256; c.height = 256; const gg = c.getContext('2d'); gg.fillStyle = col; gg.fillRect(0, 0, 256, 256);
+      const e = document.createElement('canvas'); e.width = 256; e.height = 256; const ge = e.getContext('2d'); ge.fillStyle = '#000'; ge.fillRect(0, 0, 256, 256);
+      for (let y = 0; y < 3; y++) for (let x = 0; x < 4; x++) { const px = 22 + x * 58, py = 30 + y * 74; gg.fillStyle = '#5b6b78'; gg.fillRect(px, py, 34, 44); gg.fillStyle = '#f4efe6'; gg.fillRect(px - 3, py + 44, 40, 5); gg.fillRect(px + 15, py, 4, 44); if (Math.random() < 0.45) { ge.fillStyle = Math.random() < 0.5 ? '#ffcf86' : '#ffb35c'; ge.fillRect(px, py, 34, 44); } }
+      const t = new THREE.CanvasTexture(c), te = new THREE.CanvasTexture(e); t.colorSpace = te.colorSpace = THREE.SRGBColorSpace;
+      const m = new THREE.MeshStandardMaterial({ map: t, emissive: 0xffffff, emissiveMap: te, emissiveIntensity: 0, roughness: 0.9 }); facadeCache.set(key, m); nightMats.push(m); return m; };
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * Math.PI * 2 + rnd(-0.1, 0.1), r = rnd(16, 30);
       const x = w / 2 + Math.cos(a) * r, z = d / 2 + Math.sin(a) * r;
-      const hw = rnd(5, 8), hd = rnd(5, 8), hh = rnd(4, 7);
-      const house = new THREE.Mesh(new THREE.BoxGeometry(hw, hh, hd), mat('house' + (i % 3), { color: [0xe9dfc9, 0xd7c6a7, 0xc9d3d9][i % 3], roughness: 0.9 })); house.position.set(x, hh / 2, z); house.castShadow = true; g.add(house);
-      const roof = new THREE.Mesh(new THREE.ConeGeometry(Math.max(hw, hd) * 0.75, 2.5, 4), roofM); roof.position.set(x, hh + 1.25, z); roof.rotation.y = Math.PI / 4; g.add(roof);
+      const hw = rnd(6, 9), hd = rnd(6, 8), hh = rnd(5, 8);
+      const house = new THREE.Mesh(new THREE.BoxGeometry(hw, hh, hd), facade(['#ece2cc', '#dccaa8', '#cfd8dc', '#e8d2c0'][i % 4])); house.position.set(x, hh / 2, z); house.lookAt(w / 2, hh / 2, d / 2); house.castShadow = true; g.add(house);
+      // Satteldach (Dreiecksprisma)
+      const roof = new THREE.Mesh(new THREE.CylinderGeometry(hw * 0.62, hw * 0.62, hd + 0.6, 3, 1), roofM);
+      roof.position.set(x, hh + hw * 0.18, z); roof.scale.set(1, 1, 0.55); roof.quaternion.copy(house.quaternion).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0))); roof.castShadow = true; g.add(roof);
+      const chim = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.6, 0.6), mat('chimney', { color: 0x8a5a48, roughness: 0.9 })); chim.position.set(x + rnd(-1.5, 1.5), hh + 1.6, z + rnd(-1, 1)); g.add(chim);
+    }
+    if (def.style === 'bedroom') {
+      // Dachgeschoss: das eigene Haus steht darunter, man blickt über die Dächer
+      g.position.y = -4.6;
+      const own = new THREE.Mesh(new THREE.BoxGeometry(w + 0.4, 4.6, d + 0.4), facade('#e8dcc4')); own.position.set(w / 2, 2.3, d / 2); g.add(own);
     }
     for (let i = 0; i < 24; i++) { const a = Math.random() * Math.PI * 2, r = rnd(10, 40); const t = new THREE.Group(); t.position.set(w / 2 + Math.cos(a) * r, 0, d / 2 + Math.sin(a) * r); cyl(t, 0.15, 0.2, 2, mat('trunk', { color: 0x5b3b24 }), 0, 1, 0, 8); const c = new THREE.Mesh(new THREE.SphereGeometry(rnd(1.2, 2), 10, 8), mat('treeTop', { color: 0x3f7a36, roughness: 0.9 })); c.position.y = 2.8; c.castShadow = true; t.add(c); g.add(t); }
   } else if (kind === 'industrial' || kind === 'city') {

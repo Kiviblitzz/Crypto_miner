@@ -893,3 +893,11 @@ body.lowfx .featcard, body.lowfx .pause-card, body.lowfx #dock, body.lowfx #spla
 .btn.primary { box-shadow: 0 3px 0 #b86f00, 0 8px 18px rgba(255,160,0,.22) !important; font-family: var(--font-fun); font-weight: 600; }
 .btn.primary:active { transform: translateY(2px); box-shadow: 0 1px 0 #b86f00 !important; }
 .btn.big.primary { box-shadow: 0 5px 0 #b86f00, 0 12px 22px rgba(255,160,0,.26) !important; }
+/* Strenge Kritik Runde 1 */
+.grid2.single { grid-template-columns: 1fr; } .grid2.single .coins { display: none; }
+.intro-phone .msg { font-size: 16px; line-height: 1.45; }
+.intro-phone .pricecard .pc-p { font: 600 26px var(--font-fun); }
+.intro-phone .pricecard canvas.chart { height: 72px; }
+#build .item.dis { opacity: 1 !important; } #build .item.dis .thumb { opacity: .6; }
+#build .item.dis .p { color: #ffb5a7 !important; } #build .item .miss { font-size: 13px; color: #ffb5a7; }
+#pause { background: rgba(22,16,12,.34) !important; backdrop-filter: blur(3px) !important; }
