@@ -40,7 +40,7 @@ npm install
 npm run dev
 ```
 
-Dann <http://localhost:5173> öffnen. Statischer Build: `npm run build` (Ausgabe in `dist/`),
+Dann <http://localhost:5173> öffnen. Ein Hinweis-Balken oben führt Schritt für Schritt durch Kapitel 1. Statischer Build: `npm run build` (Ausgabe in `dist/`),
 Ein-Datei-Version neu bauen: `npm run build:single`.
 
 ## Was drin ist
@@ -97,6 +97,7 @@ Ein-Datei-Version neu bauen: `npm run build:single`.
 | Shift + Klick | Mehrfach bauen |
 | Entf (2×) | Angeschautes Gerät verkaufen |
 | M / P / C / T / L / K | Markt, Handy, Firma, Technik, Rangliste, Karte (Imperium) |
+| G | Ziel bezahlen (z. B. Papas Stromrechnung, Ladenschulden) |
 | H | Wärmebild |
 | F | Taschenlampe |
 | Leertaste, 1–4 | Pause, Tempo |
