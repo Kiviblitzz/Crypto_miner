@@ -2,6 +2,8 @@
 import { COINS, COIN } from '../data/coins.js';
 import { PLACEABLE, PART, PLACEABLES, PARTS, GPUS } from '../data/hardware.js';
 import { FACILITIES, FACILITY, CHAPTERS, MESSAGES, NEWS, START_DAY, TECHS } from '../data/world.js';
+import { EVENTS, EVENT } from '../data/events.js';
+import { ACHIEVEMENTS } from '../data/achievements.js';
 import { BTC_HASH, POWER_HOUSEHOLD, GPU_BOOM, MONOLITH_SHARE, DAG_AET, DAG_AEC, seasonOffset, noise, toDay, BTC_PRICE, curve } from '../data/history.js';
 export const SKILL_XP = [0, 100, 300, 700, 1500]; // Erfahrung für Stufe 1–5
 
@@ -34,6 +36,7 @@ export class Game {
       stats: { minedUSD: 0, sold: 0, spentHW: 0, elec: 0, history: [] },
       endless: null, lastNet: {},
       feat: { phone: 1 },
+      ev: { done: {}, open: null, log: [], later: [], last: 0 }, rel: { papa: 0, mama: 0, opa: 0, deniz: 0 }, mods: [], ach: {},
     };
     for (const c of COINS) s.autoSell[c.id] = 0;
     const m0 = MESSAGES.find((m) => m.id === 'm0'); if (m0) s.messages.push({ id: 'm0', day: START_DAY, from: m0.from, text: m0.text, read: true }); // Start-Nachricht (im Intro gezeigt)
@@ -68,12 +71,15 @@ export class Game {
       }
       if (!Number.isFinite(s.cash)) s.cash = 0;
       for (const c of COINS) { s.wallet[c.id] ||= { ex: 0, cold: 0 }; if (s.autoSell[c.id] == null) s.autoSell[c.id] = DEFAULT_AUTOSELL; }
+      s.ev ||= { done: {}, open: null, log: [], later: [], last: 0 }; s.ev.done ||= {}; s.ev.log ||= []; s.ev.later ||= [];
+      s.rel ||= { papa: 0, mama: 0, opa: 0, deniz: 0 }; s.mods ||= []; s.ach ||= {}; s.flags ||= {}; s.stats ||= { minedUSD: 0, sold: 0, spentHW: 0, elec: 0, history: [] };
       this.s = s; this.cache = {}; this.dayUpdate(true); return true;
     } catch (e) { console.warn(e); return false; }
   }
 
   // ---------- Technologien ----------
-  fx(key) { let m = 1; const u = this.s.techs || {}; for (const t of TECHS) if (u[t.id] && t.fx[key]) m *= t.fx[key]; if (key === 'rev' && this.s.skills) m *= 1 + 0.04 * (this.skillLv('mining') - 1); return m; }
+  fx(key, facId = null) { let m = 1; const u = this.s.techs || {}; for (const t of TECHS) if (u[t.id] && t.fx[key]) m *= t.fx[key];
+    for (const md of this.s.mods || []) if (md.key === key && (!md.fac || md.fac === facId) && this.s.day < md.until) m *= md.mult; if (key === 'rev' && this.s.skills) m *= 1 + 0.04 * (this.skillLv('mining') - 1); return m; }
   techAvailable(t) { return this.s.day >= toDay(t.date) && (!t.minTier || Math.max(...this.s.unlocked.map((id) => FACILITY[id].tier)) >= t.minTier); }
   buyTech(id) { const t = TECHS.find((x) => x.id === id); if (!t || (this.s.techs ||= {})[id] || !this.techAvailable(t) || !this.canAfford(t.cost)) return false; this.s.cash -= t.cost; this.s.techs[id] = this.s.day;
     if (id === 'ico') { const usd = Math.min(30e6, 600000 + this.netWorthFast() * 0.25); const p = this.price('ETH') || 1; this.s.wallet.ETH.ex += usd / p; this.toast(`ICO ausverkauft: ${fmtUSD(usd)} in Ethereum`, 'good', 9000); }
@@ -98,8 +104,8 @@ export class Game {
   elecPrice(facId, day = this.s.day) {
     const f = FACILITY[facId];
     if (facId === 'kinder' && !this.s.flags.papa1) return 0; // Mama zahlt – noch.
-    if (f.elec === 'fixed') return f.elecFixed * (day > toDay('2022-03-01') && day < toDay('2023-06-01') ? 1.6 : 1) * this.fx('elec') * this.fx('fjordElec');
-    return POWER_HOUSEHOLD(day) * f.elecMult * this.fx('elec');
+    if (f.elec === 'fixed') return f.elecFixed * (day > toDay('2022-03-01') && day < toDay('2023-06-01') ? 1.6 : 1) * this.fx('elec', facId) * this.fx('fjordElec');
+    return POWER_HOUSEHOLD(day) * f.elecMult * this.fx('elec', facId);
   }
   // USD pro (H/s) pro Tag für Coin
   revPerHash(id, day = this.s.day) {
@@ -152,6 +158,7 @@ export class Game {
       p *= ratio * Math.max(0.35, 1 - 0.1 * years);
     } else p *= Math.pow(1.02, Math.max(0, (day - toDay('2010-01-01')) / 365));
     if (this.s?.skills) p *= 1 - 0.04 * (this.skillLv('hw') - 1);
+    if (this.s?.mods?.length) p *= this.fx('price') * this.fx('price:' + (item.kind === 'device' ? 'asic' : item.type || item.kind));
     return Math.max(1, Math.round(p));
   }
   available(item, day = this.s.day) {
@@ -429,7 +436,7 @@ export class Game {
   // Facility-Zusammenfassung
   facSummary(facId, day = this.s.day) {
     const f = this.s.fac[facId], fd = FACILITY[facId];
-    let watt = 0, heat = 0, cool = fd.baseCool * this.fx('cool'), rev = 0; const per = new Map(); const hashByAlgo = {};
+    let watt = 0, heat = 0, cool = fd.baseCool * this.fx('cool', facId), rev = 0; const per = new Map(); const hashByAlgo = {};
     const elecP = this.elecPrice(facId, day);
     let coolCap = 0, coolW = 0; const coolers = [];
     for (const o of f.objects) {
@@ -442,10 +449,10 @@ export class Game {
     const util = coolCap ? Math.min(1, Math.max(0.05, (heat - fd.baseCool * 0.6) / coolCap)) : 0;
     for (const a of coolers) { a.watt *= util; a.heat = a.watt; a.util = util; }
     watt += coolW * util; heat += coolW * util; cool += coolCap;
-    const capKw = fd.power[f.power].kw;
+    const capKw = fd.power[f.power].kw * this.fx('cap', facId);
     const ambient = 21 + fd.ambient + seasonOffset(day) * (fd.style === 'basement' ? 0.4 : 1);
     const temp = ambient + 12 * (heat / Math.max(1, cool));
-    const throttle = temp > 38 ? Math.max(0.35, 1 - (temp - 38) * 0.05) : 1;
+    const throttle = (temp > 38 ? Math.max(0.35, 1 - (temp - 38) * 0.05) : 1) * this.fx('hash', facId);
     const elec = this.elecPrice(facId, day);
     return { watt, heat, cool, rev, per, capKw, tripped: watt / 1000 > capKw, temp, throttle, elec, hashByAlgo };
   }
@@ -455,8 +462,8 @@ export class Game {
   walletValue() { let v = 0; for (const c of COINS) { const w = this.s.wallet[c.id]; v += (w.ex + w.cold) * this.price(c.id); } return v; }
   hardwareValue() { let v = 0; for (const f of Object.values(this.s.fac)) for (const o of f.objects) v += this.objectValue(o); return v; }
   netWorth() { return this.s.cash + this.walletValue() + this.hardwareValue() - (this.s.loan || 0); }
-  monolithHash(day = this.s.day) { return day < toDay('2014-03-01') ? 0 : BTC_HASH(Math.min(day, LAST_DATA_DAY)) * MONOLITH_SHARE(day) * (this.s.endless ? this.s.endless.BTC.h : 1); }
-  dailyProfit() { let rev = 0, cost = 0; for (const id of this.s.unlocked) { const sm = this.summary[id]; if (!sm) continue; if (!sm.tripped) { rev += sm.rev * sm.throttle; cost += Math.max(0, sm.watt / 1000 * 24 - this.solarKwh(id)) * sm.elec; } cost += FACILITY[id].rent / 30.4; } cost += this.s.staff.tech * this.techSalary() / 30.4; if (this.s.loan > 0) cost += this.s.loan * this.loanRate() / 365; return { rev, cost, net: rev - cost }; }
+  monolithHash(day = this.s.day) { return day < toDay('2014-03-01') ? 0 : BTC_HASH(Math.min(day, LAST_DATA_DAY)) * MONOLITH_SHARE(day) * (this.s.endless ? this.s.endless.BTC.h : 1) * this.fx('monolith'); }
+  dailyProfit() { let rev = 0, cost = 0; for (const id of this.s.unlocked) { const sm = this.summary[id]; if (!sm) continue; if (!sm.tripped) { rev += sm.rev * sm.throttle; cost += Math.max(0, sm.watt / 1000 * 24 - this.solarKwh(id)) * sm.elec; } cost += FACILITY[id].rent / 30.4 * this.fx('rent', id); } cost += this.s.staff.tech * this.techSalary() / 30.4; if (this.s.loan > 0) cost += this.s.loan * this.loanRate() / 365; return { rev, cost, net: rev - cost }; }
   techSalary(day = this.s.day) { return Math.round(2600 * Math.pow(1.03, (day - toDay('2014-01-01')) / 365)); }
   techCoverage() { let n = 0; for (const id of this.s.unlocked) for (const o of this.s.fac[id].objects) { const def = PLACEABLE[o.type]; if (def.kind === 'holder') n += o.items.length; else if (def.kind !== 'decor' && def.kind !== 'cooling') n++; } return n ? Math.min(1, (this.s.staff.tech * 60) / n) : 1; }
 
@@ -518,7 +525,8 @@ export class Game {
     if (minedUSD > 0 && s.skills) this.addXp('mining', 6, true);
     // Fixkosten
     let fixed = 0;
-    for (const id of s.unlocked) fixed += FACILITY[id].rent / 30.4;
+    for (const id of s.unlocked) fixed += FACILITY[id].rent / 30.4 * this.fx('rent', id);
+    for (const md of s.mods) if (md.key === 'monthly' && day < md.until) fixed += md.mult / 30.4; // laufende Kosten/Erträge aus Ereignissen (negativ = Einnahme)
     fixed += s.staff.tech * this.techSalary(day) / 30.4;
     if (s.loan > 0) fixed += (s.loan * this.loanRate(day)) / 365;
     s.cash -= fixed;
@@ -557,7 +565,9 @@ export class Game {
       this.emit('release', it, text);
     }
     // Story
-    this.checkMessages(); this.checkGoals();
+    this.checkMessages(); this.checkGoals(); this.checkEvents();
+    if (day % 7 === 0) this.checkAchievements();
+    if (day % 30 === 0) s.mods = s.mods.filter((m) => m.until > day);
     if (day === toDay('2021-05-26') && !s.flags.offerMade && s.unlocked.length >= 4) { s.flags.offerMade = true; this.emit('offer', Math.max(40e6, Math.round(this.netWorthFast() * 1.4 / 1e6) * 1e6)); }
     // Statistik
     const d = new Date(day * 86400000);
@@ -613,7 +623,7 @@ export class Game {
     for (const c of COINS) coldUSD += this.s.wallet[c.id].cold * this.price(c.id);
     const exUSD = COINS.reduce((a, c) => a + this.s.wallet[c.id].ex * this.price(c.id), 0);
     if (coldUSD > 1000 && exUSD < coldUSD * 0.05) { const ms = (this.s.milestones ||= {}); if (!ms.cold) { ms.cold = this.s.day; this.emit('milestone', 'Cold-Wallet-Profi', `${fmtUSD(coldUSD)} sicher – während andere alles verlieren.`); } }
-    for (const c of COINS) { const w = this.s.wallet[c.id]; lostUSD += w.ex * loss * this.price(c.id); w.ex *= 1 - loss; }
+    for (const c of COINS) { const w = this.s.wallet[c.id]; lostUSD += w.ex * loss * this.price(c.id); if (c.id === 'BTC') { const st = (this.s.stats.lostBtc ||= {}); st[this.s.day < toDay('2018-01-01') ? 'gox' : 'fxt'] = (st[this.s.day < toDay('2018-01-01') ? 'gox' : 'fxt'] || 0) + w.ex * loss; } w.ex *= 1 - loss; }
     if (lostUSD > 1) this.toast(`${text} – du verlierst Coins im Wert von ${fmtUSD(lostUSD)}!`, 'bad', 9000);
     else this.toast(`${text} – deine Coins in der Cold-Wallet sind sicher.`, 'good', 7000);
   }
@@ -647,6 +657,81 @@ export class Game {
       if (ok) { s.messages.push({ id: m.id, day: s.day, from: m.from, text: m.text, read: false }); this.emit('message', m); }
     }
   }
+  // ---------- Ereignisse mit Entscheidungen ----------
+  evText(e, k = 'text') { const v = e[k]; return typeof v === 'function' ? v(this.s, this.helpers(), this) : v || ''; }
+  evChoices(e) { const s = this.s, h = this.helpers(); return (e.choices || []).map((c, i) => { const cost = typeof c.cost === 'function' ? c.cost(this) : c.cost || 0; const ok = (!cost || this.canAfford(cost)) && (!c.need || c.need(s, h, this)); return { i, label: typeof c.label === 'function' ? c.label(this) : c.label, hint: typeof c.hint === 'function' ? c.hint(this) : c.hint || '', cost, ok }; }); }
+  evDue(e, day) {
+    const w = e.when || {}, s = this.s;
+    if (w.date) { const d = toDay(w.date); if (day < d) return null; if (day > d + (w.window ?? 14)) return 'skip'; return e.id; }
+    if (w.yearly) { const y = new Date(day * 86400000).getUTCFullYear(); if (w.from && y < +w.from) return null; if (w.to && y > +w.to) return null; const d = toDay(`${y}-${w.yearly}`); if (day < d || day > d + (w.window ?? 7)) return null; return `${e.id}:${y}`; }
+    if (w.from || w.to || w.chance) {
+      if (w.from && day < toDay(w.from)) return null; if (w.to && day > toDay(w.to)) return w.repeat ? null : 'skip';
+      if (day % 7 !== 3) return null; // einmal pro Woche würfeln
+      const key = w.repeat ? `${e.id}:${Math.floor(day / (w.repeat || 365))}` : e.id;
+      if (s.ev.done[key]) return null;
+      if (Math.random() >= (w.chance ?? 1)) return null;
+      return key;
+    }
+    return e.id;
+  }
+  checkEvents() {
+    const s = this.s; if (!s.ev || !s.flags.miningStarted) return;
+    const day = s.day, h = this.helpers();
+    if (s.ev.open) { if (day > s.ev.open.until) { const e = EVENT[s.ev.open.id]; this.chooseEvent(e?.fallback ?? (e?.choices?.length || 1) - 1, true); } return; }
+    // fällige Folge-Ereignisse zuerst
+    const li = s.ev.later.findIndex((l) => l.day <= day);
+    if (li >= 0) { const l = s.ev.later.splice(li, 1)[0]; const e = EVENT[l.id]; if (e && (!e.cond || e.cond(s, h, this))) return this.openEvent(e, l.id + ':' + l.day); }
+    for (const e of EVENTS) {
+      if (e.chain) continue; // nur als Folge-Ereignis
+      if (s.ev.done[e.id] && !(e.when?.yearly || e.when?.repeat)) continue;
+      const key = this.evDue(e, day); if (!key) continue;
+      if (key === 'skip') { s.ev.done[e.id] = 'skip'; continue; }
+      if (s.ev.done[key]) continue;
+      const random = e.when?.chance != null;
+      if (random && day - (s.ev.last || 0) < 21) continue;
+      if (e.cond && !e.cond(s, h, this)) continue; // Datums-Ereignisse warten im Zeitfenster auf ihre Bedingung
+      return this.openEvent(e, key);
+    }
+  }
+  openEvent(e, key) {
+    const s = this.s; s.ev.done[key] = s.day; s.ev.last = s.day;
+    s.ev.open = { id: e.id, key, day: s.day, until: s.day + (e.expire ?? 21) };
+    this.emit('event', e);
+  }
+  chooseEvent(i, auto = false) {
+    const s = this.s, o = s.ev.open; if (!o) return null; const e = EVENT[o.id]; if (!e) { s.ev.open = null; return null; }
+    const ch = (e.choices || [])[i]; if (!ch) { s.ev.open = null; return null; }
+    const cost = typeof ch.cost === 'function' ? ch.cost(this) : ch.cost || 0;
+    if (!auto && cost && !this.canAfford(cost)) return null;
+    if (!auto && ch.need && !ch.need(s, this.helpers(), this)) return null;
+    if (cost) { if (this.canAfford(cost)) s.cash -= cost; else return this.chooseEvent((e.choices.length || 1) - 1, true); }
+    s.ev.open = null;
+    const fx = typeof ch.fx === 'function' ? ch.fx(this, s) : ch.fx || {};
+    this.applyFx(fx);
+    s.ev.log.push({ d: s.day, id: e.id, i, t: fx.log || `${this.evText(e, 'title')}: ${typeof ch.label === 'function' ? ch.label(this) : ch.label}` }); if (s.ev.log.length > 300) s.ev.log.shift();
+    if (auto) this.toast(`${this.evText(e, 'title')}: ohne Antwort – ${typeof ch.label === 'function' ? ch.label(this) : ch.label}`, 'info', 6000);
+    this.dayUpdate(true);
+    return typeof ch.reply === 'function' ? ch.reply(this) : ch.reply || null;
+  }
+  applyFx(fx) {
+    const s = this.s; if (!fx) return;
+    if (fx.cash) s.cash += fx.cash;
+    for (const [c, n] of Object.entries(fx.coin || {})) { const w = s.wallet[c]; if (!w) continue; if (n >= 0) w.ex += n; else { let r = -n; const a = Math.min(w.ex, r); w.ex -= a; r -= a; w.cold = Math.max(0, w.cold - r); } }
+    for (const [c, f] of Object.entries(fx.sellFrac || {})) this.sell(c, f);
+    for (const [k, n] of Object.entries(fx.rel || {})) { s.rel[k] = Math.max(-3, Math.min(5, (s.rel[k] || 0) + n)); }
+    for (const m of fx.mod || []) s.mods.push({ key: m.key, mult: m.mult, fac: m.fac || null, until: m.days ? s.day + m.days : 1e9, src: m.src || null });
+    for (const f of [].concat(fx.flag || [])) s.flags[f] = s.day || 1;
+    for (const a of [].concat(fx.ach || [])) this.unlockAch(a);
+    for (const [k, n] of Object.entries(fx.xp || {})) if (s.skills) this.addXp(k, n);
+    for (const n of [].concat(fx.next || [])) s.ev.later.push({ id: n.id, day: s.day + (n.inDays || 1) });
+    if (fx.msg) { const m = { id: 'ev' + s.day + Math.random().toString(36).slice(2, 6), day: s.day, from: fx.msg.from, text: fx.msg.text, read: false }; s.messages.push(m); this.emit('message', m); }
+    if (fx.stat) for (const [k, n] of Object.entries(fx.stat)) s.stats[k] = (s.stats[k] || 0) + n;
+    if (fx.toast) this.toast(fx.toast, 'good', 6000);
+    if (fx.do) fx.do(this, s);
+  }
+  checkAchievements() { const s = this.s, h = this.helpers(); s.ach ||= {}; for (const a of ACHIEVEMENTS) if (!s.ach[a.id] && a.check && a.check(s, h, this)) this.unlockAch(a.id); }
+  unlockAch(id) { const s = this.s; s.ach ||= {}; if (s.ach[id]) return false; s.ach[id] = s.day || 1; this.emit('achievement', id); return true; }
+  relLv(k) { return this.s.rel?.[k] || 0; }
   chapter() { return CHAPTERS[Math.min(this.s.chapter, CHAPTERS.length - 1)]; }
   checkGoals() {
     const s = this.s, h = this.helpers();

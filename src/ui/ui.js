@@ -4,6 +4,8 @@ import { PLACEABLE, PART, CATEGORIES, PLACEABLES, PARTS } from '../data/hardware
 import { FACILITIES, FACILITY, CHAPTERS, TECHS, FEATURES, MESSAGES } from '../data/world.js';
 import { fmtUSD, fmtNum, fmtCoin, fmtHash, fmtDate, fmtWatt, SKILL_XP } from '../sim/game.js';
 import { toDay, BTC_HASH, inHeatwave, HALVINGS, BTC_REWARD } from '../data/history.js';
+import { EVENT } from '../data/events.js';
+import { ACH } from '../data/achievements.js';
 
 const $ = (s) => document.querySelector(s);
 const h = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
@@ -78,6 +80,8 @@ export class UI {
     game.on('feature', (f) => this.featureCard(f));
     game.on('milestone', (t, sub) => this.milestone(t, sub));
     game.on('won', () => this.ending());
+    game.on('event', () => { this.evSnooze = null; this.tryEvent(); });
+    game.on('achievement', (id) => { const a = ACH[id]; if (a) setTimeout(() => this.milestone('Erfolg', `${a.name} – ${a.desc}`), 600); });
     game.on('offer', (usd) => this.offer(usd));
     game.on('release', (it, text) => { if (it.type !== 'psu' && it.type !== 'mobo') this.toast(`${esc(text)}`, 'info', 6000); this.ticker(); this.lastBuildDay = -99; });
     game.on('update', () => this.onDay());
@@ -100,6 +104,7 @@ export class UI {
   }
   refresh() { this.top(); this.sites(); this.build(true); this.goals(); this.dock(); if (this.inspUid) this.inspect(this.inspUid, true); }
   onDay() {
+    if (this.g.s.ev?.open) this.tryEvent();
     this.sites(); this.goals(); this.keysHint();
     for (const t of TECHS) if (toDay(t.date) === this.g.s.day) { this.toast(`Neue Technologie verfügbar: <b>${esc(t.name)}</b>`, 'good', 7000); this.dock(); }
     if (this.g.s.day % 7 === 0) this.dock();
@@ -704,7 +709,7 @@ export class UI {
   // ---------- Dock ----------
   dock() {
     const el = $('#dock'), g = this.g;
-    const unread = g.s.messages.filter((m) => !m.read).length;
+    const unread = g.s.messages.filter((m) => !m.read).length + (g.s.ev?.open ? 1 : 0);
     const techN = TECHS.filter((t) => !(g.s.techs || {})[t.id] && g.techAvailable(t) && g.s.cash >= t.cost).length;
     el.innerHTML = '';
     const btns = [
@@ -722,7 +727,7 @@ export class UI {
 
   // ---------- Modals ----------
   openModal(node, cls = '', kind = null) { document.getElementById('lvup')?.remove(); this.openUI(); const m = $('#modal'); m.classList.remove('hidden'); const card = m.querySelector('.modal-card'); card.className = 'modal-card ' + cls; const b = m.querySelector('.modal-body'); b.innerHTML = ''; b.append(node); this.modalKind = kind; document.body.dataset.modal = kind || ''; this.dock(); }
-  closeModal() { $('#modal').classList.add('hidden'); this.modalKind = null; document.body.dataset.modal = ''; this.dock(); const cb = this.onModalClose; this.onModalClose = null; cb?.(); if (!this.inspUid && !document.body.classList.contains('show-build') && $('#modal').classList.contains('hidden') && (this.w.mode === 'ui')) this.w.setMode('play'); }
+  closeModal() { const wasEvent = this.modalKind === 'event'; $('#modal').classList.add('hidden'); this.modalKind = null; document.body.dataset.modal = ''; this.dock(); const cb = this.onModalClose; this.onModalClose = null; cb?.(); if (wasEvent && this.g.s.ev?.open) this.evSnooze = this.g.s.ev.open.key; else if (this.g.s.ev?.open) setTimeout(() => this.tryEvent(), 500); if (!this.inspUid && !document.body.classList.contains('show-build') && $('#modal').classList.contains('hidden') && (this.w.mode === 'ui')) this.w.setMode('play'); }
   // Spielstart: Nachricht von Deniz – Bitcoin gibt es jetzt, dein PC kann das. Mit Kurs.
   introPhone(onClose) {
     const g = this.g, s = g.s, p = g.price('BTC');
@@ -887,12 +892,32 @@ export class UI {
     const msgs = [...g.s.messages].sort((a, b) => b.day - a.day);
     const body = h(`<div><h2>Handy</h2><div class="phone"></div></div>`);
     const ph = body.querySelector('.phone');
+    const oe = g.s.ev?.open && EVENT[g.s.ev.open.id];
+    if (oe) { const card = h(`<div class="msg decide"><div class="fr">${esc(oe.from || '')}<span>Entscheidung offen · noch ${Math.max(0, g.s.ev.open.until - g.s.day)} Tage</span></div><b>${esc(g.evText(oe, 'title'))}</b><div class="row" style="margin-top:8px"><button class="btn small primary">Jetzt entscheiden</button></div></div>`); card.querySelector('button').onclick = () => { this.evSnooze = null; this.closeModal(); this.eventCard(); }; ph.append(card); }
     if (!msgs.length) ph.append(h('<div class="empty">Keine Nachrichten.</div>'));
     for (const m of msgs) { if (m.old) continue; ph.append(h(`<div class="msg f-${m.from.split(' ')[0]} ${m.read ? '' : 'unread'}"><div class="fr">${FACE[m.from] || ''} ${esc(m.from)}<span>${fmtDate(m.day)}</span></div>${esc(m.text)}</div>`)); }
     msgs.forEach((m) => (m.read = true));
     this.openModal(body, 'narrow', 'phone'); this.dock();
   }
 
+  // Ereignis mit Entscheidung: erscheint, sobald kein anderes Fenster offen ist
+  tryEvent() {
+    const o = this.g.s.ev?.open; if (!o || this.evSnooze === o.key) { this.dock(); return; }
+    if (this.modalKind || this.inspUid || this.w.focus || this.w.empire || !document.getElementById('splash').classList.contains('hidden') || document.body.classList.contains('show-build')) { this.dock(); return; }
+    this.eventCard();
+  }
+  eventCard() {
+    const g = this.g, o = g.s.ev?.open, e = o && EVENT[o.id]; if (!e) return;
+    const ch = g.evChoices(e);
+    const body = h(`<div class="story event"><div class="ev-from"><span class="ev-av">${esc((e.from || '?').slice(0, 1))}</span><span>${esc(e.from || '')}</span><span class="ev-date">${fmtDate(g.s.day)}</span></div><div class="ch">${esc(g.evText(e, 'title'))}</div><p>${g.evText(e)}</p><div class="ev-choices"></div></div>`);
+    const box = body.querySelector('.ev-choices');
+    for (const c of ch) {
+      const b = h(`<button class="btn ${c.i === 0 ? 'primary' : ''} ev-c" ${c.ok ? '' : 'disabled'}><span class="ev-l">${esc(c.label)}${c.cost ? ` <span class="ev-cost">· ${this.money(c.cost)}</span>` : ''}</span>${c.hint ? `<small>${esc(c.hint)}</small>` : ''}${!c.ok && c.cost ? '<small>Dafür reicht dein Geld nicht.</small>' : ''}</button>`);
+      b.onclick = () => { const reply = g.chooseEvent(c.i); this.evSnooze = null; this.closeModal(); this.audio?.cash?.(); if (reply) this.toast(reply, 'msg', 7000); this.refresh(); this.dock(); };
+      box.append(b);
+    }
+    this.openModal(body, 'narrow', 'event');
+  }
   company() {
     const g = this.g, s = g.s;
     const body = h(`<div><h2>Firma</h2><div class="cards"></div><div class="sec staff"></div></div>`);

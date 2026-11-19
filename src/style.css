@@ -1530,3 +1530,14 @@ body[data-modal="market"] :is(#st-cash, #st-profit, #st-wallet) { visibility: hi
 #build .item .thumb { position: relative; }
 #build .item .thumb img { transform: none !important; position: relative; z-index: 1; }
 #build .item .thumb::after { content: ''; position: absolute; left: 28%; right: 28%; bottom: 12px; height: 14px; background: radial-gradient(closest-side, rgba(0,0,0,.2), transparent); z-index: 0; pointer-events: none; }
+/* ===== Ereignisse mit Entscheidungen ===== */
+.story.event .ev-from { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font: 700 14px var(--font); color: var(--text2); }
+.story.event .ev-av { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: rgba(255,194,58,.18); color: var(--acc); font: 700 15px var(--font-fun); }
+.story.event .ev-date { margin-left: auto; color: var(--dim); font-weight: 600; font-size: 12.5px; }
+.story.event p { line-height: 1.5; }
+.story.event .ev-choices { display: grid; gap: 8px; margin-top: 14px; }
+.story.event .ev-c { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 10px 14px !important; min-height: 48px; border-radius: 14px !important; white-space: normal; }
+.story.event .ev-c .ev-l { font: 700 15px var(--font-fun); }
+.story.event .ev-c .ev-cost { font-weight: 600; opacity: .8; }
+.story.event .ev-c small { font: 600 12.5px var(--font); opacity: .78; }
+.phone .msg.decide { border: 1px solid rgba(255,194,58,.45); background: rgba(255,194,58,.08) !important; }
