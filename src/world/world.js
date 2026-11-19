@@ -315,7 +315,7 @@ export class World {
     this.ghostMat ||= new THREE.MeshBasicMaterial({ color: 0xffb547, transparent: true, opacity: 0.3, depthWrite: false });
     this.ghostLine ||= new THREE.LineBasicMaterial({ color: 0xffd08a, transparent: true, opacity: 0.65, depthWrite: false });
     const edges = [];
-    g.traverse((m) => { if (m.isMesh) { m.material = this.ghostMat; m.castShadow = false; m.raycast = () => {}; if (m.geometry.attributes.position.count < 4000) { const l = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, 35), this.ghostLine); l.raycast = () => {}; edges.push([m, l]); } } });
+    g.traverse((m) => { if (m.isMesh) { m.material = this.ghostMat; m.castShadow = false; m.raycast = () => {}; if (m.geometry.attributes.position.count < 4000) { const l = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, 60), this.ghostLine); l.raycast = () => {}; edges.push([m, l]); } } });
     for (const [m, l] of edges) m.add(l);
     this.ghost = g; e.group.add(g);
   }
@@ -355,7 +355,7 @@ export class World {
   updateLoose(dt) {
     if (!this.looseItems) return;
     for (const [t, g] of Object.entries(this.looseItems)) {
-      const h = g.children.find((c) => c.userData.halo); if (h) h.material.opacity = (t === this.markLoose ? 0.24 : 0.07) + (t === this.markLoose ? 0.08 : 0.03) * Math.sin(this.t * 2.4 + g.position.x * 3);
+      const h = g.children.find((c) => c.userData.halo); if (h) h.material.opacity = (t === this.markLoose ? 0.38 : 0.12) + (t === this.markLoose ? 0.08 : 0.03) * Math.sin(this.t * 2.4 + g.position.x * 3);
       if (g.userData.flying) {
         const f = (g.userData.flying += dt), k = Math.min(1, f / 0.42), tgt = this.camera.position.clone().addScaledVector(this.camera.getWorldDirection(new THREE.Vector3()), 0.3).add(new THREE.Vector3(0, -0.45, 0));
         g.position.lerp(tgt, k * 0.35); g.scale.setScalar(Math.max(0.001, 1 - 1.6 * k)); g.rotation.y += dt * 6;
@@ -592,8 +592,8 @@ export class World {
       cam.position.copy(tgt).addScaledVector(dir, dist); cam.lookAt(tgt); cam.near = dist / 50; cam.far = dist * 4; cam.updateProjectionMatrix(); cam.updateMatrixWorld();
       let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const q of corners) { const v = q.clone().project(cam); x0 = Math.min(x0, v.x); x1 = Math.max(x1, v.x); y0 = Math.min(y0, v.y); y1 = Math.max(y1, v.y); }
       ext = [x0, x1, y0, y1];
-      const sx = (x1 - x0) / 2 / 0.86, sy = (y1 - y0) / 2 / 0.82, sc = Math.max(sx, sy);
-      const want = new THREE.Vector3((x0 + x1) / 2, y0 + 0.8 * sc, 0.5);
+      const sx = (x1 - x0) / 2 / 0.84, sy = (y1 - y0) / 2 / 0.78, sc = Math.max(sx, sy);
+      const want = new THREE.Vector3((x0 + x1) / 2, y0 + 0.74 * sc, 0.5);
       const off = want.unproject(cam).sub(new THREE.Vector3(0, 0, 0.5).unproject(cam));
       tgt.add(off); dist *= 0.35 + 0.65 * sc;
     }
@@ -605,7 +605,7 @@ export class World {
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const si = ((H - 1 - y) * W + x) * 4, di = (y * W + x) * 4; for (let k = 0; k < 3; k++) { const v = px[si + k] / 255, t = v / (1 + v * 0.6); img.data[di + k] = Math.min(255, Math.pow(t * 1.15, 1 / 2.2) * 255); } img.data[di + 3] = px[si + 3]; }
     g.putImageData(img, 0, 0);
     // Weicher Bodenschatten unter dem Objekt (hinter die Modellpixel gelegt)
-    { const cx = W / 2, cy = H * 0.9, rx = Math.max(26, Math.min(W * 0.36, (ext[1] - ext[0]) / 2 * W / 2 * 0.95)), ry = rx * 0.2;
+    { const cx = W / 2, cy = H * 0.87, rx = Math.max(26, Math.min(W * 0.36, (ext[1] - ext[0]) / 2 * W / 2 * 0.95)), ry = rx * 0.2;
       g.save(); g.globalCompositeOperation = 'destination-over'; g.translate(cx, cy); g.scale(1, ry / rx); const sh = g.createRadialGradient(0, 0, 0, 0, 0, rx); sh.addColorStop(0, 'rgba(25,16,10,.55)'); sh.addColorStop(1, 'rgba(25,16,10,0)'); g.fillStyle = sh; g.beginPath(); g.arc(0, 0, rx, 0, 7); g.fill(); g.restore(); }
     const url = cv.toDataURL('image/png'); this.thumbs.set(type, url); return url;
   }
@@ -943,7 +943,7 @@ export class World {
         const f = this.focus, k = this.focusK * this.focusK * (3 - 2 * this.focusK);
         if (f) { if (!this.fc) this.fc = { pos: f.pos.clone(), q: f.q.clone(), light: f.light.clone() }; const a = 1 - Math.exp(-dt * 3.2); this.fc.pos.lerp(f.pos, a); this.fc.q.slerp(f.q, a); this.fc.light.lerp(f.light, a); }
         this.camera.position.lerp(this.fc.pos, k); this.camera.quaternion.slerp(this.fc.q, k);
-        if (this.focusLight) { this.focusLight.position.copy(this.fc.light); this.focusLight.intensity = 1.1 * k; }
+        if (this.focusLight) { this.focusLight.position.copy(this.fc.light); this.focusLight.intensity = 1.45 * k; }
         if (this.outline && !this.outline.pulsePeriod) this.outline.edgeStrength = 1.8 - 1.35 * k;
       } else { this.fc = null; if (this.focusLight) this.focusLight.intensity = 0; if (this.outline) this.outline.edgeStrength = 1.8; }
     }

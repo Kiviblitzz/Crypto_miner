@@ -1334,3 +1334,13 @@ body.showrun #st-wallet { visibility: hidden; }
 }
 body:has(#modal:not(.hidden)) #toasts { z-index: 35 !important; }
 .goal .cnt { font-variant-numeric: tabular-nums; }
+/* Runde 9 (GPT) */
+#splash { background: linear-gradient(90deg, rgba(14,10,8,.38) 0%, rgba(14,10,8,.2) 32%, rgba(14,10,8,0) 64%) !important; }
+.intro-phone .msg kbd { display: inline-grid; place-items: center; min-width: 22px; height: 22px; border-radius: 6px; background: var(--acc); color: #3a2300; font: 700 13px var(--font-fun); box-shadow: 0 2px 0 #a66313; border: 0; padding: 0 5px; vertical-align: 1px; }
+#goals .goal .bag i { width: 28px !important; height: 28px !important; border-radius: 8px !important; }
+#goals .goal .bag i svg { width: 18px; height: 18px; }
+.pcb-step.locked { opacity: .72 !important; }
+.pcb .btn.glow { animation: btnGlow2 1.4s ease-in-out 3 !important; }
+.skills .sk { min-height: 96px !important; padding: 12px !important; }
+#build .item .thumb { height: 144px !important; padding: 10px !important; }
+.tiles .acts .btn.sellb.confirm { background: linear-gradient(180deg, #ff9f6b, #f07c4a) !important; color: #3a1600 !important; box-shadow: 0 4px 0 #a6481f !important; }

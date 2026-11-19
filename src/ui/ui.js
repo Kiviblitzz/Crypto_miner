@@ -481,7 +481,7 @@ export class UI {
       on.querySelector('button').onclick = () => this.powerOnSequence(o);
       sec.append(on);
     } else {
-      const bp = this.w.bootPending; const done = h(`<div class="sec start two"><button class="btn big ${bp ? 'primary glow' : ''}">Zum Monitor</button><button class="btn big ${bp ? '' : 'primary'}">Weiter</button></div>`); const [bm, bw] = done.querySelectorAll('button'); bm.onclick = () => { bm.classList.remove('glow', 'primary'); bw.classList.add('primary'); const mon = this.w.focusUid == null; if (mon) { this.w.focusObject?.(o.uid); bm.textContent = 'Zum Monitor'; } else { this.w.focusMonitor?.(); bm.textContent = 'Zum PC'; } }; bw.onclick = () => this.resume(); sec.append(done);
+      const bp = this.w.bootPending; const done = h(`<div class="sec start two"><button class="btn big ${bp ? 'primary glow' : ''}">Zum Monitor</button><button class="btn big ${bp ? '' : 'primary'}">Zurück ins Zimmer</button></div>`); const [bm, bw] = done.querySelectorAll('button'); bm.onclick = () => { bm.classList.remove('glow', 'primary'); bw.classList.add('primary'); const mon = this.w.focusUid == null; if (mon) { this.w.focusObject?.(o.uid); bm.textContent = 'Zum Monitor'; } else { this.w.focusMonitor?.(); bm.textContent = 'Zum PC'; } }; bw.onclick = () => this.resume(); sec.append(done);
     }
     return sec;
   }
@@ -705,9 +705,8 @@ export class UI {
     const txt = m0 ? m0.text : MESSAGES.find((m) => m.id === 'm0').text;
     const body = h(`<div class="intro-phone"><div class="ip-date">${fmtDate(s.day)}</div>
       <div class="phone"><div class="ph-top"><div class="av"><svg viewBox="0 0 40 40" width="40" height="40"><circle cx="20" cy="20" r="20" fill="#ffcf8a"/><path d="M6 40c1-8 7-12 14-12s13 4 14 12z" fill="#e2574c"/><circle cx="20" cy="18" r="8.5" fill="#e7b48f"/><path d="M11 17c0-7 5-10 10-10 6 0 9 4 8 9-3-3-7-4-11-3-3 1-5 2-7 4z" fill="#2f241e"/><circle cx="17" cy="19" r="1.1" fill="#2f241e"/><circle cx="23" cy="19" r="1.1" fill="#2f241e"/><path d="M17 22.5q3 2.2 6 0" stroke="#8a4a3a" stroke-width="1.3" fill="none" stroke-linecap="round"/></svg></div><div><b>Deniz</b><span class="on">online</span></div></div>
-        <div class="msg f-Deniz">${esc(txt)}</div>
-        <div class="msg f-Deniz link"><div class="pc-line"><span class="pc-dot">₿</span><span>Bitcoin</span><b>${fmtUSD(p)}</b><canvas class="spark"></canvas></div></div>
-        <div class="msg f-Deniz">Deine alten PC-Teile liegen doch noch im Zimmer. Schau eins an und drück E.</div>
+        <div class="msg f-Deniz">${esc(txt)}<div class="pc-line"><span class="pc-dot">₿</span><span>Bitcoin</span><b>${fmtUSD(p)}</b><canvas class="spark"></canvas></div></div>
+        <div class="msg f-Deniz">Deine alten PC-Teile liegen doch noch im Zimmer. Schau eins an und drück <kbd>E</kbd>.</div>
         <div class="row ip-act"><button class="btn primary big">Los geht’s</button></div>
       </div></div>`);
     if (m0) m0.read = true;
@@ -764,7 +763,7 @@ export class UI {
     const r1 = hold.querySelector('.acts');
     const fee = g.s.skills ? g.tradeFee() : 0.005, net = (f) => (w.ex + pend) * f * p * (1 - fee);
     hold.querySelector('.info').append(h(`<div class="fee">Gebühr ${(fee * 100).toLocaleString('de-DE')} % · Handel senkt sie</div>`));
-    for (const f of [0.25, 0.5, 1]) { const b = h(`<button class="btn sellb ${f === 1 ? 'primary' : ''}"><b>${f === 1 ? 'Alles verkaufen' : f * 100 + ' % verkaufen'}</b><small>${net(f) > 0.004 ? '+' + fmtUSD(net(f)) : 'nichts da'}</small></button>`); b.disabled = w.ex + pend <= 0; b.onclick = () => { if (pend) g.creditPending(c.id, this.pendingBtc()); const u = g.sell(c.id, f); this.audio?.cash(); this.flashCash(u); this.toast(`Verkauft für ${fmtUSD(u)}`, 'good', 2500); this.market(); }; r1.append(b); }
+    for (const f of [0.25, 0.5, 1]) { const b = h(`<button class="btn sellb ${f === 1 ? 'primary' : ''}"><b>${f === 1 ? 'Alles verkaufen' : f * 100 + ' % verkaufen'}</b><small>${net(f) > 0.004 ? '+' + fmtUSD(net(f)) : 'nichts da'}</small></button>`); b.disabled = w.ex + pend <= 0; b.onclick = () => { if (f === 1 && !b.classList.contains('confirm')) { b.classList.add('confirm'); b.innerHTML = `<b>Wirklich alles?</b><small>${fmtCoin(w.ex + pend)} BTC → +${fmtUSD(net(1))}</small>`; clearTimeout(this.sellArm); this.sellArm = setTimeout(() => this.market(), 4000); return; } clearTimeout(this.sellArm); if (pend) g.creditPending(c.id, this.pendingBtc()); const u = g.sell(c.id, f); this.audio?.cash(); this.flashCash(u); this.toast(`Verkauft für ${fmtUSD(u)}`, 'good', 2500); this.market(); }; r1.append(b); }
     if (g.has('cold')) { const ct = tile('Cold-Wallet', w.cold, 'cold'); const tc = h(`<button class="btn small">${w.cold > 0 && w.ex === 0 ? 'Auf Börse holen' : 'Einlagern'}</button>`); tc.onclick = () => { g.transfer(c.id, !(w.cold > 0 && w.ex === 0)); this.market(); }; ct.querySelector('.acts').append(tc); tiles.append(ct); }
     det.append(tiles);
     const r2 = h(`<div class="row" style="align-items:center"><span style="font-size:13px">Kaufen für</span><input type="number" min="0" step="100" value="${Math.max(0, Math.round(Math.min(s.cash, 1000)))}"/><span>$</span><button class="btn small primary">Kaufen</button></div>`);
@@ -1009,7 +1008,7 @@ export class UI {
   }
   skills() {
     const g = this.g, s = g.s; if (!s.skills) return;
-    const body = h(`<div class="skills"><h2>Fähigkeiten</h2><p class="pk-hint">Was du tust, lernst du. Jede Stufe macht dich besser.</p><div class="sk-list"></div></div>`);
+    const body = h(`<div class="skills"><h2>Fähigkeiten</h2><div class="sk-list"></div></div>`);
     const list = body.querySelector('.sk-list');
     for (const k of ['hw', 'mining', 'trade']) {
       const x = s.skills[k] || 0, lv = g.skillLv(k), lo = SKILL_XP[lv - 1], hi = SKILL_XP[lv], pc = hi ? Math.round(((x - lo) / (hi - lo)) * 100) : 100;
