@@ -43,8 +43,8 @@ const memo = (name, f) => (g) => {
 const has = (s, id) => s.unlocked.includes(id);
 const top = (s) => s.unlocked.reduce((a, id) => (FACILITY[id].tier > FACILITY[a].tier ? id : a), s.unlocked[0]);
 const tier = (s) => FACILITY[top(s)].tier;
-const NAME = { kinder: 'Kinderzimmer', keller: 'Hobbykeller', werkstatt: 'Werkstatt', halle: 'Lagerhalle', rz: 'Rechenzentrum', fjord: 'Fjordhalle' };
-const GEN = { kinder: 'n', keller: 'm', werkstatt: 'f', halle: 'f', rz: 'n', fjord: 'f' };
+const NAME = { kinder: 'Wohnung', keller: 'Hobbykeller', werkstatt: 'Werkstatt', halle: 'Lagerhalle', rz: 'Rechenzentrum', fjord: 'Fjordhalle' };
+const GEN = { kinder: 'f', keller: 'm', werkstatt: 'f', halle: 'f', rz: 'n', fjord: 'f' };
 const fname = (id) => NAME[id] || FACILITY[id].name;
 // Grammatik: poss('keller', 'dat') → „deinem Hobbykeller“, poss('halle', 'nom', 'Ihr') → „Ihre Lagerhalle“; inn('werkstatt') → „in der Werkstatt“
 const poss = (id, k, base = 'dein') => `${base}${{ nom: { n: '', m: '', f: 'e' }, akk: { n: '', m: 'en', f: 'e' }, dat: { n: 'em', m: 'em', f: 'er' } }[k][GEN[id] || 'f']} ${fname(id)}`;
@@ -66,7 +66,7 @@ function sellCoins(g, c, frac) {
   const v = n * p * (1 - g.tradeFee()); s.cash += v; s.stats.sold += v; if (s.skills) g.addXp('trade', 15 + Math.min(60, v / 10)); return v;
 }
 const sellDo = (c, frac, logText) => (g) => { const v = sellCoins(g, c, frac); return { log: `${logText} (${usd(v)})` }; };
-// GPU-Rigs (ohne den allerersten PC im Kinderzimmer)
+// GPU-Rigs (ohne den allerersten PC in der Wohnung)
 const rigsWithGpu = (s, facs = s.unlocked) => facs.filter((id) => has(s, id)).flatMap((id) => s.fac[id].objects.filter((o) => o.uid !== 1 && o.parts?.gpus?.length));
 const gpuCount = (s, facs) => rigsWithGpu(s, facs).reduce((n, o) => n + o.parts.gpus.length, 0);
 const rigValue = (g, facs) => rigsWithGpu(g.s, facs).reduce((a, o) => a + g.objectValue(o) * 2, 0); // voller Zeitwert statt halbem Ankaufspreis
@@ -150,7 +150,7 @@ const closeCh2 = (g, s) => { for (const go of CHAPTERS[1].goals) s.goals[go.id] 
 export const REL_PERK = {
   papa: 'Papa vertraut dir: Die Werkstatt kostet keine Miete mehr.',
   papaLost: 'Papa vertraut dir: Er repariert mit – Reparaturen 20 % günstiger.', // nachdem die Bank den Laden geschlossen hat
-  mama: 'Mama hilft mit: Im Kinderzimmer kühlt es 20 % besser.',
+  mama: 'Mama bringt dir ihren alten Standventilator: In deiner Wohnung kühlt es 20\u00a0% besser.',
   opa: 'Opa packt mit an: Stromausbau in Keller und Werkstatt 25 % günstiger.',
   deniz: 'Deniz ist voll dabei: 10 % weniger Ausfälle.',
 };
@@ -181,8 +181,8 @@ const dip = (key, days, min, sellFrac, why) => [
 ];
 
 const XMAS = {
-  2010: 'Dein erstes Weihnachten als Miner. Mama wundert sich, warum dein Zimmer im Dezember 26 Grad hat.',
-  2011: 'Papa hat den Baum in den Keller gestellt – „da ist es ja warm“.',
+  2010: 'Dein erstes Weihnachten als Miner – und in der eigenen Bude. Mama war Plätzchen vorbeibringen und wundert sich, warum es bei dir im Dezember 26 Grad hat.',
+  2011: 'Papa wollte den Baum in deinen Keller stellen – „da ist es ja warm“. Herr Krause hat es verboten.',
   2012: 'Das erste Halving ist durch. Opa erzählt zum dritten Mal von 1962, Deniz isst die Plätzchen.',
   2013: 'Bitcoin hat die 1.000 $ geknackt. Opa will wissen, ob man davon auch Geschenke kaufen kann.',
   2014: 'GoxBank ist pleite, die Rigs brummen. Papa hat trotzdem die beste Laune seit Jahren.',
@@ -197,14 +197,14 @@ const XMAS = {
   2023: 'Mama ist in Rente und hat Plätzchen für die ganze Firma gebacken.',
   2024: 'Bitcoin über 100.000 $. Opa hat den Zeitungsartikel eingerahmt.',
   2025: 'Das ganze Haus riecht nach Zimt. Deniz bringt seine Familie mit.',
-  2026: 'Sechzehn Jahre seit dem ersten PC im Kinderzimmer. Der alte Kasten steht immer noch da.',
+  2026: 'Sechzehn Jahre seit dem ersten PC in der feuchten Bude im Hinterhaus. Der alte Kasten steht immer noch da.',
 };
 
 // Kontakt kennenlernen: Nummer speichern (Standard, auch ohne Antwort) oder ablehnen – dann später im Handy unter Kontakte anrufen
 const pct = (f) => `${Math.round(f * 100)}\u00a0%`;
 const contactChoices = (id, yes, no, noReply) => [
   { label: yes, hint: `${CONTACT[id].offer} im Katalog (B) · ${pct(FEE_TIERS[0].fee)} Montage, Stammkunden zahlen weniger`, fx: { do: (g) => g.meetContact(id, true), log: `${CONTACT[id].name} (${CONTACT[id].biz}) kennengelernt – liefert fertig montiert` }, reply: `<b>${CONTACT[id].name}:</b> ${CONTACT[id].lines.hello}` },
-  { label: no, hint: `Selbst bauen geht immer – ${CONTACT[id].name} kannst du später im Handy (P) unter Kontakte anrufen`, fx: { do: (g) => g.meetContact(id, false), log: `${CONTACT[id].name}s Angebot abgelehnt – lieber selbst gebaut` }, reply: noReply },
+  { label: no, hint: `Selbst bauen geht immer – ${CONTACT[id].name} kannst du später im Handy (H) unter Kontakte anrufen`, fx: { do: (g) => g.meetContact(id, false), log: `${CONTACT[id].name}s Angebot abgelehnt – lieber selbst gebaut` }, reply: noReply },
 ];
 
 export const EVENTS = [
@@ -247,7 +247,7 @@ export const EVENTS = [
     id: 'backup', from: 'Deniz', title: 'Hast du ein Backup?', when: { date: '2011-01-25', window: 30 }, cond: (s) => btc(s) > 1,
     text: (s) => `„Bei einem aus dem Forum ist die Festplatte abgeraucht – mit 3.000 Bitcoin drauf. Weg. Für immer. Deine wallet.dat liegt auch nur auf deinem alten PC, oder?“ Darin: <b>${nf(0).format(s.wallet.BTC.ex)} BTC</b>.`,
     choices: [
-      { label: 'USB-Stick kaufen und sichern', cost: 15, hint: 'Die Wallet ist doppelt gesichert', fx: { flag: 'backup', log: 'Januar 2011: Wallet auf einem USB-Stick gesichert' }, reply: '<b>Deniz:</b> Und jetzt den Stick NICHT in die Hosentasche. Mama wäscht alles.' },
+      { label: 'USB-Stick kaufen und sichern', cost: 15, hint: 'Die Wallet ist doppelt gesichert', fx: { flag: 'backup', log: 'Januar 2011: Wallet auf einem USB-Stick gesichert' }, reply: '<b>Deniz:</b> Und jetzt den Stick NICHT in die Hosentasche. Du bringst deine Wäsche doch immer noch zu Mama.' },
       { label: 'Ausdrucken und in den Schuhkarton', hint: 'Kostet nichts · ein Abend Arbeit: die Rechner stehen 2 Tage', fx: { flag: 'backup', mod: ['kinder', 'keller', 'werkstatt'].map((fac) => ({ key: 'hash', mult: 0, days: 2, fac })), log: 'Januar 2011: Wallet auf Papier gesichert' }, reply: '<b>Deniz:</b> Ein Schuhkarton voller Zahlen. Opa wäre stolz.' },
       { label: 'Mach ich später', hint: 'Was soll schon passieren?', fx: { log: 'Januar 2011: kein Backup gemacht' }, reply: '<b>Deniz:</b> „Später“ heißt bei dir „nie“. Ich sag’s nur.' },
     ],
@@ -316,20 +316,20 @@ export const EVENTS = [
     fallback: 3,
   },
   {
-    id: 'noise', from: 'Mama', title: 'Frau Kowalczyk von nebenan', when: { from: '2011-03-01', to: '2013-12-31', chance: 0.15 }, cond: (s, h, g) => s.unlocked.includes('keller') && kellerKw(g) > 1.5,
-    text: '„Die Nachbarin war da. Aus dem Keller brummt es Tag und Nacht, sagt sie, ihr Fernseher flimmert. Kannst du was machen?“',
+    id: 'noise', from: 'Mama', title: 'Frau Kowalczyk aus dem Vorderhaus', when: { from: '2011-03-01', to: '2013-12-31', chance: 0.15 }, cond: (s, h, g) => s.unlocked.includes('keller') && kellerKw(g) > 1.5,
+    text: '„Frau Kowalczyk aus deinem Vorderhaus hat mich beim Bäcker abgefangen. Aus deinem Keller brummt es Tag und Nacht, sagt sie, ihr Fernseher flimmert. Kannst du was machen? Ich hab mich ganz schön geschämt.“',
     choices: [
-      { label: 'Dämmmatten kaufen', cost: 250, hint: 'Ruhe im Haus · Mama +1', fx: { rel: { mama: 1 }, log: 'Dämmmatten im Keller verlegt' }, reply: '<b>Mama:</b> Danke, Schatz. Sie hat sogar gewunken.' },
+      { label: 'Dämmmatten kaufen', cost: 250, hint: 'Ruhe im Haus · Mama +1', fx: { rel: { mama: 1 }, log: 'Dämmmatten im Keller verlegt' }, reply: '<b>Mama:</b> Danke, Schatz. Beim Bäcker hat sie mir heute sogar zugewunken.' },
       { label: 'Ihren Fernseher reparieren', hint: 'Papa hilft – kostet nichts · Papa +1, Mama +1', fx: { rel: { papa: 1, mama: 1 }, xp: { hw: 15 }, log: 'Frau Kowalczyks Fernseher repariert' }, reply: '<b>Papa:</b> Kondensator. Wie früher. Hat Spaß gemacht.' },
       { label: 'Keller nachts drosseln', hint: '−25 % Hashrate im Keller für 60 Tage', fx: { mod: [{ key: 'hash', mult: 0.75, days: 60, fac: 'keller' }] }, reply: '<b>Mama:</b> Na gut. Ich sag ihr Bescheid.' },
     ],
   },
   {
     id: 'storm', from: 'Opa Heinz', title: 'Gewitter über Lindental', when: { from: '2011-05-01', to: '2016-09-30', chance: 0.04, repeat: 120 }, cond: (s) => { const m = month(s); return m >= 4 && m <= 8 && s.unlocked.includes('keller'); },
-    text: '„Blitz in den Trafo an der Dorfstraße. Bei euch ist der Strom weg. Ich kann dir ein Notstromaggregat leihen, das säuft aber Diesel.“',
+    text: '„Blitz in den Trafo an der Dorfstraße. Bei dir im Haus ist der Strom weg. Ich kann dir ein Notstromaggregat leihen, das säuft aber Diesel.“',
     choices: [
       { label: 'Aggregat leihen', cost: (g) => Math.round(Math.max(40, rev(g) * 0.4)), hint: 'Diesel für einen Tag · Opa +1', fx: { rel: { opa: 1 } }, reply: '<b>Opa:</b> Und nicht drinnen laufen lassen, Junge!' },
-      { label: 'Einen Tag abwarten', hint: 'Kinderzimmer, Keller und Werkstatt stehen 2 Tage', fx: { mod: [{ key: 'hash', mult: 0, days: 2, fac: 'keller' }, { key: 'hash', mult: 0, days: 2, fac: 'werkstatt' }, { key: 'hash', mult: 0, days: 2, fac: 'kinder' }] }, reply: '<b>Opa:</b> Dann spielen wir halt Skat.' },
+      { label: 'Einen Tag abwarten', hint: 'Wohnung, Keller und Werkstatt stehen 2 Tage', fx: { mod: [{ key: 'hash', mult: 0, days: 2, fac: 'keller' }, { key: 'hash', mult: 0, days: 2, fac: 'werkstatt' }, { key: 'hash', mult: 0, days: 2, fac: 'kinder' }] }, reply: '<b>Opa:</b> Dann spielen wir halt Skat.' },
     ],
   },
 
@@ -346,12 +346,12 @@ export const EVENTS = [
     fallback: 1,
   },
   {
-    id: 'abi', from: 'Mama', title: 'Abiturprüfungen', when: { date: '2012-03-07', window: 14 },
-    text: '„In vier Wochen sind deine Prüfungen. Ich sehe dich nur noch zwischen deinen Kisten. Wie wär’s mit Lernen?“',
+    id: 'abi', from: 'Mama', title: 'Die Abschlussprüfung', when: { date: '2012-03-07', window: 14 }, // Flag-Name aus alten Ständen
+    text: '„In vier Wochen ist deine Abschlussprüfung. Drei Jahre Ausbildung, Schatz! Wenn ich anrufe, höre ich nur Lüfter. Wie wär’s mit Lernen?“',
     choices: [
-      { label: 'Lernen – die Rigs laufen allein', hint: 'Mama +2 · 45 Tage 30 % mehr Ausfälle (keiner schaut nach)', fx: { rel: { mama: 2 }, mod: [{ key: 'fail', mult: 1.3, days: 45 }], flag: 'abi', log: 'Frühjahr 2012: fürs Abitur gelernt' }, reply: '<b>Mama:</b> Nervennahrung steht vor deiner Tür. Opa passt auf die Sicherung auf.' },
-      { label: 'Mit Deniz neben den Rigs lernen', hint: 'Mama +1, Deniz +1', fx: { rel: { mama: 1, deniz: 1 }, flag: 'abi', log: 'Frühjahr 2012: mit Deniz im Keller gelernt' }, reply: '<b>Mama:</b> Ich höre euch über Hashraten reden statt über Goethe. Na ja.' },
-      { label: 'Abi ist überbewertet', hint: 'Mama −2', fx: { rel: { mama: -2 }, log: 'Frühjahr 2012: lieber geschürft als gelernt' }, reply: '<b>Mama:</b> Darüber reden wir noch, junger Mann.' },
+      { label: 'Lernen – die Rigs laufen allein', hint: 'Mama +2 · 45 Tage 30 % mehr Ausfälle (keiner schaut nach)', fx: { rel: { mama: 2 }, mod: [{ key: 'fail', mult: 1.3, days: 45 }], flag: 'abi', log: 'Frühjahr 2012: für die Abschlussprüfung gelernt' }, reply: '<b>Mama:</b> Nervennahrung steht vor deiner Tür. Opa passt auf die Sicherung auf.' },
+      { label: 'Mit Deniz neben den Rigs lernen', hint: 'Mama +1, Deniz +1', fx: { rel: { mama: 1, deniz: 1 }, flag: 'abi', log: 'Frühjahr 2012: mit Deniz im Keller gelernt' }, reply: '<b>Mama:</b> Ich höre euch über Hashraten reden statt über Prüfungsfragen. Na ja.' },
+      { label: 'Prüfung? Läuft schon irgendwie', hint: 'Mama −2', fx: { rel: { mama: -2 }, log: 'Frühjahr 2012: lieber geschürft als gelernt' }, reply: '<b>Mama:</b> Darüber reden wir noch, junger Mann.' },
     ],
     fallback: 1,
   },
@@ -1024,7 +1024,7 @@ export const EVENTS = [
   },
   {
     id: 'denizopen', from: 'Deniz', title: 'Open Source?', when: { date: '2026-10-10', window: 14 },
-    text: (s, h, g) => `„Unsere Firmware ist die beste der Branche. Ich will sie veröffentlichen – für alle kleinen Miner, die so anfangen wie wir im Kinderzimmer. KRAL Compute würde dafür allerdings <b>${usd(osOffer(g))}</b> zahlen.“${s.flags.schule ? ' „Zwei aus deiner Schul-AG von damals arbeiten übrigens schon mit dran.“' : ''}`,
+    text: (s, h, g) => `„Unsere Firmware ist die beste der Branche. Ich will sie veröffentlichen – für alle kleinen Miner, die so anfangen wie wir in deiner feuchten Bude. KRAL Compute würde dafür allerdings <b>${usd(osOffer(g))}</b> zahlen.“${s.flags.schule ? ' „Zwei aus deiner Schul-AG von damals arbeiten übrigens schon mit dran.“' : ''}`,
     choices: [
       { label: 'Open Source für alle', hint: 'Deniz +2 · die Community findet Fehler: −10 % Ausfälle', fx: { rel: { deniz: 2 }, mod: [{ key: 'fail', mult: 0.9 }], flag: 'openSource', log: 'Oktober 2026: Hashwerk-Firmware als Open Source veröffentlicht' }, reply: '<b>Deniz:</b> 4.000 Sterne am ersten Tag. Ein Junge aus Chile hat sich bedankt. Mit Foto vom Kinderzimmer.' },
       { label: 'An KRAL Compute verkaufen', hint: (g) => `+${usd(osOffer(g))} · Deniz −2 · MONOLITH +5 %`, fx: (g) => ({ cash: osOffer(g), rel: { deniz: -2 }, mod: [{ key: 'monolith', mult: 1.05 }], log: `Oktober 2026: Firmware an KRAL Compute verkauft (${usd(osOffer(g))})` }), reply: '<b>Deniz:</b> Okay. Es ist dein Laden. Ich geh eine Runde spazieren.' },

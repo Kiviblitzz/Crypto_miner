@@ -24,7 +24,13 @@ world.onPlace = (type, x, z, rot, template) => {
   const fac = game.s.current;
   const def = PLACEABLE[type];
   if (!game.placeableAllowed(def, fac)) { ui.toast('Das passt hier nicht hin.', 'bad'); return null; }
-  if (!game.slotOk(fac, def)) { ui.toast('Kein Platz mehr – Zeit für einen größeren Standort.', 'bad'); world.cancelPlacement(); return null; }
+  if (!game.slotOk(fac, def)) { ui.toast(template?.stock ? 'Hier ist kein Platz mehr – stell es an einem anderen Standort auf.' : 'Kein Platz mehr – Zeit für einen größeren Standort.', 'bad'); world.cancelPlacement(); return null; }
+  if (template?.stock) { // Ausgepacktes aus dem Bestand aufstellen: kostet nichts mehr
+    const o = game.placeStock(template.stock, fac, x, z, rot);
+    if (!o) { ui.toast('Davon ist nichts mehr ausgepackt.', 'info'); world.cancelPlacement(); return null; }
+    audio.install?.(); return o;
+  }
+  if (game.parcelMode()) { ui.toast('Im Shop wird bestellt – geliefert wird morgen früh vor deine Wohnungstür.', 'info'); world.cancelPlacement(); return null; } // Paket-Modus: Kaufen geht nur über Bestellungen
   if (template?.build) { // Build aus Katalog/Konfigurator: fertig montiert oder als Bausatz
     const o = game.placeBuild(template.build, fac, x, z, rot, !!template.ready);
     if (!o) { const blk = game.buildBlocked(template.build), lock = template.ready && !game.readyOk(template.build.type); ui.toast(blk ? `${blk} gibt es nicht mehr zu kaufen.` : lock ? 'Fertig bestückt geht erst über einen Kontakt – als Bausatz geht’s sofort.' : 'Nicht genug Geld.', 'bad'); if (lock) world.cancelPlacement(); return null; }
@@ -42,7 +48,7 @@ const splash = document.getElementById('splash');
 const hasSave = game.hasSave();
 if (hasSave) {
   // Hintergrund im Titel: das eigene Zimmer aus dem Spielstand
-  let loaded = false; try { loaded = game.load(); if (loaded) { world.syncObjects(); world.syncLoose(); } } catch (e) { /* neuer Stand bleibt */ }
+  let loaded = false; try { loaded = game.load(); if (loaded) { world.syncObjects(); world.syncLoose(); world.syncParcels?.(); } } catch (e) { /* neuer Stand bleibt */ }
   const b = document.getElementById('btn-continue'); if (loaded) b.classList.remove('hidden'); b.classList.add('primary'); document.getElementById('btn-new').classList.remove('primary');
   const info = game.saveInfo(); if (info) b.innerHTML = `<span class="bi"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span><span class="bt">Weiterspielen<small>${fmtDate(info.day)} · ${fmtUSD(info.cash)}</small></span>`;
 }
@@ -71,8 +77,9 @@ btnNew.onclick = () => {
   pickDifficulty((diff) => {
   game.newGame(diff); ui.resetSession(); splash.classList.add('hidden'); splashOrbit = false;
   world.setMode('ui');
-  ui.switchSite('kinder'); world.syncLoose(); ui.speedBar(); ui.ticker();
-  ui.introPhone(() => { ui.setSpeed(1); ui.keysHint(); ui.tutorial(); });
+  game.startTutor(); // Anlernen: alles kommt nach und nach – zuerst das Handy
+  ui.switchSite('kinder'); world.syncLoose(); world.syncParcels?.(); ui.speedBar(); ui.ticker(); ui.dock(); ui.keysHint();
+  ui.wakeUp(); // aufwachen, dann vibriert das Handy
   });
 };
 document.getElementById('btn-continue').onclick = () => {
@@ -90,8 +97,9 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // Tastatur (Hotkeys)
-const HOT = { j: () => ui.skills(), g: () => ui.goalActionKey(), b: () => ui.toggleBuild(), m: () => ui.market(), p: () => ui.phone(), c: () => ui.company(), t: () => ui.techs(), l: () => ui.ranking(), k: () => ui.toggleMap() };
-window.addEventListener('keydown', (e) => {
+// H = Handy (P geht weiter), I = Wärmebild
+const HOT = { j: () => ui.skills(), g: () => ui.goalActionKey(), b: () => ui.toggleBuild(), m: () => ui.market(), h: () => ui.phone(), p: () => ui.phone(), i: () => ui.toggleHeat(), c: () => ui.company(), t: () => ui.techs(), l: () => ui.ranking(), k: () => ui.toggleMap() };
+function onKey(e) {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || !splash.classList.contains('hidden')) return;
   const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
   if (e.code === 'Space') { e.preventDefault(); ui.setSpeed(game.s.speed ? 0 : (ui.lastSpeed || 1)); return; }
@@ -106,9 +114,9 @@ window.addEventListener('keydown', (e) => {
   if (HOT[k] && (world.mode === 'play' || world.mode === 'ui' || ui.paused || world.mode === 'map')) {
     if (world.mode === 'map' && k !== 'k') return;
     if (k === 'b' && world.mode === 'ui' && document.body.classList.contains('show-build')) { ui.resume(); return; }
-    if (k !== 'b' && k !== 'k' && ui.modalKind && ui.modalKind === { m: 'market', p: 'phone', c: 'company', t: 'techs', l: 'ranking', j: 'skills' }[k]) { ui.resume(); return; }
+    if (k !== 'b' && k !== 'k' && ui.modalKind && ui.modalKind === { m: 'market', p: 'phone', h: 'phone', c: 'company', t: 'techs', l: 'ranking', j: 'skills' }[k]) { ui.resume(); return; }
     if (ui.stickyModal()) return; // Story/Finale/Rückblick nicht wegklicken
-    const NEED = { b: 'build', m: 'market', p: 'phone', c: 'company', t: 'techs', l: 'ranking', k: 'map', j: 'skills' };
+    const NEED = { b: 'build', m: 'market', p: 'phone', h: 'phone', i: 'heat', c: 'company', t: 'techs', l: 'ranking', k: 'map', j: 'skills' };
     if (NEED[k] && !game.has(NEED[k])) { ui.toast('Noch nicht freigeschaltet.', 'info', 1800); return; }
     HOT[k](); return;
   }
@@ -118,7 +126,10 @@ window.addEventListener('keydown', (e) => {
     if (ui.delArmed === o.uid) { const v = game.objectValue(o); game.removeObject(o.uid); ui.resume(); ui.delArmed = null; ui.toast(`Verkauft für ${v.toLocaleString('de-DE')} $`, 'good', 2500); }
     else { ui.delArmed = o.uid; ui.toast('Nochmal Entf drücken, um das Objekt zu verkaufen.', 'info', 3000); setTimeout(() => { if (ui.delArmed === o.uid) ui.delArmed = null; }, 3000); }
   }
-});
+}
+window.addEventListener('keydown', onKey);
+// H gehört jetzt dem Handy: vor der Welt abfangen (die nahm H früher fürs Wärmebild, das jetzt auf I liegt)
+window.addEventListener('keydown', (e) => { if (e.key !== 'h' && e.key !== 'H') return; if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return; e.stopImmediatePropagation(); onKey(e); }, true);
 
 // Spielschleife
 let last = performance.now();
@@ -127,7 +138,7 @@ function loop(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   const s = game.s;
   if (splashOrbit) {
-    // Langsamer Blick durchs Kinderzimmer hinter dem Titelbild
+    // Langsamer Blick durch die erste Wohnung hinter dem Titelbild
     const t = now / 1000 * 0.12;
     world.camera.position.set(3.3, 1.6, 3.05);
     world.controls.target.set(2.35 + Math.sin(t) * 0.4, 1.0 + Math.sin(t * 0.7) * 0.1, 0.4 + Math.cos(t) * 0.25);

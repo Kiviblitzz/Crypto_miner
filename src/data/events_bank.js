@@ -17,7 +17,7 @@ export const BANK_EVENTS = [
       },
       {
         label: 'Notverkauf: älteste Geräte abgeben',
-        hint: (g) => { const v = g.bankSalePreview(); return v > 0 ? `Bringt etwa ${usd(v)} · das Kinderzimmer bleibt` : 'Es gibt nichts mehr zu verkaufen'; },
+        hint: (g) => { const v = g.bankSalePreview(); return v > 0 ? `Bringt etwa ${usd(v)} · die Wohnung bleibt` : 'Es gibt nichts mehr zu verkaufen'; },
         need: (s, h, g) => g.bankSalePreview() > 0,
         fx: (g) => { const t = g.bankAuto(); return { log: `Bankgespräch: ${t}`, autoText: t }; },
         reply: '<b>Herr Albers:</b> Schade um die Maschinen. Aber so bleibt das Konto sauber.',

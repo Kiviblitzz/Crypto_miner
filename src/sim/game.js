@@ -4,7 +4,7 @@ import { PLACEABLE, PART, PLACEABLES, PARTS, GPUS } from '../data/hardware.js';
 import { FACILITIES, FACILITY, CHAPTERS, MESSAGES, NEWS, START_DAY, TECHS } from '../data/world.js';
 import { EVENTS, EVENT, REL_PERK } from '../data/events.js';
 import { ACHIEVEMENTS } from '../data/achievements.js';
-import { UPGRADES, DIFFICULTY, FULL_TALK } from '../data/world.js';
+import { UPGRADES, DIFFICULTY, FULL_TALK, FEATURES } from '../data/world.js';
 import { ROLES, TRAITS, FIRST, LAST } from '../data/staff.js';
 import { BANK_EVENTS } from '../data/events_bank.js';
 import { CONTACT, CONTACTS, READY_BY, FEE_TIERS } from '../data/contacts.js';
@@ -16,9 +16,10 @@ export const TRADE_FEES = [0.04, 0.035, 0.03, 0.025, 0.02, 0.016, 0.013, 0.01, 0
 for (const e of BANK_EVENTS) if (!EVENT[e.id]) { EVENTS.push(e); EVENT[e.id] = e; } // Bankgespräch (nur über Game.dispoDay)
 
 const LAST_DATA_DAY = BTC_PRICE.lastDay;
-const FREE_POWER_END = toDay('2011-03-01'); // ab dann kostet der Strom im Kinderzimmer, auch ohne Papas Rechnung
+const FREE_POWER_END = toDay('2011-03-01'); // bis dahin steckt der Strom der Wohnung in der Pauschale der Warmmiete – dann sieht Herr Krause die Abrechnung
 export const SAVE_KEY = 'hashwerk-save-v1';
 const DEFAULT_AUTOSELL = 0.8;
+const LESSON_DAYS = 5; // Anlernen: so viele Spieltage hat eine Lektion, ehe die nächste kommt
 export const BUILD_FEE = 0.1; // Montageaufschlag für fertig montierte PCs/Rigs (Neukunde; Stammkunden zahlen weniger: FEE_TIERS in contacts.js)
 
 const RELEASES = [...PLACEABLES, ...PARTS].filter((it) => it.releaseDay > START_DAY && (it.kind === 'device' || it.kind === 'rig' || it.type));
@@ -56,7 +57,7 @@ export class Game {
     this.registerFutureHW([]);
     for (const c of COINS) s.autoSell[c.id] = 0;
     this.initProgress(s);
-    const m0 = MESSAGES.find((m) => m.id === 'm0'); if (m0) s.messages.push({ id: 'm0', day: START_DAY, from: m0.from, text: m0.text, read: true }); // Start-Nachricht (im Intro gezeigt)
+    for (const id of ['m0', 'm0b']) { const m = MESSAGES.find((x) => x.id === id); if (m) s.messages.push({ id, day: START_DAY, from: m.from, text: m.text, read: true }); } // Start-Nachrichten (Anlernen: ungelesen, startTutor)
     this.s = s;
     this.cache = {};
     this.initEcon(diff);
@@ -143,7 +144,7 @@ export class Game {
     const r = this.s.rel; if (!r) return 1;
     if (key === 'rent' && facId === 'werkstatt' && r.papa >= 3 && !this.s.flags.shopLost) return 0; // Papa: keine Werkstattmiete
     if (key === 'repair' && r.papa >= 3 && this.s.flags.shopLost) return 0.8; // ohne Laden: Papa repariert mit (−20 % Reparaturkosten)
-    if (key === 'cool' && facId === 'kinder' && r.mama >= 3) return 1.2; // Mama: +20 % Kühlung im Kinderzimmer
+    if (key === 'cool' && facId === 'kinder' && r.mama >= 3) return 1.2; // Mama: +20 % Kühlung in der Wohnung (ihr alter Standventilator)
     if (key === 'fail' && r.deniz >= 3) return 0.9; // Deniz: −10 % Ausfälle
     return 1;
   }
@@ -176,7 +177,7 @@ export class Game {
   coinAlgo(id, day = this.s.day) { return COIN[id].algo(day); }
   elecPrice(facId, day = this.s.day, full = false) {
     const f = FACILITY[facId];
-    if (facId === 'kinder' && !full && !this.s.flags.papa1 && day < FREE_POWER_END) return 0; // Mama zahlt – bis März 2011 (full: regulärer Preis, z. B. für die Kartenwahl)
+    if (facId === 'kinder' && !full && !this.s.flags.papa1 && day < FREE_POWER_END) return 0; // Strompauschale in der Warmmiete – bis März 2011 oder bis zur Nachzahlung (full: regulärer Preis, z. B. für die Kartenwahl)
     if (f.elec === 'fixed') return f.elecFixed * (day > toDay('2022-03-01') && day < toDay('2023-06-01') ? 1.6 : 1) * this.fx('elec', facId) * this.fx('fjordElec');
     return POWER_HOUSEHOLD(day) * f.elecMult * this.fx('elec', facId);
   }
@@ -266,23 +267,68 @@ export class Game {
 
   // ---------- Freischaltungen (am Anfang kann man wenig, alles kommt nach und nach) ----------
   has(f) { return !this.s.feat || !!this.s.feat[f]; }
-  grant(f) { if (this.has(f)) return false; this.s.feat[f] = this.s.day || 1; if (f === 'autosell') for (const c of COINS) if (!this.s.autoSell[c.id]) this.s.autoSell[c.id] = DEFAULT_AUTOSELL; this.emit('feature', f); return true; }
+  // Freischalten. Anlernen (s.flags.tutor, neue Spiele aus der Oberfläche): nicht sofort, sondern der Reihe nach über tutorTick
+  grant(f) {
+    if (this.has(f)) return false;
+    const L = this.s.flags?.tutor && this.s.learn;
+    if (L && FEATURES[f]) { if (L.cur !== f && !L.q.includes(f)) { L.q.push(f); this.tutorTick(); } return false; }
+    return this.introduce(f);
+  }
+  introduce(f) { this.s.feat[f] = this.s.day || 1; if (f === 'autosell') for (const c of COINS) if (!this.s.autoSell[c.id]) this.s.autoSell[c.id] = DEFAULT_AUTOSELL; this.emit('feature', f); return true; }
+  // ---------- Anlernen: jede Funktion kommt erst, wenn sie gebraucht wird – mit Handy-Nachricht und Tastenhinweis ----------
+  // s.learn = { cur: laufende Lektion, q: Warteschlange, day: Start der Lektion, done: { f: Tag } }.
+  // Die nächste Lektion kommt, sobald die laufende benutzt wurde (learned, z. B. Handy geöffnet) – oder nach LESSON_DAYS Spieltagen
+  // (vor dem ersten Mining steht die Zeit: dann wartet die Lektion). Bots, Tests und alte Spielstände (ohne tutor): alles sofort wie bisher.
+  startTutor() {
+    const s = this.s; s.flags.tutor = 1; s.feat = {}; s.learn = { cur: null, q: [], day: s.day, done: {} };
+    s.frac = 0.3; // Aufwachen am Morgen
+    for (const m of s.messages) if (m.id === 'm0' || m.id === 'm0b') m.read = false;
+    this.dayUpdate(true);
+  }
+  lesson() { return this.s.flags?.tutor ? this.s.learn?.cur || null : null; }
+  tutorTick() {
+    const s = this.s, L = s.learn; if (!s.flags?.tutor || !L) return;
+    if (L.cur) { if (!(s.flags.miningStarted && s.day - L.day >= LESSON_DAYS)) return; L.done[L.cur] = 'zeit'; L.cur = null; this.emit('lesson', null); }
+    while (L.q.length) {
+      const f = L.q.shift(), F = FEATURES[f]; if (this.has(f)) continue;
+      if (F?.stale?.(s, this)) continue; // z. B. „Paket abholen“, obwohl es schon aufgehoben ist
+      L.cur = f; L.day = s.day; this.introduce(f);
+      const txt = typeof F?.msg === 'function' ? F.msg(s, this) : F?.msg;
+      if (txt) this.pushMsg({ from: F.from || 'Deniz', text: txt });
+      this.emit('lesson', f); return;
+    }
+  }
+  // Der Spieler hat es benutzt (Oberfläche: Handy geöffnet, Shop geöffnet …; Spiel: bestellt, Paket aufgehoben, Karte eingebaut)
+  learned(key) {
+    const s = this.s, L = s.learn; if (!s.flags?.tutor || !L?.cur) return false;
+    if (L.cur !== key && FEATURES[L.cur]?.by !== key) return false;
+    L.done[L.cur] = s.day || 1; L.cur = null; this.emit('lesson', null); this.tutorTick(); return true;
+  }
   checkFeatures() {
     const s = this.s; if (!s.feat) return;
     const btc = s.wallet.BTC ? s.wallet.BTC.ex + s.wallet.BTC.cold : 0;
+    if (s.flags.tutor) { // Anlernen: Börse und Shop gleich nach dem Einschalten, dann Schlafen, Paket, Einbau, Fähigkeiten
+      if (s.flags.cpuStart && s.flags.miningStarted) { this.grant('market'); this.grant('build'); }
+      if (s.flags.gpuOrdered && !s.flags.boughtGpu && s.orders?.length) this.grant('sleep');
+      if (!s.flags.boughtGpu && s.parcels?.length) this.grant('parcel');
+      if (!s.flags.boughtGpu && s.flags.miningStarted && this.bagList('gpu').length) this.grant('install');
+      if (s.flags.boughtGpu) { this.learned('install'); this.grant('skills'); }
+    }
     if (s.flags.miningStarted && btc * this.price('BTC') >= 12) this.grant('market');
     if (s.flags.boughtGpu) { this.grant('build'); this.grant('speed2'); this.grant('rigs'); } // gleich weitere Mining-PCs bauen
+    if (s.flags.cpuStart && s.flags.miningStarted) this.grant('build'); // CPU-Start: der Shop ist sofort da – die erste Grafikkarte bestellt man dort
     if (s.goals.rig2 || (s.unlocked.includes('kinder') && this.summary?.kinder?.watt > 1200)) this.grant('company'); // Strom ausbauen (Eigener Stromkreis)
     if (this.has('build')) { let hot = false; for (const id of s.unlocked) if ((this.summary[id]?.temp || 0) > 30) hot = true; if (hot) this.grant('heat'); }
     if (s.chapter >= 1) { this.grant('rigs'); this.grant('autosell'); this.grant('speed3'); this.grant('company'); this.grant('build'); this.grant('speed2'); this.grant('market'); this.grant('buycoins'); } // Coins kaufen schon im Keller: 2012 lohnt Halten mehr als GPUs
-    else if (s.flags.miningStarted && (s.goals.fill1 || this.saving(CHAPTERS[s.chapter]))) this.grant('speed3'); // Zimmer voll oder nur noch sparen: schneller vorspulen
+    else if (s.flags.miningStarted && (s.goals.fill1 || this.saving(CHAPTERS[s.chapter]))) this.grant('speed3'); // Wohnung voll oder nur noch sparen: schneller vorspulen
     if (s.chapter >= 1 && s.day >= toDay('2011-10-07')) this.grant('coins');
     if (s.chapter >= 1 && s.day >= toDay('2011-06-20')) this.grant('cold');
     if (s.unlocked.length >= 2) this.grant('map');
     if (s.chapter >= 2) { this.grant('techs'); this.grant('ranking'); this.grant('loan'); this.grant('buycoins'); this.grant('coins'); this.grant('cold'); this.grant('heat'); }
     if (s.chapter >= 1) { this.grant('techs'); this.grant('ranking'); } // Opas Werkbank und das Logbuch schon im Keller
+    this.tutorTick(); // Anlernen: abgelaufene Lektion beenden, nächste einführen
   }
-  startMining(uid) { const o = this.findObj(uid); if (!o || (o.parts && !this.pcReady(o))) return false; o.mode = 'auto'; const first = !this.s.flags.miningStarted; if (first) { this.s.mineDay0 = this.s.day; this.s.mineFrac0 = this.s.frac || 0; } this.s.flags.miningStarted = true; this.s.flags.seenPc = true; if (first) this.addXp('mining', 40); this.checkGoals(); this.dayUpdate(true); this.emit('objects', this.facOf(uid)); return true; }
+  startMining(uid) { const o = this.findObj(uid); if (!o || (o.parts && !(this.isFirstPc(o) ? this.firstReady(o) : this.pcReady(o)))) return false; o.mode = 'auto'; const first = !this.s.flags.miningStarted; if (first) { this.s.mineDay0 = this.s.day; this.s.mineFrac0 = this.s.frac || 0; } this.s.flags.miningStarted = true; this.s.flags.seenPc = true; if (first) this.addXp('mining', 40); this.checkGoals(); this.dayUpdate(true); this.emit('objects', this.facOf(uid)); return true; }
   // Zentraler Geld-Check: nur kaufen, was wirklich bezahlt werden kann (kein Kauf bei Minus-Konto)
   canAfford(usd) { return Number.isFinite(usd) && usd >= 0 && Number.isFinite(this.s.cash) && this.s.cash >= usd; }
   addObject(facId, type, x, z, rot, parts, free = false) {
@@ -315,7 +361,7 @@ export class Game {
     const from = o && this.facOf(o.uid), def = o && PLACEABLE[o.type], F = FACILITY[to]; if (!from || !F) return 'Geht nicht';
     if (from === to) return 'Steht schon hier';
     if (!this.s.unlocked.includes(to)) return `${F.short} ist noch nicht frei`;
-    if (this.isFirstPc(o)) return 'Dein erster PC bleibt im Zimmer';
+    if (this.isFirstPc(o)) return 'Dein erster PC bleibt in der Wohnung';
     if (!this.placeableAllowed(def, to)) return `Passt nicht in ${F.short}`;
     if (!this.slotOk(to, def)) return `${F.short}: alle ${this.slotsMax(to)} Plätze belegt`;
     const fee = this.moveFee(o, to, from); if (fee && !this.canAfford(fee)) return `Umzug kostet ${fmtUSD(fee)}`;
@@ -367,15 +413,16 @@ export class Game {
     if (o.broken) v *= 0.4;
     return Math.round(v);
   }
-  // Verkaufen erlaubt? Den ersten PC im Kinderzimmer braucht man in Kapitel 1 noch (sonst Sackgasse) – weitere Mining-PCs schon
+  // Verkaufen erlaubt? Den ersten PC in der Wohnung braucht man in Kapitel 1 noch (sonst Sackgasse) – weitere Mining-PCs schon
   canSell(o) { return !!o && this.has('build') && !(this.s.chapter === 0 && this.isFirstPc(o)); }
-  isFirstPc(o) { return !!o && o.uid === 1 && o.type === 'tower'; } // der allererste PC (Tutorial) – bleibt im Zimmer
+  isFirstPc(o) { return !!o && o.uid === 1 && o.type === 'tower'; } // der allererste PC (Tutorial) – bleibt in der Wohnung
   partIds(o) { const p = o.parts; return [p.mobo, p.cpu, p.psu, ...p.gpus].filter(Boolean); }
   // ---------- Fähigkeiten: lernen durch Tun ----------
   skillLv(k) { const x = this.s.skills?.[k] || 0; return SKILL_XP.filter((t) => x >= t).length; }
   addXp(k, n, quiet = false) {
     const s = this.s; if (!s.skills) return; const before = this.skillLv(k); s.skills[k] = (s.skills[k] || 0) + Math.round(n);
-    this.grant('skills'); const after = this.skillLv(k); if (!quiet || after > before) this.emit('xp', k, Math.round(n), after > before ? after : 0);
+    if (!s.flags?.tutor || s.flags.boughtGpu) this.grant('skills'); // Anlernen: Fähigkeiten erst nach der ersten Grafikkarte
+    const after = this.skillLv(k); if (!quiet || after > before) this.emit('xp', k, Math.round(n), after > before ? after : 0);
   }
   creditPending(coin, n) { const s = this.s; if (!(n > 0)) return; s.wallet[coin].ex += n; const n0 = s.accr?.day === s.day && s.accr.coin === coin ? s.accr.n || 0 : 0; s.accr = { day: s.day, f: s.frac, coin, n: n0 + n }; } // n: heute schon gutgeschrieben
   tradeFee() { return Math.max(0, (TRADE_FEES[this.skillLv('trade') - 1] ?? 0.005) - (this.s.staff?.list && this.staffFx().trader ? 0.005 : 0)); }
@@ -386,11 +433,15 @@ export class Game {
     if ((type === 'cpu' || type === 'gpu') && !o.parts.mobo) return false;
     const id = s.invIds[type]; if (type === 'gpu') o.parts.gpus.push(id); else o.parts[type] = id;
     s.inv = s.inv.filter((t) => t !== type);
-    if (this.pcReady(o)) s.flags.pcBuilt = true;
+    if (this.firstReady(o)) s.flags.pcBuilt = true;
     this.addXp('hw', 25); this.dayUpdate(true); this.emit('objects', this.facOf(uid)); return true;
   }
   pcMissing(o) { const p = o.parts; return ['mobo', 'cpu', 'gpu', 'psu'].filter((t) => (t === 'gpu' ? !p.gpus.length : !p[t])); }
-  pcReady(o) { return o?.parts && this.pcMissing(o).length === 0; }
+  pcReady(o) { return o?.parts && this.pcMissing(o).length === 0; } // voll bestückter Rig (mit Grafikkarte)
+  // Erster PC: welche Teile braucht er zum Einschalten? CPU-Start (neue Spiele): Mainboard, CPU, Netzteil – die Grafikkarte kommt später aus dem Shop
+  firstNeed() { return this.s.flags?.cpuStart ? ['mobo', 'cpu', 'psu'] : ['mobo', 'cpu', 'gpu', 'psu']; }
+  firstMissing(o) { const p = o.parts; return this.firstNeed().filter((t) => (t === 'gpu' ? !p.gpus.length : !p[t])); }
+  firstReady(o) { return !!o?.parts && this.firstMissing(o).length === 0; }
 
   // Teil in Rig einbauen (altes wird verkauft)
   setPart(uid, slot, partId, gpuIndex = 0) {
@@ -410,7 +461,7 @@ export class Game {
       o.parts[slot] = partId;
       if (slot === 'mobo') { const cap = this.rigGpuCap(o); if (o.parts.gpus.length > cap) { for (const g of o.parts.gpus.slice(cap)) this.s.cash += Math.round(this.itemPrice(PART[g]) * 0.5); o.parts.gpus = o.parts.gpus.slice(0, cap); } }
     }
-    if (!this.s.flags.miningStarted && o.type === 'tower' && this.pcReady(o)) this.s.flags.pcBuilt = true;
+    if (!this.s.flags.miningStarted && o.type === 'tower' && (this.isFirstPc(o) ? this.firstReady(o) : this.pcReady(o))) this.s.flags.pcBuilt = true;
     this.dayUpdate(true); if (partId && slot === 'gpu') this.capWarn(this.facOf(uid)); this.emit('objects', this.facOf(uid));
     return true;
   }
@@ -684,7 +735,7 @@ export class Game {
     }
     this.bagAdd(id, -n); const fresh = (this.s.fresh?.[id] || 0) > 0; if (fresh) this.freshAdd(id, -n);
     if (o.kit && this.pcReady(o) && !this.kitPlan(o).length) { delete o.kit; this.s.stats.kits = (this.s.stats.kits || 0) + 1; } // Bausatz fertig (auch Teil für Teil eingebaut)
-    if (!this.s.flags.miningStarted && o.type === 'tower' && this.pcReady(o)) this.s.flags.pcBuilt = true;
+    if (!this.s.flags.miningStarted && o.type === 'tower' && (this.isFirstPc(o) ? this.firstReady(o) : this.pcReady(o))) this.s.flags.pcBuilt = true;
     if (this.s.skills && fresh) this.addXp('hw', 15);
     this.dayUpdate(true); if (it.type === 'gpu') this.capWarn(this.facOf(uid)); this.emit('objects', this.facOf(uid)); this.emit('bag'); return true;
   }
@@ -786,6 +837,207 @@ export class Game {
     const c = this.repairCost(o); if (!this.canAfford(c)) return false;
     this.s.cash -= c; o.broken = false; if (o.items) o.items.forEach((it) => (it.b = 0));
     this.dayUpdate(true); this.emit('objects', this.facOf(uid)); return true;
+  }
+
+  // ---------- Online-Shop: Bestellen, Pakete, Bestand „zum Aufstellen“ ----------
+  // Paket-Modus (neue Spiele, bis die Werkstatt frei ist): bestellt wird sofort bezahlt, geliefert am nächsten Morgen als Paket
+  // vor die Wohnungstür (alle Bestellungen eines Tages in einem Paket). Aufheben: Teile ins Lager (frisch, Schrauben-EP beim Einbau),
+  // Platzierbares (Gehäuse, Bausätze, fertige PCs, Miner, Kühlung, Deko) in den Bestand s.unpacked – Aufstellen kostet dann nichts mehr.
+  // s.orders: [{ day, due, items }] · s.parcels: [{ id, label, items, day }] (Welt: world.syncParcels, Aufheben: world.onParcel(id))
+  // Posten: { k: 'part', id, n } | { k: 'place', type, parts?, kit?, items?, coin?, ready? } | { k: 'dev', id, n, holder } (Geräte für ein Regal)
+  // Die Sofort-Funktionen (buyPart, placeBuild, cloneObject, addObject …) bleiben unverändert – Bots, Tests und spätere Kapitel nutzen sie.
+  parcelMode() { const s = this.s; return !!s.flags?.parcels && !s.unlocked.includes('werkstatt'); }
+  static emptyParts() { return { mobo: null, cpu: null, psu: null, gpus: [] }; }
+  // Alles, was bestellt, unterwegs, vor der Tür oder ausgepackt ist (Platzprüfung, Vermögen)
+  pendingItems(withStock = true) { const s = this.s, out = []; for (const o of s.orders || []) out.push(...o.items); for (const p of s.parcels || []) out.push(...p.items); if (withStock) for (const e of s.unpacked || []) out.push({ k: 'place', ...e }); return out; }
+  pendingSlots() { let n = 0; for (const it of this.pendingItems()) if (it.k === 'place' && this.slotKind(PLACEABLE[it.type])) n++; return n; }
+  pendingHolder(uid) { let n = 0; for (const it of this.pendingItems(false)) if (it.k === 'dev' && it.holder === uid) n += it.n; return n; }
+  pendingParts() { const m = {}; for (const it of this.pendingItems(false)) if (it.k === 'part') m[it.id] = (m[it.id] || 0) + it.n; return m; } // unterwegs oder vor der Tür
+  // Freie Stellplätze für Bestellungen: an allen Standorten, wo das Gerät stehen darf – minus alles, was schon bestellt oder ausgepackt ist
+  orderRoom(def) {
+    if (!this.slotKind(def)) return Infinity; let free = 0;
+    for (const id of this.s.unlocked) if (this.placeableAllowed(def, id)) free += Math.max(0, this.slotsMax(id) - this.slotsUsed(id));
+    return free - this.pendingSlots();
+  }
+  orderRoomOk(def) { return this.orderRoom(def) >= 1; }
+  itemGpus(it) { if (it.k === 'part') return PART[it.id]?.type === 'gpu' ? it.n : 0; if (it.k === 'place') return (it.parts?.gpus?.length || 0) + (it.kit?.gpus?.length || 0); return 0; }
+  orderAdd(items, cost) {
+    const s = this.s; s.cash -= cost; s.stats.spentHW += cost; s.orders ||= [];
+    let o = s.orders.find((x) => x.day === s.day); if (!o) { o = { day: s.day, due: s.day + 1, items: [] }; s.orders.push(o); } // Bestellungen eines Tages kommen zusammen
+    for (const it of items) { const same = it.k === 'part' && o.items.find((x) => x.k === 'part' && x.id === it.id); if (same) same.n += it.n; else o.items.push(it); }
+    if (items.some((it) => this.itemGpus(it) > 0)) s.flags.gpuOrdered ||= s.day || 1;
+    this.learned('build'); this.dayUpdate(true); this.emit('orders'); return o;
+  }
+  // Einzelne Teile ins Lager bestellen (wie buyPart)
+  orderPart(id, n = 1) {
+    const it = PART[id]; if (!it || !this.available(it) || !(n >= 1)) return 0; const p = this.itemPrice(it);
+    let k = 0; while (k < n && this.canAfford(p * (k + 1))) k++; if (!k) return 0;
+    this.orderAdd([{ k: 'part', id, n: k }], p * k); if (this.s.skills) this.addXp('hw', 3 * k, true);
+    return k;
+  }
+  // Warum geht die Bestellung nicht? '' = geht (für Geräte, Halter, Kühlung, Deko, leere Gehäuse)
+  orderWhy(def) {
+    if (!def || !this.available(def)) return 'Nicht mehr im Handel';
+    if (this.stockLeft(def) < 1) return `Kontingent: ${this.stockText()}`;
+    if (!this.orderRoomOk(def)) return this.pendingSlots() ? 'Kein Platz mehr – Bestelltes und Ausgepacktes belegt schon alle freien Plätze' : 'Kein Platz mehr – Zeit für einen größeren Standort';
+    if (!this.canAfford(this.itemPrice(def))) return 'Nicht genug Geld';
+    return '';
+  }
+  orderPlace(type) {
+    const def = PLACEABLE[type]; if (this.orderWhy(def)) return null;
+    const it = { k: 'place', type }; if (def.kind === 'rig') it.parts = Game.emptyParts(); if (def.kind === 'holder') it.items = [];
+    this.stockUse(def, 1); this.orderAdd([it], this.itemPrice(def)); return it;
+  }
+  // Rig bestellen: fertig montiert (über den Kontakt) oder als Bausatz (Gehäuse + Teile, Einbauplan o.kit) – wie placeBuild
+  orderBuild(cfg, facId = this.s.current, ready = true) {
+    const def = PLACEABLE[cfg.type]; if (def?.kind !== 'rig' || this.buildBlocked(cfg) || !this.orderRoomOk(def)) return null;
+    if (ready && !this.readyOk(cfg.type)) return null;
+    const st = this.buildStats(cfg, facId, ready); if (!st.ok || !this.canAfford(st.price)) return null;
+    const p = st.parts, items = [];
+    if (ready) items.push({ k: 'place', type: cfg.type, parts: JSON.parse(JSON.stringify(p)), ready: true });
+    else {
+      items.push({ k: 'place', type: cfg.type, parts: Game.emptyParts(), kit: JSON.parse(JSON.stringify(p)) });
+      for (const id of [p.mobo, p.cpu, ...p.gpus]) if (id) items.push({ k: 'part', id, n: 1 }); if (p.psu) items.push({ k: 'part', id: p.psu, n: st.np });
+    }
+    this.orderAdd(items, st.price);
+    this.s.lastBuild = { type: cfg.type, mobo: cfg.mobo, cpu: cfg.cpu, psu: cfg.psu, gpu: cfg.gpu, n: st.n, ready };
+    if (ready) this.contactOrder(cfg.type); this.emit('bag'); return st;
+  }
+  // „Noch so einen“ bestellen – wie cloneObject (Rigs fertig montiert über den Kontakt oder als Bausatz)
+  orderClone(src, kit = false) {
+    if (!src || this.cloneBlocked(src)) return null;
+    const rig = this.cloneRig(src); kit = kit && rig;
+    if (rig && this.rigOverload(src)) return null;
+    if (rig && !kit && !this.readyOk(src.type)) return null;
+    const def = PLACEABLE[src.type]; if (!def || !this.orderRoomOk(def)) return null;
+    const cost = this.cloneCost(src, kit); if (!this.canAfford(cost) || !this.cloneStockOk(src)) return null;
+    const it = { k: 'place', type: src.type, coin: src.coin || 'auto' }, items = [it];
+    if (src.parts) it.parts = kit ? Game.emptyParts() : JSON.parse(JSON.stringify(src.parts));
+    if (kit) { const np = this.psuCount(src); for (const id of this.partIds(src)) items.push({ k: 'part', id, n: id === src.parts.psu ? np : 1 }); it.kit = JSON.parse(JSON.stringify(src.parts)); }
+    else if (rig) it.ready = true;
+    if (src.items) it.items = src.items.map((i) => ({ id: i.id, b: 0 }));
+    this.cloneStockOk(src, true); this.orderAdd(items, cost);
+    if (rig && !kit) this.contactOrder(src.type); return it;
+  }
+  // Inspektor „Kaufen“ (buyPlan): Teil bestellen, reicht das Netzteil nicht, kommt das passende mit – eingebaut wird später aus dem Lager
+  orderPlan(uid, id, idx = null) {
+    const o = this.findObj(uid), pl = this.buyPlan(o, id, idx); if (!pl || pl.why || !this.canAfford(pl.total)) return null;
+    const items = [{ k: 'part', id, n: pl.n }]; if (pl.psu) items.push({ k: 'part', id: pl.psu, n: pl.np });
+    this.orderAdd(items, pl.total); if (this.s.skills) this.addXp('hw', 3 * (pl.n + pl.np), true);
+    return pl;
+  }
+  // „Basis-Teile kaufen“ als Bestellung: dieselbe Wahl wie quickBase (Mainboard mit den meisten Plätzen, günstigste CPU, passendes Netzteil)
+  basePlan(o) {
+    const def = PLACEABLE[o?.type], p = o?.parts; if (!p || def?.kind !== 'rig') return null;
+    const pr = (x) => this.itemPrice(x), out = []; let mb = p.mobo ? PART[p.mobo] : null, cpu = p.cpu ? PART[p.cpu] : null;
+    if (!mb) { const mbs = this.partList('mobo'); if (!mbs.length) return null; const best = Math.max(...mbs.map((m) => Math.min(m.slots, def.maxGpu))); mb = mbs.filter((m) => Math.min(m.slots, def.maxGpu) === best).sort((a, b) => pr(a) - pr(b))[0]; out.push({ id: mb.id, n: 1 }); }
+    if (!cpu) { cpu = [...this.partList('cpu')].sort((a, b) => pr(a) - pr(b))[0]; if (!cpu) return null; out.push({ id: cpu.id, n: 1 }); }
+    if (!p.psu) {
+      const np = this.psuCount(o), need = 25 + mb.watt + cpu.watt + p.gpus.reduce((a, id) => a + (PART[id].watt || 0), 0) + Math.min(def.maxGpu, mb.slots) * 160;
+      const psus = this.partList('psu').sort((a, b) => a.cap - b.cap), ps = psus.find((x) => x.cap * np >= need) || psus[psus.length - 1]; if (!ps) return null; out.push({ id: ps.id, n: np });
+    }
+    return { items: out, total: out.reduce((a, x) => a + pr(PART[x.id]) * x.n, 0) };
+  }
+  orderBase(uid) { const pl = this.basePlan(this.findObj(uid)); if (!pl || !pl.items.length || !this.canAfford(pl.total)) return null; this.orderAdd(pl.items.map((x) => ({ k: 'part', ...x })), pl.total); if (this.s.skills) this.addXp('hw', 3 * pl.items.length, true); return pl; }
+  // „Freie Plätze füllen“ als Bestellung: so viele Karten, wie Steckplätze, Netzteile im Handel und Geld hergeben (wie fillGpus)
+  fillPlan(o, gpuId) {
+    const gp = PART[gpuId], p = o?.parts; if (!gp || !p?.mobo) return null;
+    const np = this.psuCount(o), psus = this.partList('psu').sort((a, b) => a.cap - b.cap), cur = p.psu ? PART[p.psu].cap * np : 0;
+    const maxCap = Math.max(cur, ...psus.map((x) => x.cap * np)), price = this.itemPrice(gp);
+    for (let k = this.rigGpuCap(o) - p.gpus.length; k > 0; k--) {
+      const w = this.rigWatt(o) + k * gp.watt; if (w > maxCap) continue;
+      const ps = p.psu && w > cur ? psus.find((x) => x.cap * np >= w) : null, total = k * price + (ps ? this.itemPrice(ps) * np : 0);
+      if (this.canAfford(total)) return { k, psu: ps?.id || null, np: ps ? np : 0, total };
+    }
+    return null;
+  }
+  orderFill(uid, gpuId) { const pl = this.fillPlan(this.findObj(uid), gpuId); if (!pl) return null; const items = [{ k: 'part', id: gpuId, n: pl.k }]; if (pl.psu) items.push({ k: 'part', id: pl.psu, n: pl.np }); this.orderAdd(items, pl.total); if (this.s.skills) this.addXp('hw', 3 * pl.k, true); return pl; }
+  // Geräte für ein Regal bestellen (wie holderAdd) – beim Aufheben kommen sie gleich hinein
+  orderHolder(uid, devId, n = 1) {
+    const o = this.findObj(uid), dev = PLACEABLE[devId]; if (!o?.items || !dev || !this.available(dev)) return 0;
+    const def = PLACEABLE[o.type], price = this.itemPrice(dev); n = Math.min(n, def.slots - o.items.length - this.pendingHolder(uid), this.stockLeft(dev));
+    let k = 0; while (k < n && this.canAfford(price * (k + 1))) k++; if (k <= 0) return 0;
+    this.stockUse(dev, k); this.orderAdd([{ k: 'dev', id: devId, n: k, holder: uid }], price * k); return k;
+  }
+  // Paketaufschrift: „Grafikkarte“, „Tower-PC“, „3 Teile“
+  parcelLabel(items) {
+    const n = items.reduce((a, it) => a + (it.k === 'place' ? 1 : it.n || 1), 0), it = items[0];
+    if (n !== 1 || !it) return `${n} Teile`;
+    if (it.k === 'part') return { gpu: 'Grafikkarte', cpu: 'Prozessor', mobo: 'Mainboard', psu: 'Netzteil' }[PART[it.id]?.type] || 'Teil';
+    const d = PLACEABLE[it.k === 'dev' ? it.id : it.type]; if (!d) return 'Paket';
+    return d.id === 'tower' ? (it.ready ? 'Mining-PC' : 'PC-Gehäuse') : d.short || d.name.replace(/\s*\(.*\)/, '');
+  }
+  // Tageswechsel: fällige Bestellungen liegen als Paket vor der Wohnungstür
+  deliverDue(day = this.s.day) {
+    const s = this.s; if (!s.orders?.length) return [];
+    const due = s.orders.filter((o) => o.due <= day); if (!due.length) return [];
+    s.orders = s.orders.filter((o) => o.due > day); s.parcels ||= []; const out = [], first = !(s.stats.parcels > 0);
+    for (const o of due) { const p = { id: 'p' + (s.nextParcel = (s.nextParcel || 0) + 1), label: this.parcelLabel(o.items), items: o.items, day }; s.parcels.push(p); out.push(p); }
+    s.stats.parcels = (s.stats.parcels || 0) + out.length;
+    const txt = `Paket ist da – liegt vor deiner Wohnungstür${out.length === 1 ? ` (${out[0].label})` : ` (${out.length} Pakete)`}.`;
+    if (first) this.pushMsg({ from: 'Paketdienst', text: `${txt} Hingehen und aufheben, dann geht’s ans Auspacken.` }); else this.toast(txt, 'good', 6000);
+    this.learned('sleep'); this.emit('parcels'); return out;
+  }
+  // Paket aufheben: Teile ins Lager, Platzierbares in den Bestand, Regal-Geräte gleich ins Regal. Gibt eine Übersicht zurück (oder null)
+  pickupParcel(id) {
+    const s = this.s, i = (s.parcels || []).findIndex((p) => p.id === id); if (i < 0) return null;
+    const p = s.parcels.splice(i, 1)[0], res = { id, label: p.label, parts: 0, place: 0, dev: 0, names: [] }, facs = new Set();
+    s.unpacked ||= [];
+    for (const it of p.items) {
+      if (it.k === 'part' && PART[it.id]) { this.bagAdd(it.id, it.n); this.freshAdd(it.id, it.n); res.parts += it.n; res.names.push(`${it.n > 1 ? it.n + '× ' : ''}${PART[it.id].name}`); }
+      else if (it.k === 'dev' && PLACEABLE[it.id]) {
+        const h = this.findObj(it.holder), hd = h && PLACEABLE[h.type]; let n = it.n;
+        if (h?.items && hd?.kind === 'holder') { while (n > 0 && h.items.length < hd.slots) { h.items.push({ id: it.id, b: 0 }); n--; } facs.add(this.facOf(h.uid)); }
+        res.dev += it.n - n; for (; n > 0; n--) { this.stockAdd({ type: it.id }); res.place++; } // Regal weg oder voll: einzeln aufstellen
+        const d = PLACEABLE[it.id]; if (d.look !== 'fpga' && d.look !== 'usb') s.flags.boughtAsic = true; res.names.push(`${it.n}× ${d.name}`);
+      } else if (it.k === 'place' && PLACEABLE[it.type]) { const { k, ...e } = it; this.stockAdd(e); res.place++; res.names.push(this.stockName(e)); }
+    }
+    this.learned('parcel'); this.dayUpdate(true); for (const f of facs) if (f) this.emit('objects', f);
+    this.emit('parcels'); this.emit('bag'); this.emit('unpacked'); return res;
+  }
+  stockAdd(e) { const s = this.s; (s.unpacked ||= []).push({ ...e, sid: 'u' + (s.nextParcel = (s.nextParcel || 0) + 1) }); }
+  stockName(e) { const d = PLACEABLE[e.type]; if (!d) return 'Gerät'; if (d.kind === 'rig') return `${d.id === 'tower' ? (e.ready ? 'Mining-PC' : e.kit ? 'PC-Bausatz' : 'PC-Gehäuse') : d.name}${e.ready && d.id !== 'tower' ? ' (fertig bestückt)' : e.kit && d.id !== 'tower' ? ' (Bausatz)' : ''}`; return d.name; }
+  stockKey(e) { return JSON.stringify([e.type, e.parts || null, e.kit || null, (e.items || []).map((i) => i.id), !!e.ready, e.coin || 'auto']); }
+  // Bestand „zum Aufstellen“, gleiche Dinge zusammengefasst: [{ key, e, n }]
+  stockGroups() { const m = new Map(); for (const e of this.s.unpacked || []) { const k = this.stockKey(e), g = m.get(k); if (g) g.n++; else m.set(k, { key: k, e, n: 1 }); } return [...m.values()]; }
+  stockFind(key) { return (this.s.unpacked || []).find((e) => e.sid === key || this.stockKey(e) === key) || null; }
+  // Aufstellen aus dem Bestand: kostet nichts, Stellplätze und Standort-Regeln gelten wie beim Kaufen
+  placeStock(key, facId, x, z, rot) {
+    const s = this.s, e = this.stockFind(key), def = e && PLACEABLE[e.type]; if (!def || !s.fac[facId] || !this.placeableAllowed(def, facId) || !this.slotOk(facId, def)) return null;
+    const o = { uid: s.nextUid++, type: e.type, x, z, rot, coin: e.coin || 'auto', broken: false, bought: s.day };
+    if (def.kind === 'rig') o.parts = e.parts ? JSON.parse(JSON.stringify(e.parts)) : Game.emptyParts();
+    if (def.kind === 'rig' && e.kit) o.kit = JSON.parse(JSON.stringify(e.kit));
+    if (def.kind === 'holder') o.items = (e.items || []).map((i) => ({ id: i.id, b: 0 }));
+    s.unpacked = s.unpacked.filter((x) => x !== e); s.fac[facId].objects.push(o);
+    if (def.kind === 'device' && def.look !== 'fpga' && def.look !== 'usb') s.flags.boughtAsic = true;
+    if (s.skills) this.addXp('hw', 10);
+    this.dayUpdate(true); this.capWarn(facId); this.emit('objects', facId); this.emit('unpacked'); return o;
+  }
+  // Wiederverkaufswert von allem, was bestellt, unterwegs oder ausgepackt ist (zählt zum Vermögen)
+  pendingValue() {
+    let v = 0;
+    for (const it of this.pendingItems()) {
+      if (it.k === 'part' && PART[it.id]) v += this.partResale(it.id) * it.n;
+      else if (it.k === 'dev' && PLACEABLE[it.id]) v += this.itemPrice(PLACEABLE[it.id]) * 0.5 * it.n;
+      else if (it.k === 'place' && PLACEABLE[it.type]) v += this.objectValue({ type: it.type, parts: PLACEABLE[it.type].kind === 'rig' ? it.parts || Game.emptyParts() : undefined, items: it.items, broken: false });
+    }
+    return v;
+  }
+  // Alte Spielstände: Felder anlegen, Unbekanntes aussortieren (Paket-Modus bleibt aus, solange s.flags.parcels fehlt)
+  migrateParcels(s) {
+    const okParts = (p) => (p && typeof p === 'object' ? { mobo: PART[p.mobo] ? p.mobo : null, cpu: PART[p.cpu] ? p.cpu : null, psu: PART[p.psu] ? p.psu : null, gpus: (p.gpus || []).filter((id) => PART[id]) } : null);
+    const okItem = (it) => {
+      if (!it || typeof it !== 'object') return null;
+      if (it.k === 'part') return PART[it.id] && it.n > 0 ? { k: 'part', id: it.id, n: Math.round(it.n) } : null;
+      if (it.k === 'dev') return PLACEABLE[it.id] && it.n > 0 ? { k: 'dev', id: it.id, n: Math.round(it.n), holder: it.holder } : null;
+      if (it.k === 'place' || !it.k) { const d = PLACEABLE[it.type]; if (!d) return null; const e = { ...it, k: 'place' }; if (d.kind === 'rig') { e.parts = okParts(e.parts) || Game.emptyParts(); if (e.kit) e.kit = okParts(e.kit); } else { delete e.parts; delete e.kit; } if (d.kind === 'holder') e.items = (e.items || []).filter((i) => i && PLACEABLE[i.id]); else delete e.items; return e; }
+      return null;
+    };
+    const list = (a) => (Array.isArray(a) ? a.map(okItem).filter(Boolean) : []);
+    s.orders = (Array.isArray(s.orders) ? s.orders : []).filter((o) => o && Number.isFinite(o.due)).map((o) => ({ day: +o.day || 0, due: o.due, items: list(o.items) })).filter((o) => o.items.length);
+    s.parcels = (Array.isArray(s.parcels) ? s.parcels : []).filter((p) => p && p.id).map((p) => ({ ...p, items: list(p.items) })).filter((p) => p.items.length).map((p) => ({ ...p, label: p.label || this.parcelLabel(p.items) }));
+    s.unpacked = list(s.unpacked).filter((e) => e.k === 'place').map(({ k, ...e }, i) => ({ ...e, sid: e.sid || 'u0' + i }));
+    s.nextParcel = Math.max(+s.nextParcel || 0, s.parcels.length + s.unpacked.length);
   }
 
   // ---------- Geräte-Analyse ----------
@@ -950,7 +1202,7 @@ export class Game {
   // ---------- Kennzahlen ----------
   algoHash(algo) { let h = 0; for (const id of this.s.unlocked) { const sm = this.summary[id]; if (sm && !sm.tripped) h += (sm.hashByAlgo[algo] || 0) * sm.throttle; } return h; }
   walletValue() { let v = 0; for (const c of COINS) { const w = this.s.wallet[c.id]; v += (w.ex + w.cold) * this.price(c.id); } return v; }
-  hardwareValue() { let v = this.bagValue(); for (const f of Object.values(this.s.fac)) for (const o of f.objects) v += this.objectValue(o); return v; }
+  hardwareValue() { let v = this.bagValue() + this.pendingValue(); for (const f of Object.values(this.s.fac)) for (const o of f.objects) v += this.objectValue(o); return v; }
   netWorth() { return this.s.cash + this.walletValue() + this.hardwareValue() - (this.s.loan || 0); }
   monolithHash(day = this.s.day) { return day < toDay('2014-03-01') ? 0 : BTC_HASH(Math.min(day, LAST_DATA_DAY)) * MONOLITH_SHARE(day) * (this.s.endless ? this.s.endless.BTC.h : 1) * this.fx('monolith'); }
   dailyProfit() { let rev = 0, cost = 0; for (const id of this.s.unlocked) { const sm = this.summary[id]; if (!sm) continue; if (!sm.tripped) { rev += sm.rev * sm.throttle; cost += Math.max(0, sm.watt / 1000 * 24 - this.solarKwh(id)) * sm.elec; } cost += FACILITY[id].rent / 30.4 * this.fx('rent', id); } cost += this.staffMonthly() / 30.4 + this.extraDaily(this.s.day, true); for (const md of this.s.mods || []) if (md.key === 'monthly' && this.s.day < md.until) cost += md.mult / 30.4; if (this.s.loan > 0) cost += this.s.loan * this.loanRate() / 365; return { rev, cost, net: rev - cost }; }
@@ -1034,6 +1286,7 @@ export class Game {
     // Techniker reparieren
     this.techRepairs(day);
     this.econDay(day);
+    this.deliverDue(day); // Online-Shop: gestrige Bestellungen liegen jetzt vor der Wohnungstür
     // News & Ereignisse
     while (s.newsIdx < NEWS.length && NEWS[s.newsIdx].day <= day) {
       const n = NEWS[s.newsIdx++];
@@ -1083,7 +1336,7 @@ export class Game {
       if (sha >= v && !ms['h' + v]) { ms['h' + v] = this.s.day; this.emit('milestone', `${l} Hashrate`, 'Deine SHA-256-Leistung wächst und wächst.'); }
     }
     const nw = this.s.day % 7 ? -Infinity : this.netWorthFast(); // Vermögen (alle Geräte bewerten) nur wöchentlich prüfen
-    for (const [v, l, t] of [[1e4, '10.000 $ Vermögen', 'Mehr als Papas Laden im Jahr umsetzt.'], [1e5, '100.000 $ Vermögen', 'Sechsstellig. Mit Internetgeld.'], [1e6, 'Millionär!', 'Die erste Million. Mama glaubt es immer noch nicht.'], [1e7, '10 Mio. $ Vermögen', 'Hashwerk ist ein echtes Unternehmen.'], [1e8, '100 Mio. $ Vermögen', 'Die Wirtschaftspresse ruft an.'], [1e9, 'Milliardär!', 'Vom Kinderzimmer zur Milliarde.']]) {
+    for (const [v, l, t] of [[1e4, '10.000 $ Vermögen', 'Mehr als Papas Laden im Jahr umsetzt.'], [1e5, '100.000 $ Vermögen', 'Sechsstellig. Mit Internetgeld.'], [1e6, 'Millionär!', 'Die erste Million. Mama glaubt es immer noch nicht.'], [1e7, '10 Mio. $ Vermögen', 'Hashwerk ist ein echtes Unternehmen.'], [1e8, '100 Mio. $ Vermögen', 'Die Wirtschaftspresse ruft an.'], [1e9, 'Milliardär!', 'Von der feuchten Einzimmerbude zur Milliarde.']]) {
       if (nw >= v && !ms['n' + v]) { ms['n' + v] = this.s.day; this.emit('milestone', l, t); }
     }
   }
@@ -1091,7 +1344,7 @@ export class Game {
   netWorthFast() { return this.s.cash + this.walletValue() + this.hardwareValue() - (this.s.loan || 0); }
 
   wear(o, temp, day) {
-    if (this.s.chapter === 0 && this.s.feat) return; // im Kinderzimmer geht nichts kaputt
+    if (this.s.chapter === 0 && this.s.feat) return; // in der ersten Wohnung geht nichts kaputt
     const def = PLACEABLE[o.type];
     const heatMul = (temp < 30 ? 1 : temp < 38 ? 1 + (temp - 30) / 8 : 2 + (temp - 38) * 0.5) * this.fx('fail');
     const life = (def.life || 6) * 365;
@@ -1410,6 +1663,7 @@ export class Game {
     const f = FACILITY[facId];
     if (!this.canUnlock(facId) || !this.canAfford(f.cost)) return false;
     this.s.cash -= f.cost; this.s.unlocked.push(facId); (this.s.since ||= {})[facId] = this.s.day;
+    if (facId === 'werkstatt' && this.s.flags.parcels && !this.s.flags.parcelsEnd) { this.s.flags.parcelsEnd = this.s.day || 1; this.pushMsg({ from: 'Papa', text: 'Ich hab mit meinem alten Großhändler telefoniert: Ab jetzt liefert er dir direkt in die Werkstatt. Kein Paketeschleppen mehr – was du im Shop kaufst, steht sofort da.' }); }
     this.dayUpdate(true); this.emit('unlocked', facId); return true;
   }
   upgradePower(facId) {
@@ -1471,7 +1725,7 @@ export class Game {
     this.dayUpdate(true); this.emit('upgrade', facId, id); return true;
   }
   cancelUpgrade(facId, id) { const u = this.upgrades(facId).find((x) => x.id === id); if (!u?.cancel || !this.s.fac[facId]?.up?.[id]) return false; delete this.s.fac[facId].up[id]; this.dayUpdate(true); return true; }
-  // Diebstahlschutz: Kinderzimmer (Mama ist zu Hause) und Profi-Standorte ab Rechenzentrum immer, sonst per Ausbau
+  // Diebstahlschutz: die Wohnung (du schläfst daneben) und Profi-Standorte ab Rechenzentrum immer, sonst per Ausbau
   facSecure(facId) { if (facId === 'kinder' || (FACILITY[facId]?.tier ?? 0) >= 4) return true; return this.upgrades(facId).some((u) => u.secure && this.upActive(facId, u)); }
   facUps(facId) { return this.upgrades(facId).some((u) => u.ups && this.upActive(facId, u)); }
 
@@ -1513,7 +1767,7 @@ export class Game {
     if (!s.flags.warnedNeg || day - s.flags.warnedNeg > 30) { s.flags.warnedNeg = day; this.toast(over ? `Dispo überzogen: ${fmtUSD(s.cash)} bei ${fmtUSD(lim)} Rahmen!` : `Konto im Minus: Dispo ${fmtUSD(-s.cash)} von ${fmtUSD(lim)} (${fmtNum(this.dispoRate() * 100, 0)} % Zinsen)`, 'bad', 8000); }
     if (over && s.ev && !s.ev.open && day - (s.flags.bankTalk || -99) >= 14) { s.flags.bankTalk = day; this.openEvent(EVENT.bank, 'bank:' + day); }
   }
-  bankSaleList() { // älteste Geräte zuerst; das Kinderzimmer bleibt, Kühlung und Deko auch
+  bankSaleList() { // älteste Geräte zuerst; die Wohnung bleibt, Kühlung und Deko auch
     const all = [];
     for (const id of this.s.unlocked) { if (id === 'kinder') continue; for (const o of this.s.fac[id].objects) { const k = PLACEABLE[o.type].kind; if (k !== 'decor' && k !== 'cooling') all.push(o); } }
     return all.sort((a, b) => (a.bought || 0) - (b.bought || 0) || a.uid - b.uid);
@@ -1525,7 +1779,7 @@ export class Game {
     if (n) this.toast(`Notverkauf: ${n} Gerät(e) für ${fmtUSD(v)} abgegeben.`, 'info', 7000);
     return v;
   }
-  bankSaving() { // Sparprogramm: alles einmotten (außer Kinderzimmer), Personal entlassen
+  bankSaving() { // Sparprogramm: alles einmotten (außer der Wohnung), Personal entlassen
     const s = this.s; let n = 0;
     for (const id of s.unlocked) if (this.canMothball(id) && !s.fac[id].mothball && (s.fac[id].objects.length || FACILITY[id].rent)) { s.fac[id].mothball = s.day || 1; n++; }
     const k = s.staff?.list?.length || 0; if (k) { s.staff.list = []; this.syncStaff(); }
@@ -1648,7 +1902,7 @@ export class Game {
   econDay(day) {
     const s = this.s;
     if (new Date(day * 86400000).getUTCDate() === 1 && s.loan > 0) { const r = this.loanPayment(); s.loan -= r; s.cash -= r; if (s.loanHi) s.loanHi = Math.min(s.loanHi, s.loan); }
-    if (day === FREE_POWER_END && !s.flags.papa1 && s.flags.miningStarted) this.applyFx({ msg: { from: 'Mama', text: 'Ab März zahlst du deinen Strom selbst. Ich hab die Rechnung gesehen, mein Lieber.' } });
+    if (day === FREE_POWER_END && !s.flags.papa1 && s.flags.miningStarted) this.applyFx({ msg: { from: 'Herr Krause', text: 'Ich hab die Nebenkostenabrechnung gesehen. Die Strompauschale in der Warmmiete war für einen Kühlschrank gedacht, nicht für ein Rechenzentrum. Ab März zahlen Sie Ihren Strom nach Zähler.' } });
     for (const id of s.unlocked) for (const u of UPGRADES[id] || []) { const d = s.fac[id].up?.[u.id]; if (d && u.days && day - d === u.days) this.toast(`${u.name} (${FACILITY[id].short}) ist ausgelaufen.`, 'info', 7000); }
     if (s.staff?.list && this.staffFx().elec) {
       for (const id of s.unlocked) {
@@ -1663,7 +1917,7 @@ export class Game {
     s.stats.y ||= {}; s.stats.trips ||= 0; s.stats.halv ||= 0; s.stats.tmax ||= 0; s.bonus ||= {}; s.streak ||= {};
   }
   inWait(ch) { return !!ch && ch.goals.every((go) => this.s.goals[go.id]) && this.s.day < toDay(ch.minDate) && !this.chSkip(ch); }
-  // Sparphase: es fehlt nur noch eine Zahlung (z. B. Papas Stromrechnung), für die das Geld noch nicht reicht
+  // Sparphase: es fehlt nur noch eine Zahlung (z. B. die Strom-Nachzahlung an Herrn Krause), für die das Geld noch nicht reicht
   saving(ch) { const open = ch ? ch.goals.filter((go) => !this.s.goals[go.id]) : []; return open.length > 0 && open.every((go) => go.action && !this.canPayGoal(go)); }
   idlePhase(ch) { return this.inWait(ch) || this.saving(ch); }
   bonusOpen(ch, b) { const s = this.s; return !s.bonus?.[b.id] && !(b.until && s.day > toDay(b.until)) && (!b.from || b.from(s)) && (!b.wait || this.idlePhase(ch)); }

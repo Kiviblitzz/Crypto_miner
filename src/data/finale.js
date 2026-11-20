@@ -5,9 +5,9 @@ import { toDay } from './history.js';
 const yearOf = (day) => new Date(day * 864e5).getUTCFullYear();
 const nf = (d) => new Intl.NumberFormat('de-DE', { maximumFractionDigits: d });
 const usd = (v) => (v >= 1e9 ? `${nf(2).format(v / 1e9)} Mrd. $` : v >= 1e6 ? `${nf(1).format(v / 1e6)} Mio. $` : `${nf(0).format(v)} $`);
-const SITE_IN = { fjord: 'in der Fjordhalle', rz: 'im Rechenzentrum', halle: 'in der Lagerhalle', werkstatt: 'in der Werkstatt', keller: 'im Hobbykeller', kinder: 'in deinem alten Zimmer' };
+const SITE_IN = { fjord: 'in der Fjordhalle', rz: 'im Rechenzentrum', halle: 'in der Lagerhalle', werkstatt: 'in der Werkstatt', keller: 'im Hobbykeller', kinder: 'in deiner alten Bude' };
 const lastSite = (s) => s.unlocked[s.unlocked.length - 1];
-export const playerAge = (day) => 17 + Math.floor((day - toDay('2010-10-01')) / 365.25); // Oktober 2010: 17 Jahre
+export const playerAge = (day) => 19 + Math.floor((day - toDay('2010-10-01')) / 365.25); // Oktober 2010: 19 Jahre, gerade in die erste Wohnung gezogen
 
 // ---------- Krals Anruf ----------
 export function kralCall(s, end) {
@@ -41,8 +41,8 @@ export const KRAL_REPLIES = [
 const WEIGHT = { juni11: 8, goxhack: 7, kralcard: 9, poach: 9, denizback: 9, corona: 7, repaircafe: 6, friseur: 7, fork17: 4, chengdu: 5, kralbroke: 8, aitenant: 7, goxrefund: 6, pizza: 2, noise: 2, storm: 1, offer: 10, sold: 11, torn: 10, won: 11 };
 const MILESTONES = [['h' + 1e12, '1 TH/s – die ASIC-Ära beginnt', 4], ['n' + 1e6, 'Die erste Million', 6], ['h' + 1e15, '1 PH/s Hashrate', 4], ['h' + 1e18, '1 EH/s Hashrate', 5], ['cold', 'Börsenpleite überstanden – dank Cold-Wallet', 6], ['n' + 1e9, 'Milliardär', 7]]; // Schlüssel wie Game.checkMilestones
 export function chronicle(s, events, max = 10) {
-  const out = [{ d: toDay('2010-10-01'), t: 'Ein leeres PC-Gehäuse unterm Dach. Deniz schreibt von Bitcoin.', w: 12 }];
-  if (s.feat?.map > 1) out.push({ d: s.feat.map, t: 'Umzug in den Hobbykeller', w: 5 });
+  const out = [{ d: toDay('2010-10-01'), t: 'Ein leeres PC-Gehäuse in der feuchten Bude im Hinterhaus. Deniz schreibt von Bitcoin.', w: 12 }];
+  if (s.feat?.map > 1) out.push({ d: s.feat.map, t: 'Umzug in den Hobbyraum im Keller', w: 5 });
   for (const [k, t, w] of MILESTONES) if (s.milestones?.[k]) out.push({ d: s.milestones[k], t, w });
   const seen = new Set();
   for (const e of s.ev?.log || []) {
@@ -62,11 +62,11 @@ export function epilog(s, end, day = s.day) {
   const papa = [
     'Papa hat den Laden irgendwann zugemacht. Ihr telefoniert an Geburtstagen, und er fragt nie nach Hashwerk. Aber in seiner Schublade liegt jeder Zeitungsartikel über dich, ausgeschnitten und gefaltet.',
     `Elektro Brandt gibt es noch. Papa repariert Radios und erzählt jedem Kunden, dass sein Kind „was mit Computern“ macht. Seit ein paar Jahren sagt er es mit Stolz.${f.papaRepairs ? ' Und wenn keiner hinschaut, repariert er Miner.' : ''}`,
-    `Papa hat Elektro Brandt behalten – aus Spaß, sagt er. Über der Kasse hängt eingerahmt die Stromrechnung, die du 2011 bezahlt hast.${f.repaircafe ? ' Samstags ist das Reparatur-Café so voll, dass die Leute auf dem Gehweg löten.' : ' Jeder Kunde bekommt die Geschichte zu hören, ob er will oder nicht.'}`,
+    `Papa hat Elektro Brandt behalten – aus Spaß, sagt er. Über der Kasse hängt eingerahmt der erste Zeitungsartikel über dich.${f.repaircafe ? ' Samstags ist das Reparatur-Café so voll, dass die Leute auf dem Gehweg löten.' : ' Jeder Kunde bekommt die Geschichte zu hören, ob er will oder nicht.'}`,
   ];
   const mama = [
-    'Mama hat dein Kinderzimmer zum Bügelzimmer gemacht. Den Brandfleck im Teppich hat sie nie vergessen – und du kommst zu selten zum Essen.',
-    'Mama zahlt längst keine Stromrechnung mehr für dich. Das Messgerät an deiner alten Zimmersteckdose hat sie trotzdem drangelassen. Aus Prinzip.',
+    'Mama wäscht deine Wäsche nicht mehr. Den Schimmelfleck in deiner ersten Bude hat sie nie vergessen – und du kommst zu selten zum Essen.',
+    'Mama ruft immer noch jeden Sonntag an und fragt, ob du genug lüftest. In deiner ersten Wohnung hat sie damals heimlich einen Luftentfeuchter versteckt. Er steht immer noch da.',
     'Mama hat aus der Abwärme ein Gewächshaus gemacht. Ihre Tomaten gewinnen jedes Jahr beim Lindentaler Gartenfest. „Bitcoin-Tomaten“ steht auf dem Schild, und keiner traut sich zu fragen.',
   ];
   const age = yearOf(day) - 1938;

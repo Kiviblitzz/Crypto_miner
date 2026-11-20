@@ -39,8 +39,10 @@ const ACH_SVG = {
 };
 const LOCK_SVG = '<svg class="lock-ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5.5" y="10.5" width="13" height="9.5" rx="2.2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg>';
 const MONTH_RE = /^(Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)\s+\d{4}:\s*/;
+const PKG_SVG = '<svg class="pkg-ic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 7.5 12 3.5l8.5 4v9L12 20.5l-8.5-4z"/><path d="M3.5 7.5 12 11.5l8.5-4M12 11.5v9M7.8 5.5l8.4 4"/></svg>'; // Paket
+const PHONE_SVG = '<svg class="ph-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18h2"/></svg>';
 const PAUSE_LABEL = { heat: 'Pausiert (zu heiß)', event: 'Gedrosselt (Ereignis)', loss: 'Pausiert (kaum rentabel)' }; // Grund der Auto-Pause (Game.autoLimit)
-const MOVE_TO = { kinder: 'Ins Zimmer tragen', keller: 'In den Keller tragen', werkstatt: 'In die Werkstatt bringen', halle: 'In die Halle bringen', rz: 'Ins Rechenzentrum schicken', fjord: 'In die Fjordhalle schicken' };
+const MOVE_TO = { kinder: 'In die Wohnung tragen', keller: 'In den Keller tragen', werkstatt: 'In die Werkstatt bringen', halle: 'In die Halle bringen', rz: 'Ins Rechenzentrum schicken', fjord: 'In die Fjordhalle schicken' };
 
 // Gesprächskarte: gezeichnetes Gesicht (kein Emoji), passend zu den Figuren in der Welt
 const FACES = {
@@ -68,6 +70,7 @@ export class UI {
     world.onAim = (aim) => { document.body.classList.toggle('aiming', !!aim); this.prompt(aim); };
     world.onInteract = (uid) => this.openInspector(uid);
     world.onDoor = (door) => this.travel(door);
+    world.onParcel = (id) => this.pickParcel(id); // Paket vor der Wohnungstür aufheben (die Welt zeigt die Kartons: world.syncParcels)
     world.onProp = (p) => this.useProp(p);
     world.onSnap = () => this.audio?.install?.();
     world.onNoAim = () => { // E ohne Ziel: das markierte Ziel in Reichweite benutzen
@@ -104,11 +107,12 @@ export class UI {
     setTimeout(() => { applySnd(); applySens(); }, 0);
     $('#clickhint').onclick = () => this.w.requestLock();
     game.on('toast', (t, k, ms) => this.toast(t, k, ms));
-    const showMsg = (m) => { if (document.querySelector('#featcards .featcard') || document.getElementById('lvup') || this.lvBusy) { setTimeout(() => showMsg(m), 1200); return; } this.toast(`<b>${m.tip ? 'Tipp von ' : ''}${esc(m.from)}:</b> ${esc(m.text)}`, 'msg', m.tip ? 10000 : 7000); this.dock(); };
+    const showMsg = (m) => { if (document.querySelector('#featcards .featcard:not(.lesson)') || document.getElementById('lvup') || this.lvBusy) { setTimeout(() => showMsg(m), 1200); return; } this.toast(`<b>${m.tip ? 'Tipp von ' : ''}${esc(m.from)}:</b> ${esc(m.text)}`, 'msg', m.tip ? 10000 : 7000); this.dock(); };
     this.flushMsgs = (base = 3000) => { const q = this.msgQ || []; this.msgQ = []; q.forEach((m, i) => setTimeout(() => showMsg(m), base + i * 2500)); };
     game.on('message', (m) => { if (this.inspUid || this.w.focus) { (this.msgQ ||= []).push(m); this.dock(); return; } showMsg(m); });
     game.on('news', () => this.ticker());
     game.on('feature', (f) => this.featureCard(f));
+    game.on('lesson', (f) => { if (!f) this.lessonDone(); }); // Lektion benutzt: Hinweiskarte weg (die nächste kommt über 'feature')
     game.on('milestone', (t, sub) => this.milestone(t, sub));
     game.on('won', () => this.ending());
     game.on('egoal', (id) => egoalDone(this, id));
@@ -121,6 +125,8 @@ export class UI {
     game.on('goal', () => { this.audio?.cash(); });
     game.on('facfull', (id, c) => this.facFull(id, c));
     game.on('bag', () => this.refresh()); // Teile gekauft/verkauft/ein- und ausgebaut
+    game.on('parcels', () => { this.w.syncParcels?.(); this.refresh(); }); // Paket geliefert oder aufgehoben
+    game.on('orders', () => this.refresh()); game.on('unpacked', () => this.refresh()); // Bestellt, ausgepackt, aufgestellt
     game.on('contact', () => { this.lastBuildDay = -99; this.refresh(); }); // Kontakt kennengelernt/angerufen: Katalog zeigt „Fertig bestückt“
     game.on('unlockable', (id) => { this.milestone('Kapitel geschafft', `${FACILITY[id].short} ist frei`); this.toast(`<b>${FACILITY[id].short}</b> ist frei`, 'good', 8000); this.goals(); this.sites(); });
     this.initProgress(); // Jahresrückblick, Erfolge im Logbuch, Bonusziele
@@ -147,7 +153,7 @@ export class UI {
     for (const card of document.querySelectorAll('#build .item[data-id]')) {
       const it = PLACEABLE[card.dataset.id]; if (!it) continue; const p = this.g.itemPrice(it); if (+card.dataset.price === p) continue;
       if (card.dataset.rig) continue; // Rig-Karten: Preise hängen am Build, neu aufbauen reicht wöchentlich
-      card.dataset.price = p; const pe = card.querySelector('.t .p'); if (pe) pe.textContent = this.money(p); const pb = card.querySelector('.place'); if (pb) pb.textContent = `Platzieren · ${this.money(p)}`;
+      card.dataset.price = p; const pe = card.querySelector('.t .p'); if (pe) pe.textContent = this.money(p); const pb = card.querySelector('.place'); if (pb) pb.textContent = this.buyLabel(p);
     }
     this.buildAfford();
   }
@@ -168,10 +174,11 @@ export class UI {
   speedBar() {
     const el = $('#speed'); el.innerHTML = '';
     SPEEDS.forEach((s) => { const b = h(`<button title="${s.t}">${s.l}</button>`); b.onclick = () => this.setSpeed(s.v); if (!this.speedOk(s.v)) b.style.display = 'none'; el.append(b); });
+    el.style.display = this.g.s.flags?.tutor && !this.g.has('speed2') ? 'none' : ''; // Anlernen: Tempo-Knöpfe erst mit dem Zeitraffer
     this.setSpeed(this.g.s.speed ?? 0);
   }
   speedOk(v) { const g = this.g; return v <= 1 || (v === 2 && g.has('speed2')) || (v >= 3 && g.has('speed3')); }
-  setSpeed(v) { if (!this.speedOk(v)) { this.toast('Noch nicht freigeschaltet.', 'info', 1800); return; } this.g.s.speed = v; if (v) this.lastSpeed = v; this.g.s.paused = v === 0; [...$('#speed').children].forEach((b, i) => b.classList.toggle('on', SPEEDS[i].v === v)); }
+  setSpeed(v) { if (!this.speedOk(v)) { this.toast('Noch nicht freigeschaltet.', 'info', 1800); return; } this.g.s.speed = v; if (v) this.lastSpeed = v; this.g.s.paused = v === 0; if (v >= 2) this.g.learned?.('speed2'); if (v >= 3) this.g.learned?.('speed3'); [...$('#speed').children].forEach((b, i) => b.classList.toggle('on', SPEEDS[i].v === v)); }
   top() {
     const g = this.g, s = g.s;
     const vf = this.w.visFrac ?? s.frac, day = vf > 0.27 && vf < 0.79;
@@ -188,7 +195,7 @@ export class UI {
     const ease = (cur, target) => (cur == null || Math.abs(target - cur) > Math.abs(target) * 0.5 + 1e4 || Math.abs(target - cur) < 0.005 ? target : cur + (target - cur) * k);
     this.dCash = ease(this.dCash, s.cash); this.dNw = ease(this.dNw, nw);
     const mOn = !s.feat || s.flags.miningStarted;
-    for (const [id, ok] of [['#st-profit', mOn], ['#st-hash', mOn], ['#st-nw', g.has('rigs')]]) $(id).style.display = ok ? '' : 'none';
+    for (const [id, ok] of [['#st-profit', mOn], ['#st-hash', mOn], ['#st-nw', g.has('rigs')], ['#st-btc', !s.flags.tutor || g.has('market')]]) $(id).style.display = ok ? '' : 'none'; // Anlernen: Bitcoin-Kurs erst mit der Börse
     $('#st-cash').title = 'Bargeld für Hardware, Strom, Miete und Löhne'; $('#st-nw').title = 'Kontostand + Coins + Wiederverkaufswert der Hardware − Kredit'; $('#st-profit').title = 'Mining-Ertrag minus Strom, Miete, Löhne und Zinsen pro Tag';
     $('#st-cash').innerHTML = `<div class="l">Kontostand</div><div class="v ${s.cash < 0 ? 'neg' : ''}">${fmtUSD(this.dCash)}</div>`;
     $('#st-nw').innerHTML = `<div class="l">Vermögen</div><div class="v">${fmtUSD(this.dNw)}</div>`;
@@ -269,8 +276,8 @@ export class UI {
       b.onclick = () => { if (g.s.current !== f.id) this.switchSite(f.id); };
       el.append(b);
     }
-    const hb = h(`<div class="site ${this.w.heatMode ? 'on' : ''}" title="Wärmebild ein/aus (Taste H)"><div class="n">Wärmebild</div><div class="m">Taste H</div></div>`);
-    hb.onclick = () => { this.w.toggleHeat(); this.sites(); }; if (g.has('heat')) el.append(hb);
+    const hb = h(`<div class="site ${this.w.heatMode ? 'on' : ''}" title="Wärmebild ein/aus (Taste I)"><div class="n">Wärmebild</div><div class="m">Taste I</div></div>`);
+    hb.onclick = () => this.toggleHeat(); if (g.has('heat')) el.append(hb);
     const br = g.brokenIn(g.s.current);
     if (br.n) { const b = h(`<div class="site fix" title="Alle defekten Geräte hier reparieren"><div class="n">${br.n} defekt</div><div class="m">Alle reparieren: ${fmtUSD(br.c)}</div></div>`); b.onclick = () => { const n = g.repairAll(g.s.current); this.toast(n ? `${n} Gerät(e) repariert` : 'Nicht genug Geld.', n ? 'good' : 'bad'); this.sites(); }; el.append(b); }
   }
@@ -284,19 +291,22 @@ export class UI {
   }
   fade() { const f = $('#fade'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); }
 
-  // ---------- Baumenü ----------
+  // ---------- Shop (Baumenü) ----------
+  // Paket-Modus (Game.parcelMode, neue Spiele bis zur Werkstatt): die Kaufknöpfe bestellen – geliefert wird am nächsten Morgen als Paket vor die
+  // Wohnungstür. Oben stehen Lieferstatus und der Bestand „Ausgepackt – zum Aufstellen“ (aufstellen kostet nichts mehr).
   build(force = false) {
-    const el = $('#build'), g = this.g, fac = g.s.current;
+    const el = $('#build'), g = this.g, fac = g.s.current, pm = g.parcelMode();
     if (!force && el.childElementCount) return;
     this.lastBuildDay = g.s.day;
     el.innerHTML = '';
-    const hwLv = g.skillLv ? g.skillLv('hw') : 1; const head = h(`<div class="bhead"><h2>Bauen${hwLv > 1 ? `<span class="disc">Schrauben −${SKILL_PCT * (hwLv - 1)} %</span>` : ''}</h2><button class="modal-x" title="Schließen (B)">✕</button></div>`); head.querySelector('button').onclick = () => this.resume(); head.lastElementChild.before(this.capStrip(fac)); el.append(head);
+    const hwLv = g.skillLv ? g.skillLv('hw') : 1; const head = h(`<div class="bhead"><h2>Shop${hwLv > 1 ? `<span class="disc">Schrauben −${SKILL_PCT * (hwLv - 1)} %</span>` : ''}${pm ? '<span class="bsub">Online-Shop · Lieferung morgen vor deine Wohnungstür</span>' : ''}</h2><button class="modal-x" title="Schließen (B)">✕</button></div>`); head.querySelector('button').onclick = () => this.resume(); head.lastElementChild.before(this.capStrip(fac)); el.append(head);
     const cats = h('<div class="cats"></div>');
-    const catOk = (c) => (c.id === 'parts' ? g.has('rigs') && PARTS.some((p) => g.available(p)) : (c.id !== 'rigs' || g.has('rigs')) && g.shopList(c.id, fac).length > 0);
+    const catOk = (c) => (c.id === 'parts' ? (g.has('rigs') || !!g.s.flags.cpuStart) && PARTS.some((p) => g.available(p)) : (c.id !== 'rigs' || g.has('rigs')) && g.shopList(c.id, fac).length > 0); // CPU-Start: Teile (Grafikkarten) gleich von Anfang an
     if (!CATEGORIES.some((c) => c.id === this.cat && catOk(c))) this.cat = (CATEGORIES.find(catOk) || CATEGORIES[0]).id;
     for (const c of CATEGORIES.filter(catOk)) { const b = h(`<button class="${this.cat === c.id ? 'on' : ''}"><span class="ic">${c.icon}</span>${c.name}</button>`); b.onclick = () => { this.cat = c.id; this.build(true); }; cats.append(b); }
     el.append(cats);
     const list = h('<div class="items"></div>');
+    this.shopTop(list, fac); // Lieferstatus und Ausgepacktes – in allen Rubriken oben
     if (this.cat === 'parts') { el.style.setProperty('--cols', 3); this.partsView(list); el.append(list); return; }
     const items = g.shopList(this.cat, fac).sort((a, b) => b.releaseDay - a.releaseDay);
     if (this.cat === 'rigs') { const kb = this.kitsBar(fac); if (kb) list.append(kb); }
@@ -313,12 +323,13 @@ export class UI {
       if (it.kind === 'device' && g.facTier(fac) >= 1 && !it.hydro) s += `<br/><span class="rc-dim">Tipp: im Regal teilen sich 8 Miner einen Stellplatz</span>`;
       const left = g.stockLeft(it), sold = left === 0; if (left !== Infinity) s += `<br/><span class="stock ${sold ? 'neg' : ''}">${sold ? 'Kontingent: ' + esc(g.stockText(it)) : `Kontingent: noch ${left} Stück diesen Monat`}</span>`;
       if ((it.kind === 'device' || it.kind === 'holder') && g.slotOk(fac, it) && g.rentStart(fac) > 0) s += `<br/><b class="rc-warn">Startet die Miete: −${fmtUSD(g.rentStart(fac))}/Tag</b>`; // erstes Gerät am Miet-Standort
-      const noSlot = !g.slotOk(fac, it); if (noSlot) s += `<br/><span class="stock neg">Alle ${g.slotsMax(fac)} Plätze belegt</span>`;
-      const card = h(`<div class="item ${price > g.s.cash || it.hydro || noSlot ? 'dis' : ''}" data-price="${price}" data-id="${it.id}" ${it.hydro ? 'data-hydro="1"' : ''} ${noSlot ? 'data-full="1"' : ''}><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${this.money(price)}</span></div><div class="s">${s}</div><div class="miss">${this.missText(price)}</div><button class="btn small primary place" ${price > g.s.cash || it.hydro ? 'disabled' : ''}>Platzieren · ${this.money(price)}</button></div>`);
+      const noSlot = pm ? !g.orderRoomOk(it) : !g.slotOk(fac, it); if (noSlot) s += `<br/><span class="stock neg">${pm && g.pendingSlots() ? 'Kein Platz mehr – Bestelltes belegt die letzten Plätze' : `Alle ${g.slotsMax(fac)} Plätze belegt`}</span>`;
+      const card = h(`<div class="item ${price > g.s.cash || it.hydro || noSlot ? 'dis' : ''}" data-price="${price}" data-id="${it.id}" ${it.hydro ? 'data-hydro="1"' : ''} ${noSlot ? 'data-full="1"' : ''}><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${this.money(price)}</span></div><div class="s">${s}</div><div class="miss">${this.missText(price)}</div><button class="btn small primary place" ${price > g.s.cash || it.hydro ? 'disabled' : ''}>${this.buyLabel(price)}</button></div>`);
       try { const url = this.w.thumbnail(it.id); if (url) card.prepend(h(`<div class="thumb"><img alt="" src="${url}"/></div>`)); } catch (e) { /* ohne Vorschau weiter */ }
       if (sold) { card.dataset.sold = '1'; card.classList.add('dis'); card.querySelector('.place').disabled = true; card.addEventListener('click', (e) => { e.stopImmediatePropagation(); this.toast(`${it.name}: ${g.stockText(it)}`, 'bad'); }); }
       card.onclick = () => {
         if (it.hydro) { this.toast('Hydro-Miner nur in Rack oder Container.', 'bad'); return; }
+        if (g.parcelMode()) { this.orderItem(it); return; }
         if (!g.slotOk(fac, it)) { this.toast('Kein Platz mehr – Zeit für einen größeren Standort.', 'bad'); return; }
         if (g.itemPrice(it) > g.s.cash) { this.toast('Nicht genug Geld.', 'bad'); return; } // Preis von heute, nicht vom Öffnen
         this.resume(); this.w.startPlacement(it.id);
@@ -336,6 +347,64 @@ export class UI {
       }
     }
     el.append(list);
+  }
+  // Kaufknopf: im Paket-Modus „Bestellen · X $“, sonst „Platzieren · X $“
+  buyLabel(price, verb = null) { return `${verb || (this.g.parcelMode() ? 'Bestellen' : 'Platzieren')} · ${this.money(price)}`; }
+  // Shop oben: was unterwegs ist, was vor der Tür liegt, und der Bestand „Ausgepackt – zum Aufstellen“
+  shopTop(list, fac) {
+    const g = this.g, s = g.s, groups = g.stockGroups(), parcels = s.parcels || [], orders = s.orders || [];
+    if (parcels.length || orders.length) {
+      const n = orders.reduce((a, o) => a + o.items.length, 0), bits = [];
+      if (orders.length) bits.push(`${n === 1 ? 'Eine Bestellung' : `${n} Bestellungen`} unterwegs – kommt morgen früh`);
+      if (parcels.length) bits.push(`<b>${parcels.length === 1 ? 'Ein Paket' : `${parcels.length} Pakete`} vor deiner Wohnungstür</b> (${esc(parcels.slice(0, 3).map((p) => p.label).join(', '))}${parcels.length > 3 ? ' …' : ''}) – hingehen und <kbd>E</kbd>`);
+      const bar = h(`<div class="shipbar">${PKG_SVG}<span>${bits.join('<br/>')}</span></div>`);
+      if (parcels.length && !this.w.syncParcels) { const b = h('<button class="btn small primary">Reinholen</button>'); b.onclick = (e) => { e.stopPropagation(); for (const p of [...parcels]) this.pickParcel(p.id); }; bar.append(b); } // Welt ohne Paket-Kartons: hier hereinholen
+      list.append(bar);
+    }
+    if (!groups.length) return;
+    const total = groups.reduce((a, x) => a + x.n, 0), box = h(`<div class="unpack"><div class="up-h">Ausgepackt – zum Aufstellen <span>${total} ${total === 1 ? 'Stück' : 'Stück'} · kostet nichts mehr</span></div><div class="up-row"></div></div>`), row = box.querySelector('.up-row');
+    for (const gr of groups) {
+      const e = gr.e, def = PLACEABLE[e.type], ok = g.placeableAllowed(def, fac), full = !g.slotOk(fac, def);
+      const w = def.kind === 'rig' ? (e.parts && g.partIds({ type: e.type, parts: e.parts }).length ? g.rigWatt({ type: e.type, parts: e.parts }) : 0) : def.watt || 0, warn = ok && !full ? this.rigWarn(fac, w) : '';
+      const sub = !ok ? `Passt nicht in ${esc(FACILITY[fac].short)}` : full ? 'Hier ist kein Platz mehr' : e.kit ? 'Bausatz – Teile liegen im Lager' : e.ready ? `Fertig bestückt · ${e.parts?.gpus?.length || 0}× ${esc(PART[e.parts?.gpus?.[0]]?.name || 'ohne Karte')}` : def.kind === 'rig' ? 'Leeres Gehäuse' : def.kind === 'cooling' ? `Kühlt ${fmtWatt(def.cool)}` : def.kind === 'holder' ? `${e.items?.length || 0} / ${def.slots} Geräte` : def.kind === 'device' ? fmtHash(def.hash, def.algo) : 'Deko';
+      const c = h(`<div class="up-card ${ok && !full ? '' : 'dis'}"><div class="up-th"></div><div class="up-t"><b>${esc(g.stockName(e))}${gr.n > 1 ? ` <em>×${gr.n}</em>` : ''}</b><span>${sub}</span>${warn ? `<span class="rc-warn">${esc(warn)}</span>` : ''}</div><button class="btn small primary" ${ok && !full ? '' : 'disabled'}>Aufstellen</button></div>`);
+      try { const url = this.w.thumbnail(e.type); if (url) c.querySelector('.up-th').append(h(`<img alt="" src="${url}"/>`)); } catch (err) { /* ohne Vorschau */ }
+      c.querySelector('button').onclick = (ev) => { ev.stopPropagation(); this.placeFromStock(gr.key); };
+      row.append(c);
+    }
+    list.append(box);
+  }
+  // Ausgepacktes aufstellen: Platzier-Modus wie beim Kaufen, aber gratis (Game.placeStock über main.js onPlace)
+  placeFromStock(key) {
+    const g = this.g, e = g.stockFind(key); if (!e) return; const def = PLACEABLE[e.type], fac = g.s.current;
+    if (!g.placeableAllowed(def, fac)) { this.toast(`${esc(def.name)} passt nicht in ${esc(FACILITY[fac].short)}.`, 'bad'); return; }
+    if (!g.slotOk(fac, def)) { this.toast('Hier ist kein Platz mehr – stell es an einem anderen Standort auf.', 'bad'); return; }
+    this.resume(); this.w.startPlacement(e.type, null, { type: e.type, rot: 0, coin: e.coin || 'auto', parts: e.parts, items: e.items, stock: g.stockKey(e) });
+  }
+  // Paket vor der Wohnungstür aufheben (world.onParcel)
+  pickParcel(id) {
+    const r = this.g.pickupParcel(id); if (!r) return null;
+    this.audio?.install?.();
+    const bits = []; if (r.parts) bits.push(`${r.parts === 1 ? 'ein Teil' : `${r.parts} Teile`} im Lager`); if (r.dev) bits.push(`${r.dev} im Regal`); if (r.place) bits.push(`${r.place === 1 ? 'eins' : r.place} zum Aufstellen: <kbd>B</kbd> → oben „Ausgepackt“`);
+    const names = r.names.slice(0, 3).join(', ') + (r.names.length > 3 ? ' …' : '');
+    this.toast(`<b>Paket ausgepackt:</b> ${esc(names)}${bits.length ? ` – ${bits.join(', ')}` : ''}`, 'good', 6500);
+    this.goals(); return r;
+  }
+  // Bestellt (Toast) – mit Hinweis auf die Lieferung
+  ordered(what, extra = '') { this.audio?.buy?.(); this.toast(`<b>Bestellt:</b> ${esc(what)} – kommt morgen früh als Paket vor deine Wohnungstür.${extra}`, 'good', 5000); this.goals(); }
+  orderItem(it) {
+    const g = this.g, why = g.orderWhy(it); if (why) { this.toast(`${esc(why)}.`, 'bad'); return false; }
+    if (!g.orderPlace(it.id)) { this.toast('Bestellen ging nicht.', 'bad'); return false; }
+    this.ordered(it.name); return true;
+  }
+  // Monitor in der Wohnung: Online-Shop oder Börse
+  openShop() { if (!document.body.classList.contains('show-build')) this.toggleBuild(); }
+  monitorPick() {
+    const g = this.g, pm = g.parcelMode();
+    const body = h(`<div class="mon-pick"><h2>Am Monitor</h2><div class="cards"><div class="card"><h3>Online-Shop</h3><div class="sub">Teile, Rigs, Kühlung, Deko${pm ? ' · Lieferung morgen vor deine Wohnungstür' : ''}</div><button class="btn primary"><kbd>B</kbd>Shop öffnen</button></div><div class="card"><h3>Börse</h3><div class="sub">Bitcoin verkaufen · gerade ${fmtUSD(g.price('BTC'))}</div><button class="btn"><kbd>M</kbd>Zur Börse</button></div></div></div>`);
+    const [sb, mb] = body.querySelectorAll('button');
+    sb.onclick = () => { this.closeModal(); this.openShop(); }; mb.onclick = () => { this.closeModal(); this.market(); };
+    this.openModal(body, 'narrow', 'monitor');
   }
 
   // ---------- Ego-Steuerung: Panels öffnen/schließen ----------
@@ -369,7 +438,7 @@ export class UI {
     if (this.inspUid) { this.inspUid = null; $('#inspector').classList.add('hidden'); this.w.select(null); }
     this.w.focusObject?.(null); this.w.ghostPart?.(null); this.pause(false);
   }
-  openInspector(uid) { this.openedAt = performance.now(); if (!this.g.s.flags.seenPc) { this.g.s.flags.seenPc = true; this.g.checkGoals?.(); } this.w.select(uid); this.openUI(); }
+  openInspector(uid) { this.g.learned?.('inspect'); this.openedAt = performance.now(); if (!this.g.s.flags.seenPc) { this.g.s.flags.seenPc = true; this.g.checkGoals?.(); } this.w.select(uid); this.openUI(); }
   flashCash(u) { const el = $('#st-cash'); if (!el) return; el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); if (u > 0) { const f = h(`<div class="cashfly">+${fmtUSD(u)}</div>`); document.body.append(f); setTimeout(() => f.remove(), 1400); } }
   // „Neu freigeschaltet“-Karte mit kurzer Erklärung
   featureCard(f) {
@@ -378,8 +447,10 @@ export class UI {
     clearTimeout(this.featT); this.featT = setTimeout(() => this.showFeatures(), 60);
   }
   showFeatures() {
-    if (this.w.mode !== 'play' || this.paused || document.getElementById('lvup') || this.lvQ || this.lvBusy || document.querySelector('#toasts .toast.msg')) { clearTimeout(this.featT); this.featT = setTimeout(() => this.showFeatures(), 700); return; }
+    const les = this.g.lesson(), isLes = les && (this.featQ || []).includes(les); // Anlernen: Lektionskarte darf neben der Handy-Nachricht stehen
+    if (this.w.mode !== 'play' || this.paused || document.getElementById('lvup') || this.lvQ || this.lvBusy || (!isLes && document.querySelector('#toasts .toast.msg'))) { clearTimeout(this.featT); this.featT = setTimeout(() => this.showFeatures(), 700); return; }
     const q = this.featQ || []; this.featQ = []; if (!q.length) return;
+    if (isLes) { this.lessonCard(les); return; }
     this.audio?.message();
     const box = $('#featcards'); box.innerHTML = '';
     const PRIO = ['market', 'build', 'skills', 'speed2', 'autosell', 'rigs', 'company', 'coins', 'cold', 'heat', 'map', 'techs', 'ranking', 'loan', 'buycoins', 'speed3', 'phone'];
@@ -389,18 +460,38 @@ export class UI {
     this.featHide = setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 600); }, top === 'market' ? 4000 : 5200);
     this.speedBar(); this.dock(); this.keysHint(); this.sites(); this.goals();
   }
+  // Anlernen (Game.tutorTick): Hinweiskarte mit Taste, bleibt stehen, bis man es benutzt hat (Game.learned → lessonDone)
+  lessonCard(f) {
+    const F = FEATURES[f]; if (!F || this.g.lesson() !== f) return;
+    const box = $('#featcards'); box.querySelectorAll('.featcard').forEach((x) => x.remove()); clearTimeout(this.featHide);
+    const ring = f === 'phone', key = F.key && !F.pseudo ? `<kbd class="fc-k">${F.key}</kbd>` : '';
+    const el = h(`<div class="featcard lesson ${ring ? 'ring' : ''}" data-f="${f}"><div class="fc-t">${ring ? `${PHONE_SVG}Bzzz … bzzz …` : F.pseudo ? 'Nächster Schritt' : 'Neu'}</div><div class="fc-h">${key}${esc(F.title)}</div><div class="fc-b">${F.text}</div></div>`);
+    box.append(el); this.audio?.message();
+    this.speedBar(); this.dock(); this.keysHint(); this.sites(); this.goals();
+  }
+  lessonDone() { const el = document.querySelector('#featcards .featcard.lesson'); if (el) { el.classList.add('out'); setTimeout(() => el.remove(), 600); } this.dock(); this.keysHint(); }
+  // Neues Spiel: Aufwachen in der Wohnung (Kamerafahrt der Welt, wenn es sie gibt), dann vibriert das Handy
+  wakeUp() {
+    this.w.setMode('play');
+    let done = false; const go = () => { if (done) return; done = true; this.g.grant('phone'); this.setSpeed(1); this.keysHint(); this.dock(); };
+    if (this.w.wakeUp) { try { this.w.wakeUp(go); setTimeout(go, 15000); return; } catch (e) { /* ohne Kamerafahrt weiter */ } }
+    setTimeout(go, 1400);
+  }
+  // Wärmebild (Taste I – H ist jetzt das Handy)
+  toggleHeat() { if (!this.g.has('heat')) return; const on = this.w.toggleHeat(); this.sites(); this.g.learned?.('heat'); this.toast(on ? 'Wärmebild an' : 'Wärmebild aus', 'info', 1500); }
   // Tasten-Hinweise unten rechts: nur, was schon freigeschaltet ist
   keysHint() {
     const g = this.g, el = $('#keys'); if (!el) return;
     const unread = g.s.messages.filter((m) => !m.read).length;
-    const ks = [['build', 'B', 'Bauen'], ['market', 'M', 'Börse']].filter(([f]) => g.has(f));
-    if (unread) ks.unshift(['phone', 'P', `Handy (${unread})`]);
+    const ks = [['build', 'B', 'Shop'], ['market', 'M', 'Börse']].filter(([f]) => g.has(f));
+    if (g.has('phone')) ks.unshift(['phone', 'H', unread ? `Handy (${unread})` : 'Handy']);
     if (this.w.facId === 'keller' && this.w.dusty) ks.unshift(['lamp', 'F', this.w.vm?.lampOn ? 'Lampe aus' : 'Taschenlampe']);
     el.innerHTML = ks.map(([, k, l]) => `<span><kbd>${k}</kbd>${l}</span>`).join('') + '<span><kbd>Esc</kbd>Menü</span>';
   }
   toggleBuild() {
     if (document.body.classList.contains('show-build')) { this.resume(); return; }
-    this.resume(); document.body.classList.add('show-build'); this.build(true); this.openUI(); this.dock();
+    const s = this.g.s; if (s.flags.cpuStart && !s.goals.gpuorder) { this.cat = 'parts'; this.partTab = 'gpu'; } // erste Grafikkarte: gleich bei den Grafikkarten
+    this.resume(); document.body.classList.add('show-build'); this.build(true); this.openUI(); this.dock(); this.g.learned?.('build');
   }
   prompt(aim) {
     const el = $('#prompt');
@@ -413,7 +504,8 @@ export class UI {
       const g0 = this.g, search = g0.s.feat && !g0.s.unlocked.includes('keller') && !g0.s.flags.miningStarted;
       html = `<kbd>E</kbd>${search && this.w.facId === 'keller' ? 'Hoch in dein Zimmer' : search && Object.keys(g0.s.loose || {}).length ? 'Runter in den Keller' : esc(aim.door.label)}`;
     } else if (aim.prop) {
-      html = aim.prop.action === 'market' && !this.g.has('market') ? `Monitor · ${this.g.s.flags.miningStarted ? 'Miner läuft' : 'aus'}` : `<kbd>E</kbd>${esc(aim.prop.hint)}`;
+      const mon = this.monitorUse(aim.prop); // PC-Monitor: Shop und/oder Börse
+      html = mon ? `<kbd>E</kbd>${mon === 'both' ? 'Shop · Börse' : mon === 'shop' ? 'Online-Shop' : esc(aim.prop.hint)}` : aim.prop.action === 'market' ? `Monitor · ${this.g.s.flags.miningStarted ? 'Miner läuft' : 'aus'}` : `<kbd>E</kbd>${esc(aim.prop.hint)}`;
     } else {
       const o = this.g.findObj(aim.uid); if (!o) { el.classList.add('hidden'); return; }
       const def = PLACEABLE[o.type], sm = this.g.summary[this.g.facOf(aim.uid)], a = sm?.per.get(aim.uid);
@@ -421,14 +513,15 @@ export class UI {
       if (a && a.units.length) { const rev = a.units.reduce((x, u) => x + u.rev, 0) * sm.throttle; const cost = a.watt / 1000 * 24 * sm.elec; line = `${a.units.filter((u) => u.h).map((u) => fmtHash(u.h * sm.throttle, u.algo)).join(' · ') || 'pausiert'} · <span class="${rev - cost >= 0 ? 'pos' : 'neg'}">${rev - cost >= 0 ? '+' : ''}${fmtUSD(rev - cost)}/Tag</span>`; }
       else if (def.kind === 'cooling') line = `kühlt ${fmtWatt(def.cool)}`;
       const st = a?.psuOff && a.status === 'ok' ? `Netzteil zu schwach – ${a.psuOff === 1 ? '1 Karte' : a.psuOff + ' Karten'} aus` : { broken: 'Defekt – reparieren', partial: 'Teilweise defekt', psu: 'Netzteil zu schwach', incomplete: 'Teile fehlen – bestücken', empty: '➕ Leer – Geräte einsetzen', idle: { heat: 'pausiert (zu heiß)', event: 'gedrosselt (Ereignis)', loss: 'pausiert (kaum rentabel)' }[a?.limit] || 'pausiert (unrentabel)', full: 'pausiert (Anschluss voll)', off: '⏻ aus' }[a?.status];
-      const build = o.type === 'tower' && o.parts && !this.g.s.flags.miningStarted, miss = build ? this.g.pcMissing(o).length : 0;
-      html = build ? `<kbd>E</kbd>${miss ? 'Teile einbauen' : 'PC einschalten'}<div class="st">${4 - miss} von 4 Teilen eingebaut</div>` : `<kbd>E</kbd>${esc(o.type === 'tower' ? (this.g.facObjects('kinder').find((x) => x.type === 'tower')?.uid === o.uid ? 'Dein PC' : 'Mining-PC') : (def.short || def.name.replace(/[-‑]Gehäuse|\s*\(.*\)/g, '')))}${st ? `<div class="st">${st}</div>` : line ? `<div class="ln">${line}</div>` : ''}`;
+      const build = o.type === 'tower' && o.parts && !this.g.s.flags.miningStarted, first = this.g.isFirstPc(o), need = first ? this.g.firstNeed().length : 4, miss = build ? (first ? this.g.firstMissing(o) : this.g.pcMissing(o)).length : 0;
+      html = build ? `<kbd>E</kbd>${miss ? 'Teile einbauen' : 'PC einschalten'}<div class="st">${need - miss} von ${need} Teilen eingebaut</div>` : `<kbd>E</kbd>${esc(o.type === 'tower' ? (this.g.facObjects('kinder').find((x) => x.type === 'tower')?.uid === o.uid ? 'Dein PC' : 'Mining-PC') : (def.short || def.name.replace(/[-‑]Gehäuse|\s*\(.*\)/g, '')))}${st ? `<div class="st">${st}</div>` : line ? `<div class="ln">${line}</div>` : ''}`;
     }
     el.innerHTML = html; el.classList.remove('hidden');
   }
   useProp(p) {
     if (p.action === 'talk') { this.talk(p.who); return; }
-    if (p.action === 'market') { if (!this.g.has('market')) { this.toast(this.g.s.flags.miningStarted ? 'Noch nichts zu verkaufen – lass den PC arbeiten.' : 'Bau erst deinen PC zusammen.', 'info', 3000); return; } this.market(); }
+    if (p.action === 'shop') { if (this.g.has('build')) this.openShop(); else this.toast('Bau erst deinen PC zusammen.', 'info', 3000); return; }
+    if (p.action === 'market') { const mon = this.monitorUse(p); if (mon === 'both') { this.monitorPick(); return; } if (mon === 'shop') { this.openShop(); return; } if (!this.g.has('market')) { this.toast(this.g.s.flags.miningStarted ? 'Noch nichts zu verkaufen – lass den PC arbeiten.' : 'Bau erst deinen PC zusammen.', 'info', 3000); return; } this.market(); }
     else if (p.action === 'company') this.company();
     else if (p.action === 'techs') this.techs();
     else if (p.action === 'ranking') this.ranking();
@@ -438,8 +531,13 @@ export class UI {
       const vf = this.w.visFrac ?? s.frac;
       if (vf > 0.25 && vf < 0.8) { this.toast('Noch nicht müde – schlafen kannst du ab 19 Uhr.', 'info', 3000); return; }
       this.fade(); const steps = vf >= 0.8 ? 1 : 0; for (let i = 0; i < steps; i++) this.g.advanceDay(); s.frac = 0.29; this.w.visFrac = 0.29;
-      this.toast('Guten Morgen!', 'good', 2500);
+      this.g.learned?.('sleep'); this.toast(s.parcels?.length ? 'Guten Morgen! Vor deiner Wohnungstür liegt ein Paket.' : 'Guten Morgen!', 'good', 3000);
     }
+  }
+  // Was kann man am Monitor? 'both' (Shop und Börse), 'shop', 'market' oder '' – der Shop nur am PC-Monitor in der Wohnung
+  monitorUse(p) {
+    if (p?.action !== 'market') return ''; const g = this.g, shop = g.has('build') && (p.label === 'PC-Monitor' || this.w.facId === 'kinder'), mk = g.has('market');
+    return shop && mk ? 'both' : shop ? 'shop' : mk ? 'market' : '';
   }
   // Am Anfang: runter in den verstaubten Keller zum Suchen und wieder hoch
   searchTrip(down) {
@@ -509,28 +607,37 @@ export class UI {
     const ks = def.kind === 'rig' && o.parts ? this.kitSec(o) : null;
     if (g.slotKind(def) && !g.cloneBlocked(o.kit && !g.pcReady(o) ? { ...o, parts: o.kit } : o)) {
       const src = o.kit && !g.pcReady(o) ? { ...o, parts: o.kit } : o; // offener Bausatz: „noch so einen“ = derselbe Bausatz, nicht das leere Gehäuse
-      const fac = g.facOf(uid), full = !g.slotOk(fac, def), rig = g.cloneRig(src), lock = rig && (!g.readyOk(o.type) || src !== o), cc = g.cloneCost(src, lock), ck = rig ? g.cloneCost(src, true) : 0, cid = g.readyBy(o.type), ow = rig ? g.cloneWhy(src, lock) : '';
+      const fac = g.facOf(uid), pm = g.parcelMode(), full = pm ? !g.orderRoomOk(def) : !g.slotOk(fac, def), rig = g.cloneRig(src), lock = rig && (!g.readyOk(o.type) || src !== o), cc = g.cloneCost(src, lock), ck = rig ? g.cloneCost(src, true) : 0, cid = g.readyBy(o.type), ow = rig ? g.cloneWhy(src, lock) : '';
       const kitT = () => ({ type: o.type, rot: o.rot, coin: o.coin, parts: { mobo: null, cpu: null, psu: null, gpus: [] }, kit: true, src }); // Bausatz-Kopie: leeres Gehäuse, Teile ins Lager
-      const ag = h(`<button class="btn ${ks ? '' : 'primary'} wide again" ${full || ow || cc > g.s.cash ? 'disabled' : ''} title="${full ? 'Alle Plätze belegt' : ow ? esc(ow) : lock ? 'Gleiches Gehäuse, alle Teile ins Lager – selbst einbauen' : rig && cid ? `Gleicher Rig, fertig montiert von ${esc(CONTACT[cid].name)} (${Math.round(g.buildFee(o.type) * 100)} % Montage)` : 'Gleiches Gerät mit allen Teilen noch mal kaufen und hinstellen'}">${full ? 'Kein Platz mehr hier' : lock ? `Noch so einen als Bausatz · ${this.money(cc)}` : `Noch so einen bauen · ${this.money(cc)}`}</button>`);
-      ag.onclick = () => { this.resume(); this.w.startPlacement(o.type, null, lock ? kitT() : o); };
+      const ag = h(`<button class="btn ${ks ? '' : 'primary'} wide again" ${full || ow || cc > g.s.cash ? 'disabled' : ''} title="${full ? 'Alle Plätze belegt' : ow ? esc(ow) : lock ? 'Gleiches Gehäuse, alle Teile ins Lager – selbst einbauen' : rig && cid ? `Gleicher Rig, fertig montiert von ${esc(CONTACT[cid].name)} (${Math.round(g.buildFee(o.type) * 100)} % Montage)` : 'Gleiches Gerät mit allen Teilen noch mal kaufen und hinstellen'}">${full ? (pm ? 'Kein Platz mehr frei' : 'Kein Platz mehr hier') : lock ? `Noch so einen als Bausatz${pm ? ' bestellen' : ''} · ${this.money(cc)}` : `Noch so einen ${pm ? 'bestellen' : 'bauen'} · ${this.money(cc)}`}</button>`);
+      ag.onclick = () => { if (pm) { this.orderAgain(lock ? src : o, lock); return; } this.resume(); this.w.startPlacement(o.type, null, lock ? kitT() : o); };
       const as = h('<div class="sec again-sec"></div>'); as.append(ag);
       if (ow) as.append(h(`<div class="again-why">${esc(ow)}.</div>`));
       else if (rig && !full && lock && cid && !g.readyOk(o.type)) { const ll = h(this.lockLine(cid)); this.lockWire(ll); as.append(ll); }
-      else if (rig && !full && !lock) { const kb = h(`<button class="btn small again-kit" ${ck > g.s.cash ? 'disabled' : ''} title="Gleiches Gehäuse, alle Teile ins Lager – selbst einbauen (günstiger, Schrauben-EP)">Als Bausatz · ${this.money(ck)}</button>`); kb.onclick = () => { this.resume(); this.w.startPlacement(o.type, null, kitT()); }; as.append(kb); }
+      else if (rig && !full && !lock) { const kb = h(`<button class="btn small again-kit" ${ck > g.s.cash ? 'disabled' : ''} title="Gleiches Gehäuse, alle Teile ins Lager – selbst einbauen (günstiger, Schrauben-EP)">Als Bausatz${pm ? ' bestellen' : ''} · ${this.money(ck)}</button>`); kb.onclick = () => { if (pm) { this.orderAgain(o, true); return; } this.resume(); this.w.startPlacement(o.type, null, kitT()); }; as.append(kb); }
       c.prepend(as);
     }
     if (ks) c.prepend(ks);
     const mv = h('<button class="btn">✥ Verschieben</button>'); mv.onclick = () => { this.resume(); this.w.startPlacement(o.type, uid); }; row.append(mv);
     const mvb = this.moveButton(o); if (mvb) row.append(mvb);
     const rt = h('<button class="btn">⟳ Drehen</button>'); rt.onclick = () => { const r0 = o.rot; o.rot = (o.rot + 1) % 4; if (!this.w.canPlace(def, o.x, o.z, o.rot, uid)) { o.rot = r0; this.toast('Kein Platz zum Drehen.', 'bad'); } this.w.syncObjects(); }; row.append(rt);
-    if (def.kind !== 'decor' && !g.slotKind(def)) { const blk = g.cloneBlocked(o); const dp = h(`<button class="btn" title="${blk ? esc(blk) + ' gibt es nicht mehr zu kaufen' : 'Gleiches Objekt inkl. Teilen noch mal kaufen'}" ${blk ? 'disabled' : ''}>⧉ Duplizieren ${blk ? '· Teile nicht mehr im Handel' : `(${fmtUSD(this.g.cloneCost ? this.g.cloneCost(o) : 0)})`}</button>`); dp.onclick = () => { this.resume(); this.w.startPlacement(o.type, null, o); }; row.append(dp); }
+    if (def.kind !== 'decor' && !g.slotKind(def)) { const blk = g.cloneBlocked(o), pm = g.parcelMode(); const dp = h(`<button class="btn" title="${blk ? esc(blk) + ' gibt es nicht mehr zu kaufen' : pm ? 'Gleiches Gerät noch mal bestellen – Lieferung morgen' : 'Gleiches Objekt inkl. Teilen noch mal kaufen'}" ${blk ? 'disabled' : ''}>⧉ ${pm ? 'Nachbestellen' : 'Duplizieren'} ${blk ? '· Teile nicht mehr im Handel' : `(${fmtUSD(this.g.cloneCost ? this.g.cloneCost(o) : 0)})`}</button>`); dp.onclick = () => { if (pm) { this.orderAgain(o, false); return; } this.resume(); this.w.startPlacement(o.type, null, o); }; row.append(dp); }
     const sell = h(`<button class="btn danger">Verkaufen (+${fmtUSD(g.objectValue(o))})</button>`); sell.onclick = () => { if (!g.canSell(o)) { this.toast('Den PC brauchst du noch.', 'info', 2500); return; } g.removeObject(uid); this.resume(); }; row.append(sell);
     c.append(row);
+  }
+  // „Noch so einen“ / Nachbestellen im Paket-Modus (Game.orderClone)
+  orderAgain(src, kit) {
+    const g = this.g, def = PLACEABLE[src.type], why = g.cloneWhy(src, kit);
+    if (why) { this.toast(`${esc(why)}.`, 'bad'); return; }
+    if (!g.orderRoomOk(def)) { this.toast(esc(g.orderWhy(def) || 'Kein Platz mehr.'), 'bad'); return; }
+    if (!g.orderClone(src, kit)) { this.toast(g.cloneRig(src) && !kit && !g.readyOk(src.type) ? 'Fertig bestückt geht erst über einen Kontakt – als Bausatz geht’s sofort.' : 'Nicht genug Geld.', 'bad'); return; }
+    this.ordered(`${src.type === 'tower' ? (kit ? 'PC-Bausatz' : 'Mining-PC') : def.name}${kit && src.type !== 'tower' ? ' als Bausatz' : ''}`, kit ? ' Die Teile kommen mit ins Paket.' : '');
+    if (this.inspUid) this.inspect(this.inspUid);
   }
   // ---------- Umziehen: Gerät samt Teilen an einen anderen Standort ----------
   moveButton(o) {
     const g = this.g, def = PLACEABLE[o.type]; if (!g.slotKind(def) && def.kind !== 'cooling') return null;
-    if (g.isFirstPc(o)) return h('<button class="btn" disabled title="Dein erster PC bleibt im Zimmer – zur Erinnerung">Bleibt im Zimmer</button>');
+    if (g.isFirstPc(o)) return h('<button class="btn" disabled title="Dein erster PC bleibt in der Wohnung – zur Erinnerung">Bleibt in der Wohnung</button>');
     const from = g.facOf(o.uid), tg = g.s.unlocked.filter((id) => id !== from); if (!tg.length) return null;
     if (tg.length === 1) {
       const to = tg[0], why = g.moveWhy(o, to), fee = g.moveFee(o, to);
@@ -555,7 +662,7 @@ export class UI {
     const why = g.moveWhy(o, to); if (why) { this.toast(esc(why), 'bad'); return; }
     const r = g.moveObject(uid, to); if (!r) { this.toast('Kein Platz zum Abstellen gefunden.', 'bad'); return; }
     this.resume(); this.audio?.install?.();
-    this.toast(`${esc(o.type === 'tower' ? 'Mining-PC' : PLACEABLE[o.type].name)} steht jetzt ${to === 'kinder' ? 'im Zimmer' : to === 'keller' ? 'im Keller' : `in: ${esc(FACILITY[to].name)}`}${r.fee ? ` · Umzug ${fmtUSD(r.fee)}` : ''}`, 'good', 4000);
+    this.toast(`${esc(o.type === 'tower' ? 'Mining-PC' : PLACEABLE[o.type].name)} steht jetzt ${to === 'kinder' ? 'in der Wohnung' : to === 'keller' ? 'im Keller' : `in: ${esc(FACILITY[to].name)}`}${r.fee ? ` · Umzug ${fmtUSD(r.fee)}` : ''}`, 'good', 4000);
   }
   // Neuer Standort zum ersten Mal: Geräte von dort mitnehmen, wo der Strom teurer ist? („Deine 5 PCs mitnehmen?“)
   offerMove(to, tries = 0) {
@@ -564,7 +671,7 @@ export class UI {
     const take = list.slice(0, free), n = take.length, fee = take.reduce((a, c) => a + c.fee, 0), save = take.reduce((a, c) => a + c.save, 0), F = FACILITY[to];
     const pcs = take.every((c) => c.o.type === 'tower'), rigs = take.every((c) => PLACEABLE[c.o.type].kind === 'rig'), noun = pcs ? (n === 1 ? 'PC' : 'PCs') : rigs ? (n === 1 ? 'Rig' : 'Rigs') : n === 1 ? 'Gerät' : 'Geräte';
     const froms = [...new Set(take.map((c) => c.from))].map((id) => FACILITY[id].short).join(' und '), first = g.s.fac.kinder.objects.some((x) => g.isFirstPc(x)) && take.some((c) => c.from === 'kinder');
-    const body = h(`<div class="story"><div class="ch">Umziehen?</div><p><b>Deine ${n} ${noun} mitnehmen?</b><br/>${esc(froms)} → ${esc(F.name)}: dort ist der Strom günstiger${save > 0.005 ? ` – spart etwa <b>${fmtUSD(save)}/Tag</b>` : ''}.${list.length > n ? ` Es passen ${n} von ${list.length}.` : ''}${first ? '<br/>Dein erster PC bleibt im Zimmer.' : ''}${fee ? `<br/>Umzug: ${fmtUSD(fee)}.` : ''}${F.rent && g.rentStart(to) > 0 ? `<br/>Damit startet die Miete: −${fmtUSD(g.rentStart(to))}/Tag.` : ''}</p><div class="row" style="justify-content:flex-end;gap:8px"><button class="btn">Lieber nicht</button><button class="btn primary" ${fee > g.s.cash ? 'disabled' : ''}>Alle mitnehmen${fee ? ` · ${this.money(fee)}` : ''}</button></div></div>`);
+    const body = h(`<div class="story"><div class="ch">Umziehen?</div><p><b>Deine ${n} ${noun} mitnehmen?</b><br/>${esc(froms)} → ${esc(F.name)}: dort ist der Strom günstiger${save > 0.005 ? ` – spart etwa <b>${fmtUSD(save)}/Tag</b>` : ''}.${list.length > n ? ` Es passen ${n} von ${list.length}.` : ''}${first ? '<br/>Dein erster PC bleibt in der Wohnung.' : ''}${fee ? `<br/>Umzug: ${fmtUSD(fee)}.` : ''}${F.rent && g.rentStart(to) > 0 ? `<br/>Damit startet die Miete: −${fmtUSD(g.rentStart(to))}/Tag.` : ''}</p><div class="row" style="justify-content:flex-end;gap:8px"><button class="btn">Lieber nicht</button><button class="btn primary" ${fee > g.s.cash ? 'disabled' : ''}>Alle mitnehmen${fee ? ` · ${this.money(fee)}` : ''}</button></div></div>`);
     const [no, yes] = body.querySelectorAll('button');
     no.onclick = () => this.closeModal();
     yes.onclick = () => { const r = g.moveAll(to, take); this.closeModal(); if (r.n) { this.audio?.install?.(); this.toast(`${r.n} ${noun} stehen jetzt ${to === 'keller' ? 'im Keller' : `in: ${esc(F.name)}`}${r.fee ? ` · Umzug ${fmtUSD(r.fee)}` : ''}`, 'good', 5000); } };
@@ -585,7 +692,7 @@ export class UI {
     const badge = $('#insp-badge');
     const st = sm.tripped ? ['bad', 'Kein Strom'] : a.status === 'broken' ? ['bad', 'Defekt'] : a.status === 'partial' ? ['warn', 'Teilweise defekt'] : a.status === 'psu' ? ['bad', 'Netzteil zu schwach'] : a.status === 'incomplete' ? ['warn', 'Unvollständig'] : a.status === 'empty' ? ['idle', 'Leer'] : a.status === 'idle' ? ['idle', PAUSE_LABEL[a.limit] || 'Pausiert (unrentabel)'] : a.status === 'full' ? ['idle', 'Pausiert (Anschluss voll)'] : a.status === 'off' ? ['idle', 'Aus'] : def.kind === 'decor' ? ['idle', 'Deko'] : a.psuOff ? ['warn', `${a.psuOff === 1 ? '1 Karte' : a.psuOff + ' Karten'} aus`] : ['ok', sm.throttle < 1 ? 'Läuft (gedrosselt)' : 'Läuft'];
     if (this.showRun && g.s.flags.miningStarted && o.type === 'tower') { if (badge) badge.innerHTML = `<span class="badge ok"><i></i>Läuft</span>`; const se = $('#insp-stats'); if (se) se.innerHTML = ''; return; }
-    if (!g.s.flags.miningStarted && def.kind === 'rig' && o.parts) { const n = 4 - g.pcMissing(o).length; if (badge) badge.innerHTML = `<span class="badge ${n === 4 ? 'ok' : 'idle'}"><i></i>${n} / 4 Teile</span>`; const se = $('#insp-stats'); if (se) se.innerHTML = ''; return; }
+    if (!g.s.flags.miningStarted && def.kind === 'rig' && o.parts) { const need = g.isFirstPc(o) ? g.firstNeed().length : 4, n = need - (g.isFirstPc(o) ? g.firstMissing(o) : g.pcMissing(o)).length; if (badge) badge.innerHTML = `<span class="badge ${n === need ? 'ok' : 'idle'}"><i></i>${n} / ${need} Teile</span>`; const se = $('#insp-stats'); if (se) se.innerHTML = ''; return; }
     if (badge) badge.innerHTML = `<span class="badge ${st[0]}"><i></i>${st[1]}</span>`;
     let rev = 0, hs = [];
     for (const u of a.units) { rev += u.rev * sm.throttle; if (u.idle) hs.push(`<span style="color:var(--dim)">pausiert – wäre ${fmtUSD(u.potential)}/Tag mit ${u.coin ? COIN[u.coin].name : '–'}</span>`); else if (u.coin) hs.push(`${fmtHash(u.h * sm.throttle, u.algo)} → ${COIN[u.coin].name}`); else if (Object.keys(u.hash).length) hs.push('kein lohnender Coin'); if (u.note) hs.push(`<span class="neg">${u.note}</span>`); }
@@ -604,7 +711,7 @@ export class UI {
     if (hs.length) rows.push(['Leistung', hs.join('<br/>')]);
     if (def.kind !== 'decor' && a.watt > 0) rows.push(['Verbrauch', fmtWatt(a.watt)]);
     if (def.kind === 'cooling') { rows.push(['Kühlleistung', fmtWatt(def.cool)]); rows.push(['Auslastung', `${Math.round((a.util ?? 1) * 100)} %`]); }
-    if (sm.elec === 0 && g.s.flags.miningStarted) rows.push(['Strom', '<span class="pos">zahlt Mama</span>']);
+    if (sm.elec === 0 && g.s.flags.miningStarted) rows.push(['Strom', '<span class="pos">Pauschale in der Warmmiete</span>']);
     if (a.units.length) { rows.push(['Ertrag / Tag', `<span class="pos">${fmtUSD(rev)}</span>`]); if (cost > 0.005) rows.push(['Strom / Tag', `<span class="neg">−${fmtUSD(cost)}</span>`]); if (cost > 0.005) rows.push(['Gewinn / Tag', `<b class="${rev - cost >= 0 ? 'pos' : 'neg'}">${fmtUSD(rev - cost)}</b>`]); }
     else if (def.kind === 'cooling') rows.push(['Strom / Tag', `<span class="neg">−${fmtUSD(cost)}</span>`]);
     const el = $('#insp-stats'); if (el) el.innerHTML = `<div class="kv">${rows.map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join('')}</div>`;
@@ -612,14 +719,14 @@ export class UI {
   // Erster Mining-PC: Schritt für Schritt zusammenbauen
   pcBuild(o) {
     const g = this.g, s = g.s, p = o.parts, spots = this.w.room?.looseSpots || {};
-    const steps = [['mobo', 'Mainboard'], ['cpu', 'Prozessor'], ['gpu', 'Grafikkarte'], ['psu', 'Netzteil']];
+    const need = g.firstNeed(), steps = [['mobo', 'Mainboard'], ['cpu', 'Prozessor'], ['gpu', 'Grafikkarte'], ['psu', 'Netzteil']].filter(([t]) => need.includes(t)); // CPU-Start: ohne Grafikkarte
     const cur = (t) => (t === 'gpu' ? p.gpus[0] : p[t]);
     const running = s.flags.miningStarted;
     const firstNext = running ? null : steps.map(([t]) => t).find((t) => !cur(t) && s.inv?.includes(t) && !((t === 'cpu' || t === 'gpu') && !p.mobo));
     setTimeout(() => this.w.ghostPart?.(o.uid, firstNext, s.invIds?.[firstNext]), 0);
     const sec = h(`<div class="pcb ${running ? 'running' : ''}"></div>`);
     if (running) sec.append(h(`<div class="pcb-live"><span class="lab">Schon geschürft</span><b id="pcb-live">Miner startet …</b><span class="sub">Dein PC arbeitet jetzt für dich.</span></div>`));
-    const partsBox = running ? h('<details class="pcb-parts"><summary>Verbaute Teile (4)</summary></details>') : null; if (partsBox) sec.append(partsBox);
+    const partsBox = running ? h(`<details class="pcb-parts"><summary>Verbaute Teile (${g.partIds(o).length})</summary></details>`) : null; if (partsBox) sec.append(partsBox);
     steps.forEach(([t, lab]) => {
       const id = cur(t), snapping = this.installing && this.installingType === t, it = id ? PART[id] : null, carried = s.inv?.includes(t), lying = s.loose?.[t];
       const needMobo = !it && carried && (t === 'cpu' || t === 'gpu') && !p.mobo;
@@ -632,17 +739,19 @@ export class UI {
         if (this.installing) return; this.installing = true; this.installingType = t;
         if (!g.installLoose(o.uid, t)) { this.installing = false; this.flushXp(); return; }
         clearTimeout(this.instT); this.instT = setTimeout(() => { if (this.installing) { this.installing = false; this.flushXp(); if (this.inspUid) this.inspect(this.inspUid); if (this.afterSnap) { this.toast(this.afterSnap, 'good', 2600); this.afterSnap = null; } } }, 1600); this.w.ghostPart?.(null); this.inspect(o.uid); this.w.animateInstall?.(o.uid, t);
-        this.afterSnap = g.pcReady(o) ? 'Alle Teile sind drin. Schalt deinen PC ein!' : `${lab} eingebaut`;
+        this.afterSnap = g.firstReady(o) ? 'Alle Teile sind drin. Schalt deinen PC ein!' : `${lab} eingebaut`;
       };
       (partsBox || sec).append(row);
     });
+    // CPU-Start: der Grafikkarten-Platz bleibt erst mal frei – die Karte bestellt man später im Shop
+    if (!need.includes('gpu')) { const gid = p.gpus[0], gi = gid ? PART[gid] : null; (partsBox || sec).append(h(`<div class="pcb-step ${gi ? 'done' : 'opt'}"><span class="ic">${partSvg('gpu')}${gi ? '<i class="tick"></i>' : ''}</span><div class="tx"><b>Grafikkarte</b><span>${gi ? esc(gi.name) : 'Noch keine – der Prozessor schürft erst mal allein. Eine Karte bestellst du später im Shop.'}</span></div></div>`)); }
     if (!running) {
       // Live-Vorschau: was der PC mit den eingebauten Teilen schafft
       const hs = [p.cpu, ...p.gpus].filter(Boolean).reduce((a, id) => a + (PART[id].hash.sha256 || 0), 0), watt = g.rigWatt(o);
       const rev = hs ? g.revenueFor({ sha256: hs }, 'BTC', 99) : 0, px = g.price('BTC') || 1;
       const rows = [['Rechenleistung', hs ? fmtHash(hs, 'sha256') : '–'], ['Verbrauch', !g.partIds(o).length ? '–' : p.psu ? `${watt} W von ${PART[p.psu].cap} W` : `${watt} W`], ['Ertrag / Tag', rev ? `<span class="pos">≈ ${Math.round(rev / px).toLocaleString('de-DE')} BTC</span> <span style="color:var(--dim)">(${fmtUSD(rev)})</span>` : '–']];
-      if (g.pcReady(o) || s.flags.pcBuilt) sec.append(h(`<div class="kv pcb-sum">${rows.map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join('')}</div>`));
-      const ready = g.pcReady(o), miss = g.pcMissing(o).length;
+      if (g.firstReady(o) || s.flags.pcBuilt) sec.append(h(`<div class="kv pcb-sum">${rows.map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join('')}</div>`));
+      const ready = g.firstReady(o), miss = g.firstMissing(o).length;
       const on = h(`<div class="sec start"><button class="btn primary big wide ${ready ? 'glow' : ''}" ${ready && !this.installing ? '' : 'disabled'}><span class="bi"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg></span><span class="bt">PC einschalten</span></button>${ready ? '' : `<div class="pcb-left">Noch ${miss} ${miss === 1 ? 'Teil' : 'Teile'} bis zum Einschalten</div>`}</div>`);
       on.querySelector('button').onclick = () => this.powerOnSequence(o);
       sec.append(on);
@@ -683,8 +792,9 @@ export class UI {
       if (type === 'mobo') s = `${it.slots} GPU-Slots (Rahmen: max. ${PLACEABLE[o.type].maxGpu})`;
       const pl = it.id === cur ? null : g.buyPlan(o, it.id, slot), price = pl?.total ?? g.itemPrice(it), why = pl?.why || '', short = !why && price > g.s.cash;
       if (pl?.psu) s += `<br/><span class="rc-dim">mit ${esc(PART[pl.psu].name)} (+${fmtUSD(pl.extra)}) – das alte Netzteil kommt ins Lager</span>`;
-      const row = h(`<div class="picker-row ${it.id === cur ? 'cur' : ''}"><div><b>${esc(it.name)}</b>${it.id === bestId ? ' <span class="new">BESTER WERT</span>' : ''}${why ? ` <span style="color:#ff6b6b;font-size:11px">${esc(why)}</span>` : short ? ' <span style="color:#ff6b6b;font-size:11px">zu teuer</span>' : ''}<div class="s">${s}</div></div><div class="p" style="color:#ffb000;font-weight:700">${fmtUSD(price)}</div><button class="btn small primary" ${!pl || why || short ? 'disabled' : ''}>${it.id === cur ? 'Eingebaut' : `${cur ? 'Tauschen' : 'Kaufen'}${pl?.psu ? ' + Netzteil' : ''}`}</button></div>`);
+      const row = h(`<div class="picker-row ${it.id === cur ? 'cur' : ''}"><div><b>${esc(it.name)}</b>${it.id === bestId ? ' <span class="new">BESTER WERT</span>' : ''}${why ? ` <span style="color:#ff6b6b;font-size:11px">${esc(why)}</span>` : short ? ' <span style="color:#ff6b6b;font-size:11px">zu teuer</span>' : ''}<div class="s">${s}</div></div><div class="p" style="color:#ffb000;font-weight:700">${fmtUSD(price)}</div><button class="btn small primary" ${!pl || why || short ? 'disabled' : ''}>${it.id === cur ? 'Eingebaut' : `${g.parcelMode() ? 'Bestellen' : cur ? 'Tauschen' : 'Kaufen'}${pl?.psu ? ' + Netzteil' : ''}`}</button></div>`);
       row.querySelector('button').onclick = () => {
+        if (g.parcelMode()) { const r = g.orderPlan(o.uid, it.id, slot); if (!r) { this.toast(esc(g.buyPlan(o, it.id, slot)?.why || 'Nicht genug Geld.'), 'bad'); return; } this.closeModal(); this.ordered(`${it.name}${r.psu ? ` + ${PART[r.psu].name}` : ''}`, ' Dann aus dem Lager einbauen.'); this.inspect(o.uid); return; }
         const revOf = () => { const sm = g.summary[g.facOf(o.uid)], a = sm?.per.get(o.uid); return a ? a.units.reduce((x, u) => x + u.rev, 0) * sm.throttle : 0; };
         const before = revOf(), r = g.buyInstall(o.uid, it.id, slot);
         if (!r) { this.toast(esc(g.buyPlan(o, it.id, slot)?.why || 'Nicht genug Geld.'), 'bad'); return; }
@@ -716,8 +826,9 @@ export class UI {
       sec.append(sel);
       const row = h('<div class="row"></div>');
       const others = g.facObjects(g.facOf(o.uid)).filter((x) => x.type === o.type && x.items.length < def.slots);
-      if (others.length > 1) { const ab = h(`<button class="btn small good" style="margin-top:6px">Alle ${others.length} ${esc(def.name.split(' (')[0])} hier auffüllen</button>`); ab.onclick = () => { let k = 0; for (const x of others) k += g.holderAdd(x.uid, sel.value, def.slots); this.toast(k ? `${k}× ${esc(PLACEABLE[sel.value].name)} eingesetzt` : 'Nicht genug Geld.', k ? 'good' : 'bad', 3000); this.inspect(o.uid); }; sec.append(ab); }
-      for (const n of [1, 5, 25, 'max']) { if (n !== 'max' && n > def.slots) continue; const b = h(`<button class="btn small ${n === 'max' ? 'primary' : ''}">${n === 'max' ? 'Auffüllen' : '+' + n}</button>`); b.onclick = () => { const k = g.holderAdd(o.uid, sel.value, n === 'max' ? def.slots : n); if (!k) this.toast('Nicht genug Geld oder kein Platz.', 'bad'); else this.toast(`${k}× ${PLACEABLE[sel.value].name} eingesetzt`, 'good', 2500); this.inspect(o.uid); }; row.append(b); }
+      if (others.length > 1) { const ab = h(`<button class="btn small good" style="margin-top:6px">Alle ${others.length} ${esc(def.name.split(' (')[0])} hier auffüllen</button>`); ab.onclick = () => { let k = 0; for (const x of others) k += g.parcelMode() ? g.orderHolder(x.uid, sel.value, def.slots) : g.holderAdd(x.uid, sel.value, def.slots); this.toast(k ? `${k}× ${esc(PLACEABLE[sel.value].name)} ${g.parcelMode() ? 'bestellt – kommen morgen früh' : 'eingesetzt'}` : 'Nicht genug Geld.', k ? 'good' : 'bad', 3000); this.inspect(o.uid); }; sec.append(ab); }
+      const pm = g.parcelMode(), pend = pm ? g.pendingHolder(o.uid) : 0; if (pend) sec.append(h(`<div class="rc-dim" style="margin-top:4px">${pend} ${pend === 1 ? 'Gerät' : 'Geräte'} unterwegs – kommen mit dem Paket ins Regal</div>`));
+      for (const n of [1, 5, 25, 'max']) { if (n !== 'max' && n > def.slots) continue; const b = h(`<button class="btn small ${n === 'max' ? 'primary' : ''}">${n === 'max' ? (pm ? 'Auffüllen bestellen' : 'Auffüllen') : '+' + n}</button>`); b.onclick = () => { const k = pm ? g.orderHolder(o.uid, sel.value, n === 'max' ? def.slots : n) : g.holderAdd(o.uid, sel.value, n === 'max' ? def.slots : n); if (!k) this.toast('Nicht genug Geld oder kein Platz.', 'bad'); else if (pm) this.ordered(`${k}× ${PLACEABLE[sel.value].name}`, ' Beim Auspacken kommen sie gleich ins Regal.'); else this.toast(`${k}× ${PLACEABLE[sel.value].name} eingesetzt`, 'good', 2500); this.inspect(o.uid); }; row.append(b); }
       sec.append(row);
     }
     return sec;
@@ -743,8 +854,8 @@ export class UI {
       const left = go.action ? g.payLeft(go) : 0, paid = go.action ? g.payPaid(go) : 0;
       if (!done && go.action) { const fund = Math.min(g.payFunds(), left), pc = left ? Math.max(0, Math.min(100, (fund / left) * 100)) : 100; prog = `${paid > 0 && left > 0 ? `<span class="gnoch"> · noch ${fmtUSD(left)}</span>` : ''}<div class="gpay" title="Bargeld und Coins (Börse und Cold-Wallet, nach Gebühr) – was an Bargeld fehlt, wird beim Bezahlen aus den Coins verkauft"><span class="cnt">${fmtNum(Math.floor(fund), 0)} / ${this.money(left)}</span><div class="bar" style="width:180px"><div style="width:${pc}%;background:#ffb000"></div></div></div>`; }
       const gk = s.chapter + ':' + go.id, enter = gk !== this.goalKey; this.goalKey = gk;
-      const bag = s.loose && !s.flags.miningStarted && go.id === 'collect' ? `<span class="bag">${['mobo', 'cpu', 'gpu', 'psu'].map((t) => `<i class="${s.loose[t] ? 'miss' : 'got'}" title="${PNAME[t]}${s.loose[t] ? ' – noch nicht gefunden' : ' – eingesammelt'}">${partSvg(t, 16)}${s.loose[t] ? '' : '<b class="tk"></b>'}<em>${{ mobo: 'Board', cpu: 'CPU', gpu: 'GPU', psu: 'Netzteil' }[t]}</em></i>`).join('')}</span>` : '';
-      const gtext = (go.id === 'sell' && !g.has('market') ? 'Lass deinen PC ein paar Tage schürfen' : go.id === 'pcbuild' && this.w.facId === 'keller' ? 'Alle 4 Teile gefunden · zurück ins Zimmer' : go.text) + (go.orDate ? ` – sonst ab ${this.monthYear(g.orDate(ch, go))}` : '');
+      const bag = s.loose && !s.flags.miningStarted && go.id === 'collect' ? `<span class="bag">${g.firstNeed().map((t) => `<i class="${s.loose[t] ? 'miss' : 'got'}" title="${PNAME[t]}${s.loose[t] ? ' – noch nicht gefunden' : ' – eingesammelt'}">${partSvg(t, 16)}${s.loose[t] ? '' : '<b class="tk"></b>'}<em>${{ mobo: 'Board', cpu: 'CPU', gpu: 'GPU', psu: 'Netzteil' }[t]}</em></i>`).join('')}</span>` : '';
+      const gtext = (go.id === 'sell' && !g.has('market') ? 'Lass deinen PC ein paar Tage schürfen' : go.id === 'pcbuild' && this.w.facId === 'keller' ? `Alle ${g.firstNeed().length} Teile gefunden · zurück in die Wohnung` : go.text) + (go.orDate ? ` – sonst ab ${this.monthYear(g.orDate(ch, go))}` : '');
       const gh = this.goalHint(go);
       const row = h(`<div class="goal ${done ? 'done' : ''} ${enter ? 'enter' : ''}"><div class="ck">${done ? '✓' : ''}</div><div>${bag ? `<div class="goal-line">${esc(gtext)}${prog}</div>${bag}` : `${esc(gtext)}${prog}`}${gh ? `<div class="goal-hint">${gh}</div>` : ''}</div></div>`);
       if (!done && go.action) { const b = h(`<button class="btn small primary"><kbd>G</kbd>${esc(go.action.label)}</button>`); b.disabled = !g.canPayGoal(go); b.onclick = () => { if (g.goalAction(go)) { this.toast('✔ Erledigt!', 'good'); this.goals(); } }; row.lastElementChild.append(h('<br/>'), b); }
@@ -763,9 +874,13 @@ export class UI {
   }
   // Wie geht das Ziel? Kurzer Hinweis unter „zweiter PC“ / „erstes Rig im Keller“ (Bausatz zuerst, fertig bestückt über Kontakte)
   goalHint(go) {
-    const g = this.g, site = { rig2: 'kinder', openrig: 'keller' }[go.id]; if (!site || !g.has('rigs') || !g.s.unlocked.includes(site)) return '';
-    if (g.kitsOpen(site).length) return g.s.current === site ? 'Bausatz steht – anschauen, <kbd>E</kbd> und die Teile aus dem Lager einbauen.' : `Dein Bausatz wartet ${site === 'kinder' ? 'im Zimmer' : 'im Keller'} aufs Einbauen.`;
+    const g = this.g, s0 = g.s;
+    if (go.id === 'gpuorder') return g.has('build') ? 'Am <b>Monitor</b> <kbd>E</kbd> oder <kbd>B</kbd>: Shop → Teile → Grafikkarten. Lieferung morgen früh vor deine Wohnungstür.' : '';
+    if (go.id === 'gpu') { const inBag = g.bagList('gpu').length; if (inBag) return 'Die Karte liegt im Lager: PC anschauen, <kbd>E</kbd> → Grafikkarte 1 → einbauen.'; if (s0.parcels?.length) return 'Das Paket liegt vor deiner Wohnungstür – hingehen und <kbd>E</kbd>.'; if (s0.orders?.length) return 'Bestellt – morgen früh liegt das Paket vor der Tür. Ab 19 Uhr kannst du schlafen gehen (Bett, <kbd>E</kbd>).'; return ''; }
+    const site = { rig2: 'kinder', openrig: 'keller' }[go.id]; if (!site || !g.has('rigs') || !g.s.unlocked.includes(site)) return '';
+    if (g.kitsOpen(site).length) return g.s.current === site ? 'Bausatz steht – anschauen, <kbd>E</kbd> und die Teile aus dem Lager einbauen.' : `Dein Bausatz wartet ${site === 'kinder' ? 'in der Wohnung' : 'im Keller'} aufs Einbauen.`;
     const t = go.id === 'rig2' ? 'tower' : 'crate', nm = t === 'tower' ? 'Tower' : 'Milchkiste';
+    if (g.parcelMode()) return g.readyOk(t) ? `<kbd>B</kbd> → Rigs → ${nm}: „Fertig bestellen“ oder als Bausatz. Morgen früh vor der Tür, dann oben im Shop „Aufstellen“.` : `<kbd>B</kbd> → Rigs → ${nm}: „Bausatz bestellen“. Morgen auspacken, aufstellen, selbst einbauen.`;
     return g.readyOk(t) ? `<kbd>B</kbd> → Rigs → ${nm}: „Fertig bestückt“ oder als Bausatz.` : `<kbd>B</kbd> → Rigs → ${nm}: „Als Bausatz“ kaufen, hinstellen, selbst einbauen.`;
   }
   // Taste G: nächste Ziel-Aktion (z. B. Papa die Stromrechnung geben) – in der Ego-Steuerung ohne Mausklick
@@ -808,7 +923,7 @@ export class UI {
     this.switchSite(id);
     const ci = CHAPTERS.findIndex((c) => c.unlock === id);
     const next = CHAPTERS[ci + 1];
-    this.story(next?.title || f.name, `${(this.g.s.flags.shopLost && next?.introLost) || next?.intro || ''}<br/><br/><b>${esc(f.name)}</b> – ${esc(f.place)}<br/>${f.w} × ${f.d} m · ${f.power[0].kw.toLocaleString('de-DE')} kW Anschluss${f.rent ? ` · Miete ${fmtUSD(f.rent)}/Monat ab dem ersten Gerät` : ''}<br/><i>${esc(f.desc)}</i><br/><br/><b>${f.slots}</b> Stellplätze statt ${FACILITY[FACILITIES[Math.max(0, f.tier - 1)].id].slots} · <b>${Math.round((f.w * f.d) / 14).toLocaleString('de-DE')}×</b> so groß wie dein Kinderzimmer · <b>${Math.round(f.power[0].kw / 1.8).toLocaleString('de-DE')}×</b> so viel Strom.`);
+    this.story(next?.title || f.name, `${(this.g.s.flags.shopLost && next?.introLost) || next?.intro || ''}<br/><br/><b>${esc(f.name)}</b> – ${esc(f.place)}<br/>${f.w} × ${f.d} m · ${f.power[0].kw.toLocaleString('de-DE')} kW Anschluss${f.rent ? ` · Miete ${fmtUSD(f.rent)}/Monat ab dem ersten Gerät` : ''}<br/><i>${esc(f.desc)}</i><br/><br/><b>${f.slots}</b> Stellplätze statt ${FACILITY[FACILITIES[Math.max(0, f.tier - 1)].id].slots} · <b>${Math.round((f.w * f.d) / 14).toLocaleString('de-DE')}×</b> so groß wie deine erste Bude · <b>${Math.round(f.power[0].kw / 1.8).toLocaleString('de-DE')}×</b> so viel Strom.`);
     this.onModalClose = () => setTimeout(() => this.offerMove(id), 300); // danach: Geräte mitnehmen? (V2)
   }
 
@@ -819,14 +934,16 @@ export class UI {
     const techN = TECHS.filter((t) => !t.hidden && !(g.s.techs || {})[t.id] && g.techAvailable(t) && g.s.cash >= t.cost).length;
     el.innerHTML = '';
     const btns = [
-      ['', 'Bauen', 'B', () => this.toggleBuild()], ['', 'Börse', 'M', () => this.market()], ['', 'Handy', 'P', () => this.phone(), unread], ['', 'Firma', 'C', () => this.company()],
+      ['', 'Shop', 'B', () => this.toggleBuild()], ['', 'Börse', 'M', () => this.market()], ['', 'Handy', 'H', () => this.phone(), unread], ['', 'Firma', 'C', () => this.company()],
       ['', 'Technik', 'T', () => this.techs(), techN], ['', 'Logbuch', 'L', () => this.ranking(), this.achNew || 0], ['', 'Fähigkeiten', 'J', () => this.skills()], ['', this.w.empire ? 'Zurück' : 'Karte', 'K', () => this.toggleMap()], ['', 'Menü', 'ESC', () => this.menu()],
     ];
-    const need = { B: 'build', M: 'market', P: 'phone', C: 'company', T: 'techs', L: 'ranking', K: 'map', J: 'skills' };
-    const act = document.body.classList.contains('show-build') ? 'B' : this.w.empire ? 'K' : ({ market: 'M', phone: 'P', intro: 'P', company: 'C', techs: 'T', ranking: 'L', menu: 'ESC', skills: 'J' })[this.modalKind] || (this.paused ? 'ESC' : null);
-    for (const [ic, l, key, fn, b] of btns.filter((x) => !need[x[2]] || g.has(need[x[2]]))) { const e = h(`<button class="${act === key ? 'on' : ''}" title="${l} (${key})">${ic}${l}<span class="key">${key}</span>${b ? `<span class="bdg">${b}</span>` : ''}</button>`); e.onclick = () => { if (this.stickyModal()) return; fn(); }; el.append(e); }
+    const need = { B: 'build', M: 'market', H: 'phone', C: 'company', T: 'techs', L: 'ranking', K: 'map', J: 'skills' };
+    const act = document.body.classList.contains('show-build') ? 'B' : this.w.empire ? 'K' : ({ market: 'M', phone: 'H', intro: 'H', company: 'C', techs: 'T', ranking: 'L', menu: 'ESC', skills: 'J' })[this.modalKind] || (this.paused ? 'ESC' : null);
+    const les = g.lesson(), lf = les && (FEATURES[les]?.by || les); // Anlernen: der Knopf der laufenden Lektion leuchtet
+    for (const [ic, l, key, fn, b] of btns.filter((x) => !need[x[2]] || g.has(need[x[2]]))) { const e = h(`<button class="${act === key ? 'on' : ''} ${lf && need[key] === lf ? 'learn' : ''}" title="${l} (${key})">${ic}${l}<span class="key">${key}</span>${b ? `<span class="bdg">${b}</span>` : ''}</button>`); e.onclick = () => { if (this.stickyModal()) return; fn(); }; el.append(e); }
   }
   toggleMap() {
+    this.g.learned?.('map');
     if (this.w.empire) { this.w.hideEmpire(); this.pause(false); this.w.setMode('play'); }
     else { this.resume(); this.w.showEmpire(); }
   }
@@ -834,23 +951,6 @@ export class UI {
   // ---------- Modals ----------
   openModal(node, cls = '', kind = null) { document.getElementById('lvup')?.remove(); this.openUI(); const m = $('#modal'); m.classList.remove('hidden'); const card = m.querySelector('.modal-card'); card.className = 'modal-card ' + cls; card.scrollTop = 0; /* neues Fenster beginnt oben (reCompany stellt die Position selbst wieder her) */ const b = m.querySelector('.modal-body'); b.innerHTML = ''; b.append(node); this.modalKind = kind; document.body.dataset.modal = kind || ''; this.dock(); }
   closeModal() { const wasEvent = this.modalKind === 'event'; $('#modal').classList.add('hidden'); this.modalKind = null; document.body.dataset.modal = ''; this.dock(); const cb = this.onModalClose; this.onModalClose = null; cb?.(); if (wasEvent && this.g.s.ev?.open) this.evSnooze = this.g.s.ev.open.key; else if (this.g.s.ev?.open) setTimeout(() => this.tryEvent(), 500); if (!this.inspUid && !document.body.classList.contains('show-build') && $('#modal').classList.contains('hidden') && (this.w.mode === 'ui')) this.w.setMode('play'); }
-  // Spielstart: Nachricht von Deniz – Bitcoin gibt es jetzt, dein PC kann das. Mit Kurs.
-  introPhone(onClose) {
-    const g = this.g, s = g.s, p = g.price('BTC');
-    const m0 = s.messages.find((m) => m.id === 'm0');
-    const txt = m0 ? m0.text : MESSAGES.find((m) => m.id === 'm0').text;
-    const body = h(`<div class="intro-phone"><div class="ip-date">${fmtDate(s.day)}</div>
-      <div class="phone"><div class="ph-top"><div class="av"><svg viewBox="0 0 40 40" width="40" height="40"><circle cx="20" cy="20" r="20" fill="#ffcf8a"/><path d="M6 40c1-8 7-12 14-12s13 4 14 12z" fill="#e2574c"/><circle cx="20" cy="18" r="8.5" fill="#e7b48f"/><path d="M11 17c0-7 5-10 10-10 6 0 9 4 8 9-3-3-7-4-11-3-3 1-5 2-7 4z" fill="#2f241e"/><circle cx="17" cy="19" r="1.1" fill="#2f241e"/><circle cx="23" cy="19" r="1.1" fill="#2f241e"/><path d="M17 22.5q3 2.2 6 0" stroke="#8a4a3a" stroke-width="1.3" fill="none" stroke-linecap="round"/></svg></div><div><b>Deniz</b><span class="on">online</span></div></div>
-        <div class="msg f-Deniz">${esc(txt)}</div>
-        <div class="msg f-Deniz">Deine alten PC-Teile liegen doch noch irgendwo im Keller. Geh runter und such sie zusammen!<div class="pc-line"><span class="pc-dot">₿</span><span>Bitcoin gerade</span><b>${fmtUSD(p)}</b><canvas class="spark"></canvas></div></div>
-        <div class="row ip-act"><button class="btn primary big">Ab in den Keller</button></div>
-      </div></div>`);
-    if (m0) m0.read = true;
-    body.querySelector('button').onclick = () => { this.closeModal(); if (s.feat && Object.keys(s.loose || {}).length && this.w.facId !== 'keller') this.searchTrip(true); };
-    this.onModalClose = onClose;
-    this.openModal(body, 'narrow', 'intro');
-    requestAnimationFrame(() => this.chart(body.querySelector('canvas.spark'), 'BTC', 120, true));
-  }
   story(title, html, btn = 'Los geht’s') {
     const n = h(`<div class="story"><div class="ch">${esc(title)}</div><p>${html}</p><div class="row" style="justify-content:flex-end"><button class="btn primary">${btn}</button></div></div>`);
     n.querySelector('button').onclick = () => this.closeModal();
@@ -893,6 +993,7 @@ export class UI {
   market(update = false) {
     const g = this.g, s = g.s;
     if (update && this.modalKind !== 'market') return;
+    this.g.learned?.('market');
     // Auswahl aus einem früheren Spiel oder ein noch nicht gestarteter Coin: zurück auf Bitcoin
     { const mc = COIN[this.marketCoin]; if (!g.has('coins') || !mc || s.day < mc.start) this.marketCoin = 'BTC'; }
     if (this.trade?.mode === 'buy' && !g.has('buycoins')) this.trade.mode = 'sell';
@@ -1030,6 +1131,7 @@ export class UI {
   }
 
   phone(tab = null) {
+    this.g.learned?.('phone');
     const g = this.g;
     const msgs = [...g.s.messages].sort((a, b) => b.day - a.day), unread = msgs.filter((m) => !m.read).length;
     tab = tab || (unread || g.s.ev?.open ? 'msgs' : this.phoneTab || 'msgs'); this.phoneTab = tab;
@@ -1090,6 +1192,7 @@ export class UI {
     this.openModal(body, 'narrow', 'event');
   }
   company() {
+    this.g.learned?.('company');
     const g = this.g, s = g.s;
     const body = h(`<div><h2>Firma</h2><div class="cards"></div><div class="sec staff"></div></div>`);
     const cards = body.querySelector('.cards');
@@ -1100,7 +1203,7 @@ export class UI {
       const fs = s.fac[f.id], sm = g.summary[f.id];
       const c = h(`<div class="card ${!un && !can ? 'lock' : ''}"><h3>${un ? '' : can ? '' : ''}${esc(f.name)}</h3><div class="sub">${esc(f.place)} · ${fmtNum(f.w, 1)}×${fmtNum(f.d, 1)} m</div>
         <div class="kv" style="margin:4px 0"><div class="k">Anschluss</div><div class="v">${fmtNum(f.power[fs.power].kw, 1)} kW</div>
-        <div class="k">Strompreis</div><div class="v">${g.elecPrice(f.id) ? fmtUSD(g.elecPrice(f.id)) + '/kWh' : 'zahlen die Eltern'}</div>
+        <div class="k">Strompreis</div><div class="v">${g.elecPrice(f.id) ? fmtUSD(g.elecPrice(f.id)) + '/kWh' : 'Pauschale in der Warmmiete'}</div>
         <div class="k">Miete</div><div class="v">${f.rent ? (un && g.upgrades(f.id).some((u) => u.fx?.rent === 0 && g.upActive(f.id, u)) ? 'keine (gekauft)' : un && !g.facInUse(f.id) ? `ruht ohne Geräte (${fmtUSD(f.rent)}/Monat)` : fmtUSD(f.rent * (un ? g.fx('rent', f.id) : 1)) + '/Monat') : 'keine'}</div>
         ${un ? `<div class="k">Last</div><div class="v">${fmtWatt(sm.watt)}</div><div class="k">Temperatur</div><div class="v ${sm.temp > 38 ? 'neg' : ''}">${fmtNum(sm.temp, 1)} °C</div><div class="k">Stellplätze</div><div class="v ${g.slotsUsed(f.id) >= g.slotsMax(f.id) ? 'neg' : ''}">${g.slotsUsed(f.id)} / ${g.slotsMax(f.id)}</div>` : `<div class="k">Stellplätze</div><div class="v">${f.slots}</div>`}</div></div>`);
       if (un) {
@@ -1226,6 +1329,7 @@ export class UI {
   ending() { showFinale(this, 'won'); }
 
   techs() {
+    this.g.learned?.('techs');
     const g = this.g, s = g.s;
     const bench = Math.max(...s.unlocked.map((id) => FACILITY[id].tier)) <= 1;
     const body = h(`<div><h2>${bench ? 'Opas Werkbank' : 'Technik'}</h2>${bench ? '<p class="tech-note">Opa Heinz tüftelt mit dir an Verbesserungen. Größere Ideen brauchen größere Standorte.</p>' : ''}<div class="cards"></div></div>`);
@@ -1240,6 +1344,7 @@ export class UI {
   }
 
   ranking(tab = this.logTab || 'rank') {
+    this.g.learned?.('ranking');
     this.logTab = tab;
     if (tab !== 'rank') { if (tab === 'ach') { this.achNew = 0; this.dock(); } this.openModal(this.logShell(tab, tab === 'ach' ? this.achPane() : this.chronPane()), 'narrow logbook-card', 'ranking'); return; }
     const g = this.g, s = g.s, day = s.day;
@@ -1377,7 +1482,7 @@ export class UI {
     const partial = Y.d0 > toDay(`${y}-01-01`) + 1;
     const body = h(`<div class="story yr"><div class="ch">Jahresrückblick${partial ? ` · ab ${fmtDate(Y.d0)}` : ''}</div>
       <div class="yr-t"><b>${y}</b><span>${esc(yearTitle(y))}</span></div>
-      <div class="yr-grid">${cell('Ertrag', fmtUSD(Y.rev), 'pos')}${cell('Strom', Y.elec > 0 ? '−' + fmtUSD(Y.elec) : 'zahlt Mama')}${cell(Y.fix < 0 ? 'Feste Einnahmen' : 'Fixkosten', Y.fix > 0 ? '−' + fmtUSD(Y.fix) : Y.fix < 0 ? '+' + fmtUSD(-Y.fix) : '–', Y.fix < 0 ? 'pos' : '')}${cell('Gewinn', `${gain >= 0 ? '+' : ''}${fmtUSD(gain)}`, gain >= 0 ? 'pos' : 'neg')}</div>
+      <div class="yr-grid">${cell('Ertrag', fmtUSD(Y.rev), 'pos')}${cell('Strom', Y.elec > 0 ? '−' + fmtUSD(Y.elec) : 'Pauschale')}${cell(Y.fix < 0 ? 'Feste Einnahmen' : 'Fixkosten', Y.fix > 0 ? '−' + fmtUSD(Y.fix) : Y.fix < 0 ? '+' + fmtUSD(-Y.fix) : '–', Y.fix < 0 ? 'pos' : '')}${cell('Gewinn', `${gain >= 0 ? '+' : ''}${fmtUSD(gain)}`, gain >= 0 ? 'pos' : 'neg')}</div>
       <div class="yr-rows">${rows.map(([l, v]) => `<div class="yr-r"><span>${l}</span><span>${v}</span></div>`).join('')}</div>
       ${dec ? `<div class="yr-p"><span class="yr-k">Wichtigste Entscheidung</span>${esc(dec)}</div>` : ''}
       <div class="yr-p"><span class="yr-k">Familie</span>${esc(fam)}</div>
@@ -1422,7 +1527,7 @@ export class UI {
       if (!g.hasSave()) { this.toast('Kein Spielstand gefunden', 'bad'); return; }
       if (!lb.dataset.armed) { lb.dataset.armed = '1'; lb.textContent = 'Sicher? Nochmal klicken = laden'; setTimeout(() => { if (lb.isConnected) { delete lb.dataset.armed; lb.textContent = 'Laden'; } }, 4000); return; }
       if (!g.load()) { this.toast('Spielstand konnte nicht geladen werden', 'bad'); return; }
-      this.resetSession(); this.closeModal(); this.switchSite(g.s.current); this.w.syncLoose(); this.speedBar(); this.ticker(); this.keysHint(); this.toast('Spielstand geladen', 'good');
+      this.resetSession(); this.closeModal(); this.switchSite(g.s.current); this.w.syncLoose(); this.w.syncParcels?.(); this.speedBar(); this.ticker(); this.keysHint(); this.toast('Spielstand geladen', 'good');
     };
     const nb = body.querySelector('[data-a=new]');
     nb.onclick = () => {
@@ -1436,7 +1541,7 @@ export class UI {
 
   newGamePick(nb) {
     const g = this.g, row = h('<div class="row diff-row"></div>');
-    for (const [id, d] of Object.entries(DIFFICULTY)) { const b = h(`<button class="btn small ${id === 'normal' ? 'primary' : ''}" title="${esc(d.desc)}">${esc(d.name)}</button>`); b.onclick = () => { g.newGame(id); this.resetSession(); this.closeModal(); this.w.setMode('ui'); this.switchSite('kinder'); this.w.syncLoose(); this.speedBar(); this.ticker(); this.introPhone(() => { this.setSpeed(1); this.keysHint(); this.tutorial(); }); }; row.append(b); }
+    for (const [id, d] of Object.entries(DIFFICULTY)) { const b = h(`<button class="btn small ${id === 'normal' ? 'primary' : ''}" title="${esc(d.desc)}">${esc(d.name)}</button>`); b.onclick = () => { g.newGame(id); g.startTutor(); this.resetSession(); this.closeModal(); this.switchSite('kinder'); this.w.syncLoose(); this.w.syncParcels?.(); this.speedBar(); this.ticker(); this.dock(); this.keysHint(); this.wakeUp(); }; row.append(b); }
     row.prepend(h('<span class="dp-lab">Neues Spiel als</span>')); nb.closest('.row').after(row); nb.remove();
   }
 
@@ -1483,6 +1588,7 @@ export class UI {
     document.body.append(el); setTimeout(() => el.classList.add('out'), 3400); setTimeout(() => el.remove(), 3900);
   }
   skills() {
+    this.g.learned?.('skills');
     const g = this.g, s = g.s; if (!s.skills) return;
     const body = h(`<div class="skills"><h2>Fähigkeiten</h2><div class="sk-list"></div></div>`);
     const list = body.querySelector('.sk-list');
@@ -1540,18 +1646,18 @@ export class UI {
   // Die Karte zeigt immer den VOLL bestückten Rig (bester Ertrag pro Stellplatz) und merkt sich genau diese Zusammenstellung:
   // Klick kauft, was angezeigt wird (Preis/Verfügbarkeit werden geprüft); zu teuer → „Klein anfangen“ mit 1 Karte, später auffüllen
   rigCard(it, fac) {
-    const g = this.g, lock = !g.readyOk(it.id), rd = !lock, r = g.readyRig(it.id, fac, Infinity, rd), cp = g.itemPrice(it), full = !g.slotOk(fac, it), isNew = g.s.day - it.releaseDay < 120, price = r ? r.price : cp;
+    const g = this.g, pm = g.parcelMode(), lock = !g.readyOk(it.id), rd = !lock, r = g.readyRig(it.id, fac, Infinity, rd), cp = g.itemPrice(it), full = pm ? !g.orderRoomOk(it) : !g.slotOk(fac, it), isNew = g.s.day - it.releaseDay < 120, price = r ? r.price : cp;
     const cfg = r ? { type: r.type, mobo: r.mobo, cpu: r.cpu, psu: r.psu, gpu: r.gpu, n: r.n } : null;
     const sm = cfg && cfg.n > 1 && r.price > g.s.cash ? g.buildStats({ ...cfg, n: 1 }, fac, rd) : null; // gleiches Netzteil: reicht später für alle Karten
     const per = (x) => `<b class="${x.net >= 0 ? 'pos' : 'neg'}">${x.net >= 0 ? '+' : ''}${fmtUSD(x.net)}/Tag</b>`;
     const spec = r ? `${lock ? 'Bausatz' : 'Fertig'}: ${r.n}× ${esc(PART[r.gpu].name)} · ${fmtWatt(r.watt)}<br/>≈ ${per(r)} pro Stellplatz · ${this.roiText(r.roi)}` : esc(it.desc || '');
     const fd = full ? 'data-full="1"' : '', warn = r && !full ? this.rigWarn(fac, r.watt) : '', cid = g.readyBy(it.id);
-    const main = !r ? '' : lock ? `<button class="btn small primary wide rc-kit" data-p="${r.price}" ${fd} ${full || r.price > g.s.cash ? 'disabled' : ''} title="Gehäuse wird aufgestellt, die Teile liegen im Lager – selbst einbauen (Schrauben-EP)">Als Bausatz · ${this.money(r.price)}</button>` : `<button class="btn small primary wide rc-ready" data-p="${r.price}" ${fd} ${full || r.price > g.s.cash ? 'disabled' : ''} title="${cid ? `Fertig montiert von ${esc(CONTACT[cid].name)} · ${Math.round(g.buildFee(it.id) * 100)} % Montage` : 'Fertig montiert'}">Fertig bestückt · ${this.money(r.price)}</button>`;
+    const main = !r ? '' : lock ? `<button class="btn small primary wide rc-kit" data-p="${r.price}" ${fd} ${full || r.price > g.s.cash ? 'disabled' : ''} title="${pm ? 'Gehäuse und Teile kommen morgen im Paket – auspacken, aufstellen, selbst einbauen (Schrauben-EP)' : 'Gehäuse wird aufgestellt, die Teile liegen im Lager – selbst einbauen (Schrauben-EP)'}">${pm ? 'Bausatz bestellen' : 'Als Bausatz'} · ${this.money(r.price)}</button>` : `<button class="btn small primary wide rc-ready" data-p="${r.price}" ${fd} ${full || r.price > g.s.cash ? 'disabled' : ''} title="${cid ? `Fertig montiert von ${esc(CONTACT[cid].name)} · ${Math.round(g.buildFee(it.id) * 100)} % Montage` : 'Fertig montiert'}">${pm ? 'Fertig bestellen' : 'Fertig bestückt'} · ${this.money(r.price)}</button>`;
     const small = sm && !full ? `<button class="btn small wide rc-small" data-p="${sm.price}" ${sm.price > g.s.cash ? 'disabled' : ''} title="1 Karte jetzt, die anderen ${cfg.n - 1} später auffüllen – das Netzteil reicht für alle ${cfg.n} · ≈ ${fmtUSD(sm.net)}/Tag pro Stellplatz">Klein anfangen: 1 Karte · ${this.money(sm.price)}</button>` : '';
     const minP = sm && !full ? Math.min(price, sm.price) : price; // Karte nur abblenden, wenn auch der kleine Einstieg zu teuer ist
-    const card = h(`<div class="item rigc ${full || minP > g.s.cash ? 'dis' : ''}" data-rig="1" data-price="${minP}" data-fp="${price}" data-id="${it.id}" ${fd}><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${this.money(price)}</span></div><div class="s">${spec}<br/><span class="rc-dim">bis ${it.maxGpu} Grafikkarten${full ? '' : ` · Platz ${g.slotsUsed(fac)}/${g.slotsMax(fac)}`}</span>${warn ? `<br/><b class="rc-warn">${warn}</b>` : ''}</div>${lock && cid ? this.lockLine(cid) : ''}<div class="miss">${full ? 'Kein Platz mehr – Zeit für einen größeren Standort' : this.missText(price)}</div>${main}${small}<div class="rc-row"><button class="btn small rc-cfg" data-p="0" ${fd} ${full ? 'disabled' : ''} title="Teile selbst wählen${lock ? '' : ': als Bausatz oder fertig montiert'}">Selbst bauen</button><button class="btn small rc-case" data-p="${cp}" ${fd} ${full || cp > g.s.cash ? 'disabled' : ''} title="Leeres Gehäuse – Teile einzeln einbauen">Gehäuse · ${this.money(cp)}</button></div></div>`);
+    const card = h(`<div class="item rigc ${full || minP > g.s.cash ? 'dis' : ''}" data-rig="1" data-price="${minP}" data-fp="${price}" data-id="${it.id}" ${fd}><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${this.money(price)}</span></div><div class="s">${spec}<br/><span class="rc-dim">bis ${it.maxGpu} Grafikkarten${full ? '' : ` · Platz ${g.slotsUsed(fac)}/${g.slotsMax(fac)}`}</span>${warn ? `<br/><b class="rc-warn">${warn}</b>` : ''}</div>${lock && cid ? this.lockLine(cid) : ''}<div class="miss">${full ? (pm && g.pendingSlots() ? 'Kein Platz mehr – Bestelltes belegt die letzten Plätze' : 'Kein Platz mehr – Zeit für einen größeren Standort') : this.missText(price)}</div>${main}${small}<div class="rc-row"><button class="btn small rc-cfg" data-p="0" ${fd} ${full ? 'disabled' : ''} title="Teile selbst wählen${lock ? '' : ': als Bausatz oder fertig montiert'}">Selbst bauen</button><button class="btn small rc-case" data-p="${cp}" ${fd} ${full || cp > g.s.cash ? 'disabled' : ''} title="Leeres Gehäuse – Teile einzeln einbauen">Gehäuse · ${this.money(cp)}</button></div></div>`);
     try { const url = this.w.thumbnail(it.id); if (url) card.prepend(h(`<div class="thumb"><img alt="" src="${url}"/></div>`)); } catch (e) { /* ohne Vorschau weiter */ }
-    const go = (fn) => (e) => { e?.stopPropagation(); if (!g.slotOk(fac, it)) { this.toast('Kein Platz mehr – Zeit für einen größeren Standort.', 'bad'); return; } fn(); };
+    const go = (fn) => (e) => { e?.stopPropagation(); if (g.parcelMode() ? !g.orderRoomOk(it) : !g.slotOk(fac, it)) { this.toast(g.parcelMode() ? `${esc(g.orderWhy(it))}.` : 'Kein Platz mehr – Zeit für einen größeren Standort.', 'bad'); return; } fn(); };
     // gekauft wird genau die gezeigte Zusammenstellung; hat sich der Preis spürbar geändert oder ist ein Teil ausgelaufen: Katalog neu
     const buy = (c, ready, shown) => go(() => {
       const blk = g.buildBlocked(c), now = blk ? 0 : g.buildStats(c, fac, ready).price;
@@ -1559,7 +1665,7 @@ export class UI {
       this.startBuild(c, ready);
     });
     const ready = cfg ? buy(cfg, true, r.price) : null, kit = cfg ? buy(cfg, false, r.price) : null;
-    const caseOnly = go(() => { if (g.itemPrice(it) > g.s.cash) { this.toast('Nicht genug Geld.', 'bad'); return; } this.resume(); this.w.startPlacement(it.id); });
+    const caseOnly = go(() => { if (g.itemPrice(it) > g.s.cash) { this.toast('Nicht genug Geld.', 'bad'); return; } if (g.parcelMode()) { this.orderItem(it); return; } this.resume(); this.w.startPlacement(it.id); });
     card.querySelector('.rc-ready')?.addEventListener('click', ready);
     card.querySelector('.rc-kit')?.addEventListener('click', kit);
     card.querySelector('.rc-small')?.addEventListener('click', buy({ ...cfg, n: 1 }, rd, sm?.price || 0));
@@ -1579,7 +1685,7 @@ export class UI {
   // Gesperrt: wer liefert fertig montiert, und wie lernt man ihn kennen? (abgelehnt: gleich anrufen)
   lockText(cid) {
     const g = this.g, c = CONTACT[cid], st = g.contactState(cid);
-    if (st?.met) return { short: `Fertig bestückt liefert dir ${esc(c.name)}, sobald du ihn anrufst.`, long: `${c.name} (${c.biz}): ${c.offer}. Auch im Handy (P) unter Kontakte.`, call: true };
+    if (st?.met) return { short: `Fertig bestückt liefert dir ${esc(c.name)}, sobald du ihn anrufst.`, long: `${c.name} (${c.biz}): ${c.offer}. Auch im Handy (H) unter Kontakte.`, call: true };
     return { short: esc(c.soon), long: c.meet(g.s, g, fmtDate), call: false };
   }
   lockLine(cid) {
@@ -1614,8 +1720,8 @@ export class UI {
   lastBuildCard(fac) {
     const g = this.g, lb = g.s.lastBuild; if (!lb || g.buildBlocked(lb) || !g.placeableAllowed(PLACEABLE[lb.type], fac)) return null;
     const lock = lb.ready && !g.readyOk(lb.type), ready = lb.ready && !lock; // fertig montiert gesperrt (z. B. alter Stand): als Bausatz wiederholen
-    const st = g.buildStats(lb, fac, ready), full = !g.slotOk(fac, PLACEABLE[lb.type]), fd = full ? 'data-full="1"' : '';
-    const card = h(`<div class="item rigc lastb ${full || st.price > g.s.cash ? 'dis' : ''}" data-rig="1" data-price="${st.price}" ${fd}><div class="t"><span>Wie zuletzt</span><span class="p">${this.money(st.price)}</span></div><div class="s">${esc(PLACEABLE[lb.type].name)} · ${st.n}× ${esc(PART[lb.gpu]?.name || 'ohne Grafikkarte')}<br/>${ready ? `fertig montiert${g.readyBy(lb.type) ? ` von ${esc(CONTACT[g.readyBy(lb.type)].name)}` : ''}` : 'als Bausatz zum Selbsteinbauen'}<br/>≈ <b class="${st.net >= 0 ? 'pos' : 'neg'}">${st.net >= 0 ? '+' : ''}${fmtUSD(st.net)}/Tag</b> · ${this.roiText(st.roi)}${!full && st.ok ? ((w) => (w ? `<br/><b class="rc-warn">${w}</b>` : ''))(this.rigWarn(fac, st.watt)) : ''}</div>${lock ? this.lockLine(g.readyBy(lb.type)) : ''}<div class="miss">${full ? 'Kein Platz mehr – Zeit für einen größeren Standort' : ''}</div><button class="btn small primary wide lb-again" data-p="${st.price}" ${fd} ${full || st.price > g.s.cash ? 'disabled' : ''}>${lock ? 'Nochmal als Bausatz' : 'Nochmal bauen'} · ${this.money(st.price)}</button><div class="rc-row"><button class="btn small lb-edit" data-p="0" ${fd}>Ändern</button></div></div>`);
+    const pm = g.parcelMode(), st = g.buildStats(lb, fac, ready), full = pm ? !g.orderRoomOk(PLACEABLE[lb.type]) : !g.slotOk(fac, PLACEABLE[lb.type]), fd = full ? 'data-full="1"' : '';
+    const card = h(`<div class="item rigc lastb ${full || st.price > g.s.cash ? 'dis' : ''}" data-rig="1" data-price="${st.price}" ${fd}><div class="t"><span>Wie zuletzt</span><span class="p">${this.money(st.price)}</span></div><div class="s">${esc(PLACEABLE[lb.type].name)} · ${st.n}× ${esc(PART[lb.gpu]?.name || 'ohne Grafikkarte')}<br/>${ready ? `fertig montiert${g.readyBy(lb.type) ? ` von ${esc(CONTACT[g.readyBy(lb.type)].name)}` : ''}` : 'als Bausatz zum Selbsteinbauen'}<br/>≈ <b class="${st.net >= 0 ? 'pos' : 'neg'}">${st.net >= 0 ? '+' : ''}${fmtUSD(st.net)}/Tag</b> · ${this.roiText(st.roi)}${!full && st.ok ? ((w) => (w ? `<br/><b class="rc-warn">${w}</b>` : ''))(this.rigWarn(fac, st.watt)) : ''}</div>${lock ? this.lockLine(g.readyBy(lb.type)) : ''}<div class="miss">${full ? 'Kein Platz mehr – Zeit für einen größeren Standort' : ''}</div><button class="btn small primary wide lb-again" data-p="${st.price}" ${fd} ${full || st.price > g.s.cash ? 'disabled' : ''}>${lock ? (pm ? 'Nochmal als Bausatz bestellen' : 'Nochmal als Bausatz') : pm ? 'Nochmal bestellen' : 'Nochmal bauen'} · ${this.money(st.price)}</button><div class="rc-row"><button class="btn small lb-edit" data-p="0" ${fd}>Ändern</button></div></div>`);
     const again = card.querySelector('.lb-again'), edit = card.querySelector('.lb-edit');
     again.onclick = (e) => { e.stopPropagation(); this.startBuild(lb, ready); };
     edit.onclick = (e) => { e.stopPropagation(); this.configurator(lb.type, lb); };
@@ -1629,8 +1735,15 @@ export class UI {
     if (blk) { this.toast(`${esc(blk)} gibt es nicht mehr zu kaufen.`, 'bad'); return; }
     if (ready && !g.readyOk(cfg.type)) { this.toast(`${this.lockText(g.readyBy(cfg.type)).short} Als Bausatz geht’s sofort.`, 'info', 5000); return; }
     if (!st.ok) { this.toast(esc(st.why), 'bad'); return; }
-    if (!g.slotOk(fac, PLACEABLE[cfg.type])) { this.toast('Kein Platz mehr – Zeit für einen größeren Standort.', 'bad'); return; }
+    const pm = g.parcelMode();
+    if (pm ? !g.orderRoomOk(PLACEABLE[cfg.type]) : !g.slotOk(fac, PLACEABLE[cfg.type])) { this.toast(pm ? `${esc(g.orderWhy(PLACEABLE[cfg.type]) || 'Kein Platz mehr')}.` : 'Kein Platz mehr – Zeit für einen größeren Standort.', 'bad'); return; }
     if (st.price > g.s.cash) { this.toast(`${this.missText(st.price)}.`, 'bad'); return; }
+    if (pm) { // Paket-Modus: bestellen statt hinstellen – morgen früh vor der Tür, dann „Ausgepackt“ → Aufstellen
+      if (!g.orderBuild(cfg, fac, ready)) { this.toast('Bestellen ging nicht.', 'bad'); return; }
+      if (this.modalKind === 'config') this.closeModal();
+      this.ordered(`${cfg.type === 'tower' ? (ready ? 'Mining-PC' : 'PC-Bausatz') : PLACEABLE[cfg.type].name}${ready ? (cfg.type === 'tower' ? '' : ' (fertig bestückt)') : cfg.type === 'tower' ? '' : ' als Bausatz'}${st.n ? ` mit ${st.n}× ${PART[cfg.gpu]?.name || 'Karte'}` : ''}`, ready ? '' : ' Die Teile kommen mit ins Paket.');
+      if (document.body.classList.contains('show-build')) this.build(true); return;
+    }
     this.resume();
     this.w.startPlacement(cfg.type, null, { type: cfg.type, rot: 0, coin: 'auto', parts: ready ? st.parts : { mobo: null, cpu: null, psu: null, gpus: [] }, build: { type: cfg.type, mobo: cfg.mobo, cpu: cfg.cpu, psu: cfg.psu, gpu: cfg.gpu, n: st.n }, ready });
   }
@@ -1643,14 +1756,21 @@ export class UI {
     const key = `${fac}:${heat}:${full}:${loss}`; if (this.pauseKey === key) return; this.pauseKey = key;
     const n = (k) => `${k} ${k === 1 ? 'Gerät pausiert' : 'Geräte pausieren'}`;
     this.pauseToast?.remove();
-    if (full) this.pauseToast = this.toast(`Anschluss voll: ${n(full)}. Mehr Strom: <kbd>B</kbd> Bauen → oben „Strom ausbauen“.`, 'info', 7000);
+    if (full) this.pauseToast = this.toast(`Anschluss voll: ${n(full)}. Mehr Strom: <kbd>B</kbd> Shop → oben „Strom ausbauen“.`, 'info', 7000);
     else if (!heat) this.pauseToast = this.toast(`Kaum rentabel: ${n(loss)} – der Strom frisst fast den ganzen Ertrag. Kühlung hilft da nicht.`, 'info', 7000);
-    else { const fan = g.shopList('cool', fac).sort((x, y) => g.itemPrice(x) - g.itemPrice(y))[0]; this.pauseToast = this.toast(`Zu heiß hier: ${n(heat)}. Stell Kühlung auf: <kbd>B</kbd> Bauen → Kühlung${fan ? ` (${esc(fan.name)} ab ${this.money(g.itemPrice(fan))})` : ''}.`, 'info', 7000); }
+    else { const fan = g.shopList('cool', fac).sort((x, y) => g.itemPrice(x) - g.itemPrice(y))[0]; this.pauseToast = this.toast(`Zu heiß hier: ${n(heat)}. Stell Kühlung auf: <kbd>B</kbd> Shop → Kühlung${fan ? ` (${esc(fan.name)} ab ${this.money(g.itemPrice(fan))})` : ''}.`, 'info', 7000); }
   }
   // Nach dem Setzen: gleich noch einen? (Rigs, Miner, Regale – solange Geld, Platz und Kontingent reichen)
   placedAgain(o, p) {
     const g = this.g, d = PLACEABLE[o.type], fac = g.facOf(o.uid) || g.s.current, t = p?.template, n = (this.placedRun = (this.placedRun || 0) + 1);
     const empty = (d.kind === 'rig' && !g.pcReady(o)) || (d.kind === 'holder' && !o.items?.length), src = t?.kit ? t.src : t;
+    if (t?.stock) { // aus dem Bestand „Ausgepackt“: gleich das nächste gleiche Stück, solange eins da ist und Platz bleibt
+      const left = g.stockGroups().find((x) => x.key === t.stock)?.n || 0;
+      if (left && g.slotOk(fac, d)) { this.hint(`${n} aufgestellt · Klick = noch eins (${left} übrig) · R = drehen · Rechtsklick = fertig`); return true; }
+      if (empty) this.toast(o.kit ? 'Bausatz steht. Die Teile liegen im Lager – anschauen und <kbd>E</kbd>: einbauen.' : 'Steht. Anschauen und <kbd>E</kbd>: bestücken.', 'good', 5000);
+      if (left) this.toast(`Hier ist kein Platz mehr – ${left === 1 ? 'das letzte Stück' : `die übrigen ${left}`} stellst du woanders auf.`, 'info', 5000);
+      return false;
+    }
     const tipE = () => { if (empty) this.toast((t?.build && !t.ready) || t?.kit ? `Bausatz steht. Teile liegen im Lager – anschauen und <kbd>E</kbd>: einbauen${n > 1 ? ' (oder <kbd>B</kbd> → „Alle fertig schrauben“)' : ''}` : 'Anschauen und <kbd>E</kbd>: bestücken', 'good', 5000); };
     if (!g.slotKind(d)) { tipE(); return false; }
     const cost = t?.build ? g.buildStats(t.build, fac, t.ready).price : src ? g.cloneCost(src, !!t.kit) : g.itemPrice(d);
@@ -1672,7 +1792,7 @@ export class UI {
     const render = () => {
       grid.innerHTML = ''; goEl.innerHTML = '';
       const cid = g.readyBy(cfg.type), lock = !g.readyOk(cfg.type), fee = Math.round(g.buildFee(cfg.type) * 100);
-      cfx.innerHTML = `Als <b>Bausatz</b> kommen die Teile ins Lager und du baust sie selbst ein (günstiger, Schrauben-EP). ${lock ? (cid ? this.lockText(cid).short : '') : `<b>Fertig montiert</b> läuft er sofort (+${fee}&nbsp;% Montage${cid ? ` bei ${esc(CONTACT[cid].name)}` : ''}).`}`;
+      cfx.innerHTML = `${g.parcelMode() ? 'Bestellt wird heute, geliefert morgen früh vor deine Wohnungstür. ' : ''}Als <b>Bausatz</b> kommen die Teile ins Lager und du baust sie selbst ein (günstiger, Schrauben-EP). ${lock ? (cid ? this.lockText(cid).short : '') : `<b>Fertig montiert</b> läuft er sofort (+${fee}&nbsp;% Montage${cid ? ` bei ${esc(CONTACT[cid].name)}` : ''}).`}`;
       const rigs = PLACEABLES.filter((x) => x.kind === 'rig' && g.available(x) && g.placeableAllowed(x, fac));
       const np = g.psuCount({ type: cfg.type });
       const sel = (lab, list, cur, txt, key, num = false) => { const r = h(`<label class="cf-r"><span>${lab}</span><select>${list.map((it) => `<option value="${it.id}" ${String(it.id) === String(cur) ? 'selected' : ''}>${esc(txt(it))}</option>`).join('')}</select></label>`); r.querySelector('select').onchange = (e) => { cfg[key] = num ? +e.target.value : e.target.value; if (key === 'type' || key === 'mobo') cfg.n = Math.max(cfg.n, 1); render(); }; grid.append(r); return r; };
@@ -1691,13 +1811,13 @@ export class UI {
       if (fit && fit.id !== cfg.psu) { const b = h(`<button class="btn small cf-fit">Passendes nehmen</button>`); b.onclick = (e) => { e.preventDefault(); cfg.psu = fit.id; render(); }; ps.append(b); }
       const kit = g.buildStats(cfg, fac, false), rd = g.buildStats(cfg, fac, true), algo = kit.coin ? g.coinAlgo(kit.coin) : null;
       sum.innerHTML = `<div class="kv"><div class="k">Rechenleistung</div><div class="v">${algo ? `${fmtHash(kit.hash[algo] || 0, algo)} → ${COIN[kit.coin].name}` : '–'}</div><div class="k">Verbrauch</div><div class="v ${kit.cap && kit.watt > kit.cap ? 'neg' : ''}">${fmtWatt(kit.watt)} von ${fmtWatt(kit.cap)}</div><div class="k">Ertrag / Tag</div><div class="v pos">${fmtUSD(kit.rev)}</div><div class="k">Strom / Tag</div><div class="v neg">−${fmtUSD(kit.rev - kit.net)}</div><div class="k">Gewinn / Tag</div><div class="v"><b class="${kit.net >= 0 ? 'pos' : 'neg'}">${fmtUSD(kit.net)}</b></div><div class="k">Amortisation</div><div class="v">${Number.isFinite(rd.roi) ? `${Math.round(kit.roi)} Tage (Bausatz) · ${Math.round(rd.roi)} Tage (montiert)` : 'lohnt sich hier nicht'}</div></div>${kit.why ? `<div class="cf-why">${esc(kit.why)}</div>` : ''}`;
-      const full = !g.slotOk(fac, PLACEABLE[cfg.type]);
+      const pm = g.parcelMode(), full = pm ? !g.orderRoomOk(PLACEABLE[cfg.type]) : !g.slotOk(fac, PLACEABLE[cfg.type]);
       const lt = lock && cid ? this.lockText(cid) : null; // gesperrt: statt „Fertig montiert“ der Weg dorthin (abgelehnt: gleich anrufen)
-      const bk = h(`<button class="btn big ${lock ? 'primary' : ''}" ${full || !kit.ok || kit.price > g.s.cash ? 'disabled' : ''} title="Gehäuse wird aufgestellt, die Teile liegen im Lager – selbst einbauen">Bausatz · ${this.money(kit.price)}</button>`);
-      const br = lt?.call ? h(`<button class="btn big cf-call" title="${esc(lt.long)} Danach geht’s fertig montiert.">${esc(CONTACT[cid].name)} anrufen</button>`) : h(`<button class="btn big ${lock ? 'locked' : 'primary'}" ${full || lock || !rd.ok || rd.price > g.s.cash ? 'disabled' : ''} title="${lt ? esc(lt.long) : 'Läuft sofort'}">${lock ? `${LOCK_SVG}Fertig montiert · bald` : `Fertig montiert · ${this.money(rd.price)}`}</button>`);
+      const bk = h(`<button class="btn big ${lock ? 'primary' : ''}" ${full || !kit.ok || kit.price > g.s.cash ? 'disabled' : ''} title="Gehäuse wird aufgestellt, die Teile liegen im Lager – selbst einbauen">${pm ? 'Bausatz bestellen' : 'Bausatz'} · ${this.money(kit.price)}</button>`);
+      const br = lt?.call ? h(`<button class="btn big cf-call" title="${esc(lt.long)} Danach geht’s fertig montiert.">${esc(CONTACT[cid].name)} anrufen</button>`) : h(`<button class="btn big ${lock ? 'locked' : 'primary'}" ${full || lock || !rd.ok || rd.price > g.s.cash ? 'disabled' : ''} title="${lt ? esc(lt.long) : 'Läuft sofort'}">${lock ? `${LOCK_SVG}Fertig montiert · bald` : `${pm ? 'Fertig bestellen' : 'Fertig montiert'} · ${this.money(rd.price)}`}</button>`);
       bk.onclick = () => this.startBuild(cfg, false); br.onclick = () => { if (lt?.call) { this.callContact(cid); this.configurator(cfg.type, cfg); return; } this.startBuild(cfg, true); };
       goEl.append(bk, br);
-      if (full) goEl.append(h('<div class="cf-why">Kein Platz mehr – Zeit für einen größeren Standort.</div>'));
+      if (full) goEl.append(h(`<div class="cf-why">${pm && g.pendingSlots() ? 'Kein Platz mehr – Bestelltes belegt die letzten Plätze.' : 'Kein Platz mehr – Zeit für einen größeren Standort.'}</div>`));
       else if (kit.price > g.s.cash) goEl.append(h(`<div class="cf-why">${this.missText(kit.price)}.</div>`));
     };
     render();
@@ -1711,8 +1831,9 @@ export class UI {
     const tabs = h(`<div class="pv-tabs">${['gpu', 'cpu', 'mobo', 'psu'].map((t) => `<button class="btn small ${t === T ? 'on' : ''}" data-t="${t}">${partSvg(t, 16)}${NAMES[t]}</button>`).join('')}</div>`);
     tabs.querySelectorAll('button').forEach((b) => { b.onclick = () => { this.partTab = b.dataset.t; this.build(true); }; });
     list.append(tabs);
-    const bag = g.bagList(), bc = g.bagCount(), bx = h(`<div class="pv-bag"><div class="pv-h">Dein Lager${bag.length ? ` · ${bc} ${bc === 1 ? 'Teil' : 'Teile'} · Restwert ${this.money(g.bagValue())}` : ''}</div></div>`);
-    if (!bag.length) bx.append(h('<div class="pv-e">Leer. Gekaufte und ausgebaute Teile landen hier. Einbauen: PC anschauen und <kbd>E</kbd>.</div>'));
+    const pm = g.parcelMode(), pend = g.pendingParts(), pn = Object.values(pend).reduce((a, n) => a + n, 0);
+    const bag = g.bagList(), bc = g.bagCount(), bx = h(`<div class="pv-bag"><div class="pv-h">Dein Lager${bag.length ? ` · ${bc} ${bc === 1 ? 'Teil' : 'Teile'} · Restwert ${this.money(g.bagValue())}` : ''}${pn ? ` · ${pn} unterwegs oder vor der Tür` : ''}</div></div>`);
+    if (!bag.length) bx.append(h(`<div class="pv-e">Leer. ${pm ? 'Bestellte Teile landen hier, sobald du das Paket aufhebst.' : 'Gekaufte und ausgebaute Teile landen hier.'} Einbauen: PC anschauen und <kbd>E</kbd>.</div>`));
     for (const b of bag) { const c = h(`<span class="pv-chip">${partSvg(b.part.type, 14)}<b>${b.n}×</b> ${esc(b.part.name)}<button class="btn small" title="Ein Stück verkaufen">+${this.money(g.partResale(b.id))}</button></span>`); c.querySelector('button').onclick = (e) => { e.stopPropagation(); g.sellPart(b.id, 1); this.audio?.cash?.(); }; bx.append(c); }
     list.append(bx); const kb = this.kitsBar(fac); if (kb) list.append(kb);
     const val = (it) => { const c = g.bestCoin(it.hash, it.vram); const r = c ? g.revenueFor(it.hash, c, it.vram) : 0; return { c, r, net: r - (it.watt / 1000) * 24 * el }; };
@@ -1725,9 +1846,9 @@ export class UI {
       if (T === 'cpu') spec = `${it.watt} W · reicht als Steuerzentrale${it.hash.sha256 ? ` · schürft mit (${fmtHash(it.hash.sha256, 'sha256')})` : ''}`;
       if (T === 'mobo') spec = `${it.slots} Grafikkarten-Plätze · ${it.watt} W`;
       if (T === 'psu') spec = `${it.cap} W Leistung${it.cap >= 1600 ? ' · für große Rahmen (8er/12er brauchen zwei)' : ''}`;
-      const card = h(`<div class="item part" data-price="${price}"><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${this.money(price)}</span></div><div class="s">${it.id === bestId ? '<b class="pv-best">Bester Wert für dein Geld</b><br/>' : ''}${spec}${n ? `<br/><b class="pv-n">Im Lager: ${n}</b>` : ''}</div><div class="miss"></div><div class="rc-row"><button class="btn small primary place" data-p="${price}">Kaufen · ${this.money(price)}</button>${T === 'gpu' || T === 'psu' ? `<button class="btn small" data-p="${price * 2}">2×</button>` : ''}</div></div>`);
+      const card = h(`<div class="item part" data-price="${price}"><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${this.money(price)}</span></div><div class="s">${it.id === bestId ? '<b class="pv-best">Bester Wert für dein Geld</b><br/>' : ''}${spec}${n ? `<br/><b class="pv-n">Im Lager: ${n}</b>` : ''}${pend[it.id] ? `<br/><b class="pv-n">Unterwegs: ${pend[it.id]}</b>` : ''}</div><div class="miss"></div><div class="rc-row"><button class="btn small primary place" data-p="${price}">${pm ? 'Bestellen' : 'Kaufen'} · ${this.money(price)}</button>${T === 'gpu' || T === 'psu' ? `<button class="btn small" data-p="${price * 2}">2×</button>` : ''}</div></div>`);
       const [b1, b2] = card.querySelectorAll('button');
-      const buy = (k) => (e) => { e.stopPropagation(); const got = g.buyPart(it.id, k); if (!got) { this.toast('Nicht genug Geld.', 'bad'); return; } this.audio?.buy?.(); this.toast(`${got}× ${esc(it.name)} im Lager – einbauen: PC anschauen und <kbd>E</kbd>`, 'good', 3500); };
+      const buy = (k) => (e) => { e.stopPropagation(); if (g.parcelMode()) { const got = g.orderPart(it.id, k); if (!got) { this.toast('Nicht genug Geld.', 'bad'); return; } this.ordered(`${got}× ${it.name}`, ' Paket aufheben, dann PC anschauen und <kbd>E</kbd>: einbauen.'); return; } const got = g.buyPart(it.id, k); if (!got) { this.toast('Nicht genug Geld.', 'bad'); return; } this.audio?.buy?.(); this.toast(`${got}× ${esc(it.name)} im Lager – einbauen: PC anschauen und <kbd>E</kbd>`, 'good', 3500); };
       b1.onclick = buy(1); if (b2) b2.onclick = buy(2); card.onclick = buy(1);
       list.append(card);
     }
@@ -1735,7 +1856,7 @@ export class UI {
   // Inspektor: Einbau wie beim ersten PC – Steckplätze, Lager, Ghost-Vorschau, Einrast-Animation
   rigBuild(o) {
     const g = this.g, p = o.parts, cap = g.rigGpuCap(o), np = g.psuCount(o), uid = o.uid, open = this.rbOpen?.uid === uid ? this.rbOpen.key : null;
-    const bc = g.bagCount(), sec = h(`<div class="sec pcb rb"><h4>Einbau <span class="rb-bag">${bc ? `Lager: ${bc} ${bc === 1 ? 'Teil' : 'Teile'}` : 'Lager leer'}</span></h4></div>`);
+    const pm = g.parcelMode(), pend = g.pendingParts(), pn = Object.values(pend).reduce((a, n) => a + n, 0), bc = g.bagCount(), sec = h(`<div class="sec pcb rb"><h4>Einbau <span class="rb-bag">${bc ? `Lager: ${bc} ${bc === 1 ? 'Teil' : 'Teile'}` : 'Lager leer'}${pn ? ` · ${pn} unterwegs` : ''}</span></h4></div>`);
     const rows = [['mobo', 'Mainboard', p.mobo, null], ['cpu', 'Prozessor', p.cpu, null]];
     for (let i = 0; i < Math.max(cap, p.gpus.length); i++) rows.push(['gpu', `Grafikkarte ${i + 1}`, p.gpus[i] || null, i]);
     if (!p.mobo) rows.push(['gpu', 'Grafikkarten', null, -1]);
@@ -1751,6 +1872,7 @@ export class UI {
     };
     // Neu kaufen und einbauen – reicht das Netzteil nicht, kommt das passende gleich mit (Preis im Knopf)
     const buyIn = (id, idx) => {
+      if (g.parcelMode()) { const r = g.orderPlan(uid, id, idx); if (!r) { this.toast(esc(g.buyPlan(o, id, idx)?.why || 'Nicht genug Geld.'), 'bad'); this.inspect(uid); return; } this.rbOpen = null; this.w.ghostPart?.(null); this.ordered(`${PART[id].name}${r.psu ? ` + ${PART[r.psu].name}` : ''}`, ' Paket aufheben, dann hier aus dem Lager einbauen.'); this.inspect(uid); return; }
       const before = revOf(), t = PART[id].type, r = g.buyInstall(uid, id, idx);
       if (!r) { this.toast(esc(g.buyPlan(o, id, idx)?.why || 'Nicht genug Geld.'), 'bad'); this.inspect(uid); return; }
       this.rbOpen = null; this.w.ghostPart?.(null); this.inspect(uid); this.w.animateInstall?.(uid, t); this.audio?.install?.();
@@ -1768,8 +1890,8 @@ export class UI {
     };
     for (const [t, lab, id, idx] of rows) {
       const key = `${t}:${idx}`, locked = (t === 'cpu' || t === 'gpu') && !p.mobo, it = id ? PART[id] : null, isOpen = open === key;
-      const bagN = g.bagList(t).filter((b) => b.n >= (t === 'psu' ? np : 1)).length;
-      const row = h(`<div class="pcb-step ${it ? 'done' : locked ? 'locked' : 'free'} ${isOpen ? 'open' : ''}"><span class="ic">${partSvg(t)}${it ? '<i class="tick"></i>' : ''}</span><div class="tx"><b>${lab}</b><span>${it ? esc(it.name) : locked ? 'Erst ein Mainboard einbauen' : bagN ? `frei · ${bagN} passende im Lager` : 'frei'}</span></div>${locked ? '' : `<button class="btn small ${!it ? 'primary' : ''}">${isOpen ? 'Zu' : it ? 'Tauschen' : 'Einbauen'}</button>`}</div>`);
+      const bagN = g.bagList(t).filter((b) => b.n >= (t === 'psu' ? np : 1)).length, pendT = Object.entries(pend).filter(([pid]) => PART[pid]?.type === t).reduce((a, [, n]) => a + n, 0);
+      const row = h(`<div class="pcb-step ${it ? 'done' : locked ? 'locked' : 'free'} ${isOpen ? 'open' : ''}"><span class="ic">${partSvg(t)}${it ? '<i class="tick"></i>' : ''}</span><div class="tx"><b>${lab}</b><span>${it ? esc(it.name) : locked ? 'Erst ein Mainboard einbauen' : bagN ? `frei · ${bagN} passende im Lager` : pendT ? `frei · ${pendT} unterwegs` : 'frei'}</span></div>${locked ? '' : `<button class="btn small ${!it ? 'primary' : ''}">${isOpen ? 'Zu' : it ? 'Tauschen' : 'Einbauen'}</button>`}</div>`);
       const b = row.querySelector('button');
       if (b) b.onclick = () => { this.rbOpen = isOpen ? null : { uid, key }; this.w.ghostPart?.(null); this.inspect(uid); };
       sec.append(row);
@@ -1786,11 +1908,11 @@ export class UI {
         pick.append(c);
       }
       const shop = shopFor(t).filter((x) => x.id !== id);
-      if (shop.length) pick.append(h('<div class="rb-h">Neu kaufen</div>'));
+      if (shop.length) pick.append(h(`<div class="rb-h">${pm ? 'Im Shop bestellen · Lieferung morgen' : 'Neu kaufen'}</div>`));
       for (const x of shop) {
         const si = t === 'gpu' && id ? idx : null, pl = g.buyPlan(o, x.id, si) || { why: 'Geht nicht' }, price = pl.total ?? g.itemPrice(x) * (t === 'psu' ? np : 1);
-        const tip = pl.why || (pl.psu ? `Kaufen und gleich einbauen – mit ${PART[pl.psu].name} (+${fmtUSD(pl.extra)}), weil das Netzteil sonst nicht reicht. Das alte kommt ins Lager.` : 'Kaufen und gleich einbauen');
-        const c = h(`<div class="rb-opt"><span><b>${esc(x.name)}</b> <em>${t === 'gpu' ? `${x.watt} W` : t === 'psu' ? `${x.cap} W` : t === 'mobo' ? `${x.slots} Plätze` : `${x.watt} W`}</em></span><button class="btn small" ${pl.why || price > g.s.cash ? 'disabled' : ''} title="${esc(tip)}">${pl.psu ? 'Kaufen + Netzteil' : 'Kaufen'} · ${this.money(price)}</button></div>`);
+        const tip = pl.why || (pm ? (pl.psu ? `Bestellen – mit ${PART[pl.psu].name} (+${fmtUSD(pl.extra)}), weil das Netzteil sonst nicht reicht. Morgen früh im Paket.` : 'Bestellen – morgen früh im Paket, dann aus dem Lager einbauen') : pl.psu ? `Kaufen und gleich einbauen – mit ${PART[pl.psu].name} (+${fmtUSD(pl.extra)}), weil das Netzteil sonst nicht reicht. Das alte kommt ins Lager.` : 'Kaufen und gleich einbauen');
+        const c = h(`<div class="rb-opt"><span><b>${esc(x.name)}</b> <em>${t === 'gpu' ? `${x.watt} W` : t === 'psu' ? `${x.cap} W` : t === 'mobo' ? `${x.slots} Plätze` : `${x.watt} W`}</em></span><button class="btn small" ${pl.why || price > g.s.cash ? 'disabled' : ''} title="${esc(tip)}">${pm ? (pl.psu ? 'Bestellen + Netzteil' : 'Bestellen') : pl.psu ? 'Kaufen + Netzteil' : 'Kaufen'} · ${this.money(price)}</button></div>`);
         c.onmouseenter = () => this.w.ghostPart?.(uid, t, x.id); c.onmouseleave = () => this.w.ghostPart?.(null);
         c.querySelector('button').onclick = () => buyIn(x.id, si);
         pick.append(c);
@@ -1801,7 +1923,11 @@ export class UI {
     if (p.psu) { const watt = g.rigWatt(o), capW = PART[p.psu].cap * np; sec.append(h(`<div class="pcb-load"><span>Netzteil-Last</span><div class="bar"><div style="width:${Math.min(100, (watt / capW) * 100)}%;background:${watt > capW ? '#ff8f84' : 'var(--acc)'}"></div></div><span>${watt} / ${capW} W</span></div>`)); }
     // Abkürzungen: Bausatz aus dem Lager komplett einbauen, Basis-Teile kaufen, freie Plätze füllen
     const qr = h('<div class="row rb-quick"></div>'); // Serien-Einbau steht oben (kitSec)
-    if (!p.mobo || !p.cpu || !p.psu) { const b = h('<button class="btn small">Basis-Teile kaufen & einbauen</button>'); b.onclick = () => { const r = g.quickBase(uid); if (!r) this.toast('Nicht genug Geld.', 'bad'); this.inspect(uid); }; qr.append(b); }
+    if (pm) { // Paket-Modus: dieselben Abkürzungen als Bestellung (Teile kommen morgen ins Lager)
+      if (!p.mobo || !p.cpu || !p.psu) { const pl = g.basePlan(o); if (pl?.items.length) { const b = h(`<button class="btn small" ${pl.total > g.s.cash ? 'disabled' : ''}>Basis-Teile bestellen · ${this.money(pl.total)}</button>`); b.onclick = () => { if (!g.orderBase(uid)) this.toast('Nicht genug Geld.', 'bad'); else this.ordered('Basis-Teile', ' Paket aufheben, dann hier einbauen.'); this.inspect(uid); }; qr.append(b); } }
+      else if (p.gpus.length < cap) { const bg = this.bestGpu(), pl = bg && g.fillPlan(o, bg.id); if (pl) { const b = h(`<button class="btn small">Freie Plätze: ${pl.k}× ${esc(bg.name)} bestellen · ${this.money(pl.total)}</button>`); b.onclick = () => { if (!g.orderFill(uid, bg.id)) this.toast('Nicht genug Geld.', 'bad'); else this.ordered(`${pl.k}× ${bg.name}${pl.psu ? ` + ${PART[pl.psu].name}` : ''}`, ' Paket aufheben, dann hier einbauen.'); this.inspect(uid); }; qr.append(b); } }
+    }
+    else if (!p.mobo || !p.cpu || !p.psu) { const b = h('<button class="btn small">Basis-Teile kaufen & einbauen</button>'); b.onclick = () => { const r = g.quickBase(uid); if (!r) this.toast('Nicht genug Geld.', 'bad'); this.inspect(uid); }; qr.append(b); }
     else if (p.gpus.length < cap) { const bg = this.bestGpu(); if (bg) { const k = cap - p.gpus.length, pr = g.itemPrice(bg) * k; const b = h(`<button class="btn small">Freie Plätze füllen · ${k}× ${esc(bg.name)} · ${this.money(pr)}</button>`); b.onclick = () => { const n = g.fillGpus(uid, bg.id); if (!n) this.toast('Nicht genug Geld.', 'bad'); else { this.w.animateInstall?.(uid, 'gpu'); this.audio?.install?.(); } this.inspect(uid); }; qr.append(b); } }
     if (qr.childElementCount) sec.append(qr);
     return sec;

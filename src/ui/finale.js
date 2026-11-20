@@ -60,7 +60,7 @@ function pageWhatIf(ui) {
 }
 function pageCredits(ui, mode) {
   const s = ui.g.s;
-  return h(`<div class="fin-credits"><div class="ch">Abspann</div><div class="cr-logo">HASH<span>WERK</span></div><div class="cr-sub">Vom Kinderzimmer zum Rechenzentrum · 01.10.2010 – ${fmtDate(s.day)}</div>
+  return h(`<div class="fin-credits"><div class="ch">Abspann</div><div class="cr-logo">HASH<span>WERK</span></div><div class="cr-sub">Von der Einzimmerbude zum Rechenzentrum · 01.10.2010 – ${fmtDate(s.day)}</div>
     ${CREDITS.map(([k, v], i) => `<div class="cr-row" style="animation-delay:${0.2 + i * 0.35}s"><small>${esc(k)}</small><span>${esc(v)}</span></div>`).join('')}
     <div class="cr-thanks" style="animation-delay:${0.3 + CREDITS.length * 0.35}s">Danke fürs Spielen.</div><div class="fin-end"></div></div>`);
 }
@@ -113,7 +113,7 @@ export function startNewGamePlus(ui, ending) {
   const p = g.s.fin.prev || {};
   const last = p.ending === 'sold' ? `Beim letzten Mal hast du Hashwerk am ${fmtDate(p.day)} an Kral verkauft.` : p.won ? `Beim letzten Mal hast du MONOLITH am ${fmtDate(p.won)} überholt.` : '';
   ui.story(`Neues Spiel+ ${g.s.ngPlus > 1 ? g.s.ngPlus : ''}`.trim(), `Oktober 2010, Lindental. Auf deinem Schreibtisch steht eine verbeulte Blechkiste mit einem Zettel: <i>„Für den Jungen. Gutes Werkzeug spart Geld. – Opa“</i><br/><br/><b>Opas Werkzeugkiste:</b> Alle Hardware kostet dauerhaft 10 % weniger.${last ? `<br/><br/><span style="color:var(--dim)">${esc(last)}</span>` : ''}`, 'Ab ins Jahr 2010');
-  ui.onModalClose = () => setTimeout(() => ui.introPhone(() => { ui.setSpeed(1); ui.keysHint(); ui.tutorial(); }), 60);
+  ui.onModalClose = () => setTimeout(() => { ui.setSpeed(1); ui.keysHint(); ui.dock(); ui.phone(); }, 60); // Neues Spiel+: ohne Anlernen – gleich ins Handy (Deniz’ Nachrichten)
 }
 
 // ---------- Endlosziele im Ziel-Panel ----------
@@ -164,7 +164,7 @@ function stiftungCard(ui) {
     r.mama >= 3 ? 'Der Schulgarten wird mit Abwärme aus der alten Werkstatt beheizt. Mama verteilt im Januar Tomaten.' : 'Mama hat die Stiftung erst für einen Scherz gehalten. Jetzt macht sie die Buchhaltung, „damit das ordentlich wird“.',
     'Im alten Kino gibt es einen Hackerspace mit dreißig Lötplätzen. Am Eingang steht eine Milchkiste mit zwei alten Grafikkarten. Deniz hat sie dort hingestellt.',
   ];
-  const n = h(`<div class="story finale"><div class="ch">Epilog · ${fmtDate(s.day)}</div><div class="fin-hero">Die Lindental-Stiftung</div><p class="fin-lead">50 Millionen Dollar für die Stadt, in der alles mit einem alten PC unterm Dach anfing.</p><div class="fin-fam">${L.map((t, i) => `<div class="ff"><span class="ff-av t2">${'OPMD'[i]}</span><div><p>${esc(t)}</p></div></div>`).join('')}</div><div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn primary">Weiter</button></div></div>`);
+  const n = h(`<div class="story finale"><div class="ch">Epilog · ${fmtDate(s.day)}</div><div class="fin-hero">Die Lindental-Stiftung</div><p class="fin-lead">50 Millionen Dollar für die Stadt, in der alles mit einem alten PC in einer feuchten Hinterhaus-Bude anfing.</p><div class="fin-fam">${L.map((t, i) => `<div class="ff"><span class="ff-av t2">${'OPMD'[i]}</span><div><p>${esc(t)}</p></div></div>`).join('')}</div><div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn primary">Weiter</button></div></div>`);
   n.querySelector('button').onclick = () => ui.closeModal();
   ui.audio?.fanfare?.(); ui.openModal(n, 'narrow finale', 'story');
 }
