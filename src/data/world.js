@@ -214,7 +214,7 @@ export const MESSAGES = [
   { id: 'mICO', cond: (s) => s.techs && s.techs.ico, from: 'Deniz', text: 'Unser ICO ist durch! Verkauf die Ethereum, bevor die Blase platzt.' },
   { id: 'm22', date: '2018-12-15', from: 'Deniz', text: 'Krypto-Winter. Und 3-GB-Karten können kein Ethereum mehr minen.' },
   { id: 'm23', date: '2019-11-30', from: 'Deniz', text: 'Monero läuft jetzt auf CPUs besser als auf Grafikkarten.' },
-  { id: 'm24', date: '2020-03-13', from: 'Mama', text: 'Bleibt zuhause. Und pass auf dich auf.' },
+  { id: 'm24', date: '2020-03-13', from: 'Mama', text: 'Bleib zu Hause. Und pass auf dich auf. Soll ich dir Suppe vor die Tür stellen? Wie früher in deiner ersten Bude.' },
   { id: 'm25', date: '2020-12-10', from: 'Deniz', text: '4-GB-Karten fallen bei Ethereum raus. Auf Ethereum Classic laufen sie noch.' },
   { id: 'm26', date: '2021-05-21', from: 'Deniz', text: 'China verbietet Mining! Die halbe Welt geht offline. Mehr Blöcke für uns!' },
   { id: 'm28', date: '2022-09-15', from: 'Deniz', text: 'The Merge: Ethereum braucht keine Miner mehr. Alle Grafikkarten suchen neue Coins.' },
@@ -361,7 +361,7 @@ export const UPGRADES = {
   ],
   keller: [
     { id: 'nightmeter', name: 'Opas Nachtstromzähler', cost: 400, fx: { elec: 0.7 }, eff: 'Strom −30 % im Keller', desc: 'Der alte Zähler der Nachtspeicherheizung hängt noch im Heizungskeller. Opa klemmt die Rigs auf den Nachtstrom-Tarif.' },
-    { id: 'shaft', name: 'Opas Abluftschacht', cost: 600, fx: { coolMul: 1.3 }, eff: 'Kühlung ×1,3', desc: 'Opa Heinz mauert einen Schacht vom Heizungsraum bis über das Dach.' },
+    { id: 'shaft', name: 'Opas Abluftschacht', cost: 600, fx: { coolMul: 1.3 }, eff: 'Kühlung ×1,3', desc: 'Opa Heinz mauert mit Herrn Krauses Segen einen Schacht vom Heizungsraum bis über das Dach.' },
     { id: 'bars', name: 'Fenstergitter', cost: 150, secure: true, eff: 'Diebstahlschutz', desc: 'Stahlgitter vor den Kellerfenstern. Sieht nach Gefängnis aus, hält aber.' },
   ],
   werkstatt: [

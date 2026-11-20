@@ -338,7 +338,7 @@ export const EVENTS = [
     // 2012 lohnen alte Karten mit Haushaltsstrom kaum noch: Opa weiß einen Ausweg (Ausbau „nightmeter“ in world.js, −20 % Strom im Keller)
     id: 'opazaehler', from: 'Opa Heinz', title: 'Der alte Nachtstromzähler', when: { date: '2012-01-10', window: 420 },
     cond: (s) => s.unlocked.includes('keller') && !s.fac.keller?.up?.nightmeter && (s.stats.idle || 0) > 0,
-    text: '„Deine Kisten im Keller stehen still, weil der Strom zu teuer ist? Im Heizungskeller hängt noch der alte Zähler von der Nachtspeicherheizung. Den klemm ich dir um – Nachtstrom kostet fast ein Drittel weniger. Material 400 $, die Arbeit mach ich.“',
+    text: '„Deine Kisten im Keller stehen still, weil der Strom zu teuer ist? Im Heizungskeller von deinem Haus hängt noch der alte Zähler von der Nachtspeicherheizung – den hab ich 1979 selbst gesetzt. Den klemm ich dir um – Nachtstrom kostet fast ein Drittel weniger. Material 400 $, die Arbeit mach ich.“',
     choices: [
       { label: 'Opa machen lassen', cost: 400, hint: 'Dauerhaft −30 % Strom im Keller · Opa +1', fx: (g, s) => ({ do: () => { (s.fac.keller.up ||= {}).nightmeter ||= s.day || 1; }, rel: { opa: 1 }, xp: { hw: 40 }, log: 'Januar 2012: Opa klemmt die Rigs auf den Nachtstrom' }), reply: '<b>Opa:</b> So. Jetzt laufen deine Kisten zum Heizungstarif. Und keiner muss frieren.' },
       { label: 'Später', hint: 'Geht auch später im Firmenfenster (C) unter „Ausbauten“', fx: {}, reply: '<b>Opa:</b> Der Zähler läuft nicht weg. Der hängt da seit 1979.' },
@@ -904,7 +904,7 @@ export const EVENTS = [
     id: 'mamarente', from: 'Mama', title: 'Mama geht in Rente', when: { date: '2023-08-01', window: 14 },
     text: (s, h, g) => `„Nach 31 Jahren im Kindergarten ist Schluss! Ich will endlich reisen. Oder ein Gewächshaus. Oder beides.“${s.stats.mamaBtc ? ` Ihre Bitcoin von 2020 sind heute ${usd(s.stats.mamaBtc * g.price('BTC'))} wert. „Ist das viel?“` : ''}`,
     choices: [
-      { label: 'Gewächshaus mit Abwärme aus dem Keller', cost: memo('gh', (g) => fam(g, 3000, 0.3, 25000)), hint: 'Mama +2 · Keller dauerhaft 20 % besser gekühlt', fx: { rel: { mama: 2 }, mod: [{ key: 'cool', mult: 1.2, fac: 'keller' }], flag: 'gewaechshaus', log: 'August 2023: Mamas Gewächshaus heizt mit Keller-Abwärme' }, reply: '<b>Mama:</b> Tomaten im Oktober! Die Nachbarn halten mich für eine Hexe.' },
+      { label: 'Gewächshaus im Hinterhof, beheizt aus dem Keller', cost: memo('gh', (g) => fam(g, 3000, 0.3, 25000)), hint: 'Mama +2 · Keller dauerhaft 20 % besser gekühlt', fx: { rel: { mama: 2 }, mod: [{ key: 'cool', mult: 1.2, fac: 'keller' }], flag: 'gewaechshaus', log: 'August 2023: Mamas Gewächshaus heizt mit Keller-Abwärme' }, reply: '<b>Mama:</b> Tomaten im Oktober! Herr Krause kriegt jede Woche ein Körbchen, dann sagt er nichts. Die Nachbarn halten mich für eine Hexe.' },
       { label: 'Eine Weltreise schenken', cost: memo('welt', (g) => fam(g, 15000, 1, 80000)), hint: 'Mama +3', fx: { rel: { mama: 3 }, log: 'August 2023: Mama auf Weltreise geschickt' }, reply: '<b>Mama</b> (Postkarte aus Japan): „Hier gibt es Toiletten mit mehr Knöpfen als deine Computer.“' },
       { label: 'Zur Abschiedsfeier kommen', hint: 'Mama +1', fx: { rel: { mama: 1 } }, reply: '<b>Mama:</b> Die Kinder haben ein Lied gesungen. Ich hab geheult. Du auch, gib’s zu.' },
     ],

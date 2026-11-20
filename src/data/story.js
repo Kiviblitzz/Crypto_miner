@@ -1,7 +1,7 @@
 // Lebendige Welt: Gespräche mit der Familie (NPCs in der 3D-Welt) und Fundstücke (Erinnerungsstücke)
 //
 // TALK: [{ who, ch?: [Kapitelindizes], cond?(s, h, g, fac), lines: [string | (s, h, g, fac) => string] }]
-//   who: papa | opa | deniz | tech  ·  ch: s.chapter (0 Kinderzimmer … 5 Fjord, 6 = nach dem Sieg)
+//   who: papa | opa | deniz | tech  ·  ch: s.chapter (0 erste Wohnung … 5 Fjord, 6 = nach dem Sieg)
 //   fac: Standort, an dem das Gespräch stattfindet. Einträge mit cond (Ereignisse, Kurs, Hitze …) haben Vorrang.
 // KEEPSAKES: [{ id, fac, spot: [x, y, z, ry], label, name, text, gain, reward (Game.applyFx), cond?(s) }]
 // Zustand: s.talk { last, week, joy, got, seen, line } und s.keep { id: Tag }
@@ -35,22 +35,22 @@ export const PEOPLE = {
 export const talkWho = (s, who) => (who === 'deniz' && s.flags.denizLeft && !s.flags.denizReturned ? 'tech' : who);
 
 export const TALK = [
-  // ===================== Opa Heinz (im Keller, sobald Starkstrom liegt) =====================
+  // ===================== Opa Heinz (im Hobbyraum im Keller deines Hauses – er hat das Haus 1971 verkabelt) =====================
   { who: 'opa', ch: [1, 2], lines: [
     'Starkstrom im Keller. Deine Oma hätte mich dafür erschlagen. Und dann gefragt, ob es jetzt wärmer wird.',
     'Ich hab 1962 mein erstes Radio gebaut. Röhren, Lötzinn, verbrannte Finger. Du machst im Grunde dasselbe, nur mit mehr Lüftern.',
     'Sicherungen fliegen nicht einfach so raus, Junge. Die wollen dir was sagen. Meistens: zu viel.',
-    'Mittwochs läuft die Waschmaschine. Dann nimmst du zwei Rechner vom Netz, sonst hab ich Mamas Wäsche und deine Bitcoin auf dem Gewissen.',
+    'Mittwochs wäscht Frau Kowalczyk aus dem Vorderhaus. Dann nimmst du zwei Rechner vom Netz, sonst haben wir ihre Wäsche und deine Bitcoin auf dem Gewissen.',
     'Kabel immer ordentlich verlegen. Kabelsalat ist der Anfang vom Ende. Das gilt übrigens auch fürs Leben.',
     'Dein Rechner löst also Rätsel, und wer zuerst fertig ist, kriegt Geld? Früher hieß das Kreuzworträtsel. Da gab es einen Kugelschreiber.',
-    'Die Leitungen hier unten sind von 1971. Die halten länger als mancher Neubau. Ich hab sie selbst gezogen, ich muss es wissen.',
+    'Die Leitungen hier unten sind von 1971. Hab ich selbst gezogen, für den alten Krause, den Vater von deinem Vermieter. Die halten länger als mancher Neubau.',
   ] },
   { who: 'opa', ch: [3, 4, 5, 6], lines: [
     'Die Halle in Lindental-Nord? Da hab ich 1974 die Hauptverteilung angeschlossen. Wenn es da brummt, liegt es nicht an mir.',
     'Jetzt, wo du in der großen Welt bist, ist es still hier unten. Fast zu still. Ich lass das Radio laufen.',
     'Megawatt. Früher war das ein Kraftwerk, heute ist es dein Hobby. Ich bin stolz und ein kleines bisschen besorgt.',
     'Deine Mutter sagt, du arbeitest zu viel. Ich sag, er ist ein Brandt. Wir arbeiten nicht zu viel, wir arbeiten gründlich.',
-    'Ich komm trotzdem jeden Tag runter. Alte Gewohnheit. Und das Bier steht hier kühler.',
+    'Ich komm trotzdem jeden Tag her. Alte Gewohnheit. Herr Krause hat mir sogar einen Kellerschlüssel gegeben. Und das Bier steht hier kühler.',
   ] },
   { who: 'opa', ch: [2], lines: [
     'In der Werkstatt hinterm Laden hab ich deinem Vater das Löten beigebracht. Er war schlechter als du. Sag es ihm nicht.',
@@ -63,7 +63,7 @@ export const TALK = [
     'Schick mir ein Foto vom Fjord. Ein echtes, ausgedruckt. Das Handy-Zeug kann ich nicht vergrößern.',
   ] },
   { who: 'opa', cond: (s) => (s.fac.keller?.power || 0) >= 2, lines: [
-    'Zweiunddreißig Ampere im Einfamilienhaus. Ich hab dem Netzbetreiber gesagt, wir haben eine Sauna. Ist ja nicht mal gelogen.',
+    'Zweiunddreißig Ampere im Altbau-Keller. Dem Netzbetreiber hab ich gesagt, Herr Krause baut eine Sauna ein. Ist ja nicht mal gelogen.',
   ] },
   { who: 'opa', cond: up, lines: [
     'Deine Zaubermünzen sind gestiegen, sagt Papa. Dann spendier deinem Opa mal ein Bier. Ein kleines.',
@@ -94,7 +94,7 @@ export const TALK = [
   { who: 'opa', cond: (s) => recent(s, 'friseur', 120), lines: ['Mein Friseur hat wieder gefragt. Diesmal nach Ethereum. Ich wechsel den Friseur.'] },
   { who: 'opa', cond: halving, lines: ['Halbierung, sagt Deniz. Die Belohnung wird halbiert? Das ist ja wie bei der Rente.'] },
   { who: 'opa', cond: (s) => between(s, '2018-01-01', '2019-06-30'), lines: ['Achtzig bin ich jetzt. Mit achtzig fängt man nicht mehr mit Bitcoin an, sagen die. Ich sag: Mit achtzig hat man endlich Zeit dafür.'] },
-  { who: 'opa', cond: (s) => between(s, '2020-03-16', '2020-12-31'), lines: ['Ich soll zu Hause bleiben, sagt Mama. Ich bin im Keller. Das ist zu Hause.'] },
+  { who: 'opa', cond: (s) => between(s, '2020-03-16', '2020-12-31'), lines: ['Ich soll zu Hause bleiben, sagt deine Mutter. Ich bin in deinem Keller. Das ist fast zu Hause.'] },
   { who: 'opa', cond: (s) => !!s.keep?.radio, lines: ['Das Radio läuft wieder. Kurzwelle, abends. Manchmal hör ich Oslo. Ich glaube, das ist ein Zeichen.'] },
 
   // ===================== Papa (an der Werkbank in der Werkstatt) =====================
@@ -186,7 +186,7 @@ export const TALK = [
     'MONOLITH überholt. Ich hab drei Tage gebraucht, um mit dem Grinsen aufzuhören. Bin noch nicht ganz fertig.',
   ] },
   { who: 'deniz', ch: [2, 3, 4, 5, 6], lines: [
-    'Weißt du noch, das Kinderzimmer? Ein PC, eine Grafikkarte, null Ahnung. Und jetzt guck uns an.',
+    'Weißt du noch, deine feuchte Bude im Hinterhaus? Ein PC, anfangs nicht mal mit Grafikkarte, null Ahnung. Und jetzt guck uns an.',
   ] },
   { who: 'deniz', cond: (s) => between(s, '2013-01-15', '2013-09-30'), lines: ['Die ersten ASICs sind unterwegs! Ich hab die Lieferseite so oft neu geladen, dass mein Browser um Gnade bittet.'] },
   { who: 'deniz', cond: (s) => between(s, '2013-12-06', '2014-06-30'), lines: ['Dogecoin. Ein Hund. Als Münze. Ich bin verliebt und schäme mich kein bisschen.'] },
@@ -298,13 +298,13 @@ export function talkTo(g, who0, fac = g.s.current) {
 export const KEEPSAKES = [
   {
     id: 'gameboy', fac: 'kinder', spot: [0.97, 0.0, 2.92, 0.55], label: 'Alter Gameboy', name: 'Deniz’ Gameboy', cond: (s) => s.flags.miningStarted,
-    text: 'Unterm Bett, zwischen einer Socke und dem Mathebuch: ein grauer Handheld, hinten mit Edding beschriftet: <b>„DENIZ – FINGER WEG“</b>. Du hattest ihn 2009 „nur übers Wochenende“ ausgeliehen. Das Spielmodul steckt noch drin.',
+    text: 'Unterm Bett, zwischen einer Socke und deinem Berufsschulordner: ein grauer Handheld, hinten mit Edding beschriftet: <b>„DENIZ – FINGER WEG“</b>. Du hattest ihn 2009 „nur übers Wochenende“ ausgeliehen, beim Umzug ist er mit in die Kiste gerutscht. Das Spielmodul steckt noch drin.',
     gain: 'Deniz +1', reward: { rel: { deniz: 1 }, msg: { from: 'Deniz', text: 'MEIN GAMEBOY?! Dafür hab ich 2009 einen Monat lang Rasen gemäht. Der Spielstand ist noch drauf. Du bist offiziell der Beste.' } },
   },
   {
     id: 'radio', fac: 'keller', spot: [0.34, 0.0, 4.855, Math.PI / 2], label: 'Altes Röhrenradio', name: 'Opas Röhrenradio, 1962',
-    text: 'Hinter dem Heizkessel, unter einer alten Decke: ein Holzradio mit Stoffbespannung. Innen klebt ein Zettel in Opas Schrift: <b>„Mein erstes. Gebaut 1962, für Lisbeth. Rauscht nie.“</b> Du drehst am Knopf – und es knistert tatsächlich.',
-    gain: 'Opa +1 · +40 EP Schrauben', reward: { rel: { opa: 1 }, xp: { hw: 40 }, msg: { from: 'Opa Heinz', text: 'Das Radio! Ich dachte, deine Mutter hat es beim Entrümpeln weggeworfen. Behalt es, Junge. Und dreh ab und zu Kurzwelle.' } },
+    text: 'Hinter dem Heizkessel, unter einer Decke im Gerümpel vom Vormieter: ein Holzradio mit Stoffbespannung. Innen klebt ein Zettel in Opas Schrift: <b>„Mein erstes. Gebaut 1962, für Lisbeth. Rauscht nie.“</b> Du drehst am Knopf – und es knistert tatsächlich.',
+    gain: 'Opa +1 · +40 EP Schrauben', reward: { rel: { opa: 1 }, xp: { hw: 40 }, msg: { from: 'Opa Heinz', text: 'Das Radio! Das hab ich 1971 dem alten Krause geliehen, als ich in deinem Haus die Leitungen gezogen hab – und nie zurückgekriegt. Behalt es, Junge. Und dreh ab und zu Kurzwelle.' } },
   },
   {
     id: 'loetkolben', fac: 'werkstatt', spot: [2.42, 0.0, 0.5, 0.35], label: 'Alter Lötkolben', name: 'Papas erster Lötkolben',
@@ -319,7 +319,7 @@ export const KEEPSAKES = [
   {
     id: 'usbstick', fac: 'rz', spot: [6.4, 0.0, 4.78, 0.6], label: 'Alter USB-Stick', name: '„BTC 2011 – NICHT LÖSCHEN“',
     text: 'Am Fuß der Glaswand zum Leitstand, zwischen zwei Bodenplatten: ein zerkratzter USB-Stick mit Klebeband-Etikett in deiner Schrift von damals. Beim Umzug muss er aus einer Kiste gerutscht sein. Darauf: eine Wallet aus dem ersten Winter.',
-    gain: '+0,5 BTC', reward: { coin: { BTC: 0.5 }, msg: { from: 'Deniz', text: 'Du hast den Stick gefunden?! Ich hab 2017 zwei Wochen lang dein altes Zimmer danach durchsucht. Erzähl das bitte niemandem.' } },
+    gain: '+0,5 BTC', reward: { coin: { BTC: 0.5 }, msg: { from: 'Deniz', text: 'Du hast den Stick gefunden?! Ich hab 2017 zwei Wochen lang deine alte Bude danach durchsucht. Erzähl das bitte niemandem.' } },
   },
   {
     id: 'polarfoto', fac: 'fjord', spot: [8.42, 0.0, 0.34, 0.45], label: 'Altes Foto', name: 'Polarlicht über dem Sognefjord',
