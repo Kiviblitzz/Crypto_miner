@@ -7,7 +7,7 @@
 //
 // Endlosziele (ENDLESS_GOALS, geordnet): { id, text(s, g, st), sub?, ready?(s, g, st), check?(s, g, st) | tick?(s, g, st),
 //   progress?(s, g, st) => [cur, tgt, kind('hash'|'usd'|'watt'|'count'|'days'|'btc'|'wait')], action?: {label, cost}, fx? (wie Ereignisse, beim Bezahlen),
-//   start?: {from, text} (Handy-Nachricht, sobald das Ziel dran ist), done: {from?, text} (Nachricht beim Erreichen), card?: 'stiftung'|'kral' }
+//   start?: {from, text} | (s) => {from, text} (Handy-Nachricht, sobald das Ziel dran ist), done: {from?, text} (Nachricht beim Erreichen), card?: 'stiftung'|'kral' }
 //   st = s.egoals.st[id] – eigener Fortschritt des Ziels (wird gespeichert).
 import { toDay, HALVINGS } from './history.js';
 
@@ -114,7 +114,7 @@ export const ENDLESS_GOALS = [
     id: 'kral', text: 'Überhol KRAL Compute', sub: (s, g) => `Krals KI-Firma macht ${Math.round(kralComputeRev(s.day) / 1000).toLocaleString('de-DE')} Tsd. $ Umsatz am Tag. Mining und KI-Miete zählen.`,
     ready: (s) => !!s.egoals.done.stiftung, // das letzte Ziel – erst nach der Stiftung
     check: (s, g) => dayRevenue(g) > kralComputeRev(s.day), progress: (s, g) => [dayRevenue(g), kralComputeRev(s.day), 'usd'],
-    start: { from: 'Viktor Kral', text: 'MONOLITH heißt jetzt KRAL Compute. Bitcoin war gestern, Brandt – wir rechnen jetzt für KI. Rufen Sie an, wenn Sie wieder zweiter sein wollen.' },
+    start: (s) => ({ from: 'Viktor Kral', text: s.ev?.done?.kralki ? 'Brandt. KRAL Compute verdient mit KI inzwischen mehr am Tag als Sie mit Bitcoin. Wetten, dass das so bleibt?' : 'MONOLITH heißt jetzt KRAL Compute. Bitcoin war gestern, Brandt – wir rechnen jetzt für KI. Rufen Sie an, wenn Sie wieder zweiter sein wollen.' }),
     card: 'kral',
   },
 ];

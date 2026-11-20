@@ -840,7 +840,7 @@ export class Game {
       if (ok) this.finishEndlessGoal(goal);
     }
     const cur = this.endlessGoal();
-    if (cur && eg.cur !== cur.id) { eg.cur = cur.id; const st = (eg.st[cur.id] ||= {}); if (cur.start && !st.started) { st.started = s.day; this.pushMsg(cur.start); } }
+    if (cur && eg.cur !== cur.id) { eg.cur = cur.id; const st = (eg.st[cur.id] ||= {}); if (cur.start && !st.started) { st.started = s.day; this.pushMsg(typeof cur.start === 'function' ? cur.start(s) : cur.start); } }
   }
   // Aktuelles Endlosziel: das erste offene, das schon dran ist
   endlessGoal() { const s = this.s, eg = s.egoals; if (!eg) return null; for (const goal of ENDLESS_GOALS) { if (eg.done[goal.id]) continue; const st = (eg.st[goal.id] ||= {}); if (!goal.ready || goal.ready(s, this, st)) return goal; } return null; }

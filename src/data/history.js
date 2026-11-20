@@ -124,8 +124,11 @@ export const GPU_BOOM = curve([
 ], { log: false });
 
 // Rivale: Anteil von MONOLITH an der BTC-Netz-Hashrate
+// Spitze Mitte 2021, danach verliert MONOLITH Anteile (China-Bann, Krise 2022, ab 2024 KI-Schwenk): ein guter Spieler
+// überholt 2021–2024 (Fjordhalle bis 120 MW), ein durchschnittlicher etwa 2024/25
 export const MONOLITH_SHARE = curve([
-  ['2014-03', 0.0015], ['2015-06', 0.003], ['2017-06', 0.0035], ['2019-06', 0.004], ['2021-06', 0.005], ['2023-06', 0.0045], ['2026-11', 0.004],
+  ['2014-03', 0.0015], ['2015-06', 0.003], ['2017-06', 0.0035], ['2019-06', 0.004], ['2021-06', 0.0045], ['2022-06', 0.0042], ['2023-06', 0.0034],
+  ['2024-06', 0.0028], ['2025-06', 0.0024], ['2026-11', 0.0021],
 ], { log: false });
 
 // Ether-DAG-Größe in GB (bestimmt, welche Karten Ethereum minen können)

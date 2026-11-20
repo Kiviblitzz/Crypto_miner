@@ -34,7 +34,7 @@ function pageCall(ui, mode, usd, done) {
   const head = mode === 'sold'
     ? `<div class="ch">Ende · Verkauft</div><div class="fin-hero">${esc(fmtUSD(usd))}</div><p class="fin-lead">${esc(soldLead(s, usd))}</p>`
     : `<div class="ch">Finale · ${fmtDate(s.day)}</div><div class="fin-hero">MONOLITH überholt!</div><p class="fin-lead">Hashwerk rechnet mit <b>${fmtHash(g.algoHash('sha256'))}</b> – mehr als MONOLITH, mehr als jeder andere. Dann klingelt dein Handy. Unbekannte Nummer, Vorwahl Zug.</p>`;
-  const n = h(`<div>${head}<div class="fin-call"><div class="fc-head"><span class="fc-av">K</span><div><b>Viktor Kral</b><small>MONOLITH Hash AG${mode === 'sold' ? '' : ' · Anruf'}</small></div><span class="fc-dot"></span></div><div class="fc-lines">${lines}</div></div><div class="fin-reply"></div></div>`);
+  const n = h(`<div>${head}<div class="fin-call"><div class="fc-head"><span class="fc-av">K</span><div><b>Viktor Kral</b><small>${s.ev?.done?.kralki ? 'KRAL Compute' : 'MONOLITH Hash AG'}${mode === 'sold' ? '' : ' · Anruf'}</small></div><span class="fc-dot"></span></div><div class="fc-lines">${lines}</div></div><div class="fin-reply"></div></div>`);
   const box = n.querySelector('.fin-reply');
   if (mode === 'sold') { done(true); return n; }
   KRAL_REPLIES.forEach((r, i) => {
