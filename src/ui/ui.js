@@ -235,8 +235,9 @@ export class UI {
       const pc = g.facObjects('kinder').find((o) => o.type === 'tower'); if (pc && !s.flags.miningStarted) { pos = [pc.x, 0.78, pc.z]; label = 'Dein PC'; aimed = w.aim?.uid === pc.uid; }
     }
     if (!pos && s.chapter === 0 && play && (where === 'apt' || (!where && w.facId === 'kinder')) && s.flags.miningStarted && s.flags.cpuStart && g.has('build') && !s.flags.gpuOrdered && !s.flags.boughtGpu) { const pr = w.room?.props?.find((p) => p.action === 'market'); if (pr) { pos = [pr.c[0], pr.c[1] + 0.16, pr.c[2]]; label = 'Shop: Grafikkarte bestellen'; aimed = w.aim?.prop === pr; } } // erstes Ziel nach dem Einschalten: der Shop am Monitor
-    if (!pos && s.chapter === 0 && play && (where === 'apt' || (!where && w.facId === 'kinder')) && s.flags.miningStarted && g.has('market') && !(s.stats.sold > 0)) { const pr = w.room?.props?.find((p) => p.action === 'market'); if (pr) { pos = [pr.c[0], pr.c[1] + 0.16, pr.c[2]]; label = 'Bitcoin verkaufen'; aimed = w.aim?.prop === pr; } }
-    if (!pos && play && (where || !this.visiting) && s.flags.miningStarted) { // neuer Standort frei: im Haus an der Haustür (Keller: an der Kellertür), sonst an der Tür
+    const parcelFirst = !!(where && w.parcelsLying?.()); // ein Paket vor der Tür geht vor (Börse/Freischalten können warten)
+    if (!pos && !parcelFirst && s.chapter === 0 && play && (where === 'apt' || (!where && w.facId === 'kinder')) && s.flags.miningStarted && g.has('market') && !(s.stats.sold > 0)) { const pr = w.room?.props?.find((p) => p.action === 'market'); if (pr) { pos = [pr.c[0], pr.c[1] + 0.16, pr.c[2]]; label = 'Bitcoin verkaufen'; aimed = w.aim?.prop === pr; } }
+    if (!pos && !parcelFirst && play && (where || !this.visiting) && s.flags.miningStarted) { // neuer Standort frei: im Haus an der Haustür (Keller: an der Kellertür), sonst an der Tür
       const fu = FACILITIES.find((f) => g.canUnlock(f.id)), door = w.room?.doors?.[0];
       if (fu && where) { if (fu.id === 'keller') { route('keller', `${fu.short} freischalten`); final = where === 'low'; tdoor = { kind: 'kellertuer', label: 'Kellertür' }; } else { route('haustuer', `${fu.short} freischalten`); tdoor = { kind: 'haustuer', label: 'Haustür' }; } }
       else if (fu && door && !door.auto) { pos = [door.c[0], Math.min(1.7, door.c[1] + 0.5), door.c[2]]; label = `${fu.short} freischalten`; aimed = w.aim?.door === door; }
@@ -920,7 +921,7 @@ export class UI {
   goalHint(go) {
     const g = this.g, s0 = g.s;
     if (go.id === 'gpuorder') return g.has('build') ? 'Am <b>Monitor</b> <kbd>E</kbd> oder <kbd>B</kbd>: Shop → Teile → Grafikkarten. Lieferung morgen früh vor deine Wohnungstür.' : '';
-    if (go.id === 'gpu') { const inBag = g.bagList('gpu').length; if (inBag) return 'Die Karte liegt im Lager: PC anschauen, <kbd>E</kbd> → Grafikkarte 1 → einbauen.'; if (s0.parcels?.length) return 'Das Paket liegt vor deiner Wohnungstür – hingehen und <kbd>E</kbd>.'; if (s0.orders?.length) return 'Bestellt – morgen früh liegt das Paket vor der Tür. Ab 19 Uhr kannst du schlafen gehen (Bett, <kbd>E</kbd>).'; return ''; }
+    if (go.id === 'gpu') { const inBag = g.bagList('gpu').length; if (inBag) return 'Die Karte liegt im Lager: PC anschauen, <kbd>E</kbd> → Grafikkarte 1 → einbauen.'; if (s0.parcels?.length) return 'Das Paket liegt vor deiner Wohnungstür – hingehen und <kbd>E</kbd>.'; if (s0.orders?.length) return 'Bestellt – morgen früh liegt das Paket vor der Tür. Leg dich ins Bett (<kbd>E</kbd>) und schlaf bis morgen.'; return ''; }
     const site = { rig2: 'kinder', openrig: 'keller' }[go.id]; if (!site || !g.has('rigs') || !g.s.unlocked.includes(site)) return '';
     if (g.kitsOpen(site).length) return g.s.current === site ? 'Bausatz steht – anschauen, <kbd>E</kbd> und die Teile aus dem Lager einbauen.' : `Dein Bausatz wartet ${site === 'kinder' ? 'in der Wohnung' : 'im Keller'} aufs Einbauen.`;
     const t = go.id === 'rig2' ? 'tower' : 'crate', nm = t === 'tower' ? 'Tower' : 'Milchkiste';
