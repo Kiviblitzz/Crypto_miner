@@ -1831,3 +1831,5 @@ body:has(.story.event) #xpbox { display: none; }
 #goals .goal.sub .ck { background: rgba(255,176,0,.55) !important; }
 #goals .goal .gor { color: var(--acc); font-weight: 600; margin-left: 4px; }
 #goals .goal .gfill { min-width: 0 !important; }
+#goals .goal.sub { display: flex !important; width: fit-content; max-width: 420px; }
+#goals .goal.sub > div:last-child { flex-wrap: wrap; }

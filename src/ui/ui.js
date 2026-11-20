@@ -298,7 +298,8 @@ export class UI {
       let s = esc(it.desc || '');
       if (it.kind === 'device') { const of = g.devOffer(it, fac); s = `${fmtHash(it.hash, it.algo)} · ${fmtWatt(it.watt)} · ${ALGO_LABEL[it.algo]}<br/>≈ <b class="${of.net >= 0 ? 'pos' : 'neg'}">${of.net >= 0 ? '+' : ''}${fmtUSD(of.net)}/Tag</b> hier · ${this.roiText(of.roi)}${it.hydro ? ' · nur in Rack/Container' : ''}`; }
       if (it.kind === 'cooling') s = `Kühlt ${fmtWatt(it.cool)} · verbraucht ${fmtWatt(it.watt)}`;
-      if (it.kind === 'holder') s = esc(it.desc);
+      if (it.kind === 'holder') s = `${esc(it.desc)}<br/><span class="rc-dim">1 Stellplatz für ${it.slots} Geräte</span>`;
+      if (it.kind === 'device' && g.facTier(fac) >= 1 && !it.hydro) s += `<br/><span class="rc-dim">Tipp: im Regal teilen sich 8 Miner einen Stellplatz</span>`;
       const left = g.stockLeft(it), sold = left === 0; if (left !== Infinity) s += `<br/><span class="stock ${sold ? 'neg' : ''}">${sold ? 'Kontingent: ' + esc(g.stockText(it)) : `Kontingent: noch ${left} Stück diesen Monat`}</span>`;
       const noSlot = !g.slotOk(fac, it); if (noSlot) s += `<br/><span class="stock neg">Alle ${g.slotsMax(fac)} Plätze belegt</span>`;
       const card = h(`<div class="item ${price > g.s.cash || it.hydro || noSlot ? 'dis' : ''}" data-price="${price}" data-id="${it.id}" ${it.hydro ? 'data-hydro="1"' : ''} ${noSlot ? 'data-full="1"' : ''}><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${this.money(price)}</span></div><div class="s">${s}</div><div class="miss">${price > g.s.cash ? `Dir fehlen ${this.money(price - g.s.cash)}` : ''}</div><button class="btn small primary place" ${price > g.s.cash || it.hydro ? 'disabled' : ''}>Platzieren · ${this.money(price)}</button></div>`);
@@ -450,7 +451,7 @@ export class UI {
       const un = g.s.unlocked.includes(f.id), here = g.s.current === f.id, can = g.canUnlock(f.id);
       if (!un && !can) continue;
       const sm = g.summary[f.id];
-      const c = h(`<div class="card"><h3>${here ? '' : ''}${esc(f.name)}</h3><div class="sub">${esc(f.place)}</div>${un && sm ? `<div style="font-size:12px;color:var(--dim)">${fmtWatt(sm.watt)} · ${fmtNum(sm.temp, 1)} °C · ${g.facObjects(f.id).length} Objekte</div>` : ''}</div>`);
+      const c = h(`<div class="card"><h3>${here ? '' : ''}${esc(f.name)}</h3><div class="sub">${esc(f.place)}</div>${un && sm ? `<div style="font-size:12px;color:var(--dim)">${fmtWatt(sm.watt)} · ${fmtNum(sm.temp, 1)} °C · Platz ${g.slotsUsed(f.id)}/${g.slotsMax(f.id)}</div>` : `<div style="font-size:12px;color:var(--dim)">${f.slots} Stellplätze · ${fmtNum(f.power[0].kw, 1)} kW</div>`}</div>`);
       const b = h(`<button class="btn small ${here ? '' : 'primary'}" style="margin-top:6px">${here ? 'Hierbleiben' : un ? 'Hingehen' : f.cost ? `Übernehmen (${fmtUSD(f.cost)})` : 'Einziehen'}</button>`);
       b.onclick = () => { this.closeModal(); if (here) return; if (!un) { this.unlock(f.id); return; } this.switchSite(f.id); };
       c.append(b); cards.append(c);
@@ -732,8 +733,8 @@ export class UI {
       const row = h(`<div class="goal ${done ? 'done' : ''} ${enter ? 'enter' : ''}"><div class="ck">${done ? '✓' : ''}</div><div>${bag ? `<div class="goal-line">${esc(gtext)}${prog}</div>${bag}` : `${esc(gtext)}${prog}`}</div></div>`);
       if (!done && go.action) { const b = h(`<button class="btn small primary"><kbd>G</kbd>${esc(go.action.label)}</button>`); b.disabled = !g.canPayGoal(go); b.onclick = () => { if (g.goalAction(go)) { this.toast('✔ Erledigt!', 'good'); this.goals(); } }; row.lastElementChild.append(h('<br/>'), b); }
       el.append(row);
-      const od = ch.goals.find((x) => x.orDate && !s.goals[x.id] && x !== go); // „voll → schneller weiter“ immer sichtbar
-      if (od && s.flags.miningStarted && g.has('rigs')) { const [c2, t2, k2, f2] = od.progress ? od.progress(s, g.helpers()) : [0, 1, 'n']; el.append(h(`<div class="goal sub"><div class="ck"></div><div>${esc(od.text)} <span class="gor">→ ${esc(FACILITY[ch.unlock]?.short || 'weiter')} sofort</span>${this.goalProg(c2, t2, k2, f2)}</div></div>`)); }
+      const od = ch.goals.find((x) => x.skip && !s.goals[x.id] && x !== go); // „voll → schneller weiter“ immer sichtbar
+      if (od && !ch.hard && s.flags.miningStarted && g.has('rigs')) { const [c2, t2, k2, f2] = od.progress ? od.progress(s, g.helpers()) : [0, 1, 'n']; el.append(h(`<div class="goal sub"><div class="ck"></div><div>${esc(od.text)} <span class="gor">→ ${esc(FACILITY[ch.unlock]?.short || 'weiter')} sofort</span>${this.goalProg(c2, t2, k2, f2)}</div></div>`)); }
     }
     const allDone = ch.goals.every((go) => s.goals[go.id]);
     this.goalsBonus(el, ch, allDone && s.day < toDay(ch.minDate), !allDone && g.saving(ch));
@@ -776,7 +777,7 @@ export class UI {
     this.switchSite(id);
     const ci = CHAPTERS.findIndex((c) => c.unlock === id);
     const next = CHAPTERS[ci + 1];
-    this.story(next?.title || f.name, `${(this.g.s.flags.shopLost && next?.introLost) || next?.intro || ''}<br/><br/><b>${esc(f.name)}</b> – ${esc(f.place)}<br/>${f.w} × ${f.d} m · ${f.power[0].kw.toLocaleString('de-DE')} kW Anschluss${f.rent ? ` · Miete ${fmtUSD(f.rent)}/Monat ab dem ersten Gerät` : ''}<br/><i>${esc(f.desc)}</i><br/><br/><b>${Math.round((f.w * f.d) / 14).toLocaleString('de-DE')}×</b> so groß wie dein Kinderzimmer · <b>${Math.round(f.power[0].kw / 1.8).toLocaleString('de-DE')}×</b> so viel Strom.`);
+    this.story(next?.title || f.name, `${(this.g.s.flags.shopLost && next?.introLost) || next?.intro || ''}<br/><br/><b>${esc(f.name)}</b> – ${esc(f.place)}<br/>${f.w} × ${f.d} m · ${f.power[0].kw.toLocaleString('de-DE')} kW Anschluss${f.rent ? ` · Miete ${fmtUSD(f.rent)}/Monat ab dem ersten Gerät` : ''}<br/><i>${esc(f.desc)}</i><br/><br/><b>${f.slots}</b> Stellplätze statt ${FACILITY[FACILITIES[Math.max(0, f.tier - 1)].id].slots} · <b>${Math.round((f.w * f.d) / 14).toLocaleString('de-DE')}×</b> so groß wie dein Kinderzimmer · <b>${Math.round(f.power[0].kw / 1.8).toLocaleString('de-DE')}×</b> so viel Strom.`);
   }
 
   // ---------- Dock ----------
@@ -1040,7 +1041,7 @@ export class UI {
         <div class="kv" style="margin:4px 0"><div class="k">Anschluss</div><div class="v">${fmtNum(f.power[fs.power].kw, 1)} kW</div>
         <div class="k">Strompreis</div><div class="v">${g.elecPrice(f.id) ? fmtUSD(g.elecPrice(f.id)) + '/kWh' : 'zahlen die Eltern'}</div>
         <div class="k">Miete</div><div class="v">${f.rent ? (un && g.upgrades(f.id).some((u) => u.fx?.rent === 0 && g.upActive(f.id, u)) ? 'keine (gekauft)' : un && !g.facInUse(f.id) ? `ruht ohne Geräte (${fmtUSD(f.rent)}/Monat)` : fmtUSD(f.rent * (un ? g.fx('rent', f.id) : 1)) + '/Monat') : 'keine'}</div>
-        ${un ? `<div class="k">Last</div><div class="v">${fmtWatt(sm.watt)}</div><div class="k">Temperatur</div><div class="v ${sm.temp > 38 ? 'neg' : ''}">${fmtNum(sm.temp, 1)} °C</div><div class="k">Geräte</div><div class="v">${fs.objects.length}</div>` : ''}</div></div>`);
+        ${un ? `<div class="k">Last</div><div class="v">${fmtWatt(sm.watt)}</div><div class="k">Temperatur</div><div class="v ${sm.temp > 38 ? 'neg' : ''}">${fmtNum(sm.temp, 1)} °C</div><div class="k">Stellplätze</div><div class="v ${g.slotsUsed(f.id) >= g.slotsMax(f.id) ? 'neg' : ''}">${g.slotsUsed(f.id)} / ${g.slotsMax(f.id)}</div>` : `<div class="k">Stellplätze</div><div class="v">${f.slots}</div>`}</div></div>`);
       if (un) {
         const nx = f.power[fs.power + 1];
         if (nx) { const pc = g.powerCost(f.id), wait = g.powerWaitUntil?.(f.id), b = h(`<button class="btn small">${esc(nx.label)}: ${fmtNum(nx.kw, nx.kw < 10 ? 1 : 0)} kW (${wait ? `ab ${fmtDate(wait)}` : fmtUSD(pc)})</button>`); b.disabled = s.cash < pc || !!wait; b.onclick = () => { if (g.upgradePower(f.id)) { this.toast('Stromanschluss ausgebaut!', 'good'); this.company(); this.sites(); } }; c.append(b); }
@@ -1272,6 +1273,7 @@ export class UI {
       const [cur, tgt, kind] = pr;
       const f = (v) => (kind === 'usd' ? fmtUSD(v) : kind === 'hash' ? fmtHash(v) : kind === 'coin' ? fmtCoin(v) : Math.round(v).toLocaleString('de-DE'));
       if (kind === 'jth') prog = Number.isFinite(cur) ? `<span class="gb-p">jetzt ${Math.round(cur).toLocaleString('de-DE')} J/TH</span>` : ''; // weniger ist besser
+      else if (kind === 'fill' && pr[3]) { const ci = this.capInfo(pr[3]); prog = `<span class="gb-p">Platz ${ci.plc} · ${ci.pw}</span>`; }
       else prog = `<span class="gb-p">${f(Math.max(0, Math.min(cur, tgt)))} / ${f(tgt)}${kind === 'days' ? ' Tage' : b.unit ? ' ' + esc(b.unit) : ''}</span>`;
     }
     return h(`<div class="goal bonus"><div class="ck"></div><div><div class="gb-l"><span class="gb-tag">Bonus</span><span class="gb-x">${esc(b.text)}</span>${prog}</div>${rw || b.until ? `<div class="gb-r">${rw ? `<span class="gb-rw">${esc(rw)}</span>` : ''}${b.until ? `<span class="gb-u">bis ${fmtDate(toDay(b.until))}</span>` : ''}</div>` : ''}</div></div>`);
@@ -1511,7 +1513,7 @@ export class UI {
   placedAgain(o, p) {
     const g = this.g, d = PLACEABLE[o.type], fac = g.facOf(o.uid) || g.s.current, t = p?.template, n = (this.placedRun = (this.placedRun || 0) + 1);
     const empty = (d.kind === 'rig' && !g.pcReady(o)) || (d.kind === 'holder' && !o.items?.length);
-    const tipE = () => { if (empty && n === 1) this.toast(t?.build && !t.ready ? 'Bausatz steht. Teile liegen im Lager – anschauen und <kbd>E</kbd>: einbauen' : 'Anschauen und <kbd>E</kbd>: bestücken', 'good', 5000); };
+    const tipE = () => { if (empty) this.toast(t?.build && !t.ready ? 'Bausatz steht. Teile liegen im Lager – anschauen und <kbd>E</kbd>: einbauen' : 'Anschauen und <kbd>E</kbd>: bestücken', 'good', 5000); };
     if (!g.slotKind(d)) { tipE(); return false; }
     const cost = t?.build ? g.buildStats(t.build, fac, t.ready).price : t ? g.cloneCost(t) : g.itemPrice(d);
     const why = !g.slotOk(fac, d) ? 'full' : !g.canAfford(cost) ? 'money' : (t?.build ? g.buildBlocked(t.build) : t ? g.cloneBlocked(t) || !g.cloneStockOk(t) : g.stockLeft(d) < 1) ? 'stock' : '';
@@ -1532,7 +1534,7 @@ export class UI {
     const render = () => {
       grid.innerHTML = ''; goEl.innerHTML = '';
       const rigs = PLACEABLES.filter((x) => x.kind === 'rig' && g.available(x) && g.placeableAllowed(x, fac));
-      const np = g.psuCount({ type: cfg.type }), need = g.buildStats({ ...cfg, psu: null }, fac, false).watt / g.fx('rigPower');
+      const np = g.psuCount({ type: cfg.type });
       const sel = (lab, list, cur, txt, key, num = false) => { const r = h(`<label class="cf-r"><span>${lab}</span><select>${list.map((it) => `<option value="${it.id}" ${String(it.id) === String(cur) ? 'selected' : ''}>${esc(txt(it))}</option>`).join('')}</select></label>`); r.querySelector('select').onchange = (e) => { cfg[key] = num ? +e.target.value : e.target.value; if (key === 'type' || key === 'mobo') cfg.n = Math.max(cfg.n, 1); render(); }; grid.append(r); return r; };
       sel('Gehäuse', rigs, cfg.type, (it) => `${it.name} · ${this.money(g.itemPrice(it))}`, 'type');
       sel('Mainboard', g.partList('mobo'), cfg.mobo, (it) => `${it.name} · ${Math.min(it.slots, PLACEABLE[cfg.type].maxGpu)} Plätze · ${this.money(g.itemPrice(it))}`, 'mobo');
@@ -1542,12 +1544,11 @@ export class UI {
       sel('Grafikkarte', gl, cfg.gpu, (it) => `${it.name} · ${it.watt} W · ${val(it) >= 0 ? '+' : ''}${fmtUSD(val(it))}/Tag · ${this.money(g.itemPrice(it))}`, 'gpu');
       const cap = g.buildCap(cfg); cfg.n = Math.min(cfg.n, cap);
       sel('Anzahl', Array.from({ length: cap + 1 }, (_, i) => ({ id: i })), cfg.n, (it) => `${it.id} ${it.id === 1 ? 'Grafikkarte' : 'Grafikkarten'}`, 'n', true);
-      const need2 = g.buildStats({ ...cfg, psu: null }, fac, false), w0 = 25 + [cfg.mobo, cfg.cpu].filter(Boolean).reduce((a, id) => a + (PART[id].watt || 0), 0) + (cfg.gpu ? PART[cfg.gpu].watt * cfg.n : 0);
+      const w0 = 25 + [cfg.mobo, cfg.cpu].filter(Boolean).reduce((a, id) => a + (PART[id].watt || 0), 0) + (cfg.gpu ? PART[cfg.gpu].watt * cfg.n : 0);
       const psl = [...g.partList('psu')].sort((a, b) => a.cap - b.cap);
       const ps = sel(np > 1 ? 'Netzteile (2 Stück)' : 'Netzteil', psl, cfg.psu, (it) => `${it.name}${np > 1 ? ' ×2' : ''}${it.cap * np < w0 ? ' – zu schwach' : ''} · ${this.money(g.itemPrice(it) * np)}`, 'psu');
       const fit = psl.find((x) => x.cap * np >= w0);
       if (fit && fit.id !== cfg.psu) { const b = h(`<button class="btn small cf-fit">Passendes nehmen</button>`); b.onclick = (e) => { e.preventDefault(); cfg.psu = fit.id; render(); }; ps.append(b); }
-      void need; void need2;
       const kit = g.buildStats(cfg, fac, false), rd = g.buildStats(cfg, fac, true), algo = kit.coin ? g.coinAlgo(kit.coin) : null;
       sum.innerHTML = `<div class="kv"><div class="k">Rechenleistung</div><div class="v">${algo ? `${fmtHash(kit.hash[algo] || 0, algo)} → ${COIN[kit.coin].name}` : '–'}</div><div class="k">Verbrauch</div><div class="v ${kit.cap && kit.watt > kit.cap ? 'neg' : ''}">${fmtWatt(kit.watt)} von ${fmtWatt(kit.cap)}</div><div class="k">Ertrag / Tag</div><div class="v pos">${fmtUSD(kit.rev)}</div><div class="k">Strom / Tag</div><div class="v neg">−${fmtUSD(kit.rev - kit.net)}</div><div class="k">Gewinn / Tag</div><div class="v"><b class="${kit.net >= 0 ? 'pos' : 'neg'}">${fmtUSD(kit.net)}</b></div><div class="k">Amortisation</div><div class="v">${Number.isFinite(rd.roi) ? `${Math.round(kit.roi)} Tage (Bausatz) · ${Math.round(rd.roi)} Tage (montiert)` : 'lohnt sich hier nicht'}</div></div>${kit.why ? `<div class="cf-why">${esc(kit.why)}</div>` : ''}`;
       const full = !g.slotOk(fac, PLACEABLE[cfg.type]);

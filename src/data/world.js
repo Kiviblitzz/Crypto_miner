@@ -11,7 +11,7 @@ export const FACILITIES = [
   {
     id: 'keller', tier: 1, name: 'Hobbykeller', short: 'Keller', place: 'Lindental, Elternhaus', w: 7, d: 5, h: 2.4,
     power: [{ kw: 4.5, label: 'Hausanschluss' }, { kw: 11, cost: 1500, label: 'Starkstrom 16 A' }, { kw: 22, cost: 4000, label: 'Starkstrom 32 A' }],
-    elec: 'household', elecMult: 0.8, rent: 0, cost: 0, baseCool: 1600, ambient: -3, grid: 0.5, slots: 16,
+    elec: 'household', elecMult: 0.6, rent: 0, cost: 0, baseCool: 1600, ambient: -3, grid: 0.5, slots: 16, // läuft über Papas Heizstrom-Tarif
     style: 'basement', desc: 'Kühl, staubig, mit Waschmaschine. Perfekt für die ersten Open-Frame-Rigs.',
   },
   {
@@ -56,7 +56,7 @@ export const CHAPTERS = [
       { id: 'sell', text: 'Verkaufe deine Bitcoin am Monitor', doneText: 'Erste Bitcoin verkauft!', check: (s) => s.stats.sold > 0 },
       { id: 'gpu', text: 'Bau eine zweite Grafikkarte ein', doneText: 'Zweite Grafikkarte läuft!', check: (s) => s.flags.boughtGpu },
       { id: 'rig2', text: 'Bau einen zweiten Mining-PC', doneText: 'Zwei PCs schürfen!', check: (s, h) => h.rigsAt('kinder') >= 2, progress: (s, h) => [h.rigsAt('kinder'), 2, 'n'] }, // Katalog B → Rigs → „Fertig bestückt“
-      { id: 'fill1', text: 'Fülle dein Zimmer mit Mining-PCs', orDate: true, doneText: 'Dein Zimmer ist voll!', check: (s) => !!s.full?.kinder, progress: (s, h) => [h.fill('kinder'), 1, 'fill', 'kinder'] }, // alle Plätze belegt oder Strom am Limit
+      { id: 'fill1', text: 'Fülle dein Zimmer mit Mining-PCs', orDate: true, skip: true, doneText: 'Dein Zimmer ist voll!', check: (s) => !!s.full?.kinder, progress: (s, h) => [h.fill('kinder'), 1, 'fill', 'kinder'] }, // alle Plätze belegt oder Strom am Limit
       { id: 'papa1', text: 'Bezahl Papas Stromrechnung', action: { label: '2.000 $ geben', cost: 2000, flag: 'papa1' }, check: (s) => s.flags.papa1 },
     ],
     waitText: 'Papa räumt den Hobbykeller über die Feiertage für dich frei – ab Januar gehört er dir.',
@@ -71,9 +71,9 @@ export const CHAPTERS = [
     intro: 'Papa staunt. Der Keller gehört dir – solange die Waschmaschine weiterläuft.',
     goals: [
       { id: 'openrig', text: 'Bau dein erstes Rig im Keller', check: (s, h) => h.rigsAt('keller') > 0 }, // mit mindestens 1 GPU
-      { id: 'rigs8', text: 'Betreibe 8 Mining-Rigs', check: (s, h) => h.rigsAll() >= 8, progress: (s, h) => [h.rigsAll(), 8, 'n'] }, // Zimmer + Keller
+      { id: 'rigs8', text: 'Betreibe 8 Rigs oder Miner', orDate: true, check: (s, h) => h.rigsAll() + h.miners() >= 8, progress: (s, h) => [h.rigsAll() + h.miners(), 8, 'n'] }, // Zimmer + Keller; Miner zählen mit; orDate: 2012 lohnen neue GPUs kaum, keine Pflicht
       { id: 'debt', text: 'Rette Papas Laden – Frist der Bank: Ende 2013', action: { label: '15.000 $ überweisen', cost: 15000, flag: 'debt' }, check: (s) => s.flags.debt || !!s.flags.shopLost }, // nach der Frist: Ereignis „ladenzu“ (events.js)
-      { id: 'fill2', text: 'Fülle den Keller', orDate: true, doneText: 'Der Keller ist voll!', check: (s) => !!s.full?.keller, progress: (s, h) => [h.fill('keller'), 1, 'fill', 'keller'] }, // orDate: ab minDate auch ohne vollen Keller erledigt
+      { id: 'fill2', text: 'Fülle den Keller', orDate: true, skip: true, doneText: 'Der Keller ist voll!', check: (s) => !!s.full?.keller, progress: (s, h) => [h.fill('keller'), 1, 'fill', 'keller'] }, // orDate: ab minDate auch ohne vollen Keller erledigt
     ],
     waitText: 'Papas Untermieter Zweirad Öztürk zieht erst im Juni 2012 aus der Werkstatt aus.',
     bonus: [
@@ -109,7 +109,7 @@ export const CHAPTERS = [
     goals: [
       { id: 'tech', text: 'Stell einen Techniker ein', live: true, eod: true, check: (s) => s.staff.tech > 0 }, // zählt erst am Tagesende
       { id: 'rack12', text: 'Bestücke ein Rack komplett', check: (s, h) => h.fullRack() }, // 12 Geräte in einem 42U-Rack
-      { id: 'fill4', text: 'Lagerhalle zu 75 % auslasten', orDate: '2018-03-01', check: (s, h) => h.use('halle') >= 0.75, progress: (s, h) => [h.use('halle'), 0.75, 'use', 'halle'] }, // volle Racks zählen ganz, halbe halb (Game.facUse); orDate: wer den Boom 2017 verpasst, muss im Winter 2018 nicht nachkaufen
+      { id: 'fill4', text: 'Lagerhalle zu 75 % auslasten', orDate: '2017-10-01', skip: true, check: (s, h) => h.use('halle') >= 0.75, progress: (s, h) => [h.use('halle'), 0.75, 'use', 'halle'] }, // volle Racks zählen ganz, halbe halb (Game.facUse); orDate: spätestens im Oktober 2017 ist das RZ trotzdem frei – mitten im Boom, nicht erst im Winter 2018
     ],
     waitText: 'Das Frankfurter Rechenzentrum ist noch bis Juni 2017 an eine Bank vermietet.',
     bonus: [
@@ -121,11 +121,11 @@ export const CHAPTERS = [
     ],
   },
   {
-    title: 'Kapitel 5 – Das Rechenzentrum', unlock: 'fjord', minDate: '2020-06-01', site: 'rz',
+    title: 'Kapitel 5 – Das Rechenzentrum', unlock: 'fjord', minDate: '2020-06-01', site: 'rz', hard: true, // hart: eine Fjordhalle im Krypto-Winter 2018/19 (80.000 $ Miete) ruiniert fast jeden
     intro: 'Ein echtes Rechenzentrum in Frankfurt. In der Branche spricht sich herum, dass es Hashwerk gibt – sogar bei MONOLITH in Zug.',
     goals: [
-      { id: 'mw6', text: 'Bau das Rechenzentrum auf 6 MW aus', check: (s) => s.fac.rz.power >= 1 },
-      { id: 'fill5', text: 'Rechenzentrum zu 75 % auslasten', orDate: true, check: (s, h) => h.use('rz') >= 0.75, progress: (s, h) => [h.use('rz'), 0.75, 'use', 'rz'] }, // orDate: im Krypto-Winter 2018–2020 keine Pflicht – spätestens Juni 2020 geht es nach Norwegen
+      { id: 'mw6', text: 'Bau das Rechenzentrum auf 6 MW aus', orDate: true, check: (s) => s.fac.rz.power >= 1 }, // im Winter keine Pflicht
+      { id: 'fill5', text: 'Rechenzentrum zu 75 % auslasten', orDate: true, skip: true, check: (s, h) => h.use('rz') >= 0.75, progress: (s, h) => [h.use('rz'), 0.75, 'use', 'rz'] }, // orDate: im Krypto-Winter 2018–2020 keine Pflicht; Norwegen trotzdem erst ab Juni 2020 (hard)
     ],
     waitText: 'Das Wasserkraftwerk in Sogn liefert erst ab Juni 2020 Strom für die Fjordhalle.',
     bonus: [
@@ -325,7 +325,7 @@ export const FEATURES = {
   build: { title: 'Bauen', key: 'B', text: '<kbd>B</kbd> öffnet den Katalog. Klick stellt hin.' },
   speed2: { title: 'Zeitraffer', key: '2', text: '<kbd>1</kbd> <kbd>2</kbd> Tempo, <kbd>Leertaste</kbd> Pause.' },
   heat: { title: 'Wärmebild', key: 'H', text: '<kbd>H</kbd> zeigt, wo es zu heiß wird.' },
-  rigs: { title: 'Rigs', key: 'B', text: 'Neu im Katalog <kbd>B</kbd>.' },
+  rigs: { title: 'Mehr PCs', key: 'B', text: '<kbd>B</kbd> → Rigs: fertig bestückt kaufen oder selbst zusammenstellen. Teile gibt es auch einzeln.' },
   autosell: { title: 'Auto-Verkauf', key: 'E', text: 'Neue Coins werden automatisch verkauft.' },
   speed3: { title: 'Schneller vorspulen', key: '3', text: '<kbd>3</kbd> <kbd>4</kbd> spulen schneller vor.' },
   company: { title: 'Firma', key: 'C', text: '<kbd>C</kbd>: Strom ausbauen, Kosten sehen.' },
@@ -347,7 +347,7 @@ export const UPGRADES = {
     { id: 'skylight', name: 'Dachfensterlüfter', cost: 80, fx: { coolAdd: 400 }, eff: '+400 W Kühlung', desc: 'Ein kleiner Lüfter im Dachfenster schiebt die warme Luft nach draußen.' },
   ],
   keller: [
-    { id: 'nightmeter', name: 'Opas Nachtstromzähler', cost: 400, fx: { elec: 0.8 }, eff: 'Strom −20 % im Keller', desc: 'Der alte Zähler der Nachtspeicherheizung hängt noch im Heizungskeller. Opa klemmt die Rigs auf den Nachtstrom-Tarif.' },
+    { id: 'nightmeter', name: 'Opas Nachtstromzähler', cost: 400, fx: { elec: 0.7 }, eff: 'Strom −30 % im Keller', desc: 'Der alte Zähler der Nachtspeicherheizung hängt noch im Heizungskeller. Opa klemmt die Rigs auf den Nachtstrom-Tarif.' },
     { id: 'shaft', name: 'Opas Abluftschacht', cost: 600, fx: { coolMul: 1.3 }, eff: 'Kühlung ×1,3', desc: 'Opa Heinz mauert einen Schacht vom Heizungsraum bis über das Dach.' },
     { id: 'bars', name: 'Fenstergitter', cost: 150, secure: true, eff: 'Diebstahlschutz', desc: 'Stahlgitter vor den Kellerfenstern. Sieht nach Gefängnis aus, hält aber.' },
   ],

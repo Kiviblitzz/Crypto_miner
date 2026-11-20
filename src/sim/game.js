@@ -165,9 +165,9 @@ export class Game {
   }
   coinActive(id, day = this.s.day) { const c = COIN[id]; return day >= c.start && (!c.end || day < c.end); }
   coinAlgo(id, day = this.s.day) { return COIN[id].algo(day); }
-  elecPrice(facId, day = this.s.day) {
+  elecPrice(facId, day = this.s.day, full = false) {
     const f = FACILITY[facId];
-    if (facId === 'kinder' && !this.s.flags.papa1 && day < FREE_POWER_END) return 0; // Mama zahlt – bis März 2011.
+    if (facId === 'kinder' && !full && !this.s.flags.papa1 && day < FREE_POWER_END) return 0; // Mama zahlt – bis März 2011 (full: regulärer Preis, z. B. für die Kartenwahl)
     if (f.elec === 'fixed') return f.elecFixed * (day > toDay('2022-03-01') && day < toDay('2023-06-01') ? 1.6 : 1) * this.fx('elec', facId) * this.fx('fjordElec');
     return POWER_HOUSEHOLD(day) * f.elecMult * this.fx('elec', facId);
   }
@@ -442,35 +442,41 @@ export class Game {
       this.emit('facfull', id, c);
     }
   }
-  // Fertig bestückter Rig: Rahmen + Mainboard (meiste Plätze) + günstigste CPU + passendes Netzteil + so viele GPUs wie passen/leistbar.
-  // GPU-Wahl nach Amortisation des ganzen Rigs (Preis / Netto pro Tag am Standort); erst, was bezahlbar ist. ready: fertig montiert (+10 %)
+  // Fertig bestückter Rig: Rahmen + Mainboard (meiste Plätze) + günstigste CPU + passendes Netzteil + Grafikkarten.
+  // Kartenmodell nach Amortisation des vollen Rigs (zum regulären Strompreis – Mamas Gratisstrom endet), dann so viele Karten, wie bezahlbar sind (mind. 1).
   readyRig(type, facId = this.s.current, budget = this.s.cash, ready = true, day = this.s.day) {
     const def = PLACEABLE[type]; if (def?.kind !== 'rig' || !this.available(def, day)) return null;
     const mbs = this.partList('mobo'), cpus = this.partList('cpu'), psus = this.partList('psu').sort((a, b) => a.cap - b.cap); if (!mbs.length || !cpus.length || !psus.length) return null;
     const pr = (it) => this.itemPrice(it, day), capOf = (m) => Math.min(m.slots, def.maxGpu), top = Math.max(...mbs.map(capOf));
     const mb = mbs.filter((m) => capOf(m) === top).sort((a, b) => pr(a) - pr(b))[0], cpu = [...cpus].sort((a, b) => pr(a) - pr(b))[0];
-    const np = this.psuCount({ type }), baseW = 25 + mb.watt + cpu.watt;
-    let best = null;
-    const better = (a, b) => { if (!b) return true; const af = a.price <= budget, bf = b.price <= budget; if (af !== bf) return af; if ((a.net > 0) !== (b.net > 0)) return a.net > 0; return a.net > 0 ? a.price / a.net < b.price / b.net : a.net > b.net; };
-    for (const gp of this.partList('gpu')) {
-      for (let n = top; n >= 1; n--) {
-        const w = baseW + n * gp.watt, ps = psus.find((x) => x.cap * np >= w); if (!ps) continue;
-        const c = this.buildStats({ type, mobo: mb.id, cpu: cpu.id, psu: ps.id, gpu: gp.id, n }, facId, ready, day); if (c.price > budget && n > 1) continue;
-        if (better(c, best)) best = c; break;
-      }
-    }
-    return best;
+    const np = this.psuCount({ type }), baseW = 25 + mb.watt + cpu.watt, el = this.elecPrice(facId, day, true);
+    const cfgFor = (gp, n) => { const ps = psus.find((x) => x.cap * np >= baseW + n * gp.watt); return ps ? { type, mobo: mb.id, cpu: cpu.id, psu: ps.id, gpu: gp.id, n } : null; };
+    let best = null, bv = -Infinity;
+    const gl = this.partList('gpu'), full = (gp) => { let n = top, c = null; while (n >= 1 && !(c = cfgFor(gp, n))) n--; return c; };
+    // Belastungsprobe: halber Ertrag (die Schwierigkeit steigt) zum regulären Strompreis – so gewinnen sparsame Karten statt Ladenhüter
+    const stress = (c) => { const st = this.buildStats(c, facId, ready, day, el), net = st.rev * 0.5 - (st.rev - st.net); return { net, roi: net > 0 ? st.price / net : Infinity }; };
+    const rows = gl.map((gp) => { const c = full(gp); return c && { gp, c, t: stress(c) }; }).filter(Boolean);
+    const score = (r) => (r.t.net > 0 ? 1e6 - r.t.roi : r.t.net); // erst rentabel, dann kürzeste Amortisation
+    for (const r of rows) if (score(r) > bv) { bv = score(r); best = r; }
+    // bezahlbare Alternative (mind. 1 Karte), wenn sie höchstens doppelt so lange zum Amortisieren braucht wie das beste Modell
+    const one = (r) => { const c1 = cfgFor(r.gp, 1); return c1 && this.buildStats(c1, facId, ready, day).price <= budget; };
+    if (best && !one(best)) { let alt = null; for (const r of rows) if (one(r) && r.t.net > 0 && (!(best.t.net > 0) || r.t.roi <= best.t.roi * 2) && (!alt || score(r) > score(alt))) alt = r; if (alt) best = alt; }
+    best = best?.c;
+    if (!best) return null;
+    let out = null; for (let n = best.n; n >= 1; n--) { const c = cfgFor(PART[best.gpu], n); if (!c) continue; out = this.buildStats(c, facId, ready, day); if (out.price <= budget) break; }
+    if (out && out.price > budget) out = this.buildStats(best, facId, ready, day); // nichts bezahlbar: den vollen Rig zeigen (mit „Dir fehlen …“)
+    return out;
   }
   // Build = Gehäuse + Mainboard + CPU + Netzteil (bei 8er-Rahmen doppelt) + n gleiche GPUs
   buildParts(cfg) { const n = Math.max(0, Math.min(cfg.n || 0, this.buildCap(cfg))); return { mobo: cfg.mobo || null, cpu: cfg.cpu || null, psu: cfg.psu || null, gpus: cfg.gpu ? Array(n).fill(cfg.gpu) : [] }; }
   buildCap(cfg) { const def = PLACEABLE[cfg.type], mb = PART[cfg.mobo]; return def && mb ? Math.min(def.maxGpu, mb.slots) : 0; }
-  buildStats(cfg, facId = this.s.current, ready = true, day = this.s.day) {
+  buildStats(cfg, facId = this.s.current, ready = true, day = this.s.day, elec = null) {
     const def = PLACEABLE[cfg.type], parts = this.buildParts(cfg), np = this.psuCount({ type: cfg.type }), pr = (it) => (it ? this.itemPrice(it, day) : 0);
     const ids = [parts.mobo, parts.cpu, ...parts.gpus].filter(Boolean), watt = 25 + ids.reduce((a, id) => a + (PART[id].watt || 0), 0), cap = parts.psu ? PART[parts.psu].cap * np : 0;
     const kit = pr(def) + ids.reduce((a, id) => a + pr(PART[id]), 0) + pr(PART[parts.psu]) * np, price = Math.round(ready ? kit * (1 + BUILD_FEE) : kit);
     const hash = {}; for (const id of [parts.cpu, ...parts.gpus].filter(Boolean)) for (const [a, v] of Object.entries(PART[id].hash)) hash[a] = (hash[a] || 0) + v;
     const vram = parts.gpus.length ? Math.min(...parts.gpus.map((id) => PART[id].vram)) : 99, ok = !!(parts.mobo && parts.cpu && parts.psu) && watt <= cap;
-    const coin = ok ? this.bestCoin(hash, vram, day) : null, rev = coin ? this.revenueFor(hash, coin, vram, day) : 0, w = Math.round(watt * this.fx('rigPower')), net = rev - (w / 1000) * 24 * this.elecPrice(facId, day);
+    const coin = ok ? this.bestCoin(hash, vram, day) : null, rev = coin ? this.revenueFor(hash, coin, vram, day) : 0, w = Math.round(watt * this.fx('rigPower')), net = rev - (w / 1000) * 24 * (elec ?? this.elecPrice(facId, day, true)); // Katalog: regulärer Strompreis (Mamas Gratisstrom endet bald)
     const why = !parts.mobo ? 'Mainboard fehlt' : !parts.cpu ? 'Prozessor fehlt' : !parts.psu ? 'Netzteil fehlt' : watt > cap ? `Netzteil zu schwach (${watt} W > ${cap} W)` : '';
     return { ...cfg, n: parts.gpus.length, parts, np, price, kit: Math.round(kit), rev, net, watt: w, cap, coin, hash, ok, why, ready, roi: net > 0 ? price / net : Infinity, template: { type: cfg.type, rot: 0, coin: 'auto', parts } };
   }
@@ -536,7 +542,7 @@ export class Game {
   // Kosten/Ertrag eines Geräts am Standort (Katalog): Netto pro Tag und Amortisation in Tagen
   devOffer(def, facId = this.s.current, day = this.s.day) {
     const h = { [def.algo]: def.hash * this.fx('asicHash') }, c = this.bestCoin(h, def.vram || 99, day), rev = c ? this.revenueFor(h, c, def.vram || 99, day) : 0;
-    const net = rev - (def.watt * this.fx('asicPower') / 1000) * 24 * this.elecPrice(facId, day), price = this.itemPrice(def, day);
+    const net = rev - (def.watt * this.fx('asicPower') / 1000) * 24 * this.elecPrice(facId, day, true), price = this.itemPrice(def, day);
     return { price, rev, net, coin: c, roi: net > 0 ? price / net : Infinity };
   }
   holderAdd(uid, devId, n = 1) {
@@ -1155,7 +1161,7 @@ export class Game {
     }
   }
   // Standort voll (orDate-Ziel echt erfüllt): das Wartedatum des Kapitels entfällt
-  chSkip(ch) { return !!ch && ch.goals.some((g) => g.orDate && this.s.goals[g.id] === true); }
+  chSkip(ch) { return !!ch && !ch.hard && ch.goals.some((g) => g.skip && this.s.goals[g.id] === true); } // skip: „Standort voll“-Ziele
   orDate(ch, g) { return typeof g.orDate === 'string' ? g.orDate : ch.minDate; }
   rigsAt(id) { let n = 0; for (const o of this.s.fac[id]?.objects || []) if (o.parts && PLACEABLE[o.type].kind === 'rig' && o.parts.gpus.length && this.pcReady(o)) n++; return n; }
   canPayGoal(g) { return this.canAfford(g.action.cost) || this.s.cash + this.exchangeValue() >= g.action.cost; }

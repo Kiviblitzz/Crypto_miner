@@ -316,9 +316,9 @@ export const EVENTS = [
     // 2012 lohnen alte Karten mit Haushaltsstrom kaum noch: Opa weiß einen Ausweg (Ausbau „nightmeter“ in world.js, −20 % Strom im Keller)
     id: 'opazaehler', from: 'Opa Heinz', title: 'Der alte Nachtstromzähler', when: { date: '2012-01-10', window: 420 },
     cond: (s) => s.unlocked.includes('keller') && !s.fac.keller?.up?.nightmeter && (s.stats.idle || 0) > 0,
-    text: '„Deine Kisten im Keller stehen still, weil der Strom zu teuer ist? Im Heizungskeller hängt noch der alte Zähler von der Nachtspeicherheizung. Den klemm ich dir um – Nachtstrom kostet ein Fünftel weniger. Material 400 $, die Arbeit mach ich.“',
+    text: '„Deine Kisten im Keller stehen still, weil der Strom zu teuer ist? Im Heizungskeller hängt noch der alte Zähler von der Nachtspeicherheizung. Den klemm ich dir um – Nachtstrom kostet fast ein Drittel weniger. Material 400 $, die Arbeit mach ich.“',
     choices: [
-      { label: 'Opa machen lassen', cost: 400, hint: 'Dauerhaft −20 % Strom im Keller · Opa +1', fx: (g, s) => ({ do: () => { (s.fac.keller.up ||= {}).nightmeter ||= s.day || 1; }, rel: { opa: 1 }, xp: { hw: 40 }, log: 'Januar 2012: Opa klemmt die Rigs auf den Nachtstrom' }), reply: '<b>Opa:</b> So. Jetzt laufen deine Kisten zum Heizungstarif. Und keiner muss frieren.' },
+      { label: 'Opa machen lassen', cost: 400, hint: 'Dauerhaft −30 % Strom im Keller · Opa +1', fx: (g, s) => ({ do: () => { (s.fac.keller.up ||= {}).nightmeter ||= s.day || 1; }, rel: { opa: 1 }, xp: { hw: 40 }, log: 'Januar 2012: Opa klemmt die Rigs auf den Nachtstrom' }), reply: '<b>Opa:</b> So. Jetzt laufen deine Kisten zum Heizungstarif. Und keiner muss frieren.' },
       { label: 'Später', hint: 'Geht auch später im Firmenfenster (C) unter „Ausbauten“', fx: {}, reply: '<b>Opa:</b> Der Zähler läuft nicht weg. Der hängt da seit 1979.' },
     ],
     fallback: 1,
