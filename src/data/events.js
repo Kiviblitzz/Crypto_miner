@@ -141,6 +141,8 @@ const diskReply = (g) => (g.s.flags.diskOk ? (g.s.flags.backup ? '<b>Deniz:</b> 
 const debtCost = () => CHAPTERS.flatMap((c) => c.goals).find((x) => x.id === 'debt')?.action?.cost || 15000;
 // Laden verloren: Werkstatt ein halbes Jahr mietfrei, danach 25 % teurer (Herr Öztürk statt Papa)
 const shopLostMods = () => [{ key: 'rent', mult: 0, days: 182, fac: 'werkstatt' }, { key: 'rent', mult: 1.25, fac: 'werkstatt', src: 'oeztuerk' }];
+// Kapitel 2 gilt mit dem Verlust des Ladens als abgeschlossen (auch ohne Rig und 30 $/Tag – sonst säße ein schwacher Spieler für immer im Keller)
+const closeCh2 = (g, s) => { for (const go of CHAPTERS[1].goals) s.goals[go.id] = true; g.checkGoals(); };
 
 // Beziehungen ab Stufe 3 (Wirkung in Game.relFx / Game.powerCost)
 export const REL_PERK = {
@@ -415,8 +417,8 @@ export const EVENTS = [
     id: 'ladenzu', from: 'Papa', title: 'Die Bank schließt den Laden', when: { date: '2014-01-02', window: 5000 }, cond: (s) => !s.flags.debt && s.chapter === 1,
     text: (s) => `„${s.day < toDay('2014-02-15') ? 'Die Frist ist um. Die Bank hat Elektro Brandt heute versiegelt.' : 'Ich wollte es dir nicht sagen: Die Bank hat Elektro Brandt schon Silvester 2013 versiegelt.'} Neunundzwanzig Jahre, Kind.“ Bei der Versteigerung kauft Herr Öztürk das Haus – früher Zweirad Öztürk, hinten in der Werkstatt. Er bietet dir die Werkstatt hinterm alten Laden zur Miete an, das erste halbe Jahr umsonst: „Für Ihren Vater.“`,
     choices: [
-      { label: 'Papa fängt bei dir an', hint: 'Papa −1, Mama +1 · 300 $ Lohn im Monat · dauerhaft −15 % Reparaturkosten und 5 % weniger Ausfälle', fx: { rel: { papa: -1, mama: 1 }, mod: [...shopLostMods(), { key: 'monthly', mult: 300 }, { key: 'repair', mult: 0.85 }, { key: 'fail', mult: 0.95 }], flag: ['shopLost', 'papaJob'], log: 'Januar 2014: Die Bank schließt den Laden – Papa arbeitet jetzt bei dir' }, reply: '<b>Papa:</b> Lötkolben kann ich. Hashrate lern ich. Und den Kaffee koch ich sowieso.' },
-      { label: 'Papa braucht erst mal Ruhe', hint: 'Papa −2', fx: { rel: { papa: -2 }, mod: shopLostMods(), flag: 'shopLost', log: 'Januar 2014: Die Bank schließt den Laden' }, reply: '<b>Mama:</b> Er sitzt im Garten und sortiert Schrauben. Lass ihm Zeit.' },
+      { label: 'Papa fängt bei dir an', hint: 'Papa −1, Mama +1 · 300 $ Lohn im Monat · dauerhaft −15 % Reparaturkosten und 5 % weniger Ausfälle', fx: { rel: { papa: -1, mama: 1 }, mod: [...shopLostMods(), { key: 'monthly', mult: 300 }, { key: 'repair', mult: 0.85 }, { key: 'fail', mult: 0.95 }], flag: ['shopLost', 'papaJob'], do: closeCh2, log: 'Januar 2014: Die Bank schließt den Laden – Papa arbeitet jetzt bei dir' }, reply: '<b>Papa:</b> Lötkolben kann ich. Hashrate lern ich. Und den Kaffee koch ich sowieso.' },
+      { label: 'Papa braucht erst mal Ruhe', hint: 'Papa −2', fx: { rel: { papa: -2 }, mod: shopLostMods(), flag: 'shopLost', do: closeCh2, log: 'Januar 2014: Die Bank schließt den Laden' }, reply: '<b>Mama:</b> Er sitzt im Garten und sortiert Schrauben. Lass ihm Zeit.' },
     ],
     fallback: 1,
   },
