@@ -20,6 +20,8 @@ const halving = (s) => HALVINGS.some((d) => s.day >= d - 21 && s.day <= d + 10);
 const recent = (s, id, n = 45) => (s.ev?.log || []).some((l) => l.id === id && s.day - l.d <= n);
 const rel = (s, k) => s.rel?.[k] || 0;
 const winter = (s) => [12, 1, 2].includes(month(s));
+const lost = (s) => !!s.flags?.shopLost && !s.flags.shopBack; // Laden verloren (Ereignis „ladenzu“), nicht zurückgekauft
+const L = (a, b) => (s) => (lost(s) ? b : a); // Zeile mit Variante ohne Laden
 const broken = (s, fac) => (s.fac[fac]?.objects || []).some((o) => o.broken || o.items?.some((i) => i.b));
 
 // Wer steht da? (Name, Rolle, Anrede im Prompt)
@@ -97,9 +99,9 @@ export const TALK = [
 
   // ===================== Papa (an der Werkbank in der Werkstatt) =====================
   { who: 'papa', ch: [2], lines: [
-    'Elektro Brandt, seit 1985. Und jetzt mit Bitcoin-Abteilung im Hinterhof. Opa sagt, das ist der Fortschritt. Er sagt es nicht freundlich.',
-    'Ich hab heute drei Fernseher und einen Toaster repariert. Du hast mehr verdient als ich. Ist in Ordnung, wirklich – fast.',
-    'Die Kunden fragen, warum es hinten so brummt. Ich sag: Kühlschrankprüfung. Dann nicken sie.',
+    L('Elektro Brandt, seit 1985. Und jetzt mit Bitcoin-Abteilung im Hinterhof. Opa sagt, das ist der Fortschritt. Er sagt es nicht freundlich.', 'Neunundzwanzig Jahre Elektro Brandt. Jetzt steh ich in meiner alten Werkstatt und baue Bitcoin-Kisten. Opa sagt, das ist der Fortschritt. Er sagt es nicht freundlich.'),
+    L('Ich hab heute drei Fernseher und einen Toaster repariert. Du hast mehr verdient als ich. Ist in Ordnung, wirklich – fast.', 'Ich repariere jetzt Miner statt Fernseher. Die meckern weniger als Kunden. Sie piepen nur.'),
+    L('Die Kunden fragen, warum es hinten so brummt. Ich sag: Kühlschrankprüfung. Dann nicken sie.', 'Herr Öztürk fragt, warum es hinten so brummt. Ich sag: Kühlschrankprüfung. Dann nickt er.'),
     'Ich versteh nicht alles, was du hier machst. Aber ich seh, dass du es gut machst.',
     'ASIC heißt das? Ein Chip, der nur eine einzige Sache kann, die aber perfekt. Kenn ich. So war mein Meister.',
     'Mama sagt, ich soll dich nicht immer von der Arbeit abhalten. Also: Ich halt dich nicht ab. Ich steh nur hier.',
@@ -110,13 +112,13 @@ export const TALK = [
     'Die Werkstatt ist jetzt deine. Ich komm nur noch zum Kaffee. Und zum Gucken. Und manchmal zum Reparieren.',
     'Deine Halle, dein Rechenzentrum, und trotzdem kommst du zu mir an die Werkbank. Das freut mich mehr, als ich sage.',
     'Ein Kunde wollte wissen, ob ich der Vater vom Hashwerk-Brandt bin. Ich hab zweimal Ja gesagt. Damit er es auch versteht.',
-    'Der Laden läuft wieder. Nicht toll, aber ehrlich. Ich glaube, die Leute kommen auch, um nach dir zu fragen.',
+    L('Der Laden läuft wieder. Nicht toll, aber ehrlich. Ich glaube, die Leute kommen auch, um nach dir zu fragen.', 'Manchmal steh ich vorne am alten Schaufenster. Herr Öztürk verkauft da jetzt Fahrräder. Ist auch was Ehrliches.'),
   ] },
   { who: 'papa', ch: [5, 6], lines: [
     'Norwegen … Ich war mit deiner Mutter mal dort, lange her. Es hat zwei Wochen geregnet, und wir waren trotzdem glücklich.',
   ] },
   { who: 'papa', ch: [6], lines: [
-    'Du hast MONOLITH überholt. Ich hab den Zeitungsartikel an die Kasse geklebt. Gleich neben die erste Mark von 1985.',
+    L('Du hast MONOLITH überholt. Ich hab den Zeitungsartikel an die Kasse geklebt. Gleich neben die erste Mark von 1985.', 'Du hast MONOLITH überholt. Ich hab den Zeitungsartikel an die Werkbank geklebt. Gleich neben das alte Ladenschild.'),
   ] },
   { who: 'papa', cond: (s) => s.flags.debt && s.chapter <= 3, lines: [
     'Die Bank hat angerufen. Nicht wegen Schulden. Nur so, wie es uns geht. Das gab es noch nie.',
@@ -126,13 +128,13 @@ export const TALK = [
     'Hashwerk GmbH. Ich hab dein Firmenschild dreimal geputzt. Es glänzt jetzt mehr als meins.',
   ] },
   { who: 'papa', cond: up, lines: [
-    'Der Kurs steigt, sagt das Radio. Ich hab gleich die Preise im Laden gesenkt. Wenn es gut läuft, muss man teilen.',
+    L('Der Kurs steigt, sagt das Radio. Ich hab gleich die Preise im Laden gesenkt. Wenn es gut läuft, muss man teilen.', 'Der Kurs steigt, sagt das Radio. Ich hab gleich Kuchen für die ganze Werkstatt geholt. Wenn es gut läuft, muss man teilen.'),
   ] },
   { who: 'papa', cond: down, lines: [
     'Kurs im Keller? Kenn ich vom Laden. Man macht weiter, bis es wieder hell wird. Und man spart an der Heizung.',
   ] },
   { who: 'papa', cond: hot, lines: [
-    'Mach das Rolltor auf, hier sind es gefühlt vierzig Grad. Die Kunden denken schon, ich backe Brötchen.',
+    L('Mach das Rolltor auf, hier sind es gefühlt vierzig Grad. Die Kunden denken schon, ich backe Brötchen.', 'Mach das Rolltor auf, hier sind es gefühlt vierzig Grad. Herr Öztürk denkt schon, ich backe Brötchen.'),
   ] },
   { who: 'papa', cond: (s) => rel(s, 'papa') >= 3, lines: [
     'Weißt du, was das Schönste ist? Nicht das Geld. Dass wir wieder zusammen in der Werkstatt stehen.',
@@ -141,19 +143,19 @@ export const TALK = [
     'Schon gut, du hast viel zu tun. Ich auch. Ich hab nur gedacht … ach, egal.',
   ] },
   { who: 'papa', cond: (s) => s.flags.repaircafe, lines: [
-    'Samstag waren vierzehn Leute im Reparatur-Café. Eine Dame hat Kuchen mitgebracht. Ich glaube, wir haben jetzt Stammkunden.',
+    L('Samstag waren vierzehn Leute im Reparatur-Café. Eine Dame hat Kuchen mitgebracht. Ich glaube, wir haben jetzt Stammkunden.', 'Das Reparatur-Café machen wir jetzt samstags hier in der Werkstatt. Zwischen den Minern ist es schön warm.'),
   ] },
   { who: 'papa', cond: (s) => s.flags.papaRepairs, lines: [
     'Deine Miner sind gar nicht so anders als Fernseher. Kondensator raus, Kondensator rein, Kaffee.',
   ] },
   { who: 'papa', cond: (s) => between(s, '2020-03-17', '2020-07-31'), lines: [
-    'Laden zu, Werkstatt offen. Ich trag Maske und rede mit den Lötstellen. Die widersprechen wenigstens nicht.',
+    L('Laden zu, Werkstatt offen. Ich trag Maske und rede mit den Lötstellen. Die widersprechen wenigstens nicht.', 'Alles zu, nur die Werkstatt läuft. Ich trag Maske und rede mit den Lötstellen. Die widersprechen wenigstens nicht.'),
   ] },
   { who: 'papa', cond: (s) => s.flags.kralTorn, lines: ['Ich seh immer noch Krals Gesicht, als du seine Karte zerrissen hast. Das häng ich mir innerlich über die Theke.'] },
   { who: 'papa', cond: (s) => s.flags.kralKept, lines: ['Krals Karte liegt bei dir in der Schublade? Lass sie da. Und mach die Schublade zu.'] },
   { who: 'papa', cond: (s) => s.flags.offerMade && !s.flags.soldOut, lines: ['Kral will dich kaufen? Dich kauft man nicht, Kind. Dich hat man. Als Familie, meine ich.'] },
   { who: 'papa', cond: (s) => s.flags.soldOut, lines: ['Verkauft, na ja. Die Werkbank gehört aber immer noch uns. Und der Kaffee auch.'] },
-  { who: 'papa', cond: (s) => month(s) === 12, lines: ['Zu Weihnachten gibt es im Laden wieder Lichterketten zum halben Preis. Für dich gratis. Für deine Hallen … reden wir noch.'] },
+  { who: 'papa', cond: (s) => month(s) === 12, lines: [L('Zu Weihnachten gibt es im Laden wieder Lichterketten zum halben Preis. Für dich gratis. Für deine Hallen … reden wir noch.', 'Früher gab es zu Weihnachten im Laden Lichterketten zum halben Preis. Jetzt hängen sie an deinen Racks. Gratis.')] },
   { who: 'papa', cond: halving, lines: ['Halbierung? Wenn mir einer den Stundenlohn halbiert, streike ich. Deine Rechner nicht. Tapfer, die Dinger.'] },
   { who: 'papa', cond: (s) => !!s.keep?.loetkolben, lines: ['Mein erster Lötkolben liegt jetzt bei dir. Pass gut auf ihn auf, der hat mehr Fernseher gerettet als jeder Kundendienst.'] },
 
@@ -232,6 +234,12 @@ export const TALK = [
   { who: 'tech', cond: (s, h, g, fac) => fac === 'halle', lines: ['Die Hallentore klemmen bei Frost. Ich hab sie Gertrud und Helga getauft. Mit Namen gehen sie besser auf.'] },
   { who: 'tech', cond: down, lines: ['Kurs schlecht, Stimmung gut. Wir lassen uns die Laune nicht kleinrechnen.'] },
   { who: 'tech', cond: (s) => (s.frac ?? 0.5) > 0.85 || (s.frac ?? 0.5) < 0.22, lines: ['Nachtschicht. Die Miner und ich. Wir verstehen uns ohne Worte.'] },
+  // ---------- nach „ladenzu“: Papa ohne Laden (Werkstatt, Kapitel 3–4) ----------
+  { who: 'papa', cond: (s) => lost(s) && s.chapter >= 2 && s.chapter <= 3, lines: [
+    'Morgens fahr ich noch manchmal zum Laden. Dann fällt mir ein, dass ich ja hierher muss. Ist auch schön.',
+    'Herr Öztürk ist anständig. Er hat das alte Schild nicht weggeworfen, sondern mir gegeben. Es steht bei Mama im Flur.',
+    'Die Bank hat mir einen Brief geschrieben: „Wir bedauern.“ Ich hab ihn eingerahmt. Als Erinnerung, nie wieder Schulden.',
+  ] },
 ];
 
 // Schon gesprochen heute

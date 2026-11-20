@@ -139,10 +139,13 @@ function diskFx(g, s, p) {
 }
 const diskReply = (g) => (g.s.flags.diskOk ? (g.s.flags.backup ? '<b>Deniz:</b> Backup eingespielt, alles da. Siehst du? Langweilig ist gut.' : '<b>Deniz:</b> ES LÄUFT! Die Wallet ist zurück! Ich brauch ein Bier. Und du ein Backup.') : '<b>Deniz:</b> Weg. Alles weg. Ich … kauf dir einen USB-Stick. Für die nächsten.');
 const debtCost = () => CHAPTERS.flatMap((c) => c.goals).find((x) => x.id === 'debt')?.action?.cost || 15000;
+// Laden verloren: Werkstatt ein halbes Jahr mietfrei, danach 25 % teurer (Herr Öztürk statt Papa)
+const shopLostMods = () => [{ key: 'rent', mult: 0, days: 182, fac: 'werkstatt' }, { key: 'rent', mult: 1.25, fac: 'werkstatt', src: 'oeztuerk' }];
 
 // Beziehungen ab Stufe 3 (Wirkung in Game.relFx / Game.powerCost)
 export const REL_PERK = {
   papa: 'Papa vertraut dir: Die Werkstatt kostet keine Miete mehr.',
+  papaLost: 'Papa vertraut dir: Er repariert mit – Reparaturen 20 % günstiger.', // nachdem die Bank den Laden geschlossen hat
   mama: 'Mama hilft mit: Im Kinderzimmer kühlt es 20 % besser.',
   opa: 'Opa packt mit an: Stromausbau in Keller und Werkstatt 25 % günstiger.',
   deniz: 'Deniz ist voll dabei: 10 % weniger Ausfälle.',
@@ -308,6 +311,17 @@ export const EVENTS = [
 
   // ---------- 2012 ----------
   {
+    // 2012 lohnen alte Karten mit Haushaltsstrom kaum noch: Opa weiß einen Ausweg (Ausbau „nightmeter“ in world.js, −20 % Strom im Keller)
+    id: 'opazaehler', from: 'Opa Heinz', title: 'Der alte Nachtstromzähler', when: { date: '2012-01-10', window: 420 },
+    cond: (s) => s.unlocked.includes('keller') && !s.fac.keller?.up?.nightmeter && (s.stats.idle || 0) > 0,
+    text: '„Deine Kisten im Keller stehen still, weil der Strom zu teuer ist? Im Heizungskeller hängt noch der alte Zähler von der Nachtspeicherheizung. Den klemm ich dir um – Nachtstrom kostet ein Fünftel weniger. Material 400 $, die Arbeit mach ich.“',
+    choices: [
+      { label: 'Opa machen lassen', cost: 400, hint: 'Dauerhaft −20 % Strom im Keller · Opa +1', fx: (g, s) => ({ do: () => { (s.fac.keller.up ||= {}).nightmeter ||= s.day || 1; }, rel: { opa: 1 }, xp: { hw: 40 }, log: 'Januar 2012: Opa klemmt die Rigs auf den Nachtstrom' }), reply: '<b>Opa:</b> So. Jetzt laufen deine Kisten zum Heizungstarif. Und keiner muss frieren.' },
+      { label: 'Später', hint: 'Geht auch später im Firmenfenster (C) unter „Ausbauten“', fx: {}, reply: '<b>Opa:</b> Der Zähler läuft nicht weg. Der hängt da seit 1979.' },
+    ],
+    fallback: 1,
+  },
+  {
     id: 'abi', from: 'Mama', title: 'Abiturprüfungen', when: { date: '2012-03-07', window: 14 },
     text: '„In vier Wochen sind deine Prüfungen. Ich sehe dich nur noch zwischen deinen Kisten. Wie wär’s mit Lernen?“',
     choices: [
@@ -396,6 +410,17 @@ export const EVENTS = [
 
   // ---------- 2014 ----------
   {
+    // Frist aus m1: Wer Papas Schulden bis Ende 2013 nicht bezahlt, verliert den Laden – Kapitel 2 ist trotzdem geschafft (flag shopLost).
+    // Folgen: Werkstatt gehört Herrn Öztürk (ein halbes Jahr mietfrei, danach +25 % Miete, kein Papa-Rabatt), Papa −2; Rückkauf: 'ladenrueck'.
+    id: 'ladenzu', from: 'Papa', title: 'Die Bank schließt den Laden', when: { date: '2014-01-02', window: 5000 }, cond: (s) => !s.flags.debt && s.chapter === 1,
+    text: (s) => `„${s.day < toDay('2014-02-15') ? 'Die Frist ist um. Die Bank hat Elektro Brandt heute versiegelt.' : 'Ich wollte es dir nicht sagen: Die Bank hat Elektro Brandt schon Silvester 2013 versiegelt.'} Neunundzwanzig Jahre, Kind.“ Bei der Versteigerung kauft Herr Öztürk das Haus – früher Zweirad Öztürk, hinten in der Werkstatt. Er bietet dir die Werkstatt hinterm alten Laden zur Miete an, das erste halbe Jahr umsonst: „Für Ihren Vater.“`,
+    choices: [
+      { label: 'Papa fängt bei dir an', hint: 'Papa −1, Mama +1 · 300 $ Lohn im Monat · dauerhaft −15 % Reparaturkosten und 5 % weniger Ausfälle', fx: { rel: { papa: -1, mama: 1 }, mod: [...shopLostMods(), { key: 'monthly', mult: 300 }, { key: 'repair', mult: 0.85 }, { key: 'fail', mult: 0.95 }], flag: ['shopLost', 'papaJob'], log: 'Januar 2014: Die Bank schließt den Laden – Papa arbeitet jetzt bei dir' }, reply: '<b>Papa:</b> Lötkolben kann ich. Hashrate lern ich. Und den Kaffee koch ich sowieso.' },
+      { label: 'Papa braucht erst mal Ruhe', hint: 'Papa −2', fx: { rel: { papa: -2 }, mod: shopLostMods(), flag: 'shopLost', log: 'Januar 2014: Die Bank schließt den Laden' }, reply: '<b>Mama:</b> Er sitzt im Garten und sortiert Schrauben. Lass ihm Zeit.' },
+    ],
+    fallback: 1,
+  },
+  {
     id: 'goxstop', from: 'Deniz', title: 'GoxBank zahlt nicht mehr aus', when: { date: '2014-02-07', window: 10 }, cond: (s, h, g) => exUSD(g) > 50,
     text: (s, h, g) => `„GoxBank hat alle Auszahlungen gestoppt, angeblich ‚technische Probleme‘. Auf der Börse liegen noch Coins im Wert von <b>${usd(exUSD(g))}</b>. Ein Händler kauft GoxBank-Guthaben – für 75 % des Kurses.“`,
     choices: [
@@ -457,7 +482,7 @@ export const EVENTS = [
 
   // ---------- 2015 ----------
   {
-    id: 'papaonline', from: 'Papa', title: 'Papa gegen das Internet', when: { date: '2015-03-08', window: 14 },
+    id: 'papaonline', from: 'Papa', title: 'Papa gegen das Internet', when: { date: '2015-03-08', window: 14 }, cond: (s) => !s.flags.shopLost || !!s.flags.shopBack,
     text: '„Die Leute schauen sich bei mir Fernseher an und bestellen sie dann online. Deniz meint, ich brauche einen Webshop. Ich weiß nicht mal, was ein Warenkorb ist.“',
     choices: [
       { label: 'Webshop bauen lassen', cost: memo('shop', (g) => fam(g, 2500, 3, 25000)), hint: 'Papa +2 · Papa zahlt dir zwei Jahre lang monatlich etwas zurück', fx: (g) => ({ rel: { papa: 2 }, mod: [{ key: 'monthly', mult: -Math.round(memo('shop', () => 0)(g) / 12), days: 730 }], flag: 'webshop', log: 'März 2015: Webshop für Elektro Brandt' }), reply: '<b>Papa:</b> Drei Bestellungen über Nacht! Aus Bayern! Wer kauft in Bayern Kabel bei mir?' },
@@ -612,6 +637,18 @@ export const EVENTS = [
     fallback: 2,
   },
 
+  {
+    // Rückkauf nach „ladenzu“: Herr Öztürk verkauft das Haus (Laden + Werkstatt)
+    id: 'ladenrueck', from: 'Herr Öztürk', title: 'Das Haus von Elektro Brandt', when: { date: '2017-11-20', window: 3000 },
+    cond: (s) => !!s.flags.shopLost && !s.flags.shopBack && s.cash > 200000,
+    text: '„Ich werde siebzig und will das Haus verkaufen – Laden, Werkstatt, alles. Ich frage zuerst Sie. Ihr Vater hat da drin neunundzwanzig Jahre Fernseher repariert.“',
+    choices: [
+      { label: 'Elektro Brandt zurückkaufen', cost: memo('rueck', (g) => fam(g, 120000, 1, 600000)), hint: 'Papa +3, Mama +1 · Papa öffnet den Laden wieder · Werkstatt ohne Miete', fx: (g, s) => ({ rel: { papa: 3, mama: 1 }, flag: 'shopBack', do: () => { (s.fac.werkstatt.up ||= {}).buyshop ||= s.day || 1; }, log: 'Elektro Brandt zurückgekauft – Papa schließt den Laden wieder auf' }), reply: '<b>Papa:</b> Das Schild hab ich all die Jahre im Keller aufgehoben. Ich hab es nie jemandem gesagt.' },
+      { label: 'Lieber in Hashwerk investieren', hint: 'Papa −1', fx: { rel: { papa: -1 }, log: 'Das Haus von Elektro Brandt nicht zurückgekauft' }, reply: '<b>Papa:</b> Ist schon recht. Ist ja nur ein Haus.' },
+    ],
+    fallback: 1,
+  },
+
   // ---------- 2018 ----------
   {
     id: 'opa80', from: 'Mama', title: 'Opa wird 80', when: { date: '2018-03-08', window: 14 },
@@ -693,7 +730,7 @@ export const EVENTS = [
     fallback: 2,
   },
   {
-    id: 'corona', from: 'Papa', title: 'Der Laden muss zu', when: { date: '2020-03-17', window: 20 },
+    id: 'corona', from: 'Papa', title: 'Der Laden muss zu', when: { date: '2020-03-17', window: 20 }, cond: (s) => !s.flags.shopLost || !!s.flags.shopBack,
     text: '„Lockdown. Elektro Brandt muss zumachen, keiner weiß, wie lange. Die Miete läuft weiter.“',
     choices: [
       { label: 'Drei Monatsmieten übernehmen', cost: 4500, hint: 'Papa +2', fx: { rel: { papa: 2 }, log: 'März 2020: drei Ladenmieten übernommen' }, reply: '<b>Papa:</b> Ich zahl dir das zurück. Irgendwann. Danke, Kind.' },
@@ -909,7 +946,7 @@ export const EVENTS = [
     fallback: 2,
   },
   {
-    id: 'ladenzukunft', from: 'Papa', title: 'Elektro Brandt', when: { date: '2025-08-01', window: 14 },
+    id: 'ladenzukunft', from: 'Papa', title: 'Elektro Brandt', when: { date: '2025-08-01', window: 14 }, cond: (s) => !s.flags.shopLost || !!s.flags.shopBack,
     text: '„Ich bin 68. Der Laden war mein Leben, aber meine Knie wollen nicht mehr. Zweirad Öztürk würde die Räume mieten. Oder … du machst was draus?“',
     choices: [
       { label: 'Hashwerk übernimmt den Laden', cost: memo('laden', (g) => fam(g, 20000, 0.3, 250000)), hint: 'Papa +2 · Showroom und Reparatur-Café: −10 % Reparaturkosten, Werkstatt +25 % Kühlung', fx: { rel: { papa: 2 }, mod: [{ key: 'repair', mult: 0.9 }, { key: 'cool', mult: 1.25, fac: 'werkstatt' }], flag: 'ladenHashwerk', log: 'August 2025: Hashwerk übernimmt Elektro Brandt' }, reply: '<b>Papa:</b> Das Schild bleibt aber hängen. „Elektro Brandt, seit 1988.“ Darauf bestehe ich.' },

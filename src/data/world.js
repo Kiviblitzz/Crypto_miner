@@ -71,7 +71,7 @@ export const CHAPTERS = [
     goals: [
       { id: 'openrig', text: 'Bau dein erstes Rig', check: (s, h) => h.countPlaced((o) => ['crate', 'frame6', 'frame8', 'frame12'].includes(o.type) && o.parts?.gpus?.length > 0) > 0 }, // mit mindestens 1 GPU
       { id: 'rev30', text: 'Schaff 30 $ pro Tag', check: (s, h) => h.dailyRev() >= 30, progress: (s, h) => [h.dailyRev(), 30, 'usd'] },
-      { id: 'debt', text: 'Rette Papas Laden', action: { label: '15.000 $ überweisen', cost: 15000, flag: 'debt' }, check: (s) => s.flags.debt },
+      { id: 'debt', text: 'Rette Papas Laden – Frist der Bank: Ende 2013', action: { label: '15.000 $ überweisen', cost: 15000, flag: 'debt' }, check: (s) => s.flags.debt || !!s.flags.shopLost }, // nach der Frist: Ereignis „ladenzu“ (events.js)
     ],
     waitText: 'Papas Untermieter Zweirad Öztürk zieht erst im Juni 2012 aus der Werkstatt aus.',
     bonus: [
@@ -85,6 +85,7 @@ export const CHAPTERS = [
   {
     title: 'Kapitel 3 – Die Werkstatt', unlock: 'halle', minDate: '2014-06-01',
     intro: 'Elektro Brandt ist gerettet, und Zweirad Öztürk ist ausgezogen. Papa drückt dir den Schlüssel zur Werkstatt hinterm Laden in die Hand.',
+    introLost: 'Elektro Brandt gibt es nicht mehr. Herr Öztürk hat das Haus ersteigert und vermietet dir die Werkstatt hinterm alten Laden. Papa trägt die erste Kiste hinein.', // nach „ladenzu“
     goals: [
       { id: 'asic', text: 'Kauf deinen ersten ASIC-Miner', check: (s) => s.flags.boughtAsic },
       { id: 'th1', text: 'Schaff 1 TH/s', check: (s, h) => h.algoHash('sha256') >= 1e12, progress: (s, h) => [h.algoHash('sha256'), 1e12, 'hash'] },
@@ -161,7 +162,7 @@ export function yearTitle(y) {
 }
 // Familienzeile im Jahresrückblick: Stimmung je Beziehungsstufe (≤ −2, −1, 0, 1–2, 3–4, 5)
 export const FAMILY_MOOD = {
-  papa: ['Papa spricht kaum noch mit dir.', 'Papa ist ein bisschen enttäuscht.', 'Papa fragt, wann du mal wieder im Laden hilfst.', 'Papa ist stolz auf dich.', 'Papa erzählt jedem Kunden von dir.', 'Papa hat dein Logo ins Schaufenster geklebt.'],
+  papa: ['Papa spricht kaum noch mit dir.', 'Papa ist ein bisschen enttäuscht.', 'Papa fragt, wann du mal wieder zum Essen kommst.', 'Papa ist stolz auf dich.', 'Papa erzählt jedem Kunden von dir.', 'Papa hat dein Logo ins Schaufenster geklebt.'],
   mama: ['Mama macht sich große Sorgen um dich.', 'Mama findet, du arbeitest zu viel.', 'Mama hofft, dass du genug schläfst.', 'Mama schickt dir jede Woche Kuchen.', 'Mama strickt dir einen Hashwerk-Schal.', 'Mama zeigt allen Nachbarinnen deine Zeitungsartikel.'],
   opa: ['Opa brummelt nur noch.', 'Opa hält das alles für Spinnerei.', 'Opa will wissen, was du da eigentlich machst.', 'Opa nickt anerkennend.', 'Opa nennt dich jetzt „Herr Ingenieur“.', 'Opa redet im Skatclub nur noch von dir.'],
   deniz: ['Deniz meldet sich gar nicht mehr.', 'Deniz ist ein bisschen sauer.', 'Deniz schickt dir Memes, wie immer.', 'Deniz ist richtig gut drauf.', 'Deniz würde für dich durchs Feuer gehen.', 'Deniz nennt Hashwerk nur noch „unser Baby“.'],
@@ -186,6 +187,7 @@ export const MESSAGES = [
   { id: 'm13', date: '2012-11-28', from: 'Deniz', text: 'Halving! Nur noch 25 BTC pro Block. Unsere Erträge halbieren sich.' },
   { id: 'm14', date: '2013-02-01', from: 'Deniz', text: 'Die ersten ASICs sind da. Eine Kiste schafft so viel wie 100 Grafikkarten.' },
   { id: 'm15', date: '2013-11-29', from: 'Mama', text: 'Im Fernsehen reden sie über Bitcoin. Über 1.000 Dollar! Ist das dein Ding?' },
+  { id: 'm15b', cond: (s) => !s.flags.debt && s.day >= toDay('2013-10-20') && s.day < toDay('2014-01-01'), from: 'Papa', text: 'Die Bank hat geschrieben: Wenn bis Silvester keine 15.000 $ da sind, wird der Laden versteigert. Ich weiß, ich hab gesagt, das ist nicht dein Problem …' },
   { id: 'm16', date: '2014-02-10', from: 'Deniz', text: 'GoxBank zahlt nichts mehr aus. Hol deine Coins in die Cold-Wallet!' },
   { id: 'm17', cond: (s) => s.day >= toDay('2014-03-12') && s.day <= toDay('2014-05-31') && (s.flags.gmbh || s.unlocked.includes('werkstatt')), from: 'Viktor Kral', text: 'Viktor Kral, MONOLITH Hash AG. Wir kaufen kleine Betriebe. Denken Sie drüber nach.' },
   { id: 'm18', cond: (s) => s.flags.gmbh, from: 'Deniz', text: 'Hashwerk GmbH! Ich kündige und steig ein. CTO? Sag ja.' },
@@ -330,13 +332,14 @@ export const UPGRADES = {
     { id: 'skylight', name: 'Dachfensterlüfter', cost: 80, fx: { coolAdd: 400 }, eff: '+400 W Kühlung', desc: 'Ein kleiner Lüfter im Dachfenster schiebt die warme Luft nach draußen.' },
   ],
   keller: [
+    { id: 'nightmeter', name: 'Opas Nachtstromzähler', cost: 400, fx: { elec: 0.8 }, eff: 'Strom −20 % im Keller', desc: 'Der alte Zähler der Nachtspeicherheizung hängt noch im Heizungskeller. Opa klemmt die Rigs auf den Nachtstrom-Tarif.' },
     { id: 'shaft', name: 'Opas Abluftschacht', cost: 600, fx: { coolMul: 1.3 }, eff: 'Kühlung ×1,3', desc: 'Opa Heinz mauert einen Schacht vom Heizungsraum bis über das Dach.' },
     { id: 'bars', name: 'Fenstergitter', cost: 150, secure: true, eff: 'Diebstahlschutz', desc: 'Stahlgitter vor den Kellerfenstern. Sieht nach Gefängnis aus, hält aber.' },
   ],
   werkstatt: [
     { id: 'doorvent', name: 'Rolltor-Lüftung', cost: 1500, fx: { coolMul: 1.25 }, eff: 'Kühlung ×1,25', desc: 'Lamellen im Rolltor und ein Abluftgebläse unterm Dach.' },
     { id: 'alarm', name: 'Alarmanlage', cost: 900, secure: true, eff: 'Diebstahlschutz', desc: 'Bewegungsmelder und eine Sirene, die halb Lindental weckt.' },
-    { id: 'buyshop', name: 'Werkstatt von Papa kaufen', cost: 45000, fx: { rent: 0 }, rel: { papa: 1 }, eff: 'Keine Miete mehr · Papa freut sich', desc: 'Papa verkauft dir die Werkstatt. Das Geld steckt er in den Laden.' },
+    { id: 'buyshop', name: 'Werkstatt von Papa kaufen', cost: 45000, fx: { rent: 0 }, rel: { papa: 1 }, eff: 'Keine Miete mehr · Papa freut sich', desc: 'Papa verkauft dir die Werkstatt. Das Geld steckt er in den Laden.', lost: { name: 'Werkstatt von Herrn Öztürk kaufen', rel: null, eff: 'Keine Miete mehr', desc: 'Herr Öztürk verkauft dir die Werkstatt hinterm alten Laden. Papa hilft beim Umschreiben der Schilder.' } },
   ],
   halle: [
     { id: 'lease5', name: '5-Jahres-Mietvertrag', cost: 4000, days: 1826, keepRent: true, obsoleteBy: 'buyhall', fx: { rent: 0.75 }, eff: 'Miete −25 % für 5 Jahre', desc: 'Lange Bindung, kleinere Miete. Einmotten spart dann aber keine Miete mehr.' },
