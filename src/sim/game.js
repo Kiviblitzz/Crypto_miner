@@ -537,7 +537,7 @@ export class Game {
   }
   // Alte Spielstände (ohne s.contacts): wer schon so weit ist oder fertige Geräte gekauft hat, kennt die Leute schon – still, ohne Ereignis
   migrateContacts(s) {
-    const lb = s.lastBuild, kinds = (types) => { let n = 0; for (const f of Object.values(s.fac || {})) for (const o of f.objects || []) if (types.includes(o.type) && o.parts && (o.parts.gpus?.length || o.parts.mobo)) n++; return n; };
+    const lb = s.lastBuild, kinds = (types) => { let n = 0; for (const f of Object.values(s.fac || {})) for (const o of f.objects || []) if (types.includes(o.type)) n++; return n; }; // auch leere Gehäuse: wer schon Rigs aufstellt, behält „Fertig bestückt“
     const kemal = s.chapter >= 1 || s.day >= CONTACT.kemal.due(s) || kinds(CONTACTS.flatMap((c) => c.types)) >= 2 || !!lb?.ready;
     const jonas = s.chapter >= 2 || (s.unlocked.includes('keller') && s.day >= CONTACT.jonas.due(s)) || kinds(CONTACT.jonas.types) > 0 || (!!lb?.ready && CONTACT.jonas.types.includes(lb.type));
     for (const [id, on] of [['kemal', kemal], ['jonas', jonas]]) if (on) { s.contacts[id] = { met: s.day || 1, on: s.day || 1, n: 0 }; s.ev.done[CONTACT[id].intro] = 'migr'; }
