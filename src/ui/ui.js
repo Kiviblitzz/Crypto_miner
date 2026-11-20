@@ -1689,7 +1689,7 @@ export class UI {
       const full = !g.slotOk(fac, PLACEABLE[cfg.type]);
       const lt = lock && cid ? this.lockText(cid) : null; // gesperrt: statt „Fertig montiert“ der Weg dorthin (abgelehnt: gleich anrufen)
       const bk = h(`<button class="btn big ${lock ? 'primary' : ''}" ${full || kit.price > g.s.cash ? 'disabled' : ''} title="Gehäuse wird aufgestellt, die Teile liegen im Lager – selbst einbauen">Bausatz · ${this.money(kit.price)}</button>`);
-      const br = lt?.call ? h(`<button class="btn big cf-call" title="${esc(lt.long)}">${esc(CONTACT[cid].name)} anrufen → fertig montiert</button>`) : h(`<button class="btn big ${lock ? 'locked' : 'primary'}" ${full || lock || !rd.ok || rd.price > g.s.cash ? 'disabled' : ''} title="${lt ? esc(lt.long) : 'Läuft sofort'}">${lock ? `${LOCK_SVG}Fertig montiert · bald` : `Fertig montiert · ${this.money(rd.price)}`}</button>`);
+      const br = lt?.call ? h(`<button class="btn big cf-call" title="${esc(lt.long)} Danach geht’s fertig montiert.">${esc(CONTACT[cid].name)} anrufen</button>`) : h(`<button class="btn big ${lock ? 'locked' : 'primary'}" ${full || lock || !rd.ok || rd.price > g.s.cash ? 'disabled' : ''} title="${lt ? esc(lt.long) : 'Läuft sofort'}">${lock ? `${LOCK_SVG}Fertig montiert · bald` : `Fertig montiert · ${this.money(rd.price)}`}</button>`);
       bk.onclick = () => this.startBuild(cfg, false); br.onclick = () => { if (lt?.call) { this.callContact(cid); this.configurator(cfg.type, cfg); return; } this.startBuild(cfg, true); };
       goEl.append(bk, br);
       if (full) goEl.append(h('<div class="cf-why">Kein Platz mehr – Zeit für einen größeren Standort.</div>'));
