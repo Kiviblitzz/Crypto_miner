@@ -39,6 +39,8 @@ const ACH_SVG = {
 };
 const LOCK_SVG = '<svg class="lock-ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5.5" y="10.5" width="13" height="9.5" rx="2.2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg>';
 const MONTH_RE = /^(Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)\s+\d{4}:\s*/;
+const PAUSE_LABEL = { heat: 'Pausiert (zu heiß)', event: 'Gedrosselt (Ereignis)', loss: 'Pausiert (kaum rentabel)' }; // Grund der Auto-Pause (Game.autoLimit)
+const MOVE_TO = { kinder: 'Ins Zimmer tragen', keller: 'In den Keller tragen', werkstatt: 'In die Werkstatt bringen', halle: 'In die Halle bringen', rz: 'Ins Rechenzentrum schicken', fjord: 'In die Fjordhalle schicken' };
 
 // Gesprächskarte: gezeichnetes Gesicht (kein Emoji), passend zu den Figuren in der Welt
 const FACES = {
@@ -307,6 +309,7 @@ export class UI {
       if (it.kind === 'holder') s = `${esc(it.desc)}<br/><span class="rc-dim">1 Stellplatz für ${it.slots} Geräte</span>`;
       if (it.kind === 'device' && g.facTier(fac) >= 1 && !it.hydro) s += `<br/><span class="rc-dim">Tipp: im Regal teilen sich 8 Miner einen Stellplatz</span>`;
       const left = g.stockLeft(it), sold = left === 0; if (left !== Infinity) s += `<br/><span class="stock ${sold ? 'neg' : ''}">${sold ? 'Kontingent: ' + esc(g.stockText(it)) : `Kontingent: noch ${left} Stück diesen Monat`}</span>`;
+      if ((it.kind === 'device' || it.kind === 'holder') && g.slotOk(fac, it) && g.rentStart(fac) > 0) s += `<br/><b class="rc-warn">Startet die Miete: −${fmtUSD(g.rentStart(fac))}/Tag</b>`; // erstes Gerät am Miet-Standort
       const noSlot = !g.slotOk(fac, it); if (noSlot) s += `<br/><span class="stock neg">Alle ${g.slotsMax(fac)} Plätze belegt</span>`;
       const card = h(`<div class="item ${price > g.s.cash || it.hydro || noSlot ? 'dis' : ''}" data-price="${price}" data-id="${it.id}" ${it.hydro ? 'data-hydro="1"' : ''} ${noSlot ? 'data-full="1"' : ''}><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${this.money(price)}</span></div><div class="s">${s}</div><div class="miss">${price > g.s.cash ? `Dir fehlen ${this.money(price - g.s.cash)}` : ''}</div><button class="btn small primary place" ${price > g.s.cash || it.hydro ? 'disabled' : ''}>Platzieren · ${this.money(price)}</button></div>`);
       try { const url = this.w.thumbnail(it.id); if (url) card.prepend(h(`<div class="thumb"><img alt="" src="${url}"/></div>`)); } catch (e) { /* ohne Vorschau weiter */ }
@@ -414,7 +417,7 @@ export class UI {
       let line = '';
       if (a && a.units.length) { const rev = a.units.reduce((x, u) => x + u.rev, 0) * sm.throttle; const cost = a.watt / 1000 * 24 * sm.elec; line = `${a.units.filter((u) => u.h).map((u) => fmtHash(u.h * sm.throttle, u.algo)).join(' · ') || 'pausiert'} · <span class="${rev - cost >= 0 ? 'pos' : 'neg'}">${rev - cost >= 0 ? '+' : ''}${fmtUSD(rev - cost)}/Tag</span>`; }
       else if (def.kind === 'cooling') line = `kühlt ${fmtWatt(def.cool)}`;
-      const st = { broken: 'Defekt – reparieren', partial: 'Teilweise defekt', psu: 'Netzteil zu schwach', incomplete: 'Teile fehlen – bestücken', empty: '➕ Leer – Geräte einsetzen', idle: 'pausiert (unrentabel)', full: 'pausiert (Anschluss voll)', off: '⏻ aus' }[a?.status];
+      const st = a?.psuOff && a.status === 'ok' ? `Netzteil zu schwach – ${a.psuOff === 1 ? '1 Karte' : a.psuOff + ' Karten'} aus` : { broken: 'Defekt – reparieren', partial: 'Teilweise defekt', psu: 'Netzteil zu schwach', incomplete: 'Teile fehlen – bestücken', empty: '➕ Leer – Geräte einsetzen', idle: { heat: 'pausiert (zu heiß)', event: 'gedrosselt (Ereignis)', loss: 'pausiert (kaum rentabel)' }[a?.limit] || 'pausiert (unrentabel)', full: 'pausiert (Anschluss voll)', off: '⏻ aus' }[a?.status];
       const build = o.type === 'tower' && o.parts && !this.g.s.flags.miningStarted, miss = build ? this.g.pcMissing(o).length : 0;
       html = build ? `<kbd>E</kbd>${miss ? 'Teile einbauen' : 'PC einschalten'}<div class="st">${4 - miss} von 4 Teilen eingebaut</div>` : `<kbd>E</kbd>${esc(o.type === 'tower' ? (this.g.facObjects('kinder').find((x) => x.type === 'tower')?.uid === o.uid ? 'Dein PC' : 'Mining-PC') : (def.short || def.name.replace(/[-‑]Gehäuse|\s*\(.*\)/g, '')))}${st ? `<div class="st">${st}</div>` : line ? `<div class="ln">${line}</div>` : ''}`;
     }
@@ -511,10 +514,54 @@ export class UI {
       c.prepend(as);
     }
     const mv = h('<button class="btn">✥ Verschieben</button>'); mv.onclick = () => { this.resume(); this.w.startPlacement(o.type, uid); }; row.append(mv);
+    const mvb = this.moveButton(o); if (mvb) row.append(mvb);
     const rt = h('<button class="btn">⟳ Drehen</button>'); rt.onclick = () => { const r0 = o.rot; o.rot = (o.rot + 1) % 4; if (!this.w.canPlace(def, o.x, o.z, o.rot, uid)) { o.rot = r0; this.toast('Kein Platz zum Drehen.', 'bad'); } this.w.syncObjects(); }; row.append(rt);
     if (def.kind !== 'decor' && !g.slotKind(def)) { const blk = g.cloneBlocked(o); const dp = h(`<button class="btn" title="${blk ? esc(blk) + ' gibt es nicht mehr zu kaufen' : 'Gleiches Objekt inkl. Teilen noch mal kaufen'}" ${blk ? 'disabled' : ''}>⧉ Duplizieren ${blk ? '· Teile nicht mehr im Handel' : `(${fmtUSD(this.g.cloneCost ? this.g.cloneCost(o) : 0)})`}</button>`); dp.onclick = () => { this.resume(); this.w.startPlacement(o.type, null, o); }; row.append(dp); }
     const sell = h(`<button class="btn danger">Verkaufen (+${fmtUSD(g.objectValue(o))})</button>`); sell.onclick = () => { if (!g.canSell(o)) { this.toast('Den PC brauchst du noch.', 'info', 2500); return; } g.removeObject(uid); this.resume(); }; row.append(sell);
     c.append(row);
+  }
+  // ---------- Umziehen: Gerät samt Teilen an einen anderen Standort ----------
+  moveButton(o) {
+    const g = this.g, def = PLACEABLE[o.type]; if (!g.slotKind(def) && def.kind !== 'cooling') return null;
+    if (g.isFirstPc(o)) return h('<button class="btn" disabled title="Dein erster PC bleibt im Zimmer – zur Erinnerung">Bleibt im Zimmer</button>');
+    const from = g.facOf(o.uid), tg = g.s.unlocked.filter((id) => id !== from); if (!tg.length) return null;
+    if (tg.length === 1) {
+      const to = tg[0], why = g.moveWhy(o, to), fee = g.moveFee(o, to);
+      const b = h(`<button class="btn" ${why ? 'disabled' : ''} title="${esc(why || `Mit allen Teilen nach ${FACILITY[to].name}${fee ? ` · Umzug ${fmtUSD(fee)}` : ''}`)}">${esc(MOVE_TO[to] || `Nach ${FACILITY[to].short}`)}${fee ? ` · ${this.money(fee)}` : ''}</button>`);
+      b.onclick = () => this.doMove(o.uid, to); return b;
+    }
+    const b = h('<button class="btn" title="Mit allen Teilen an einen anderen Standort bringen">Zum Standort …</button>'); b.onclick = () => this.movePicker(o); return b;
+  }
+  movePicker(o) {
+    const g = this.g, from = g.facOf(o.uid), def = PLACEABLE[o.type];
+    const body = h(`<div><h2>Wohin damit?</h2><p style="color:var(--dim);margin-top:-6px">${esc(def.name)} – mit allen Teilen${o.items?.length ? ` und ${o.items.length} Geräten` : ''}</p><div class="cards"></div></div>`), cards = body.querySelector('.cards');
+    for (const to of g.s.unlocked) {
+      if (to === from) continue; const f = FACILITY[to], why = g.moveWhy(o, to), fee = g.moveFee(o, to);
+      const c = h(`<div class="card"><h3>${esc(f.name)}</h3><div class="sub">${esc(f.place)}</div><div style="font-size:12px;color:var(--dim)">Platz ${g.slotsUsed(to)}/${g.slotsMax(to)} · Strom ${fmtNum(g.elecPrice(to, g.s.day, true) * 100, 1)} ct/kWh${f.rent && g.rentStart(to) > 0 ? ` · startet die Miete (−${fmtUSD(g.rentStart(to))}/Tag)` : ''}</div>${why ? `<div style="font-size:12px;color:#ff8f84">${esc(why)}</div>` : ''}</div>`);
+      const b = h(`<button class="btn small ${why ? '' : 'primary'}" style="margin-top:6px" ${why ? 'disabled' : ''}>${fee ? `Hinbringen · ${this.money(fee)}` : 'Hinbringen'}</button>`); b.onclick = () => { this.closeModal(); this.doMove(o.uid, to); };
+      c.append(b); cards.append(c);
+    }
+    this.openModal(body, 'narrow', 'move');
+  }
+  doMove(uid, to) {
+    const g = this.g, o = g.findObj(uid); if (!o) return;
+    const why = g.moveWhy(o, to); if (why) { this.toast(esc(why), 'bad'); return; }
+    const r = g.moveObject(uid, to); if (!r) { this.toast('Kein Platz zum Abstellen gefunden.', 'bad'); return; }
+    this.resume(); this.audio?.install?.();
+    this.toast(`${esc(o.type === 'tower' ? 'Mining-PC' : PLACEABLE[o.type].name)} steht jetzt ${to === 'kinder' ? 'im Zimmer' : to === 'keller' ? 'im Keller' : `in: ${esc(FACILITY[to].name)}`}${r.fee ? ` · Umzug ${fmtUSD(r.fee)}` : ''}`, 'good', 4000);
+  }
+  // Neuer Standort zum ersten Mal: Geräte von dort mitnehmen, wo der Strom teurer ist? („Deine 5 PCs mitnehmen?“)
+  offerMove(to, tries = 0) {
+    if (this.modalKind) { if (tries < 20) setTimeout(() => this.offerMove(to, tries + 1), 1500); return; } // erst, wenn kein anderes Fenster offen ist
+    const g = this.g, list = g.moveCandidates(to), free = g.slotsMax(to) - g.slotsUsed(to); if (!list.length || free <= 0) return;
+    const take = list.slice(0, free), n = take.length, fee = take.reduce((a, c) => a + c.fee, 0), save = take.reduce((a, c) => a + c.save, 0), F = FACILITY[to];
+    const pcs = take.every((c) => c.o.type === 'tower'), rigs = take.every((c) => PLACEABLE[c.o.type].kind === 'rig'), noun = pcs ? (n === 1 ? 'PC' : 'PCs') : rigs ? (n === 1 ? 'Rig' : 'Rigs') : n === 1 ? 'Gerät' : 'Geräte';
+    const froms = [...new Set(take.map((c) => c.from))].map((id) => FACILITY[id].short).join(' und '), first = g.s.fac.kinder.objects.some((x) => g.isFirstPc(x)) && take.some((c) => c.from === 'kinder');
+    const body = h(`<div class="story"><div class="ch">Umziehen?</div><p><b>Deine ${n} ${noun} mitnehmen?</b><br/>${esc(froms)} → ${esc(F.name)}: dort ist der Strom günstiger${save > 0.005 ? ` – spart etwa <b>${fmtUSD(save)}/Tag</b>` : ''}.${list.length > n ? ` Es passen ${n} von ${list.length}.` : ''}${first ? '<br/>Dein erster PC bleibt im Zimmer.' : ''}${fee ? `<br/>Umzug: ${fmtUSD(fee)}.` : ''}${F.rent && g.rentStart(to) > 0 ? `<br/>Damit startet die Miete: −${fmtUSD(g.rentStart(to))}/Tag.` : ''}</p><div class="row" style="justify-content:flex-end;gap:8px"><button class="btn">Lieber nicht</button><button class="btn primary" ${fee > g.s.cash ? 'disabled' : ''}>Alle mitnehmen${fee ? ` · ${this.money(fee)}` : ''}</button></div></div>`);
+    const [no, yes] = body.querySelectorAll('button');
+    no.onclick = () => this.closeModal();
+    yes.onclick = () => { const r = g.moveAll(to, take); this.closeModal(); if (r.n) { this.audio?.install?.(); this.toast(`${r.n} ${noun} stehen jetzt ${to === 'keller' ? 'im Keller' : `in: ${esc(F.name)}`}${r.fee ? ` · Umzug ${fmtUSD(r.fee)}` : ''}`, 'good', 5000); } };
+    this.openModal(body, 'narrow', 'move');
   }
   hashProfile(o) {
     const def = PLACEABLE[o.type];
@@ -529,7 +576,7 @@ export class UI {
     const g = this.g, def = PLACEABLE[o.type], facId = g.facOf(uid), sm = g.summary[facId]; if (!sm) return;
     const a = sm.per.get(uid) || g.analyze(o);
     const badge = $('#insp-badge');
-    const st = sm.tripped ? ['bad', 'Kein Strom'] : a.status === 'broken' ? ['bad', 'Defekt'] : a.status === 'partial' ? ['warn', 'Teilweise defekt'] : a.status === 'psu' ? ['bad', 'Netzteil zu schwach'] : a.status === 'incomplete' ? ['warn', 'Unvollständig'] : a.status === 'empty' ? ['idle', 'Leer'] : a.status === 'idle' ? ['idle', a.limit === 'heat' ? 'Pausiert (zu heiß)' : 'Pausiert (unrentabel)'] : a.status === 'full' ? ['idle', 'Pausiert (Anschluss voll)'] : a.status === 'off' ? ['idle', 'Aus'] : def.kind === 'decor' ? ['idle', 'Deko'] : ['ok', sm.throttle < 1 ? 'Läuft (gedrosselt)' : 'Läuft'];
+    const st = sm.tripped ? ['bad', 'Kein Strom'] : a.status === 'broken' ? ['bad', 'Defekt'] : a.status === 'partial' ? ['warn', 'Teilweise defekt'] : a.status === 'psu' ? ['bad', 'Netzteil zu schwach'] : a.status === 'incomplete' ? ['warn', 'Unvollständig'] : a.status === 'empty' ? ['idle', 'Leer'] : a.status === 'idle' ? ['idle', PAUSE_LABEL[a.limit] || 'Pausiert (unrentabel)'] : a.status === 'full' ? ['idle', 'Pausiert (Anschluss voll)'] : a.status === 'off' ? ['idle', 'Aus'] : def.kind === 'decor' ? ['idle', 'Deko'] : a.psuOff ? ['warn', `${a.psuOff === 1 ? '1 Karte' : a.psuOff + ' Karten'} aus`] : ['ok', sm.throttle < 1 ? 'Läuft (gedrosselt)' : 'Läuft'];
     if (this.showRun && g.s.flags.miningStarted && o.type === 'tower') { if (badge) badge.innerHTML = `<span class="badge ok"><i></i>Läuft</span>`; const se = $('#insp-stats'); if (se) se.innerHTML = ''; return; }
     if (!g.s.flags.miningStarted && def.kind === 'rig' && o.parts) { const n = 4 - g.pcMissing(o).length; if (badge) badge.innerHTML = `<span class="badge ${n === 4 ? 'ok' : 'idle'}"><i></i>${n} / 4 Teile</span>`; const se = $('#insp-stats'); if (se) se.innerHTML = ''; return; }
     if (badge) badge.innerHTML = `<span class="badge ${st[0]}"><i></i>${st[1]}</span>`;
@@ -557,7 +604,6 @@ export class UI {
   }
   // Erster Mining-PC: Schritt für Schritt zusammenbauen
   pcBuild(o) {
-    if (this.pickType) return this.pcPicker(o, this.pickType);
     const g = this.g, s = g.s, p = o.parts, spots = this.w.room?.looseSpots || {};
     const steps = [['mobo', 'Mainboard'], ['cpu', 'Prozessor'], ['gpu', 'Grafikkarte'], ['psu', 'Netzteil']];
     const cur = (t) => (t === 'gpu' ? p.gpus[0] : p[t]);
@@ -604,66 +650,19 @@ export class UI {
     const w0 = g.s.wallet.BTC; this.btcAtStart = w0.ex + w0.cold; this.slowUntil = performance.now() + 9000;
     this.audio?.powerOn(); this.w.powerOn?.(o.uid); this.showRun = true; this.inspect(o.uid);
   }
-  firstPicker(o, type) { this.pickType = type; this.inspect(o.uid); }
-  // Teile-Auswahl direkt im Inspektor (das Gehäuse bleibt links sichtbar)
-  pcPicker(o, type) {
-    const g = this.g, p = o.parts;
-    const names = { mobo: 'Mainboard', cpu: 'Prozessor', psu: 'Netzteil', gpu: 'Grafikkarte' };
-    const hints = { mobo: 'Auf das Mainboard kommt alles drauf.', cpu: 'Steuert den PC. Fürs Mining reicht ein günstiger.', gpu: 'Rechnet beim Mining. Sie bestimmt, wie viel du schürfst.', psu: 'Muss genug Watt für alle Teile liefern.' };
-    const tipWhy = { mobo: 'Passt', cpu: 'Günstig, reicht völlig', gpu: 'Beste Leistung pro $', psu: 'Reicht und ist günstig' };
-    const cur = type === 'gpu' ? p.gpus[0] : p[type], refund = cur ? g.itemPrice(PART[cur]) : 0, reserve = g.buildReserve(o, type);
-    const avail = g.s.cash + refund - reserve, need = g.rigWatt(o) - (cur && type !== 'psu' ? PART[cur].watt || 0 : 0), px = g.price('BTC') || 1;
-    const list = g.partList(type).sort((a, b) => g.itemPrice(a) - g.itemPrice(b));
-    const whyNot = (it) => (type === 'psu' && it.cap < need ? `Zu schwach (${need} W nötig)` : g.itemPrice(it) - refund > g.s.cash ? 'Zu teuer' : g.itemPrice(it) > avail ? 'Dann fehlt Geld für den Rest' : '');
-    const ok = list.filter((it) => !whyNot(it) || it.id === cur), no = list.filter((it) => whyNot(it) && it.id !== cur);
-    const tip = type === 'gpu' ? ok.filter((it) => it.id !== cur).sort((a, b) => (b.hash.sha256 || 0) / g.itemPrice(b) - (a.hash.sha256 || 0) / g.itemPrice(a))[0] : ok.find((it) => it.id !== cur);
-    const body = h(`<div class="pick1"><button class="pk-back" title="Zurück">‹ Zurück</button><h3>${names[type]} wählen</h3><p class="pk-hint">${hints[type]}</p><div class="pk-budget"><span>Budget</span><b>${this.money(Math.max(0, avail))}</b>${reserve ? `<small>+ ${this.money(reserve)} für den Rest</small>` : ''}</div><div class="pk-list"></div></div>`);
-    body.querySelector('.pk-back').onclick = () => { this.pickType = null; this.inspect(o.uid); };
-    const box = body.querySelector('.pk-list');
-    const card = (it, why) => {
-      const price = g.itemPrice(it); let chips = [];
-      if (type === 'gpu' || type === 'cpu') { const hs = it.hash.sha256 || 0, r = hs ? g.revenueFor({ sha256: hs }, 'BTC', 99) : 0; chips = [fmtHash(hs, 'sha256'), `${it.watt} W`, `≈ ${Math.round(r / px).toLocaleString('de-DE')} BTC / Tag`]; }
-      if (type === 'mobo') chips = [`${it.slots} Grafikkarten-Plätze`];
-      if (type === 'psu') chips = [`${it.cap} W`, it.cap >= need ? `reicht für ${need} W` : ''].filter(Boolean);
-      const isCur = it.id === cur, isTip = it === tip;
-      const c = h(`<div class="pk-card ${isCur ? 'cur' : ''} ${why ? 'dis' : ''} ${isTip ? 'tip' : ''}"><div class="pk-top"><b>${esc(it.name)}</b><span class="pk-price">${this.money(price)}</span></div><div class="chips">${chips.map((x) => `<span>${x}</span>`).join('')}</div><div class="pk-bot"><span class="${why ? 'why' : isTip ? 'tipw' : 'note'}">${why || (isCur ? 'Eingebaut' : isTip ? '★ ' + tipWhy[type] : '')}</span>${why || isCur ? '' : `<button class="btn small ${isTip ? 'primary' : ''}">${cur ? 'Tauschen' : 'Einbauen'}</button>`}</div></div>`);
-      const b = c.querySelector('button');
-      if (b) b.onclick = () => {
-        if (!g.setPart(o.uid, type, it.id, 0)) { this.toast('Nicht genug Geld.', 'bad'); return; }
-        this.pickType = null; this.inspect(o.uid); this.w.animateInstall?.(o.uid, type);
-        this.toast(g.pcReady(o) ? 'Alle Teile sind drin. Schalt deinen PC ein!' : `${names[type]} eingebaut`, 'good', 3000);
-      };
-      return c;
-    };
-    for (const it of ok) box.append(card(it, ''));
-    if (no.length) { const d = h(`<details class="pk-more"><summary>Nicht verfügbar (${no.length})</summary></details>`); for (const it of no) d.append(card(it, whyNot(it))); box.append(d); }
-    return body;
-  }
-  rigSlots(o) {
-    const g = this.g, p = o.parts;
-    const sec = h('<div class="sec pcb"><h4>Komponenten</h4></div>');
-    const slot = (t, lab, id, onClick) => { const it = id ? PART[id] : null; const e = h(`<div class="pcb-step ${it ? 'done' : 'free'}"><span class="ic">${partSvg(t)}</span><div class="tx"><b>${lab}</b><span>${it ? esc(it.name) : 'frei'}</span></div><button class="btn small ${it ? '' : 'primary'}">${it ? 'Tauschen' : 'Einbauen'}</button></div>`); e.querySelector('button').onclick = onClick; sec.append(e); };
-    slot('mobo', 'Mainboard', p.mobo, () => this.partPicker(o, 'mobo'));
-    slot('cpu', 'Prozessor', p.cpu, () => this.partPicker(o, 'cpu'));
-    const cap = g.rigGpuCap(o);
-    for (let i = 0; i < cap; i++) slot('gpu', `Grafikkarte ${i + 1}`, p.gpus[i], () => this.partPicker(o, 'gpu', Math.min(i, p.gpus.length)));
-    slot('psu', 'Netzteil', p.psu, () => this.partPicker(o, 'psu'));
-    if (p.psu) { const watt = g.rigWatt(o), capW = PART[p.psu].cap; sec.append(h(`<div class="pcb-load"><span>Netzteil-Last</span><div class="bar"><div style="width:${Math.min(100, watt / capW * 100)}%;background:${watt > capW ? '#ff8f84' : 'var(--acc)'}"></div></div><span>${watt} / ${capW} W</span></div>`)); }
-    if (!p.mobo || !p.cpu || !p.psu) { const b = h(`<button class="btn primary small">Basis-Teile einbauen</button>`); b.onclick = () => { const r = g.quickBase(o.uid); if (!r) this.toast('Nicht genug Geld.', 'bad'); this.inspect(o.uid); }; sec.append(b); }
-    return sec;
-  }
   bestGpu() {
     const g = this.g; let best = null, bv = -Infinity; const elec = g.elecPrice(g.s.current);
     for (const it of g.partList('gpu')) { const c = g.bestCoin(it.hash, it.vram); const r = c ? g.revenueFor(it.hash, c, it.vram) : 0; const v = (r - it.watt / 1000 * 24 * elec) / Math.max(50, g.itemPrice(it)); if (v > bv) { bv = v; best = it; } }
     return best;
   }
+  // Alle Teile eines Typs: kaufen und gleich einbauen (wie im Einbau-Fenster) – das alte Teil kommt ins Lager, nicht in den Verkauf
   partPicker(o, type, idx = 0) {
-    const g = this.g, elec = g.elecPrice(g.facOf(o.uid));
+    const g = this.g, elec = g.elecPrice(g.facOf(o.uid)), slot = type === 'gpu' ? idx : null;
     const cur = type === 'gpu' ? o.parts.gpus[idx] : o.parts[type];
     const names = { mobo: 'Mainboard', cpu: 'Prozessor', psu: 'Netzteil', gpu: 'Grafikkarte' };
     const body = h(`<div><h2>${names[type]} wählen</h2><div class="list"></div></div>`);
     const list = body.querySelector('.list');
-    if (cur) { const rm = h(`<div class="picker-row cur"><div><b>${esc(PART[cur].name)}</b><div class="s">eingebaut</div></div><div></div><button class="btn small danger">Ausbauen (+${fmtUSD(g.itemPrice(PART[cur]) * 0.5)})</button></div>`); rm.querySelector('button').onclick = () => { g.setPart(o.uid, type, null, idx); this.closeModal(); this.inspect(o.uid); }; list.append(rm); }
+    if (cur) { const rm = h(`<div class="picker-row cur"><div><b>${esc(PART[cur].name)}</b><div class="s">eingebaut</div></div><div></div><button class="btn small">Ausbauen · ins Lager</button></div>`); rm.querySelector('button').onclick = () => { g.removePart(o.uid, type, idx); this.closeModal(); this.inspect(o.uid); this.toast(`${esc(PART[cur].name)} liegt im Lager${type === 'mobo' ? ' (mit CPU und Karten)' : ''}`, 'info', 3000); }; list.append(rm); }
     const parts = g.partList(type);
     const bestId = type === 'gpu' ? this.bestGpu()?.id : null;
     for (const it of parts) {
@@ -675,26 +674,16 @@ export class UI {
       }
       if (type === 'psu') s = `${it.cap} W Kapazität`;
       if (type === 'mobo') s = `${it.slots} GPU-Slots (Rahmen: max. ${PLACEABLE[o.type].maxGpu})`;
-      const price = g.itemPrice(it);
-      const row = h(`<div class="picker-row ${it.id === cur ? 'cur' : ''}"><div><b>${esc(it.name)}</b>${it.id === bestId ? ' <span class="new">BESTER WERT</span>' : ''}${price > g.s.cash ? ' <span style="color:#ff6b6b;font-size:11px">zu teuer</span>' : ''}<div class="s">${s}</div></div><div class="p" style="color:#ffb000;font-weight:700">${fmtUSD(price)}</div><button class="btn small primary" ${price > g.s.cash ? 'disabled' : ''}>${cur ? 'Tauschen' : 'Kaufen'}</button></div>`);
+      const pl = it.id === cur ? null : g.buyPlan(o, it.id, slot), price = pl?.total ?? g.itemPrice(it), why = pl?.why || '', short = !why && price > g.s.cash;
+      if (pl?.psu) s += `<br/><span class="rc-dim">mit ${esc(PART[pl.psu].name)} (+${fmtUSD(pl.extra)}) – das alte Netzteil kommt ins Lager</span>`;
+      const row = h(`<div class="picker-row ${it.id === cur ? 'cur' : ''}"><div><b>${esc(it.name)}</b>${it.id === bestId ? ' <span class="new">BESTER WERT</span>' : ''}${why ? ` <span style="color:#ff6b6b;font-size:11px">${esc(why)}</span>` : short ? ' <span style="color:#ff6b6b;font-size:11px">zu teuer</span>' : ''}<div class="s">${s}</div></div><div class="p" style="color:#ffb000;font-weight:700">${fmtUSD(price)}</div><button class="btn small primary" ${!pl || why || short ? 'disabled' : ''}>${it.id === cur ? 'Eingebaut' : `${cur ? 'Tauschen' : 'Kaufen'}${pl?.psu ? ' + Netzteil' : ''}`}</button></div>`);
       row.querySelector('button').onclick = () => {
         const revOf = () => { const sm = g.summary[g.facOf(o.uid)], a = sm?.per.get(o.uid); return a ? a.units.reduce((x, u) => x + u.rev, 0) * sm.throttle : 0; };
-        const before = revOf();
-        let ps = null, extra = 0;
-        if (type === 'gpu' && o.parts.psu) {
-          const oldW = cur ? PART[cur].watt || 0 : 0, add = (it.watt || 0) - oldW, n = g.psuCount(o);
-          if (g.rigWatt(o) + add > PART[o.parts.psu].cap * n) {
-            ps = g.fitPsu(o, add);
-            if (!ps || ps.cap * n < g.rigWatt(o) + add) { this.toast(`Dafür reicht kein Netzteil im Handel (${g.rigWatt(o) + add} W nötig${ps ? `, max. ${ps.cap * n} W` : ''}).`, 'bad'); return; }
-            extra = g.itemPrice(ps) * n - Math.round(g.itemPrice(PART[o.parts.psu]) * 0.5 * n);
-          }
-        }
-        if (g.s.cash < price + extra) { this.toast(ps ? `Dafür brauchst du auch ein stärkeres Netzteil (+${fmtUSD(extra)}).` : 'Nicht genug Geld.', 'bad'); return; }
-        if (!g.setPart(o.uid, type, it.id, idx)) { this.toast('Nicht genug Geld.', 'bad'); return; }
-        if (ps && ps.id !== o.parts.psu) g.setPart(o.uid, 'psu', ps.id);
+        const before = revOf(), r = g.buyInstall(o.uid, it.id, slot);
+        if (!r) { this.toast(esc(g.buyPlan(o, it.id, slot)?.why || 'Nicht genug Geld.'), 'bad'); return; }
         this.closeModal(); this.inspect(o.uid);
         const after = revOf(); this.audio?.powerOn(); this.w.pulse?.(o.uid);
-        if (after > before + 0.005) this.toast(`Eingebaut · ${fmtUSD(before)} → <b>${fmtUSD(after)}</b> pro Tag${ps ? ' (mit neuem Netzteil)' : ''}`, 'good', 4500);
+        this.toast(`Eingebaut${after > before + 0.005 ? ` · ${fmtUSD(before)} → <b>${fmtUSD(after)}</b> pro Tag` : ''}${r.psu ? ' (mit neuem Netzteil)' : ''}${cur || r.psu ? ' · Altteile im Lager' : ''}`, 'good', 4500);
       };
       list.append(row);
     }
@@ -743,14 +732,22 @@ export class UI {
       if (done || shown >= 1) continue; shown++;
       let prog = '';
       if (!done && go.progress && !(go.id === 'pcbuild' && this.w.facId === 'keller')) { const [cur, tgt, kind, fid] = go.progress(s, g.helpers()); if (kind === 'n' || kind === 'fill' || kind === 'use') prog = this.goalProg(cur, tgt, kind, fid); else if (kind === 'parts') { const lp = this.lastPick && performance.now() - this.lastPick.at < 1200 ? `<span class="lastpick">+ ${PNAME[this.lastPick.t]}</span>` : ''; prog = `<span class="cnt">${cur} / ${tgt}</span>${lp}`; } else { const f = (v) => (kind === 'hash' ? fmtHash(v) : fmtUSD(v)); const pc = Math.max(0, Math.min(100, tgt ? (cur / tgt) * 100 : 0)); prog = `<div style="font-size:11px;color:var(--dim)">${f(Math.max(0, cur))} / ${f(tgt)}</div><div class="bar" style="width:180px"><div style="width:${pc}%;background:#ffb000"></div></div>`; } }
+      // Bezahl-Ziele: Fortschritt aus Bargeld + verkaufbaren Coins (Börse und Cold-Wallet) bis zum offenen Rest
+      const left = go.action ? g.payLeft(go) : 0, paid = go.action ? g.payPaid(go) : 0;
+      if (!done && go.action) { const fund = Math.min(g.payFunds(), left), pc = left ? Math.max(0, Math.min(100, (fund / left) * 100)) : 100; prog = `${paid > 0 && left > 0 ? `<span class="gnoch"> · noch ${fmtUSD(left)}</span>` : ''}<div class="gpay" title="Bargeld und Coins (Börse und Cold-Wallet, nach Gebühr) – was an Bargeld fehlt, wird beim Bezahlen aus den Coins verkauft"><span class="cnt">${fmtNum(Math.floor(fund), 0)} / ${this.money(left)}</span><div class="bar" style="width:180px"><div style="width:${pc}%;background:#ffb000"></div></div></div>`; }
       const gk = s.chapter + ':' + go.id, enter = gk !== this.goalKey; this.goalKey = gk;
       const bag = s.loose && !s.flags.miningStarted && go.id === 'collect' ? `<span class="bag">${['mobo', 'cpu', 'gpu', 'psu'].map((t) => `<i class="${s.loose[t] ? 'miss' : 'got'}" title="${PNAME[t]}${s.loose[t] ? ' – noch nicht gefunden' : ' – eingesammelt'}">${partSvg(t, 16)}${s.loose[t] ? '' : '<b class="tk"></b>'}<em>${{ mobo: 'Board', cpu: 'CPU', gpu: 'GPU', psu: 'Netzteil' }[t]}</em></i>`).join('')}</span>` : '';
       const gtext = (go.id === 'sell' && !g.has('market') ? 'Lass deinen PC ein paar Tage schürfen' : go.id === 'pcbuild' && this.w.facId === 'keller' ? 'Alle 4 Teile gefunden · zurück ins Zimmer' : go.text) + (go.orDate ? ` – sonst ab ${this.monthYear(g.orDate(ch, go))}` : '');
       const row = h(`<div class="goal ${done ? 'done' : ''} ${enter ? 'enter' : ''}"><div class="ck">${done ? '✓' : ''}</div><div>${bag ? `<div class="goal-line">${esc(gtext)}${prog}</div>${bag}` : `${esc(gtext)}${prog}`}</div></div>`);
       if (!done && go.action) { const b = h(`<button class="btn small primary"><kbd>G</kbd>${esc(go.action.label)}</button>`); b.disabled = !g.canPayGoal(go); b.onclick = () => { if (g.goalAction(go)) { this.toast('✔ Erledigt!', 'good'); this.goals(); } }; row.lastElementChild.append(h('<br/>'), b); }
       el.append(row);
+      if (!done && go.action) { // Raten (z. B. 1.000 $ für Papas Laden): Knopf zeigt den Rest, daneben eine Rate
+        const b0 = row.querySelector('button.primary'); if (b0 && paid > 0) b0.innerHTML = `<kbd>G</kbd>${esc(`Rest überweisen · ${fmtUSD(left)}`)}`;
+        const part = go.action.part;
+        if (part && left > part) { const pb = h(`<button class="btn small" title="Eine Rate – was an Bargeld fehlt, kommt aus deinen Coins (erst Börse, dann Cold-Wallet)">${fmtUSD(part)} einzahlen</button>`); pb.disabled = !g.canPayGoal(go, part); pb.onclick = () => { if (g.goalAction(go, true)) { this.toast(`${fmtUSD(part)} eingezahlt – noch ${fmtUSD(g.payLeft(go))}`, 'good', 3500); this.audio?.cash?.(); this.goals(); this.top(); } }; row.lastElementChild.append(' ', pb); }
+      }
       const od = ch.goals.find((x) => x.skip && !s.goals[x.id] && x !== go); // „voll → schneller weiter“ immer sichtbar
-      if (od && !ch.hard && s.flags.miningStarted && g.has('rigs')) { const [c2, t2, k2, f2] = od.progress ? od.progress(s, g.helpers()) : [0, 1, 'n']; el.append(h(`<div class="goal sub"><div class="ck"></div><div>${esc(od.text)} <span class="gor">→ ${esc(FACILITY[ch.unlock]?.short || 'weiter')} sofort</span>${this.goalProg(c2, t2, k2, f2)}</div></div>`)); }
+      if (od && !ch.hard && s.flags.miningStarted && g.has('rigs')) { const [c2, t2, k2, f2] = od.progress ? od.progress(s, g.helpers()) : [0, 1, 'n'], rest = ch.goals.every((x) => x === od || s.goals[x.id]), sh = FACILITY[ch.unlock]?.short || 'weiter'; el.append(h(`<div class="goal sub"><div class="ck"></div><div>${esc(od.text)} <span class="gor">→ ${esc(rest || s.day >= toDay(ch.minDate) ? `${sh} sofort` : `${sh} schon vor ${this.monthYear(ch.minDate)}`)}</span>${this.goalProg(c2, t2, k2, f2)}</div></div>`)); } // „sofort“ nur, wenn sonst alles erledigt ist
     }
     const allDone = ch.goals.every((go) => s.goals[go.id]);
     this.goalsBonus(el, ch, allDone && s.day < toDay(ch.minDate), !allDone && g.saving(ch));
@@ -760,8 +757,9 @@ export class UI {
     const s = this.g.s, ch = CHAPTERS[s.chapter]; if (!ch) return egoalKey(this);
     const go = ch.goals.find((x) => !s.goals[x.id] && x.action);
     if (!go) { this.toast('Nichts zu bezahlen.', 'info', 2000); return false; }
-    if (!this.g.canPayGoal(go)) { this.toast(`Du brauchst ${fmtUSD(go.action.cost)}.`, 'bad'); return false; }
-    if (this.g.goalAction(go)) { this.toast(`✔ ${esc(go.action.label)} – erledigt!`, 'good'); this.audio?.cash(); this.goals(); this.top(); return true; }
+    const left = this.g.payLeft(go), part = go.action.part;
+    if (!this.g.canPayGoal(go)) { this.toast(`Du brauchst ${fmtUSD(left)}${part && left > part && this.g.canPayGoal(go, part) ? ` – oder zahl im Ziel ${fmtUSD(part)} an` : ''}.`, 'bad'); return false; }
+    if (this.g.goalAction(go)) { this.toast(`✔ ${esc(this.g.payPaid(go) > left ? `${fmtUSD(left)} überwiesen` : go.action.label)} – erledigt!`, 'good'); this.audio?.cash(); this.goals(); this.top(); return true; }
     return false;
   }
   // Schritt-für-Schritt-Hinweise (oben in der Mitte)
@@ -795,6 +793,7 @@ export class UI {
     const ci = CHAPTERS.findIndex((c) => c.unlock === id);
     const next = CHAPTERS[ci + 1];
     this.story(next?.title || f.name, `${(this.g.s.flags.shopLost && next?.introLost) || next?.intro || ''}<br/><br/><b>${esc(f.name)}</b> – ${esc(f.place)}<br/>${f.w} × ${f.d} m · ${f.power[0].kw.toLocaleString('de-DE')} kW Anschluss${f.rent ? ` · Miete ${fmtUSD(f.rent)}/Monat ab dem ersten Gerät` : ''}<br/><i>${esc(f.desc)}</i><br/><br/><b>${f.slots}</b> Stellplätze statt ${FACILITY[FACILITIES[Math.max(0, f.tier - 1)].id].slots} · <b>${Math.round((f.w * f.d) / 14).toLocaleString('de-DE')}×</b> so groß wie dein Kinderzimmer · <b>${Math.round(f.power[0].kw / 1.8).toLocaleString('de-DE')}×</b> so viel Strom.`);
+    this.onModalClose = () => setTimeout(() => this.offerMove(id), 300); // danach: Geräte mitnehmen? (V2)
   }
 
   // ---------- Dock ----------
@@ -1319,7 +1318,7 @@ export class UI {
       const [cur, tgt, kind] = pr;
       const f = (v) => (kind === 'usd' ? fmtUSD(v) : kind === 'hash' ? fmtHash(v) : kind === 'coin' ? fmtCoin(v) : Math.round(v).toLocaleString('de-DE'));
       if (kind === 'jth') prog = Number.isFinite(cur) ? `<span class="gb-p">jetzt ${Math.round(cur).toLocaleString('de-DE')} J/TH</span>` : ''; // weniger ist besser
-      else if (kind === 'fill' && pr[3]) { const ci = this.capInfo(pr[3]); prog = `<span class="gb-p">Platz ${ci.plc} · ${ci.pw}</span>`; }
+      else if (kind === 'fill' && pr[3]) { const ci = this.capInfo(pr[3]); prog = `<span class="gb-p">${this.livePlc(ci)} · ${ci.pw}</span>`; }
       else prog = `<span class="gb-p">${f(Math.max(0, Math.min(cur, tgt)))} / ${f(tgt)}${kind === 'days' ? ' Tage' : b.unit ? ' ' + esc(b.unit) : ''}</span>`;
     }
     return h(`<div class="goal bonus"><div class="ck"></div><div><div class="gb-l"><span class="gb-tag">Bonus</span><span class="gb-x">${esc(b.text)}</span>${prog}</div>${rw || b.until ? `<div class="gb-r">${rw ? `<span class="gb-rw">${esc(rw)}</span>` : ''}${b.until ? `<span class="gb-u">bis ${fmtDate(toDay(b.until))}</span>` : ''}</div>` : ''}</div></div>`);
@@ -1507,8 +1506,9 @@ export class UI {
     const c = this.g.facCap(fac), mw = c.capW >= 1e6, f = (w) => (mw ? fmtNum(w / 1e6, 1) : fmtNum(w / 1000, c.capW < 1e4 ? 1 : 0));
     return { c, plc: `${c.used}/${c.max}`, pw: `${f(c.watt)}/${f(c.capW)} ${mw ? 'MW' : 'kW'}`, sp: Math.min(100, (c.used / c.max) * 100), pp: Math.min(100, (c.watt / c.capW) * 100) };
   }
+  livePlc(ci) { const c = ci.c; return c.live < c.used ? `In Betrieb ${c.live}/${c.max}` : `Platz ${ci.plc}`; } // leere Gehäuse zählen fürs Volle nicht
   goalProg(cur, tgt, kind, fid) {
-    if (kind === 'fill' && fid) { const ci = this.capInfo(fid); return `<span class="cnt gfill">Platz ${ci.plc} · ${ci.pw}</span>`; }
+    if (kind === 'fill' && fid) { const ci = this.capInfo(fid); return `<span class="cnt gfill" title="Für „voll“ zählen nur Plätze mit Geräten, die schürfen können – leere Gehäuse nicht">${this.livePlc(ci)} · ${ci.pw}</span>`; }
     if (kind === 'use') return `<span class="cnt">${Math.round(Math.min(cur, tgt) * 100)} / ${Math.round(tgt * 100)} %</span>`;
     return `<span class="cnt">${Math.round(Math.min(cur, tgt)).toLocaleString('de-DE')} / ${Math.round(tgt).toLocaleString('de-DE')}</span>`;
   }
@@ -1555,7 +1555,8 @@ export class UI {
   // Passt noch einer rein, ohne dass es zu heiß wird oder der Anschluss nicht reicht?
   rigWarn(fac, watt) {
     const sm = this.g.summary?.[fac]; if (!sm || sm.tripped || !watt) return '';
-    return sm.watt + watt > sm.capKw * 1000 ? 'Anschluss reicht nicht – erst Strom ausbauen' : sm.temp + (12 * watt) / Math.max(1, sm.cool) > 38 ? 'Wird hier zu heiß – erst Kühlung aufstellen' : '';
+    const rent = this.g.rentStart?.(fac) || 0; // erstes Gerät an einem Miet-Standort: der Mietvertrag startet (sonst ruht er)
+    return sm.watt + watt > sm.capKw * 1000 ? 'Anschluss reicht nicht – erst Strom ausbauen' : sm.temp + (12 * watt) / Math.max(1, sm.cool) > 38 ? 'Wird hier zu heiß – erst Kühlung aufstellen' : rent > 0 ? `Startet die Miete: −${fmtUSD(rent)}/Tag` : '';
   }
   lastBuildCard(fac) {
     const g = this.g, lb = g.s.lastBuild; if (!lb || g.buildBlocked(lb) || !g.placeableAllowed(PLACEABLE[lb.type], fac)) return null;
@@ -1583,12 +1584,14 @@ export class UI {
   // Nach dem Setzen: pausieren Geräte, weil es zu heiß ist oder der Anschluss voll? Dann sagen, was hilft.
   pauseHint(fac) {
     const g = this.g, sm = g.summary?.[fac]; if (!sm || sm.tripped || !g.s.flags?.miningStarted) return;
-    let heat = 0, full = 0; for (const a of sm.per.values()) { if (a.status === 'idle' && a.limit === 'heat') heat++; else if (a.status === 'full') full++; }
-    if (!heat && !full) { this.pauseKey = null; return; }
-    const key = `${fac}:${heat}:${full}`; if (this.pauseKey === key) return; this.pauseKey = key;
+    // Kühlung nur bei echter Hitze vorschlagen (limit 'heat'); Ereignis-Drosselung und kaum rentable Geräte sind kein Kühlproblem
+    let heat = 0, full = 0, loss = 0; for (const a of sm.per.values()) { if (a.status === 'idle' && a.limit === 'heat') heat++; else if (a.status === 'full') full++; else if (a.status === 'idle' && a.limit === 'loss') loss++; }
+    if (!heat && !full && !loss) { this.pauseKey = null; return; }
+    const key = `${fac}:${heat}:${full}:${loss}`; if (this.pauseKey === key) return; this.pauseKey = key;
     const n = (k) => `${k} ${k === 1 ? 'Gerät pausiert' : 'Geräte pausieren'}`;
     this.pauseToast?.remove();
     if (full) this.pauseToast = this.toast(`Anschluss voll: ${n(full)}. Mehr Strom: <kbd>B</kbd> Bauen → oben „Strom ausbauen“.`, 'info', 7000);
+    else if (!heat) this.pauseToast = this.toast(`Kaum rentabel: ${n(loss)} – der Strom frisst fast den ganzen Ertrag. Kühlung hilft da nicht.`, 'info', 7000);
     else { const fan = g.shopList('cool', fac).sort((x, y) => g.itemPrice(x) - g.itemPrice(y))[0]; this.pauseToast = this.toast(`Zu heiß hier: ${n(heat)}. Stell Kühlung auf: <kbd>B</kbd> Bauen → Kühlung${fan ? ` (${esc(fan.name)} ab ${this.money(g.itemPrice(fan))})` : ''}.`, 'info', 7000); }
   }
   // Nach dem Setzen: gleich noch einen? (Rigs, Miner, Regale – solange Geld, Platz und Kontingent reichen)
@@ -1692,6 +1695,14 @@ export class UI {
       const after = revOf(), over = g.rigWatt(o) > (o.parts.psu ? PART[o.parts.psu].cap * np : Infinity);
       this.toast(over ? `${esc(PART[id].name)} eingebaut – <b>Netzteil zu schwach</b> (${g.rigWatt(o)} W). Stärkeres einbauen!` : `${esc(PART[id].name)} eingebaut${after > before + 0.005 ? ` · ${fmtUSD(before)} → <b>${fmtUSD(after)}</b> pro Tag` : ''}`, over ? 'bad' : 'good', 4000);
     };
+    // Neu kaufen und einbauen – reicht das Netzteil nicht, kommt das passende gleich mit (Preis im Knopf)
+    const buyIn = (id, idx) => {
+      const before = revOf(), t = PART[id].type, r = g.buyInstall(uid, id, idx);
+      if (!r) { this.toast(esc(g.buyPlan(o, id, idx)?.why || 'Nicht genug Geld.'), 'bad'); this.inspect(uid); return; }
+      this.rbOpen = null; this.w.ghostPart?.(null); this.inspect(uid); this.w.animateInstall?.(uid, t); this.audio?.install?.();
+      const after = revOf();
+      this.toast(`${esc(PART[id].name)} eingebaut${r.psu ? ` – mit ${esc(PART[r.psu].name)}, das alte Netzteil liegt im Lager` : ''}${after > before + 0.005 ? ` · ${fmtUSD(before)} → <b>${fmtUSD(after)}</b> pro Tag` : ''}`, 'good', 4500);
+    };
     const shopFor = (t) => {
       const el = g.elecPrice(g.facOf(uid)), val = (it) => { const c = g.bestCoin(it.hash, it.vram); return (c ? g.revenueFor(it.hash, c, it.vram) : 0) - (it.watt / 1000) * 24 * el; };
       let l = g.partList(t);
@@ -1714,7 +1725,8 @@ export class UI {
       const own = g.bagList(t).filter((b2) => b2.n >= (t === 'psu' ? np : 1) && b2.id !== id);
       if (own.length) pick.append(h('<div class="rb-h">Aus dem Lager</div>'));
       for (const b2 of own) {
-        const c = h(`<div class="rb-opt"><span><b>${esc(b2.part.name)}</b> <em>${b2.n}×</em></span><button class="btn small primary">Einbauen</button></div>`);
+        const bw = g.psuWhy(o, b2.id, t === 'gpu' && id ? idx : null);
+        const c = h(`<div class="rb-opt"><span><b>${esc(b2.part.name)}</b> <em>${b2.n}×${bw ? ' · Netzteil zu schwach' : ''}</em></span><button class="btn small primary" ${bw ? `disabled title="${esc(bw)}"` : ''}>Einbauen</button></div>`);
         c.onmouseenter = () => this.w.ghostPart?.(uid, t, b2.id); c.onmouseleave = () => this.w.ghostPart?.(null);
         c.querySelector('button').onclick = () => install(b2.id, t === 'gpu' && id ? idx : null);
         pick.append(c);
@@ -1722,10 +1734,11 @@ export class UI {
       const shop = shopFor(t).filter((x) => x.id !== id);
       if (shop.length) pick.append(h('<div class="rb-h">Neu kaufen</div>'));
       for (const x of shop) {
-        const price = g.itemPrice(x) * (t === 'psu' ? np : 1);
-        const c = h(`<div class="rb-opt"><span><b>${esc(x.name)}</b> <em>${t === 'gpu' ? `${x.watt} W` : t === 'psu' ? `${x.cap} W` : t === 'mobo' ? `${x.slots} Plätze` : `${x.watt} W`}</em></span><button class="btn small" ${price > g.s.cash ? 'disabled' : ''} title="Kaufen und gleich einbauen">Kaufen · ${this.money(price)}</button></div>`);
+        const si = t === 'gpu' && id ? idx : null, pl = g.buyPlan(o, x.id, si) || { why: 'Geht nicht' }, price = pl.total ?? g.itemPrice(x) * (t === 'psu' ? np : 1);
+        const tip = pl.why || (pl.psu ? `Kaufen und gleich einbauen – mit ${PART[pl.psu].name} (+${fmtUSD(pl.extra)}), weil das Netzteil sonst nicht reicht. Das alte kommt ins Lager.` : 'Kaufen und gleich einbauen');
+        const c = h(`<div class="rb-opt"><span><b>${esc(x.name)}</b> <em>${t === 'gpu' ? `${x.watt} W` : t === 'psu' ? `${x.cap} W` : t === 'mobo' ? `${x.slots} Plätze` : `${x.watt} W`}</em></span><button class="btn small" ${pl.why || price > g.s.cash ? 'disabled' : ''} title="${esc(tip)}">${pl.psu ? 'Kaufen + Netzteil' : 'Kaufen'} · ${this.money(price)}</button></div>`);
         c.onmouseenter = () => this.w.ghostPart?.(uid, t, x.id); c.onmouseleave = () => this.w.ghostPart?.(null);
-        c.querySelector('button').onclick = () => { const k = g.buyPart(x.id, t === 'psu' ? np : 1); if (k < (t === 'psu' ? np : 1)) { this.toast('Nicht genug Geld – das Teil liegt im Lager.', 'bad'); this.inspect(uid); return; } install(x.id, t === 'gpu' && id ? idx : null); };
+        c.querySelector('button').onclick = () => buyIn(x.id, si);
         pick.append(c);
       }
       const more = h('<button class="btn small rb-more">Alle Teile ansehen …</button>'); more.onclick = () => this.partPicker(o, t, t === 'gpu' ? Math.max(0, idx ?? 0) : 0); if (!locked) pick.append(more);
@@ -1744,7 +1757,7 @@ export class UI {
   // Standort erstmals voll: kleiner Story-Moment und der Weg zum nächsten Standort
   facFull(id, c) {
     const g = this.g, f = FACILITY[id], t = FULL_TALK[id];
-    this.milestone(`${f.short} ist voll`, c.used >= c.max ? `Alle ${c.max} Plätze belegt` : `Strom am Limit: ${fmtWatt(c.watt)}`, 'Standort voll');
+    this.milestone(`${f.short} ist voll`, c.live >= c.max ? `Alle ${c.max} Plätze belegt` : `Strom am Limit: ${fmtWatt(c.watt)}`, 'Standort voll');
     this.audio?.message?.();
     setTimeout(() => {
       if (t) this.toast(`<b>${esc(t.from)}:</b> ${esc(t.text)}`, 'msg', 9000);

@@ -172,6 +172,7 @@ export class World {
     this.bindInput();
     window.addEventListener('resize', () => this.resize()); this.resize();
     game.on('objects', (fac) => { if (fac === this.facId) this.syncObjects(); });
+    game.layoutOf = (id) => this.roomLayout(id); // freie Flecken für Umzüge (Game.freeSpot) – Möbel, Türen, Startpunkt
     game.on('loose', () => this.syncLoose());
     game.on('keep', () => this.syncKeep()); game.on('objects', () => this.syncKeep());
     game.on('update', () => this.spawnIncome());
@@ -282,7 +283,7 @@ export class World {
       let icon = null;
       if (sm.tripped && def.kind !== 'decor') icon = 'power';
       else if (a?.status === 'broken' || a?.status === 'partial') icon = 'broken';
-      else if (a?.status === 'incomplete' || a?.status === 'psu') icon = 'warn';
+      else if (a?.status === 'incomplete' || a?.status === 'psu' || a?.psuOff) icon = 'warn';
       else if (a?.status === 'empty') icon = 'empty';
       else if (e.obj.type === 'tower' && e.obj.parts && !this.game.s.flags.miningStarted) icon = null; // dafür gibt es den Zielhinweis am Objekt
       else if (a?.status === 'off' && e.obj.parts && !this.game.pcReady(e.obj)) icon = 'empty';
@@ -502,6 +503,14 @@ export class World {
     this.selBox.visible = false;
     if (this.outline) this.outline.selectedObjects = e ? [e.group] : [];
     if (!e) return;
+  }
+
+  // Raum-Hindernisse eines Standorts (auch nicht geladener): einmal bauen, merken, Meshes wieder freigeben
+  roomLayout(id) {
+    const c = (this._layouts ||= {}); if (c[id]) return c[id];
+    if (id === this.facId && this.room && !this.dusty) return (c[id] = { blocked: [...this.room.blocked], doors: this.room.doors || [], spawn: this.room.spawn });
+    const room = buildRoom(FACILITY[id]); const L = { blocked: [...room.blocked], doors: room.doors || [], spawn: room.spawn }; disposeTree(room.root);
+    return (c[id] = L);
   }
 
   // ---------- Bauen ----------
