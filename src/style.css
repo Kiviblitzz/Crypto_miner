@@ -1842,8 +1842,8 @@ body:has(.story.event) #xpbox { display: none; }
 .lock-ic { flex: none; vertical-align: -2px; }
 #build .item .rc-lock, .cfgr .cf-lock, #inspector .again-sec .rc-lock { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 4px 6px; margin-top: 8px; padding: 7px 9px; border-radius: 10px; background: rgba(143,184,255,.08); box-shadow: inset 0 0 0 1px rgba(143,184,255,.22); font: 500 12px/1.4 var(--font); color: #c6d6f2; }
 #build .item .rc-lock .lock-ic, .cfgr .cf-lock .lock-ic, #inspector .again-sec .rc-lock .lock-ic { margin-top: 2px; color: #8fb8ff; }
-#build .item .rc-lock span, .cfgr .cf-lock span, #inspector .again-sec .rc-lock span { flex: 1; min-width: 0; }
-#build .item .rc-lock .rc-call, .cfgr .cf-lock .rc-call, #inspector .again-sec .rc-lock .rc-call { flex: none; margin-left: auto; padding: 3px 10px; font-size: 12px; }
+#build .item .rc-lock span, .cfgr .cf-lock span, #inspector .again-sec .rc-lock span { flex: 1 1 calc(100% - 24px); min-width: 0; }
+#build .item .rc-lock .rc-call, .cfgr .cf-go .cf-lock .rc-call, #inspector .again-sec .rc-lock .rc-call { flex: none; min-width: 0; margin-left: 20px; padding: 3px 10px; font-size: 12px; }
 .cfgr .cf-lock { width: 100%; margin-top: 2px; }
 .cfgr .cf-go .btn.locked { opacity: .55; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 #inspector .again-sec .again-kit { margin-top: 6px; width: 100%; }
