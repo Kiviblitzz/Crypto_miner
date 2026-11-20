@@ -1065,6 +1065,7 @@ export class Game {
     const s = this.s; if (!s) return 1;
     if (key === 'fail') return this.diff('wear') * (s.staff?.list ? this.staffFx().fail : 1);
     if (key === 'powerCost') return s.staff?.list && this.staffFx().elec ? 0.8 : 1;
+    if (key === 'elec') return this.diff('elec') * (facId && s.fac?.[facId]?.up ? this.upFx(facId, 'elec') : 1); // Schwierigkeit: Strompreis
     if (!facId || !s.fac?.[facId]?.up) return 1;
     let m = this.upFx(facId, key);
     if (key === 'rent' && !this.facInUse(facId)) return 0; // ohne Mining-Geräte: der Mietvertrag ruht, bis das erste Gerät drinsteht
