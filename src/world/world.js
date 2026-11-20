@@ -272,7 +272,7 @@ export class World {
     for (const p of this.room.props || []) { const m = new THREE.Mesh(new THREE.BoxGeometry(...p.s), new THREE.MeshBasicMaterial({ visible: false })); m.position.set(...p.c); m.userData.prop = p; this.doorGroup.add(m); }
     // Freien Platz zum Erscheinen suchen (falls dort inzwischen etwas steht)
     if (!opt.pose && this.collides(this.player.pos.x, this.player.pos.z, this.player.radius)) {
-      outer: for (let r = 0.5; r < span; r += 0.5) for (let a = 0; a < 16; a++) { const x = sp.x + Math.cos(a / 16 * Math.PI * 2) * r, z = sp.z + Math.sin(a / 16 * Math.PI * 2) * r; if (!this.collides(x, z, this.player.radius)) { this.player.pos.set(x, 0, z); break outer; } }
+      outer: for (let r = 0.5; r < span; r += 0.5) for (let a = 0; a < 16; a++) { const x = sp.x + Math.cos(a / 16 * Math.PI * 2) * r, z = sp.z + Math.sin(a / 16 * Math.PI * 2) * r; if (!this.collides(x, z, this.player.radius)) { this.player.pos.set(x, this.player.pos.y, z); break outer; } }
       this.player.apply();
     }
     for (const wl of this.room.walls) wl.group.visible = true;
@@ -501,7 +501,7 @@ export class World {
     const [lx, ly, lz] = wk.lie, [sx, sz] = wk.stand, yawEnd = Math.atan2(-(wk.look[0] - sx), -(wk.look[1] - sz));
     const sit = ss(1.15, 2.0, t), up = ss(2.0, 3.1, t);
     const pos = new THREE.Vector3(lx + 0.06 * sit + (sx - lx - 0.06) * up, ly + (0.88 - ly) * sit + (this.player.eye - 0.88) * up, lz - 0.22 * sit + (sz - lz + 0.22) * up);
-    const yaw = 0.0 - 0.55 * up * (1 - up) * 2 + (yawEnd) * up, pitch = 1.32 * (1 - sit) - 0.22 * sit * (1 - up) - 0.08 * up;
+    const yaw = (wk.lieYaw || 0) * (1 - sit) * (1 - up) - 0.55 * up * (1 - up) * 2 + yawEnd * up, pitch = 1.45 * (1 - sit) - 0.22 * sit * (1 - up) - 0.08 * up;
     const roll = 0.12 * (1 - sit) + Math.sin(t * 1.7) * 0.01 * (1 - up);
     this.camera.position.copy(pos); c.euler.set(pitch, yaw, roll); this.camera.quaternion.setFromEuler(c.euler);
     if (t >= c.dur) {

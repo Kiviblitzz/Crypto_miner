@@ -110,7 +110,7 @@ const MAT = () => ({
   mbox: mat('hMbox', { color: 0x8f969b, roughness: 0.4, metalness: 0.6 }),
   mboxD: mat('hMboxD', { color: 0x2b2f33, roughness: 0.5, metalness: 0.4 }),
   globe: mat('hGlobe', { color: 0xfff4e2, emissive: 0xffd9a8, emissiveIntensity: 1.6, roughness: 0.3 }),
-  globeK: mat('hGlobeK', { color: 0xf2f6ff, emissive: 0xe4ecff, emissiveIntensity: 1.8, roughness: 0.3 }),
+  globeK: mat('hGlobeK', { color: 0xf2f6ff, emissive: 0xe4ecff, emissiveIntensity: 1.3, roughness: 0.3 }),
   globeDim: mat('hGlobeDim', { color: 0xfff1dc, emissive: 0xffcf94, emissiveIntensity: 0.7, roughness: 0.3 }),
   switchGlow: mat('hSwitch', { color: 0x5a2a08, emissive: 0xff8a2a, emissiveIntensity: 1.8, roughness: 0.4 }),
   switchBox: mat('hSwitchBox', { color: 0xe8e2d4, roughness: 0.5 }),
@@ -506,7 +506,7 @@ export function buildHouse() {
     parcels: [4.52, L0, 4.1],
   };
   const glassMats = [glass];
-  const lampMats = [[T.globe, 1.6], [T.globeK, 1.8], [T.globeDim, 0.7]]; // Treppenhauslicht: geht an, sobald man im Flur ist
+  const lampMats = [[T.globe, 1.6], [T.globeK, 1.3], [T.globeDim, 0.7]]; // Treppenhauslicht: geht an, sobald man im Flur ist
   // Decken/Böden als Sichtschutz für den Zielstrahl (z. B. Pakete auf dem Podest nicht durch die Kellerdecke anvisieren)
   const slabs = [{ x0: WX, x1: EX, z0: UP.zs, z1: SZ, y0: -0.3, y1: -0.04 }, { x0: WX, x1: PX1, z0: HF.zs, z1: UP.zs, y0: LK, y1: -0.04 }, { x0: PX1, x1: EX, z0: SZ, z1: KZ2, y0: -0.3, y1: -0.15 }, { x0: WX, x1: EX, z0: NZ, z1: HF.zs, y0: LE - 0.15, y1: LE }, { x0: WX, x1: EX, z0: NZ, z1: SZ, y0: LC, y1: LC + 0.15 }];
   return { root, doors, parcels, lights, walk, solid, slabs, points: P, glass: glassMats, lampMats, switchDown: -1.95, switchUp: -1.6 };

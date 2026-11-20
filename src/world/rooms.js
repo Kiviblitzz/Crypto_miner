@@ -160,7 +160,7 @@ export function buildRoom(def) {
     B.outside = 'hof';
     B.doors = [{ c: [3.98, 1.0, 3.025], s: [0.14, 2.0, 0.8], label: 'Wohnungstür', auto: 'apt' }];
     B.spawn = { x: 3.2, z: 2.7, look: [1.6, 0.9] };
-    B.wake = { lie: [0.5, 0.36, 3.08], stand: [1.4, 2.5], look: [1.9, 0.55] }; // Aufwachen auf der Matratze (World.wakeUp)
+    B.wake = { lie: [0.5, 0.36, 3.08], lieYaw: -0.5, stand: [1.4, 2.5], look: [1.9, 0.55] }; // Aufwachen auf der Matratze (World.wakeUp)
     B.props = [{ c: [2.6, 1.08, 0.13], s: [0.55, 0.4, 0.12], label: 'PC-Monitor', hint: 'Börse', action: 'market' }, { c: [0.5, 0.25, 2.5], s: [0.95, 0.4, 2.0], label: 'Matratze', hint: 'Schlafen', action: 'sleep' }];
   } else if (def.style === 'basement') {
     S = shell(def, {
