@@ -224,7 +224,7 @@ export const EVENTS = [
       { label: 'Ausdrucken und in den Schuhkarton', hint: 'Kostet nichts · ein Abend Arbeit: die Rechner stehen 2 Tage', fx: { flag: 'backup', mod: ['kinder', 'keller', 'werkstatt'].map((fac) => ({ key: 'hash', mult: 0, days: 2, fac })), log: 'Januar 2011: Wallet auf Papier gesichert' }, reply: '<b>Deniz:</b> Ein Schuhkarton voller Zahlen. Opa wäre stolz.' },
       { label: 'Mach ich später', hint: 'Was soll schon passieren?', fx: { log: 'Januar 2011: kein Backup gemacht' }, reply: '<b>Deniz:</b> „Später“ heißt bei dir „nie“. Ich sag’s nur.' },
     ],
-    fallback: 2,
+    fallback: 1, // ohne Antwort: Deniz druckt es dir aus (sicher, kostet nichts)
   },
   {
     id: 'festplatte', from: 'Deniz', title: 'Die Festplatte klackert', when: { date: '2011-04-15', window: 20 },
