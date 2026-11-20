@@ -5,37 +5,37 @@ export const FACILITIES = [
   {
     id: 'kinder', tier: 0, name: 'Kinderzimmer', short: 'Zimmer', place: 'Lindental, Dachgeschoss', w: 4, d: 3.5, h: 2.6,
     power: [{ kw: 1.8, label: 'Mamas Limit' }, { kw: 3.6, cost: 250, label: 'Eigener Stromkreis' }],
-    elec: 'household', elecMult: 1.0, rent: 0, cost: 0, baseCool: 600, ambient: 0, grid: 0.5,
+    elec: 'household', elecMult: 1.0, rent: 0, cost: 0, baseCool: 600, ambient: 0, grid: 0.5, slots: 6,
     style: 'bedroom', desc: 'Dein Zimmer unterm Dach. Bett, Schreibtisch, ein altes Poster – und ein PC.',
   },
   {
     id: 'keller', tier: 1, name: 'Hobbykeller', short: 'Keller', place: 'Lindental, Elternhaus', w: 7, d: 5, h: 2.4,
     power: [{ kw: 4.5, label: 'Hausanschluss' }, { kw: 11, cost: 1500, label: 'Starkstrom 16 A' }, { kw: 22, cost: 4000, label: 'Starkstrom 32 A' }],
-    elec: 'household', elecMult: 0.8, rent: 0, cost: 0, baseCool: 1600, ambient: -3, grid: 0.5,
+    elec: 'household', elecMult: 0.8, rent: 0, cost: 0, baseCool: 1600, ambient: -3, grid: 0.5, slots: 16,
     style: 'basement', desc: 'Kühl, staubig, mit Waschmaschine. Perfekt für die ersten Open-Frame-Rigs.',
   },
   {
     id: 'werkstatt', tier: 2, name: 'Werkstatt hinterm Laden', short: 'Werkstatt', place: 'Lindental, Hinterhof Elektro Brandt', w: 10, d: 8, h: 3.6,
     power: [{ kw: 25, label: 'Gewerbeanschluss' }, { kw: 60, cost: 12000, label: 'Verstärkter Anschluss' }, { kw: 120, cost: 30000, label: 'Eigener Trafo-Abgang' }],
-    elec: 'household', elecMult: 0.72, rent: 450, cost: 0, baseCool: 5000, ambient: 0, grid: 0.5,
+    elec: 'household', elecMult: 0.72, rent: 450, cost: 0, baseCool: 5000, ambient: 0, grid: 0.5, slots: 40,
     style: 'workshop', desc: 'Papas alte Lagerwerkstatt mit Rolltor. Hier beginnt die ASIC-Ära.',
   },
   {
     id: 'halle', tier: 3, name: 'Lagerhalle', short: 'Halle', place: 'Gewerbegebiet Lindental-Nord', w: 24, d: 16, h: 7,
     power: [{ kw: 400, label: 'Mittelspannung' }, { kw: 1000, cost: 180000, label: 'Trafostation 1 MVA' }, { kw: 2000, cost: 400000, label: 'Zweite Trafostation' }],
-    elec: 'household', elecMult: 0.45, rent: 2000, cost: 20000, baseCool: 50000, ambient: 0, grid: 0.5,
+    elec: 'household', elecMult: 0.45, rent: 2000, cost: 20000, baseCool: 50000, ambient: 0, grid: 0.5, slots: 60,
     style: 'warehouse', desc: 'Eine echte Halle. Stahlträger, Rolltore, Hallenstrahler. Zeit für Racks.',
   },
   {
     id: 'rz', tier: 4, name: 'Rechenzentrum', short: 'RZ', place: 'Frankfurt-Ost', w: 36, d: 24, h: 5,
     power: [{ kw: 2500, label: '2,5 MW' }, { kw: 6000, cost: 1500000, label: '6 MW Ausbau' }, { kw: 12000, cost: 3500000, label: '12 MW Umspannwerk' }],
-    elec: 'household', elecMult: 0.27, rent: 30000, cost: 500000, baseCool: 220000, ambient: -1, grid: 0.5,
+    elec: 'household', elecMult: 0.27, rent: 30000, cost: 500000, baseCool: 220000, ambient: -1, grid: 0.5, slots: 200,
     style: 'datacenter', desc: 'Doppelboden, Kaltgang/Warmgang, Präzisionsklima. Hashwerk wird erwachsen.',
   },
   {
     id: 'fjord', tier: 5, name: 'Fjordhalle', short: 'Fjord', place: 'Sogn, Norwegen (Wasserkraft)', w: 64, d: 40, h: 12,
     power: [{ kw: 30000, label: '30 MW Wasserkraft' }, { kw: 60000, cost: 8000000, label: '60 MW' }, { kw: 120000, cost: 20000000, label: '120 MW' }],
-    elec: 'fixed', elecFixed: 0.035, rent: 80000, cost: 3000000, baseCool: 3000000, ambient: -12, grid: 0.5,
+    elec: 'fixed', elecFixed: 0.035, rent: 80000, cost: 3000000, baseCool: 3000000, ambient: -12, grid: 0.5, slots: 44,
     style: 'fjord', desc: 'Grüner Strom aus dem Wasserkraftwerk, eiskalte Luft vom Fjord. Das Endspiel.',
   },
 ];
@@ -47,7 +47,7 @@ const devices = (s, g) => (g?.deviceCount ? g.deviceCount() : 0);
 // Kapitel & Ziele (check bekommt den Spielzustand + Hilfsfunktionen)
 export const CHAPTERS = [
   {
-    title: 'Kapitel 1 – Das Kinderzimmer', unlock: 'keller', minDate: '2011-01-01',
+    title: 'Kapitel 1 – Das Kinderzimmer', unlock: 'keller', minDate: '2010-11-01', site: 'kinder', // kein Warten mehr: ist das Zimmer voll und Papas Rechnung bezahlt, räumt Papa den Keller frei
     intro: 'Oktober 2010. Papas Laden steckt in Schulden. Du hast ein leeres PC-Gehäuse, ein paar alte Teile und eine Idee.',
     goals: [
       { id: 'collect', text: 'Such die PC-Teile im Keller', doneText: 'Alle Teile gefunden! Bring sie hoch zu deinem\u00a0PC.', check: (s) => s.flags.miningStarted || !s.loose || !Object.keys(s.loose).length, progress: (s) => [4 - Object.keys(s.loose || {}).length, 4, 'parts'] },
@@ -55,10 +55,11 @@ export const CHAPTERS = [
       { id: 'look', text: 'Schalte deinen PC ein', doneText: 'Dein PC läuft!', check: (s) => s.flags.miningStarted },
       { id: 'sell', text: 'Verkaufe deine Bitcoin am Monitor', doneText: 'Erste Bitcoin verkauft!', check: (s) => s.stats.sold > 0 },
       { id: 'gpu', text: 'Bau eine zweite Grafikkarte ein', doneText: 'Zweite Grafikkarte läuft!', check: (s) => s.flags.boughtGpu },
-      { id: 'earn', text: 'Schürfe Bitcoin im Wert von 1.000 $', doneText: '1.000 $ geschürft!', check: (s) => s.stats.minedUSD >= 1000, progress: (s) => [s.stats.minedUSD, 1000, 'usd'] },
+      { id: 'rig2', text: 'Bau einen zweiten Mining-PC', doneText: 'Zwei PCs schürfen!', check: (s, h) => h.rigsAt('kinder') >= 2, progress: (s, h) => [h.rigsAt('kinder'), 2, 'n'] }, // Katalog B → Rigs → „Fertig bestückt“
+      { id: 'fill1', text: 'Fülle dein Zimmer mit Mining-PCs', doneText: 'Dein Zimmer ist voll!', check: (s) => !!s.full?.kinder, progress: (s, h) => [h.fill('kinder'), 1, 'fill', 'kinder'] }, // alle Plätze belegt oder Strom am Limit
       { id: 'papa1', text: 'Bezahl Papas Stromrechnung', action: { label: '2.000 $ geben', cost: 2000, flag: 'papa1' }, check: (s) => s.flags.papa1 },
     ],
-    waitText: 'Papa räumt den Hobbykeller über die Feiertage für dich frei – ab Januar gehört er dir.',
+    waitText: 'Papa räumt den Hobbykeller für dich frei.',
     bonus: [
       { id: 'b1top', until: '2010-12-31', from: (s) => !!s.goals.sell, text: 'Verkauf Bitcoin, solange der Kurs über 0,35 $ steht', check: (s) => (s.stats.soldMaxP || 0) >= 0.35, reward: { rel: { deniz: 1 }, xp: { trade: 40 }, text: 'Deniz: „0,39 $! Gutes Timing!“' } },
       { id: 'b1hold', from: (s) => !!s.goals.gpu, text: 'Halte 2.000 Bitcoin auf einmal', check: (s) => s.wallet.BTC.ex + s.wallet.BTC.cold >= 2000, progress: (s) => [s.wallet.BTC.ex + s.wallet.BTC.cold, 2000, 'coin'], reward: { rel: { opa: 1 }, text: 'Opa sammelt ja auch Briefmarken' } },
@@ -66,12 +67,13 @@ export const CHAPTERS = [
     ],
   },
   {
-    title: 'Kapitel 2 – Der Hobbykeller', unlock: 'werkstatt', minDate: '2012-06-01',
+    title: 'Kapitel 2 – Der Hobbykeller', unlock: 'werkstatt', minDate: '2012-06-01', site: 'keller', // voller Keller: die Werkstatt sofort (Papa redet mit Herrn Öztürk), sonst ab Juni 2012
     intro: 'Papa staunt. Der Keller gehört dir – solange die Waschmaschine weiterläuft.',
     goals: [
-      { id: 'openrig', text: 'Bau dein erstes Rig', check: (s, h) => h.countPlaced((o) => ['crate', 'frame6', 'frame8', 'frame12'].includes(o.type) && o.parts?.gpus?.length > 0) > 0 }, // mit mindestens 1 GPU
-      { id: 'rev30', text: 'Schaff 30 $ pro Tag', check: (s, h) => h.dailyRev() >= 30, progress: (s, h) => [h.dailyRev(), 30, 'usd'] },
+      { id: 'openrig', text: 'Bau dein erstes Rig im Keller', check: (s, h) => h.rigsAt('keller') > 0 }, // mit mindestens 1 GPU
+      { id: 'rigs8', text: 'Betreibe 8 Mining-Rigs', check: (s, h) => h.rigsAll() >= 8, progress: (s, h) => [h.rigsAll(), 8, 'n'] }, // Zimmer + Keller
       { id: 'debt', text: 'Rette Papas Laden – Frist der Bank: Ende 2013', action: { label: '15.000 $ überweisen', cost: 15000, flag: 'debt' }, check: (s) => s.flags.debt || !!s.flags.shopLost }, // nach der Frist: Ereignis „ladenzu“ (events.js)
+      { id: 'fill2', text: 'Fülle den Keller', orDate: true, doneText: 'Der Keller ist voll!', check: (s) => !!s.full?.keller, progress: (s, h) => [h.fill('keller'), 1, 'fill', 'keller'] }, // orDate: ab minDate auch ohne vollen Keller erledigt
     ],
     waitText: 'Papas Untermieter Zweirad Öztürk zieht erst im Juni 2012 aus der Werkstatt aus.',
     bonus: [
@@ -83,12 +85,12 @@ export const CHAPTERS = [
     ],
   },
   {
-    title: 'Kapitel 3 – Die Werkstatt', unlock: 'halle', minDate: '2015-06-01', // nicht mitten in den Hashpreis-Absturz 2014: wer im Sommer 2014 eine Halle füllt, verliert alles
+    title: 'Kapitel 3 – Die Werkstatt', unlock: 'halle', minDate: '2015-06-01', site: 'werkstatt', // nicht mitten in den Hashpreis-Absturz 2014: wer im Sommer 2014 eine Halle füllt, verliert alles
     intro: 'Elektro Brandt ist gerettet, und Zweirad Öztürk ist ausgezogen. Papa drückt dir den Schlüssel zur Werkstatt hinterm Laden in die Hand.',
     introLost: 'Elektro Brandt gibt es nicht mehr. Herr Öztürk hat das Haus ersteigert und vermietet dir die Werkstatt hinterm alten Laden. Papa trägt die erste Kiste hinein.', // nach „ladenzu“
     goals: [
       { id: 'asic', text: 'Kauf deinen ersten ASIC-Miner', check: (s) => s.flags.boughtAsic },
-      { id: 'th1', text: 'Schaff 1 TH/s', check: (s, h) => h.algoHash('sha256') >= 1e12, progress: (s, h) => [h.algoHash('sha256'), 1e12, 'hash'] },
+      { id: 'miners20', text: 'Betreibe 20 Miner', check: (s, h) => h.miners() >= 20, progress: (s, h) => [h.miners(), 20, 'n'] }, // ASICs/FPGAs, einzeln oder im Regal
       { id: 'gmbh', text: 'Gründe die Hashwerk GmbH', action: { label: 'Gründen · 25.000 $', cost: 25000, flag: 'gmbh' }, check: (s) => s.flags.gmbh },
     ],
     waitText: 'Die Halle in Lindental-Nord wird erst im Juni 2015 fertig – der Bauträger ist pleite gegangen, ein neuer baut weiter.',
@@ -97,16 +99,17 @@ export const CHAPTERS = [
       { id: 'b3top', until: '2014-05-31', text: 'Verkauf Coins, solange Bitcoin über 1.000 $ steht', check: (s) => !!s.stats.sold1000, reward: { rel: { opa: 1 }, xp: { trade: 120 }, text: 'Opa: „Oben verkaufen. Kluger Junge.“' } },
       { id: 'b3eff', text: 'Bring deine SHA-256-Flotte unter 2.500 J/TH (ab 1 TH/s)', check: (s, h, g) => h.algoHash('sha256') >= 1e12 && g.fleetJTH() <= 2500, progress: (s, h, g) => [g.fleetJTH(), 2500, 'jth'], reward: { mod: [{ key: 'fail', mult: 0.95 }], xp: { hw: 80 }, text: 'Kühlere Miner: 5 % weniger Ausfälle' } },
       { id: 'b3doge', text: 'Schürfe eine Million Dogecoin', check: (s) => (s.stats.coins?.DOGE || 0) >= 1e6, progress: (s) => [s.stats.coins?.DOGE || 0, 1e6, 'coin'], reward: { rel: { deniz: 1 }, text: 'Deniz druckt Hunde-Sticker' } },
+      { id: 'b3full', text: 'Fülle die Werkstatt bis unters Dach', check: (s) => !!s.full?.werkstatt, progress: (s, h) => [h.fill('werkstatt'), 1, 'fill', 'werkstatt'], reward: { rel: { papa: 1 }, xp: { hw: 100 }, text: 'Papa: „Die Kunden fragen, warum der Laden brummt.“' } },
       { id: 'b3solar', unit: 'kWp', text: 'Bau 30 kWp Solar aufs Werkstattdach', check: (s) => (s.fac.werkstatt.solar || 0) >= 30, progress: (s) => [s.fac.werkstatt.solar || 0, 30, 'n'], reward: { rel: { mama: 1 }, mod: [{ key: 'elec', mult: 0.95, fac: 'werkstatt' }], text: '−5 % Strom in der Werkstatt' } },
     ],
   },
   {
-    title: 'Kapitel 4 – Die Lagerhalle', unlock: 'rz', minDate: '2017-06-01',
+    title: 'Kapitel 4 – Die Lagerhalle', unlock: 'rz', minDate: '2017-06-01', site: 'halle',
     intro: 'Die Hashwerk GmbH zieht ins Gewerbegebiet Lindental-Nord. Deniz hat sich im Büro-Container schon den Platz am Fenster gesichert.',
     goals: [
       { id: 'tech', text: 'Stell einen Techniker ein', live: true, eod: true, check: (s) => s.staff.tech > 0 }, // zählt erst am Tagesende
-      { id: 'ph1', text: 'Schaff 1 PH/s', check: (s, h) => h.algoHash('sha256') >= 1e15, progress: (s, h) => [h.algoHash('sha256'), 1e15, 'hash'] },
-      { id: 'nw1m', text: 'Firmenwert 1 Mio. $ (ohne Coins)', check: (s, h) => h.firmValue() >= 1e6, progress: (s, h) => [h.firmValue(), 1e6, 'usd'] }, // Bargeld + Hardware − Kredit: gehortete Coins zählen nicht
+      { id: 'rack12', text: 'Bestücke ein Rack komplett', check: (s, h) => h.fullRack() }, // 12 Geräte in einem 42U-Rack
+      { id: 'fill4', text: 'Lagerhalle zu 75 % auslasten', check: (s, h) => h.use('halle') >= 0.75, progress: (s, h) => [h.use('halle'), 0.75, 'use', 'halle'] }, // volle Racks zählen ganz, halbe halb (Game.facUse)
     ],
     waitText: 'Das Frankfurter Rechenzentrum ist noch bis Juni 2017 an eine Bank vermietet.',
     bonus: [
@@ -118,11 +121,11 @@ export const CHAPTERS = [
     ],
   },
   {
-    title: 'Kapitel 5 – Das Rechenzentrum', unlock: 'fjord', minDate: '2020-06-01',
+    title: 'Kapitel 5 – Das Rechenzentrum', unlock: 'fjord', minDate: '2020-06-01', site: 'rz',
     intro: 'Ein echtes Rechenzentrum in Frankfurt. In der Branche spricht sich herum, dass es Hashwerk gibt – sogar bei MONOLITH in Zug.',
     goals: [
-      { id: 'ph20', text: 'Schaff 20 PH/s', check: (s, h) => h.algoHash('sha256') >= 2e16, progress: (s, h) => [h.algoHash('sha256'), 2e16, 'hash'] },
-      { id: 'nw10m', text: 'Firmenwert 4 Mio. $ (ohne Coins)', check: (s, h) => h.firmValue() >= 4e6, progress: (s, h) => [h.firmValue(), 4e6, 'usd'] }, // id bleibt (alte Spielstände); 2018–2020 ist Krypto-Winter, mehr schafft ein normaler Spieler im RZ nicht
+      { id: 'mw6', text: 'Bau das Rechenzentrum auf 6 MW aus', check: (s) => s.fac.rz.power >= 1 },
+      { id: 'fill5', text: 'Rechenzentrum zu 75 % auslasten', orDate: true, check: (s, h) => h.use('rz') >= 0.75, progress: (s, h) => [h.use('rz'), 0.75, 'use', 'rz'] }, // orDate: im Krypto-Winter 2018–2020 keine Pflicht – spätestens Juni 2020 geht es nach Norwegen
     ],
     waitText: 'Das Wasserkraftwerk in Sogn liefert erst ab Juni 2020 Strom für die Fjordhalle.',
     bonus: [
@@ -134,7 +137,7 @@ export const CHAPTERS = [
     ],
   },
   {
-    title: 'Kapitel 6 – Die Fjordhalle', unlock: null, minDate: '2021-01-01', // frühester Sieg: Neujahr 2021
+    title: 'Kapitel 6 – Die Fjordhalle', unlock: null, minDate: '2021-01-01', site: 'fjord', // frühester Sieg: Neujahr 2021
     intro: 'Wasserkraft, Fjordluft, 30 Megawatt. Jetzt geht es gegen MONOLITH.',
     goals: [
       { id: 'eh1', text: 'Schaff 1 EH/s', check: (s, h) => h.algoHash('sha256') >= 1e18, progress: (s, h) => [h.algoHash('sha256'), 1e18, 'hash'] },
@@ -146,6 +149,7 @@ export const CHAPTERS = [
       { id: 'b6cold', until: '2022-11-10', text: 'Bring vier Fünftel deiner Coins in die Cold-Wallet (ab 1 Mio. $)', check: (s, h, g) => { const v = g.coinValue(); return v.all >= 1e6 && v.coldShare >= 0.8; }, reward: { rel: { opa: 1 }, text: 'Opa: „Börsen kommen und gehen.“' } },
       { id: 'b6mw60', text: 'Bau die Fjordhalle auf 60 MW aus', check: (s) => s.fac.fjord.power >= 1, reward: { rel: { papa: 1 }, text: 'Papa fliegt zum ersten Mal nach Norwegen' } },
       { id: 'b6eff', text: 'Bring deine SHA-256-Flotte unter 30 J/TH (ab 100 PH/s)', check: (s, h, g) => h.algoHash('sha256') >= 1e17 && g.fleetJTH() <= 30, progress: (s, h, g) => [g.fleetJTH(), 30, 'jth'], reward: { rel: { deniz: 1 }, text: 'Deniz: „Das ist Weltspitze.“' } },
+      { id: 'b6full', text: 'Fülle die Fjordhalle mit Containern', check: (s) => !!s.full?.fjord, progress: (s, h) => [h.fill('fjord'), 1, 'fill', 'fjord'], reward: { rel: { deniz: 1 }, text: 'Deniz: „Mehr Fjord gibt es nicht.“' } },
       { id: 'b6heat', text: 'Lass die Abwärme ganz Sogn heizen', check: (s) => !!s.techs?.heatsale, reward: { rel: { mama: 1 }, text: 'Mama: „Ein ganzes Dorf warm – das ist mein Kind!“' } },
     ],
   },
@@ -183,7 +187,7 @@ export const MESSAGES = [
   { id: 'm9', cond: (s, h) => h.facilityTripped(), from: 'Opa Heinz', text: 'Sicherung raus? Ich leg dir einen eigenen Stromkreis. Kostet aber.' },
   { id: 'm10', date: '2011-07-15', from: 'Deniz', text: 'Es gibt jetzt FPGA-Boards. Wenig Strom, viel Leistung. Aber teuer.' },
   { id: 'm11', date: '2011-10-08', from: 'Deniz', text: 'Neuer Coin: Litecoin. Da sind Grafikkarten richtig stark. Stell mal um!' },
-  { id: 'm12', cond: (s) => s.flags.debt && s.day < toDay('2012-06-01'), from: 'Papa', text: 'Der Laden ist gerettet! Und wenn Zweirad Öztürk im Juni 2012 auszieht, gehört die Werkstatt hinten dir.' },
+  { id: 'm12', cond: (s) => s.flags.debt && s.day < toDay('2012-06-01'), from: 'Papa', text: 'Der Laden ist gerettet! Wenn Zweirad Öztürk im Juni 2012 auszieht, gehört die Werkstatt hinten dir. Wird’s dir im Keller vorher zu eng, red ich mit ihm.' },
   { id: 'm12b', cond: (s) => s.flags.debt && s.day >= toDay('2012-06-01') && !s.messages.some((m) => m.id === 'm12'), from: 'Papa', text: 'Der Laden ist gerettet! Zweirad Öztürk ist schon ausgezogen – die Werkstatt hinten gehört dir.' },
   { id: 'm13', date: '2012-11-28', from: 'Deniz', text: 'Halving! Nur noch 25 BTC pro Block. Unsere Erträge halbieren sich.' },
   { id: 'm14', date: '2013-02-01', from: 'Deniz', text: 'Die ersten ASICs sind da. Eine Kiste schafft so viel wie 100 Grafikkarten.' },

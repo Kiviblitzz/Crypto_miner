@@ -46,6 +46,7 @@ export class Game {
       endless: null, lastNet: {},
       feat: { phone: 1 },
       ev: { done: {}, open: null, log: [], later: [], last: 0 }, rel: { papa: 0, mama: 0, opa: 0, deniz: 0 }, mods: [], ach: {},
+      full: {}, // Standort erstmals voll: Tag (Story-Moment, Kapitelziele)
     };
     Object.assign(s, { futureHW: [], netEff: 1, egoals: { done: {}, st: {}, cur: null }, fin: {}, ngPlus: 0, enews: {} }); // Endlosmodus & Finale
     this.registerFutureHW([]);
@@ -110,7 +111,10 @@ export class Game {
       s.keep ||= {}; s.talk ||= { last: {}, week: {}, joy: {}, got: {}, seen: {}, line: {} };
       this.initProgress(s);
       this.migrateEcon(s);
-      this.s = s; this.cache = {}; this.dayUpdate(true); return true;
+      const oldFull = !s.full; s.full ||= {};
+      this.s = s; this.cache = {};
+      if (oldFull) { this.summary = {}; for (const id of s.unlocked) this.summary[id] = this.facSummary(id); this.checkFull(true); } // alte Stände: schon volle Standorte ohne Story-Moment merken
+      this.dayUpdate(true); return true;
     } catch (e) {
       console.warn(e); this.registerFutureHW(prev.s?.futureHW || []);
       if (this.s !== prev.s) { this.s = prev.s; this.cache = prev.cache; this.summary = prev.summary; try { this.dayUpdate(true); } catch (e2) { /* alter Stand bleibt */ } }
@@ -270,6 +274,7 @@ export class Game {
   addObject(facId, type, x, z, rot, parts, free = false) {
     const def = PLACEABLE[type];
     if (!free && this.stockLeft(def) < 1) return null; // Kontingent erschöpft
+    if (!free && !this.slotOk(facId, def)) return null; // alle Stellplätze belegt
     const o = { uid: this.s.nextUid++, type, x, z, rot, coin: 'auto', broken: false, bought: this.s.day };
     if (def.kind === 'rig') o.parts = parts || { mobo: null, cpu: null, psu: null, gpus: [] };
     if (def.kind === 'holder') o.items = [];
@@ -394,11 +399,71 @@ export class Game {
     const cost = this.cloneCost(src); if (!this.canAfford(cost)) return null;
     if (!this.cloneStockOk(src)) return null; // Kontingent erschöpft
     const def = PLACEABLE[src.type];
+    if (!this.slotOk(facId, def)) return null; // alle Stellplätze belegt
     const o = { uid: this.s.nextUid++, type: src.type, x, z, rot, coin: src.coin, broken: false, bought: this.s.day };
     if (src.parts) o.parts = JSON.parse(JSON.stringify(src.parts));
     if (src.items) o.items = src.items.map((i) => ({ id: i.id, b: 0 }));
     this.s.cash -= cost; this.s.stats.spentHW += cost; this.cloneStockOk(src, true);
+    if (def.kind === 'device' && def.look !== 'fpga' && def.look !== 'usb') this.s.flags.boughtAsic = true;
+    if (this.s.skills) this.addXp('hw', 10, true);
     this.s.fac[facId].objects.push(o); this.dayUpdate(true); this.capWarn(facId); this.emit('objects', facId); return o;
+  }
+  // ---------- Schnell bauen & Stellplätze (Kern-Kreislauf: mehr Geräte → Standort voll → größerer Standort) ----------
+  // Stellplätze: Rigs, Einzelgeräte und Halter (Regal, Rack, Container) brauchen je einen, Kühlung und Deko nicht
+  slotKind(def) { const k = def?.kind; return k === 'rig' || k === 'device' || k === 'holder'; }
+  slotsUsed(facId) { let n = 0; for (const o of this.s.fac[facId]?.objects || []) if (this.slotKind(PLACEABLE[o.type])) n++; return n; }
+  slotsMax(facId) { return FACILITY[facId]?.slots ?? Infinity; }
+  slotOk(facId, def) { return !this.slotKind(def) || this.slotsUsed(facId) < this.slotsMax(facId); }
+  // Belegung eines Standorts: Plätze, Strom am aktuellen Anschluss; voll = alle Plätze belegt oder letzter Ausbau zu 95 % ausgelastet
+  facCap(facId) {
+    const fd = FACILITY[facId], f = this.s.fac[facId], sm = this.summary?.[facId];
+    const used = this.slotsUsed(facId), max = this.slotsMax(facId), cf = this.fx('cap', facId);
+    const capW = fd.power[f.power].kw * cf * 1000, maxW = fd.power[fd.power.length - 1].kw * cf * 1000, last = f.power >= fd.power.length - 1;
+    const watt = sm && !sm.tripped ? sm.watt : 0, power = last && watt >= capW * 0.95;
+    return { used, max, watt, capW, maxW, last, power, full: used >= max || power, fill: Math.min(1, Math.max(used / max, watt / (maxW * 0.95))) };
+  }
+  // Auslastung für Ziele: laufende Plätze (Rig mit GPU, Gerät, Halter anteilig nach Bestückung) bzw. Strom am letzten Ausbau
+  facUse(facId) {
+    let n = 0; for (const o of this.s.fac[facId]?.objects || []) { const d = PLACEABLE[o.type]; if (d.kind === 'device') n++; else if (d.kind === 'rig') n += this.pcReady(o) ? 1 : 0; else if (d.kind === 'holder') n += Math.min(1, (o.items?.length || 0) / d.slots); }
+    const c = this.facCap(facId); return Math.min(1, Math.max(n / c.max, c.watt / c.maxW));
+  }
+  // Erstmals voll: kleiner Story-Moment (ui: 'facfull'), merkt sich den Tag in s.full
+  checkFull(silent = false) {
+    const s = this.s; if (!s.full || !s.flags?.miningStarted) return;
+    for (const id of s.unlocked) {
+      if (s.full[id] || !this.summary?.[id]) continue;
+      const c = this.facCap(id); if (!c.full) continue;
+      s.full[id] = s.day || 1; if (!silent) this.emit('facfull', id, c);
+    }
+  }
+  // Fertig bestückter Rig: Rahmen + Mainboard (meiste Plätze) + günstigste CPU + passendes Netzteil + so viele GPUs wie passen/leistbar.
+  // GPU-Wahl nach Amortisation des ganzen Rigs (Preis / Netto pro Tag am Standort); erst, was bezahlbar ist.
+  readyRig(type, facId = this.s.current, budget = this.s.cash, day = this.s.day) {
+    const def = PLACEABLE[type]; if (def?.kind !== 'rig' || !this.available(def, day)) return null;
+    const mbs = this.partList('mobo'), cpus = this.partList('cpu'), psus = this.partList('psu').sort((a, b) => a.cap - b.cap); if (!mbs.length || !cpus.length || !psus.length) return null;
+    const pr = (it) => this.itemPrice(it, day), capOf = (m) => Math.min(m.slots, def.maxGpu), top = Math.max(...mbs.map(capOf));
+    const mb = mbs.filter((m) => capOf(m) === top).sort((a, b) => pr(a) - pr(b))[0], cpu = [...cpus].sort((a, b) => pr(a) - pr(b))[0];
+    const np = def.maxGpu >= 8 ? 2 : 1, el = this.elecPrice(facId, day), base = pr(def) + pr(mb) + pr(cpu), baseW = 25 + mb.watt + cpu.watt, rp = this.fx('rigPower');
+    let best = null;
+    const better = (a, b) => { if (!b) return true; const af = a.price <= budget, bf = b.price <= budget; if (af !== bf) return af; if ((a.net > 0) !== (b.net > 0)) return a.net > 0; return a.net > 0 ? a.price / a.net < b.price / b.net : a.net > b.net; };
+    for (const gp of this.partList('gpu')) {
+      for (let n = top; n >= 1; n--) {
+        const w = baseW + n * gp.watt, ps = psus.find((x) => x.cap * np >= w); if (!ps) continue;
+        const price = base + n * pr(gp) + pr(ps) * np; if (price > budget && n > 1) continue;
+        const hash = {}; for (const [a, v] of Object.entries(gp.hash)) hash[a] = v * n; for (const [a, v] of Object.entries(cpu.hash)) hash[a] = (hash[a] || 0) + v;
+        const coin = this.bestCoin(hash, gp.vram, day), rev = coin ? this.revenueFor(hash, coin, gp.vram, day) : 0, net = rev - (w * rp / 1000) * 24 * el;
+        const c = { type, gpu: gp.id, n, price: Math.round(price), rev, net, watt: Math.round(w * rp), coin, parts: { mobo: mb.id, cpu: cpu.id, psu: ps.id, gpus: Array(n).fill(gp.id) } };
+        if (better(c, best)) best = c; break;
+      }
+    }
+    if (best) best.template = { type, rot: 0, coin: 'auto', parts: best.parts };
+    return best;
+  }
+  // Kosten/Ertrag eines Geräts am Standort (Katalog): Netto pro Tag und Amortisation in Tagen
+  devOffer(def, facId = this.s.current, day = this.s.day) {
+    const h = { [def.algo]: def.hash * this.fx('asicHash') }, c = this.bestCoin(h, def.vram || 99, day), rev = c ? this.revenueFor(h, c, def.vram || 99, day) : 0;
+    const net = rev - (def.watt * this.fx('asicPower') / 1000) * 24 * this.elecPrice(facId, day), price = this.itemPrice(def, day);
+    return { price, rev, net, coin: c, roi: net > 0 ? price / net : Infinity };
   }
   holderAdd(uid, devId, n = 1) {
     const o = this.findObj(uid); if (!o || !o.items) return 0;
@@ -603,7 +668,7 @@ export class Game {
   dayUpdate(silent = false) {
     this.summary = {};
     for (const id of this.s.unlocked) this.summary[id] = this.facSummary(id);
-    if (this.s.feat) { this.checkFeatures(); this.checkGoals(); }
+    if (this.s.feat) { this.checkFull(); this.checkFeatures(); this.checkGoals(); }
     if (!silent) this.emit('update');
     else this.emit('refresh');
   }
