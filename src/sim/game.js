@@ -104,6 +104,7 @@ export class Game {
       if (!Number.isFinite(s.cash)) s.cash = 0;
       for (const c of COINS) { s.wallet[c.id] ||= { ex: 0, cold: 0 }; if (s.autoSell[c.id] == null) s.autoSell[c.id] = DEFAULT_AUTOSELL; }
       s.ev ||= { done: {}, open: null, log: [], later: [], last: 0 }; s.ev.done ||= {}; s.ev.log ||= []; s.ev.later ||= [];
+      s.skills ||= { hw: 0, mining: 0, trade: 0 };
       s.rel ||= { papa: 0, mama: 0, opa: 0, deniz: 0 }; s.mods ||= []; s.ach ||= {}; s.flags ||= {}; s.stats ||= { minedUSD: 0, sold: 0, spentHW: 0, elec: 0, history: [] };
       s.futureHW ||= []; s.netEff ||= 1; s.egoals ||= { done: {}, st: {}, cur: null }; s.egoals.done ||= {}; s.egoals.st ||= {}; s.fin ||= {}; s.ngPlus ||= 0; s.enews ||= {};
       s.keep ||= {}; s.talk ||= { last: {}, week: {}, joy: {}, got: {}, seen: {}, line: {} };
@@ -915,7 +916,7 @@ export class Game {
   }
   // ---------- Ereignisse mit Entscheidungen ----------
   evText(e, k = 'text') { const v = e[k]; return typeof v === 'function' ? v(this.s, this.helpers(), this) : v || ''; }
-  evChoices(e) { const s = this.s, h = this.helpers(); return (e.choices || []).map((c, i) => { const cost = typeof c.cost === 'function' ? c.cost(this) : c.cost || 0; const ok = (!cost || this.canAfford(cost)) && (!c.need || c.need(s, h, this)); return { i, label: typeof c.label === 'function' ? c.label(this) : c.label, hint: typeof c.hint === 'function' ? c.hint(this) : c.hint || '', cost, ok }; }); }
+  evChoices(e) { const s = this.s, h = this.helpers(); return (e.choices || []).map((c, i) => { const cost = typeof c.cost === 'function' ? c.cost(this) : c.cost || 0; const needOk = !c.need || c.need(s, h, this), ok = (!cost || this.canAfford(cost)) && needOk; return { needFail: !needOk, needText: typeof c.needText === 'function' ? c.needText(this) : c.needText, i, label: typeof c.label === 'function' ? c.label(this) : c.label, hint: typeof c.hint === 'function' ? c.hint(this) : c.hint || '', cost, ok }; }); }
   evDue(e, day) {
     const w = e.when || {}, s = this.s;
     if (w.date) { const d = toDay(w.date); if (day < d) return null; if (day > d + (w.window ?? 14)) return 'skip'; return e.id; }
@@ -965,7 +966,7 @@ export class Game {
     const fx = typeof ch.fx === 'function' ? ch.fx(this, s) : ch.fx || {};
     this.applyFx(fx);
     s.ev.log.push({ d: s.day, id: e.id, i, t: fx.log || `${this.evText(e, 'title')}: ${typeof ch.label === 'function' ? ch.label(this) : ch.label}` }); if (s.ev.log.length > 300) s.ev.log.shift();
-    if (auto) this.toast(`${this.evText(e, 'title')}: ohne Antwort – ${typeof ch.label === 'function' ? ch.label(this) : ch.label}`, 'info', 6000);
+    if (auto) this.toast(`${this.evText(e, 'title')}: ohne Antwort – ${fx.autoText || (typeof ch.label === 'function' ? ch.label(this) : ch.label)}`, 'info', 6000);
     this.dayUpdate(true);
     return typeof ch.reply === 'function' ? ch.reply(this) : ch.reply || null;
   }
@@ -1099,7 +1100,7 @@ export class Game {
   restartDay(facId) { const m = this.s.fac[facId]?.mothball; return m ? m + 7 : 0; }
   mothball(facId, on = true) {
     const s = this.s, f = s.fac[facId]; if (!f || !this.canMothball(facId)) return false;
-    if (on) { if (f.mothball) return false; f.mothball = s.day || 1; this.toast(`${FACILITY[facId].name} eingemottet: Geräte aus, Miete nur noch 30 %.`, 'info', 6000); }
+    if (on) { if (f.mothball) return false; f.mothball = s.day || 1; const keep = (UPGRADES[facId] || []).some((u) => u.keepRent && this.upActive(facId, u)); this.toast(`${FACILITY[facId].name} eingemottet: Geräte aus, ${!FACILITY[facId].rent ? 'keine Miete' : keep ? 'Miete läuft weiter (Mietvertrag)' : 'Miete nur noch 30 %'}.`, 'info', 6000); }
     else {
       if (!f.mothball || s.day < this.restartDay(facId)) return false;
       const c = this.restartCost(facId); if (s.cash - c < -this.dispoLimit()) return false; // Wiederanfahren darf in den Dispo gehen
@@ -1167,11 +1168,12 @@ export class Game {
     this.dayUpdate(true); return got;
   }
   bankAuto() { // ohne Antwort: Geräte, dann Cold-Wallet, dann Sparprogramm – hilft das alles nicht mehr: Opa, zuletzt Insolvenz (keine Endlos-Schulden)
-    if (this.bankFireSale() || this.bankColdSale()) return;
-    if (this.savingPossible()) { this.bankSaving(); return; }
-    const s = this.s; if (s.cash >= -this.dispoLimit()) return;
-    if (!s.flags.opaBank) { this.applyFx({ cash: 5000, flag: 'opaBank', rel: { opa: 1 } }); this.toast('Opa Heinz springt ein: 5.000 $ fürs Konto.', 'info', 8000); return; }
-    if (this.bankSalePreview() <= 0 && this.coldValue() < 1) { this.bankInsolvency(); this.applyFx({ rel: { papa: -1 } }); }
+    if (this.bankFireSale()) return 'Notverkauf alter Geräte'; if (this.bankColdSale()) return 'Cold-Wallet angezapft';
+    if (this.savingPossible()) { this.bankSaving(); return 'Sparprogramm (eingemottet, Personal entlassen)'; }
+    const s = this.s; if (s.cash >= -this.dispoLimit()) return 'Aufschub';
+    if (!s.flags.opaBank) { this.applyFx({ cash: 5000, flag: 'opaBank', rel: { opa: 1 } }); this.toast('Opa Heinz springt ein: 5.000 $ fürs Konto.', 'info', 8000); return 'Opa springt ein'; }
+    if (this.bankSalePreview() <= 0 && this.coldValue() < 1) { this.bankInsolvency(); this.applyFx({ rel: { papa: -1 } }); return 'Insolvenz'; }
+    return 'Aufschub';
   }
   reschedOk() { const s = this.s, amt = Math.max(0, -s.cash) + 1000; return (s.loan || 0) + amt <= Math.max(20000, this.hardwareValue() * 0.8 + this.walletValue() * 0.5); }
   bankReschedule() { const s = this.s, amt = Math.ceil((Math.max(0, -s.cash) + 1000) / 100) * 100; s.loan = (s.loan || 0) + amt; s.loanHi = (s.loanHi || 0) + amt; s.cash += amt; return amt; }

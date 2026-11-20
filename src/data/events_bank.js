@@ -6,7 +6,7 @@ export const BANK_EVENTS = [
   {
     id: 'bank', chain: true, from: 'Lindentaler Bank', title: 'Bankgespräch', expire: 7, fallback: 1,
     text: (s, h, g) => `Herr Albers von der Lindentaler Bank bittet zum Gespräch. Dein Konto steht bei <b>${usd(s.cash)}</b>, `
-      + `der Dispo-Rahmen liegt bei <b>${usd(g.dispoLimit())}</b>. „So geht das nicht weiter, Herr Brandt. Was schlagen Sie vor?"`,
+      + `der Dispo-Rahmen liegt bei <b>${usd(g.dispoLimit())}</b>. „So geht das nicht weiter, Herr Brandt. Was schlagen Sie vor?“`,
     choices: [
       {
         label: 'Coins aus der Cold-Wallet verkaufen',
@@ -19,7 +19,7 @@ export const BANK_EVENTS = [
         label: 'Notverkauf: älteste Geräte abgeben',
         hint: (g) => { const v = g.bankSalePreview(); return v > 0 ? `Bringt etwa ${usd(v)} · das Kinderzimmer bleibt` : 'Es gibt nichts mehr zu verkaufen'; },
         need: (s, h, g) => g.bankSalePreview() > 0,
-        fx: (g) => ({ do: () => g.bankAuto(), log: 'Bankgespräch: Notverkauf alter Geräte' }),
+        fx: (g) => { const t = g.bankAuto(); return { log: `Bankgespräch: ${t}`, autoText: t }; },
         reply: '<b>Herr Albers:</b> Schade um die Maschinen. Aber so bleibt das Konto sauber.',
       },
       {
