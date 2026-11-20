@@ -7,7 +7,8 @@ import { ACHIEVEMENTS } from '../data/achievements.js';
 import { UPGRADES, DIFFICULTY } from '../data/world.js';
 import { ROLES, TRAITS, FIRST, LAST } from '../data/staff.js';
 import { BANK_EVENTS } from '../data/events_bank.js';
-import { BTC_HASH, POWER_HOUSEHOLD, GPU_BOOM, MONOLITH_SHARE, DAG_AET, DAG_AEC, seasonOffset, noise, toDay, BTC_PRICE, curve, HALVINGS } from '../data/history.js';
+import { FUTURE, futureModel, ENDLESS_GOALS, EGOAL, ENDLESS_NEWS } from '../data/endless.js';
+import { BTC_HASH, POWER_HOUSEHOLD, GPU_BOOM, MONOLITH_SHARE, DAG_AET, DAG_AEC, seasonOffset, noise, toDay, BTC_PRICE, curve, HALVINGS, BTC_REWARD } from '../data/history.js';
 export const SKILL_XP = [0, 150, 500, 1200, 2500, 4500, 7500, 12000, 18000, 26000]; // Erfahrung für Stufe 1–10
 export const SKILL_PCT = 2; // Schrauben: −2 % Hardwarepreis, Mining: +2 % Ertrag je Stufe über 1
 export const TRADE_FEES = [0.04, 0.035, 0.03, 0.025, 0.02, 0.016, 0.013, 0.01, 0.0075, 0.005]; // Börsengebühr je Handel-Stufe
@@ -19,6 +20,7 @@ export const SAVE_KEY = 'hashwerk-save-v1';
 const DEFAULT_AUTOSELL = 0.8;
 
 const RELEASES = [...PLACEABLES, ...PARTS].filter((it) => it.releaseDay > START_DAY && (it.kind === 'device' || it.kind === 'rig' || it.type));
+const BASE_EFF = Math.min(...PLACEABLES.filter((p) => p.kind === 'device' && p.algo === 'sha256').map((p) => p.watt / (p.hash / 1e12))); // bestes J/TH bei Datenende
 const fmtHashS = (h, a) => fmtHash(h, a);
 const curveSolar = curve([['2010-01', 3200], ['2013-01', 1900], ['2016-01', 1500], ['2020-01', 1100], ['2023-01', 1000], ['2026-01', 750]], { log: false });
 function rnd(seed) { const x = Math.sin(seed * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); }
@@ -45,6 +47,8 @@ export class Game {
       feat: { phone: 1 },
       ev: { done: {}, open: null, log: [], later: [], last: 0 }, rel: { papa: 0, mama: 0, opa: 0, deniz: 0 }, mods: [], ach: {},
     };
+    Object.assign(s, { futureHW: [], netEff: 1, egoals: { done: {}, st: {}, cur: null }, fin: {}, ngPlus: 0, enews: {} }); // Endlosmodus & Finale
+    this.registerFutureHW([]);
     for (const c of COINS) s.autoSell[c.id] = 0;
     this.initProgress(s);
     const m0 = MESSAGES.find((m) => m.id === 'm0'); if (m0) s.messages.push({ id: 'm0', day: START_DAY, from: m0.from, text: m0.text, read: true }); // Start-Nachricht (im Intro gezeigt)
@@ -72,6 +76,7 @@ export class Game {
       const raw = localStorage.getItem(SAVE_KEY); if (!raw) return false;
       const s = JSON.parse(raw); if (!s || s.version !== 1) return false;
       s.fac ||= {}; s.wallet ||= {}; s.autoSell ||= {}; s.lastNet ||= {};
+      s.futureHW = Array.isArray(s.futureHW) ? s.futureHW.filter((it) => it?.id && it.hash > 0 && it.watt > 0) : []; this.registerFutureHW(s.futureHW); // Zukunfts-Miner vor dem Aussortieren unbekannter Geräte eintragen
       for (const f of FACILITIES) s.fac[f.id] ||= { power: 0, tripped: false, temp: 21, objects: [] };
       // Alte Spielstände: Parodie-Kürzel auf echte Coins umstellen
       const MIG = { SLV: 'LTC', WUF: 'DOGE', SHD: 'XMR', AET: 'ETH', AEC: 'ETC', ZRP: 'ZEC', CRV: 'RVN', KSK: 'KAS' };
@@ -100,12 +105,13 @@ export class Game {
       for (const c of COINS) { s.wallet[c.id] ||= { ex: 0, cold: 0 }; if (s.autoSell[c.id] == null) s.autoSell[c.id] = DEFAULT_AUTOSELL; }
       s.ev ||= { done: {}, open: null, log: [], later: [], last: 0 }; s.ev.done ||= {}; s.ev.log ||= []; s.ev.later ||= [];
       s.rel ||= { papa: 0, mama: 0, opa: 0, deniz: 0 }; s.mods ||= []; s.ach ||= {}; s.flags ||= {}; s.stats ||= { minedUSD: 0, sold: 0, spentHW: 0, elec: 0, history: [] };
+      s.futureHW ||= []; s.netEff ||= 1; s.egoals ||= { done: {}, st: {}, cur: null }; s.egoals.done ||= {}; s.egoals.st ||= {}; s.fin ||= {}; s.ngPlus ||= 0; s.enews ||= {};
       s.keep ||= {}; s.talk ||= { last: {}, week: {}, joy: {}, got: {}, seen: {}, line: {} };
       this.initProgress(s);
       this.migrateEcon(s);
       this.s = s; this.cache = {}; this.dayUpdate(true); return true;
     } catch (e) {
-      console.warn(e);
+      console.warn(e); this.registerFutureHW(prev.s?.futureHW || []);
       if (this.s !== prev.s) { this.s = prev.s; this.cache = prev.cache; this.summary = prev.summary; try { this.dayUpdate(true); } catch (e2) { /* alter Stand bleibt */ } }
       return false;
     }
@@ -201,8 +207,10 @@ export class Game {
     else if (item.type === 'cpu' || item.type === 'mobo' || item.type === 'psu') p *= Math.max(0.35, 1 - 0.12 * years);
     else if (item.kind === 'device') {
       const k = `hp_${item.algo}_${item.releaseDay}`;
-      const h0 = this.cache[k] ??= this.hashprice(item.algo, item.releaseDay + 15) || 1;
-      const h1 = this.hashprice(item.algo, Math.min(day, LAST_DATA_DAY)) || h0;
+      const h0 = this.cache[k] ??= this.hashprice(item.algo, Math.min(item.releaseDay + 15, LAST_DATA_DAY)) || 1; // Zukunfts-Hardware: Preis kommt aus dem Markt beim Erscheinen
+      const d1 = Math.min(day, LAST_DATA_DAY); if (this.hpDay !== d1) { this.hpDay = d1; this.hpC = {}; } // je Tag einmal rechnen (große Flotten)
+      const h1 = (this.hpC[item.algo] ??= this.hashprice(item.algo, d1)) || h0;
+      if (item.fut) p = this.futureBase(item, day); // Zukunfts-Hardware: Listenpreis folgt dem aktuellen Hashpreis
       const ratio = Math.min(2.6, Math.max(0.06, Math.pow(h1 / h0, 0.55)));
       p *= ratio * Math.max(0.35, 1 - 0.1 * years);
     } else p *= Math.pow(1.02, Math.max(0, (day - toDay('2010-01-01')) / 365));
@@ -693,6 +701,7 @@ export class Game {
     }
     // Story
     this.checkMessages(); this.checkGoals(true); this.checkEvents();
+    this.endlessDay();
     if (day % 7 === 0) this.checkAchievements();
     if (day % 30 === 0) s.mods = s.mods.filter((m) => m.until > day);
     if (day >= toDay('2021-05-26') && day <= toDay('2021-12-31') && !s.flags.offerMade && s.flags.gmbh) { s.flags.offerMade = true; this.emit('offer', Math.max(40e6, Math.round(this.netWorthFast() * 1.4 / 1e6) * 1e6)); }
@@ -762,13 +771,125 @@ export class Game {
     for (const c of COINS) {
       const e = s.endless[c.id];
       const vol = c.id === 'BTC' ? 0.028 : 0.045;
-      e.p *= Math.exp(gauss() * vol + 0.00025);
-      e.h *= Math.exp(gauss() * 0.006 + (c.id === 'BTC' ? 0.0007 : 0.0003) + (Math.log(e.p) - Math.log(e.h)) * 0.002);
+      // Kurs: Zufallspfad um einen sanften Trend (+9 %/Jahr), weich zurückgezogen – weder endlose Talfahrt noch Dauerrausch
+      e.p *= Math.exp(gauss() * vol + 0.00025 - (Math.log(e.p) - 0.00025 * (s.day - LAST_DATA_DAY)) * 0.0008);
+      // Netz-Hashrate folgt der Rentabilität: Ziel = Ertrag (Belohnung × Kurs) ÷ Effizienz der Netz-Miner, mit gut 5 Monaten Verzögerung
+      // (der technische Fortschritt der Zukunfts-Hardware gilt für alle Netze – alte Altcoin-ASICs verlieren langsam an Wert)
+      if (c.id === 'BTC') s.netEff = (s.netEff || 1) + (this.futureFront() - (s.netEff || 1)) / 900;
+      const em0 = c.emission(LAST_DATA_DAY) || 1, target = Math.max(1e-6, (c.emission(s.day) / em0) * e.p / (s.netEff || 1));
+      e.h *= Math.exp(gauss() * 0.006 + (Math.log(target) - Math.log(e.h)) / 160);
     }
     // Verlauf merken (Charts, Wochenvergleich), begrenzt auf ~2000 Tage
     const H = (s.endlessHist ||= { ids: COINS.map((c) => c.id), d: {} });
     H.d[s.day] = H.ids.flatMap((id) => (s.endless[id] ? [+s.endless[id].p.toPrecision(6), +s.endless[id].h.toPrecision(6)] : [1, 1]));
     delete H.d[s.day - 2000];
+    this.futureStep(); this.endlessNews();
+  }
+
+  // ---------- Endlosmodus: Zukunfts-Hardware ----------
+  // Bestes J/TH heute im Verhältnis zum besten Miner bei Datenende (1 = Stand 2026)
+  futureFront() { let b = BASE_EFF; for (const it of this.s.futureHW || []) b = Math.min(b, it.watt / (it.hash / 1e12)); return b / BASE_EFF; }
+  futureDue(n) { return LAST_DATA_DAY + FUTURE.every * (n + 1) + Math.round((rnd(n + 7) - 0.5) * 2 * FUTURE.jitter); }
+  // Geräte aus dem Spielstand in den Katalog eintragen (und Reste eines anderen Spielstands entfernen)
+  registerFutureHW(list) {
+    const ids = new Set(list.map((it) => it.id));
+    for (let i = PLACEABLES.length - 1; i >= 0; i--) if (PLACEABLES[i].fut && !ids.has(PLACEABLES[i].id)) { delete PLACEABLE[PLACEABLES[i].id]; PLACEABLES.splice(i, 1); }
+    for (const it of list) { it.releaseDay ??= toDay(it.release); if (!PLACEABLE[it.id]) { PLACEABLES.push(it); PLACEABLE[it.id] = it; } }
+  }
+  makeFutureHW(n, day) {
+    const m = futureModel(n), k = m.hydro ? 'hydro' : 'air', ref = m.hydro ? PLACEABLE.s23hyd : PLACEABLE.s23;
+    const eff = Math.max(FUTURE.effMin, BASE_EFF * Math.pow(FUTURE.effStep, n + 1) * (m.hydro ? 1 : 1.12));
+    const th = Math.min((ref?.hash || (m.hydro ? 580e12 : 318e12)) / 1e12 * Math.pow(FUTURE.hashStep[k], n + 1), FUTURE.maxW[k] / eff);
+    const it = { id: 'fut' + (n + 1), fut: n + 1, kind: 'device', cat: 'asic', name: m.name, release: new Date(day * 864e5).toISOString().slice(0, 10), releaseDay: day,
+      price: 0, watt: Math.round(th * eff), algo: 'sha256', hash: Math.round(th) * 1e12,
+      size: [0.5, 0.5], minTier: m.hydro ? 3 : 0, look: m.look, ...(m.hydro ? { hydro: true } : {}), life: 9 };
+    it.price = this.futureBase(it, day); // Listenpreis beim Erscheinen
+    return it;
+  }
+  // Preis nach Hashpreis (wie am echten Markt): Hersteller verlangen etwa FUTURE.roiDays Tage Reinertrag bei FUTURE.refElec $/kWh
+  futureBase(it, day = this.s.day) {
+    if (this.hpNowDay !== day) { this.hpNowDay = day; this.hpNowV = COIN.BTC.emission(day) * this.price('BTC', day) / this.netHash('BTC', day) * 1e12; } // $ pro TH/s und Tag
+    const th = it.hash / 1e12, eff = it.watt / th, k = it.hydro ? 'hydro' : 'air';
+    const usd = Math.min(th * FUTURE.usdPerTH[k], Math.max(th * FUTURE.minPerTH, FUTURE.roiDays * th * (this.hpNowV - eff / 1000 * 24 * FUTURE.refElec)));
+    return Number.isFinite(usd) ? Math.max(500, Math.round(usd / 50) * 50) : it.price || 5000;
+  }
+  futureStep() {
+    const s = this.s, list = (s.futureHW ||= []); let it = null;
+    while (s.day >= this.futureDue(list.length) && list.length < 60) { it = this.makeFutureHW(list.length, s.day); list.push(it); this.registerFutureHW(list); }
+    if (!it) return;
+    const jth = (it.watt / (it.hash / 1e12)).toLocaleString('de-DE', { maximumFractionDigits: 1 });
+    const text = `Neu im Handel: Miner ${it.name} – ${fmtHash(it.hash, 'sha256')} bei ${it.watt} W (${jth} J/TH)`;
+    s.ticker.unshift({ day: s.day, text }); s.ticker = s.ticker.slice(0, 30);
+    this.emit('release', it, text);
+    this.pushMsg({ from: 'Deniz', text: `Die ${it.name} ist raus! ${jth} J/TH${it.hydro ? ', nur für Rack und Container' : ''}. Unsere alten Kisten sehen dagegen ganz schön alt aus.` });
+  }
+  // Ticker im Endlosmodus: Halvings, Rekorde, Kursstürze und erfundene Marktmeldungen
+  news(text) { const s = this.s, n = { day: s.day, text }; s.ticker.unshift(n); s.ticker = s.ticker.slice(0, 30); this.emit('news', n); }
+  endlessNews() {
+    const s = this.s, day = s.day, e = (s.enews ||= {}), p = this.price('BTC', day), nh = this.netHash('BTC', day);
+    if (!e.ath) { e.ath = 0; e.hrec = 0; for (let d = toDay('2017-01-01'); d <= LAST_DATA_DAY; d += 3) { e.ath = Math.max(e.ath, COIN.BTC.price(d)); e.hrec = Math.max(e.hrec, COIN.BTC.hash(d)); } e.next = day + 25; e.used = []; }
+    const fmtP = (v) => fmtUSD(Math.round(v / 1000) * 1000);
+    for (const hd of HALVINGS) {
+      if (hd <= LAST_DATA_DAY) continue;
+      const r = BTC_REWARD(hd).toLocaleString('de-DE', { maximumFractionDigits: 5 });
+      if (day === hd - 30) this.news(`In 30 Tagen ist Halving: Die Belohnung pro Block sinkt auf ${r} BTC`);
+      if (day === hd) { this.news(`Halving! Ab heute gibt es nur noch ${r} BTC pro Block`); e.hdH = nh; }
+      if (day === hd + 75 && e.hdH) { const ch = Math.round((nh / e.hdH - 1) * 100); this.news(ch < 0 ? `Nach dem Halving: ${-ch} % weniger Netz-Hashrate – alte Miner gehen vom Netz` : `Netz-Hashrate trotz Halving ${ch} % höher – die Miner glauben an den Kurs`); }
+    }
+    if (p > e.ath) { e.ath = p; if (day - (e.athDay || 0) > 45) { e.athDay = day; this.news(`Neues Allzeithoch: Bitcoin bei ${fmtP(p)}`); } }
+    (e.wk ||= []).push(p); if (e.wk.length > 8) e.wk.shift(); // Kurse der letzten Woche (im Endlosmodus gibt es keine Kurshistorie)
+    const ch = e.wk.length >= 8 ? p / e.wk[0] - 1 : 0;
+    if (Math.abs(ch) > 0.2 && day - (e.crashDay || 0) > 40) { e.crashDay = day; this.news(ch < 0 ? `Bitcoin bricht ein: ${Math.round(ch * 100)} % in einer Woche` : `Bitcoin springt um ${Math.round(ch * 100)} % in einer Woche auf ${fmtP(p)}`); }
+    if (nh > e.hrec * 1.15) { e.hrec = nh; this.news(`Rekord: Die Netz-Hashrate steigt auf ${fmtHash(nh, 'sha256')}`); }
+    if (day >= e.next) { let pool = ENDLESS_NEWS.map((_, i) => i).filter((i) => !e.used.includes(i)); if (!pool.length) { e.used = []; pool = ENDLESS_NEWS.map((_, i) => i); } const i = pool[Math.floor(Math.random() * pool.length)]; e.used.push(i); e.next = day + 40 + Math.floor(Math.random() * 40); this.news(ENDLESS_NEWS[i]); }
+  }
+  pushMsg(m) { const s = this.s, x = { id: 'eg' + s.day + Math.random().toString(36).slice(2, 6), day: s.day, from: m.from, text: m.text, read: false }; s.messages.push(x); this.emit('message', x); }
+
+  // ---------- Endlosziele (nach dem Sieg über MONOLITH) ----------
+  endlessDay() {
+    const s = this.s;
+    if (s.day <= toDay('2011-03-31') && s.stats.coins) s.stats.btcWinter = s.stats.coins.BTC || 0; // für „Was wäre wenn“ im Finale
+    if (!s.flags.won || s.chapter < CHAPTERS.length || !s.egoals) return;
+    const eg = s.egoals;
+    for (const goal of ENDLESS_GOALS) {
+      if (eg.done[goal.id] || goal.action) continue;
+      const st = (eg.st[goal.id] ||= {});
+      const ok = goal.tick ? goal.tick(s, this, st) : (!goal.ready || goal.ready(s, this, st)) && goal.check(s, this, st);
+      if (ok) this.finishEndlessGoal(goal);
+    }
+    const cur = this.endlessGoal();
+    if (cur && eg.cur !== cur.id) { eg.cur = cur.id; const st = (eg.st[cur.id] ||= {}); if (cur.start && !st.started) { st.started = s.day; this.pushMsg(typeof cur.start === 'function' ? cur.start(s) : cur.start); } }
+  }
+  // Aktuelles Endlosziel: das erste offene, das schon dran ist
+  endlessGoal() { const s = this.s, eg = s.egoals; if (!eg) return null; for (const goal of ENDLESS_GOALS) { if (eg.done[goal.id]) continue; const st = (eg.st[goal.id] ||= {}); if (!goal.ready || goal.ready(s, this, st)) return goal; } return null; }
+  // Nächste Investition (Ziel mit Kaufknopf), auch wenn ein anderes Endlosziel gerade dran ist – Investitionen der Reihe nach
+  endlessInvest() { const s = this.s, eg = s.egoals; if (!eg) return null; for (const goal of ENDLESS_GOALS) { if (!goal.action || eg.done[goal.id]) continue; const st = (eg.st[goal.id] ||= {}); return !goal.ready || goal.ready(s, this, st) ? goal : null; } return null; }
+  finishEndlessGoal(goal) {
+    const s = this.s; if (s.egoals.done[goal.id]) return;
+    s.egoals.done[goal.id] = s.day; this.logStory('eg:' + goal.id, `Endlosziel: ${typeof goal.text === 'function' ? goal.text(s, this, s.egoals.st[goal.id] || {}) : goal.text}`);
+    if (goal.done) this.pushMsg(goal.done);
+    this.emit('egoal', goal.id);
+  }
+  endlessAction(id) {
+    const goal = EGOAL[id], s = this.s; if (!goal?.action || s.egoals.done[id] || !s.flags.won || (this.endlessGoal() !== goal && this.endlessInvest() !== goal) || !this.canAfford(goal.action.cost)) return false;
+    s.cash -= goal.action.cost; s.stats.invested = (s.stats.invested || 0) + goal.action.cost; if (goal.fx) this.applyFx(goal.fx);
+    this.finishEndlessGoal(goal); this.dayUpdate(true); return true;
+  }
+  siteRent(id) { return FACILITY[id].rent * this.fx('rent', id); }
+
+  // ---------- Finale, Verkauf, Neues Spiel+ ----------
+  logStory(id, t) { const s = this.s; s.ev.log.push({ d: s.day, id, i: 0, t }); if (s.ev.log.length > 300) s.ev.log.shift(); }
+  markWon() { const s = this.s; if (s.fin.wonDay) return; s.fin.wonDay = s.day; this.logStory('won', 'MONOLITH überholt – Hashwerk ist die Nummer eins'); }
+  declineOffer(usd) { const s = this.s; s.flags.offerDeclined = s.day; s.fin.offerUsd = usd; this.logStory('offer', `Krals Angebot über ${fmtUSD(usd)} abgelehnt`); }
+  sellOut(usd) { const s = this.s; s.flags.soldOut = s.day; s.fin.offerUsd = usd; s.fin.soldDay = s.day; s.fin.soldUsd = usd; this.logStory('sold', `Hashwerk für ${fmtUSD(usd)} an MONOLITH verkauft`); }
+  tearContract() { const s = this.s; delete s.flags.soldOut; s.fin.soldDay = 0; s.flags.offerDeclined = s.day; s.flags.contractTorn = s.day; this.logStory('torn', 'Krals Kaufvertrag zerrissen – Hashwerk bleibt in Lindentaler Hand'); this.dayUpdate(true); }
+  // Neues Spiel+: Opas Werkzeugkiste (−10 % auf alle Hardware, dauerhaft)
+  newGamePlus(ending = 'won') {
+    const old = this.s, n = (old.ngPlus || 0) + 1, prev = { ending, day: old.day, nw: Math.round(this.netWorth()), won: old.fin?.wonDay || 0 };
+    this.newGame(old.diff || 'normal');
+    const s = this.s; s.ngPlus = n; s.flags['ng+'] = 1; s.fin.prev = prev;
+    s.mods.push({ key: 'price', mult: 0.9, fac: null, until: 1e9, src: 'ngplus' });
+    this.dayUpdate(true); return true;
   }
 
   // ---------- Story ----------
