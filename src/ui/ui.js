@@ -741,6 +741,7 @@ export class UI {
       const row = h(`<div class="goal ${done ? 'done' : ''} ${enter ? 'enter' : ''}"><div class="ck">${done ? '✓' : ''}</div><div>${bag ? `<div class="goal-line">${esc(gtext)}${prog}</div>${bag}` : `${esc(gtext)}${prog}`}</div></div>`);
       if (!done && go.action) { const b = h(`<button class="btn small primary"><kbd>G</kbd>${esc(go.action.label)}</button>`); b.disabled = !g.canPayGoal(go); b.onclick = () => { if (g.goalAction(go)) { this.toast('✔ Erledigt!', 'good'); this.goals(); } }; row.lastElementChild.append(h('<br/>'), b); }
       el.append(row);
+      if (!done && go.open === 'company' && g.has('company')) { const cb = h('<button class="btn small primary"><kbd>C</kbd>Zur Firma: Ausbauten</button>'); cb.onclick = () => this.company(); row.lastElementChild.append(h('<br/>'), cb); } // z. B. Opas Nachtstromzähler
       if (!done && go.action) { // Raten (z. B. 1.000 $ für Papas Laden): Knopf zeigt den Rest, daneben eine Rate
         const b0 = row.querySelector('button.primary'); if (b0 && paid > 0) b0.innerHTML = `<kbd>G</kbd>${esc(`Rest überweisen · ${fmtUSD(left)}`)}`;
         const part = go.action.part;

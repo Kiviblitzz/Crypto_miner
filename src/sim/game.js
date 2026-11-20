@@ -1350,7 +1350,7 @@ export class Game {
     if (!this.canAfford(amt)) this.raiseCash(amt);
     if (!this.canAfford(amt)) return false;
     s.cash -= amt; if (a.part) s.flags[a.flag + 'Paid'] = this.payPaid(g) + amt;
-    if (amt >= left) { s.flags[a.flag] = true; if (a.up && s.fac[a.up[0]]) { (s.fac[a.up[0]].up ||= {})[a.up[1]] ||= s.day || 1; this.emit('upgrade', a.up[0], a.up[1]); } } // up: Ausbau gleich mit (z. B. Opas Nachtstromzähler)
+    if (amt >= left) s.flags[a.flag] = true;
     this.checkGoals(); this.checkFeatures(); this.dayUpdate(true); return true;
   }
   canUnlock(facId) {

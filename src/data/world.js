@@ -72,7 +72,7 @@ export const CHAPTERS = [
     goals: [
       { id: 'openrig', text: 'Bau dein erstes Rig im Keller', check: (s, h) => h.rigsAt('keller') > 0 }, // mit mindestens 1 GPU
       // Ausbauten kennenlernen: Opas Nachtstromzähler (UPGRADES.keller nightmeter, −30 % Strom im Keller) – Knopf im Ziel oder Firma (C) → Ausbauten
-      { id: 'night', text: 'Lass Opa den alten Nachtstromzähler anklemmen', doneText: 'Nachtstrom! Im Keller kostet der Strom jetzt 30 % weniger. Weitere Ausbauten: Firma (C).', action: { label: 'Opa machen lassen · 400 $', cost: 400, flag: 'nightGoal', up: ['keller', 'nightmeter'] }, check: (s) => !!s.fac.keller?.up?.nightmeter },
+      { id: 'night', text: 'Lass Opa den alten Nachtstromzähler anklemmen (Firma → Ausbauten, 400 $)', orDate: '2011-10-01', open: 'company', doneText: 'Nachtstrom! Im Keller kostet der Strom jetzt 30 % weniger. In der Firma (C) gibt es weitere Ausbauten.', check: (s) => !!s.fac.keller?.up?.nightmeter }, // open: Knopf im Ziel-Panel öffnet die Firma; orDate: kein Muss (sonst ab Oktober 2011)
       { id: 'debt', text: 'Rette Papas Laden – Frist der Bank: Ende 2013', action: { label: '15.000 $ überweisen', cost: 15000, flag: 'debt', part: 1000 }, check: (s) => s.flags.debt || !!s.flags.shopLost }, // part: in Raten zu 1.000 $ (s.flags.debtPaid); nach der Frist: Ereignis „ladenzu“ (events.js)
       { id: 'fill2', text: 'Fülle den Keller', orDate: true, skip: true, doneText: 'Der Keller ist voll!', check: (s) => !!s.full?.keller, progress: (s, h) => [h.fill('keller'), 1, 'fill', 'keller'] }, // orDate: ab minDate auch ohne vollen Keller erledigt
     ],
