@@ -1748,3 +1748,22 @@ body[data-modal="market"] :is(#st-cash, #st-profit, #st-wallet) { visibility: hi
 #goals .goal.egoal .bar { margin: 3px 0 1px; }
 #goals .goal.egoal .btn { margin-top: 5px; }
 #goals .goal.egoal + .goal.egoal { margin-top: 6px; }
+
+/* ===== QA-Runde: Layout ===== */
+/* Bau-Katalog: alle Spalten sichtbar */
+@media (min-width: 721px) { #build { width: min(940px, 94vw) !important; } #build .items { grid-template-columns: repeat(var(--cols, 3), minmax(0, 250px)) !important; } }
+/* Datum/Kurs-Kasten verdeckt kein Schließen-Kreuz breiter Fenster */
+body:has(#modal:not(.hidden)) #rbox { visibility: hidden; }
+/* Dock kompakter, bevor es das Datum berührt */
+@media (min-width: 721px) and (max-width: 1520px) { #dock { max-width: calc(100vw - 2 * 290px); } }
+/* Ereigniskarte: Platz fürs Schließen-Kreuz */
+.story.event .ev-from { padding-right: 44px; }
+/* Handy: Toasts und EP-Einblendungen nicht über Fenstern stapeln */
+@media (max-width: 720px) {
+  body:has(#modal:not(.hidden)) #toasts .toast:not(:last-child) { display: none; }
+  body:has(#modal:not(.hidden)) #toasts { top: auto !important; bottom: 12px !important; }
+  body:has(#modal:not(.hidden)) #xpbox, body:has(#modal:not(.hidden)) #lvup { display: none; }
+}
+body:has(.story.event) #xpbox { display: none; }
+/* Bankgespräch bei niedrigen Fenstern: Antworten kompakter */
+@media (max-height: 700px) { .story.event .ev-c { min-height: 40px; padding: 7px 12px !important; } .story.event .ev-choices { gap: 6px; } }

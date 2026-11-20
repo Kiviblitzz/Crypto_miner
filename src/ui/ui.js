@@ -315,8 +315,10 @@ export class UI {
   // ---------- Ego-Steuerung: Panels öffnen/schließen ----------
   anyPanelOpen() { return !$('#modal').classList.contains('hidden') || !!this.inspUid || document.body.classList.contains('show-build'); }
   openUI() { this.pause(false); if (this.w.mode === 'play') this.w.setMode('ui'); }
+  stickyModal() { return !$('#modal').classList.contains('hidden') && ['story', 'won', 'year', 'intro'].includes(this.modalKind); }
   resume() {
     this.pause(false);
+    if (!$('#modal').classList.contains('hidden') && this.modalKind === 'event' && this.g.s.ev?.open) this.evSnooze = this.g.s.ev.open.key; // ESC = später entscheiden
     if (!$('#modal').classList.contains('hidden')) { this.modalKind = null; document.body.dataset.modal = ''; $('#modal').classList.add('hidden'); this.onModalClose?.(); this.onModalClose = null; }
     document.body.classList.remove('show-build', 'show-goals'); this.dock();
     if (this.inspUid) { this.inspUid = null; $('#inspector').classList.add('hidden'); this.w.select(null); }
@@ -435,7 +437,7 @@ export class UI {
       const un = g.s.unlocked.includes(f.id), here = g.s.current === f.id, can = g.canUnlock(f.id);
       if (!un && !can) continue;
       const sm = g.summary[f.id];
-      const c = h(`<div class="card"><h3>${here ? '' : ''}${esc(f.name)}</h3><div class="sub">${esc(f.place)}</div>${un && sm ? `<div style="font-size:12px;color:var(--dim)">${fmtWatt(sm.watt)} · ${sm.temp.toFixed(1)} °C · ${g.facObjects(f.id).length} Objekte</div>` : ''}</div>`);
+      const c = h(`<div class="card"><h3>${here ? '' : ''}${esc(f.name)}</h3><div class="sub">${esc(f.place)}</div>${un && sm ? `<div style="font-size:12px;color:var(--dim)">${fmtWatt(sm.watt)} · ${fmtNum(sm.temp, 1)} °C · ${g.facObjects(f.id).length} Objekte</div>` : ''}</div>`);
       const b = h(`<button class="btn small ${here ? '' : 'primary'}" style="margin-top:6px">${here ? 'Hierbleiben' : un ? 'Hingehen' : f.cost ? `Übernehmen (${fmtUSD(f.cost)})` : 'Einziehen'}</button>`);
       b.onclick = () => { this.closeModal(); if (here) return; if (!un) { this.unlock(f.id); return; } this.switchSite(f.id); };
       c.append(b); cards.append(c);
@@ -773,7 +775,7 @@ export class UI {
     ];
     const need = { B: 'build', M: 'market', P: 'phone', C: 'company', T: 'techs', L: 'ranking', K: 'map', J: 'skills' };
     const act = document.body.classList.contains('show-build') ? 'B' : this.w.empire ? 'K' : ({ market: 'M', phone: 'P', intro: 'P', company: 'C', techs: 'T', ranking: 'L', menu: 'ESC', skills: 'J' })[this.modalKind] || (this.paused ? 'ESC' : null);
-    for (const [ic, l, key, fn, b] of btns.filter((x) => !need[x[2]] || g.has(need[x[2]]))) { const e = h(`<button class="${act === key ? 'on' : ''}" title="${l} (${key})">${ic}${l}<span class="key">${key}</span>${b ? `<span class="bdg">${b}</span>` : ''}</button>`); e.onclick = fn; el.append(e); }
+    for (const [ic, l, key, fn, b] of btns.filter((x) => !need[x[2]] || g.has(need[x[2]]))) { const e = h(`<button class="${act === key ? 'on' : ''}" title="${l} (${key})">${ic}${l}<span class="key">${key}</span>${b ? `<span class="bdg">${b}</span>` : ''}</button>`); e.onclick = () => { if (this.stickyModal()) return; fn(); }; el.append(e); }
   }
   toggleMap() {
     if (this.w.empire) { this.w.hideEmpire(); this.pause(false); this.w.setMode('play'); }
@@ -1003,7 +1005,7 @@ export class UI {
     const body = h(`<div class="story event"><div class="ev-from"><span class="ev-av">${esc((e.from || '?').slice(0, 1))}</span><span>${esc(e.from || '')}</span><span class="ev-date">${fmtDate(g.s.day)}</span></div><div class="ch">${esc(g.evText(e, 'title'))}</div><p>${g.evText(e)}</p><div class="ev-choices"></div></div>`);
     const box = body.querySelector('.ev-choices');
     for (const c of ch) {
-      const b = h(`<button class="btn ${c.i === 0 ? 'primary' : ''} ev-c" ${c.ok ? '' : 'disabled'}><span class="ev-l">${esc(c.label)}${c.cost ? ` <span class="ev-cost">· ${this.money(c.cost)}</span>` : ''}</span>${c.hint ? `<small>${esc(c.hint)}</small>` : ''}${!c.ok && c.cost ? '<small>Dafür reicht dein Geld nicht.</small>' : ''}</button>`);
+      const b = h(`<button class="btn ${c.i === 0 ? 'primary' : ''} ev-c" ${c.ok ? '' : 'disabled'}><span class="ev-l">${esc(c.label)}${c.cost ? ` <span class="ev-cost">· ${this.money(c.cost)}</span>` : ''}</span>${c.hint ? `<small>${esc(c.hint)}</small>` : ''}${!c.ok && c.cost && !c.needFail ? '<small>Dafür reicht dein Geld nicht.</small>' : ''}${!c.ok && c.needFail ? `<small>${esc(c.needText || 'Gerade nicht möglich.')}</small>` : ''}</button>`);
       b.onclick = () => { const reply = g.chooseEvent(c.i); this.evSnooze = null; this.closeModal(); this.audio?.cash?.(); if (reply) this.toast(reply, 'msg', 7000); this.refresh(); this.dock(); };
       box.append(b);
     }
@@ -1018,14 +1020,14 @@ export class UI {
       const un = s.unlocked.includes(f.id), can = g.canUnlock(f.id);
       if (!un && f !== nextLocked) continue;
       const fs = s.fac[f.id], sm = g.summary[f.id];
-      const c = h(`<div class="card ${!un && !can ? 'lock' : ''}"><h3>${un ? '' : can ? '' : ''}${esc(f.name)}</h3><div class="sub">${esc(f.place)} · ${f.w}×${f.d} m</div>
+      const c = h(`<div class="card ${!un && !can ? 'lock' : ''}"><h3>${un ? '' : can ? '' : ''}${esc(f.name)}</h3><div class="sub">${esc(f.place)} · ${fmtNum(f.w, 1)}×${fmtNum(f.d, 1)} m</div>
         <div class="kv" style="margin:4px 0"><div class="k">Anschluss</div><div class="v">${fmtNum(f.power[fs.power].kw, 1)} kW</div>
         <div class="k">Strompreis</div><div class="v">${g.elecPrice(f.id) ? fmtUSD(g.elecPrice(f.id)) + '/kWh' : 'zahlen die Eltern'}</div>
         <div class="k">Miete</div><div class="v">${f.rent ? (un && g.upgrades(f.id).some((u) => u.fx?.rent === 0 && g.upActive(f.id, u)) ? 'keine (gekauft)' : un && !g.facInUse(f.id) ? `ruht ohne Geräte (${fmtUSD(f.rent)}/Monat)` : fmtUSD(f.rent * (un ? g.fx('rent', f.id) : 1)) + '/Monat') : 'keine'}</div>
-        ${un ? `<div class="k">Last</div><div class="v">${fmtWatt(sm.watt)}</div><div class="k">Temperatur</div><div class="v ${sm.temp > 38 ? 'neg' : ''}">${sm.temp.toFixed(1)} °C</div><div class="k">Geräte</div><div class="v">${fs.objects.length}</div>` : ''}</div></div>`);
+        ${un ? `<div class="k">Last</div><div class="v">${fmtWatt(sm.watt)}</div><div class="k">Temperatur</div><div class="v ${sm.temp > 38 ? 'neg' : ''}">${fmtNum(sm.temp, 1)} °C</div><div class="k">Geräte</div><div class="v">${fs.objects.length}</div>` : ''}</div></div>`);
       if (un) {
         const nx = f.power[fs.power + 1];
-        if (nx) { const pc = g.powerCost(f.id), b = h(`<button class="btn small">${esc(nx.label)}: ${fmtNum(nx.kw, 0)} kW (${fmtUSD(pc)})</button>`); b.disabled = s.cash < pc; b.onclick = () => { if (g.upgradePower(f.id)) { this.toast('Stromanschluss ausgebaut!', 'good'); this.company(); this.sites(); } }; c.append(b); }
+        if (nx) { const pc = g.powerCost(f.id), wait = g.powerWaitUntil?.(f.id), b = h(`<button class="btn small">${esc(nx.label)}: ${fmtNum(nx.kw, nx.kw < 10 ? 1 : 0)} kW (${wait ? `ab ${fmtDate(wait)}` : fmtUSD(pc)})</button>`); b.disabled = s.cash < pc || !!wait; b.onclick = () => { if (g.upgradePower(f.id)) { this.toast('Stromanschluss ausgebaut!', 'good'); this.company(); this.sites(); } }; c.append(b); }
         else c.append(h('<div style="font-size:12px;color:var(--dim)">Maximaler Anschluss erreicht.</div>'));
         const step = g.solarStep(f.id);
         if (step) { const cost = step * g.solarPricePerKwp(); const sb = h(`<button class="btn small">+${step} kWp Solar (${fmtUSD(cost)})</button>`); sb.disabled = s.cash < cost; sb.onclick = () => { if (g.buildSolar(f.id)) { this.toast(`Solaranlage erweitert (${f.short})`, 'good'); this.company(); } }; c.append(sb); }
@@ -1044,7 +1046,7 @@ export class UI {
     const lb = h(`<div class="sec"><h4>Bankkredit</h4><div class="kv"><div class="k">Offener Kredit</div><div class="v ${loan ? 'neg' : ''}">${fmtUSD(loan)}</div><div class="k">Zinssatz</div><div class="v">${(g.loanRate() * 100).toFixed(1).replace('.', ',')} % p. a.</div><div class="k">Zinsen pro Tag</div><div class="v">${fmtUSD(loan * g.loanRate() / 365)}</div><div class="k">Weiterer Rahmen</div><div class="v">${fmtUSD(lim)}</div></div><div class="row"></div></div>`);
     const lr = lb.querySelector('.row');
     lb.querySelector('.kv').insertAdjacentHTML('beforeend', `<div class="k">Dispo-Rahmen</div><div class="v ${-s.cash > g.dispoLimit() ? 'neg' : ''}">${s.cash < 0 ? fmtUSD(-s.cash) + ' von ' : ''}${fmtUSD(g.dispoLimit())} · ${fmtNum(g.dispoRate() * 100, 0)} %</div>${loan > 0 ? `<div class="k">Tilgung</div><div class="v">${fmtUSD(g.loanPayment())}/Monat</div>` : ''}${s.loanHi > 0 && loan > 0 ? `<div class="k">davon Umschuldung</div><div class="v">${fmtUSD(Math.min(s.loanHi, loan))} · 13 %</div>` : ''}`);
-    for (const f of [0.25, 1]) { const amt = Math.round(lim * f / 100) * 100; const b = h(`<button class="btn small">${fmtUSD(amt)} leihen</button>`); b.disabled = amt <= 0; b.onclick = () => { const u = g.takeLoan(amt); if (u) { this.audio?.cash(); this.toast(`Kredit über ${fmtUSD(u)} aufgenommen`, 'good'); } this.company(); }; lr.append(b); }
+    for (const f of (lim >= 400 ? [0.25, 1] : [1])) { const amt = Math.round(lim * f / 100) * 100; const b = h(`<button class="btn small">${fmtUSD(amt)} leihen</button>`); b.disabled = amt <= 0; b.onclick = () => { const u = g.takeLoan(amt); if (u) { this.audio?.cash(); this.toast(`Kredit über ${fmtUSD(u)} aufgenommen`, 'good'); } this.company(); }; lr.append(b); }
     const rp = h(`<button class="btn small good">Tilgen (${fmtUSD(Math.min(loan, Math.max(0, s.cash)))})</button>`); rp.disabled = !loan || s.cash <= 0; rp.onclick = () => { const u = g.repayLoan(loan); if (u) this.toast(`${fmtUSD(u)} getilgt`, 'good'); this.company(); }; lr.append(rp);
     if (g.has('loan')) st.append(lb);
     if (stHide) { st.innerHTML = ''; if (g.has('loan')) st.append(lb); }
@@ -1132,7 +1134,7 @@ export class UI {
   offer(usd) {
     const g = this.g;
     const body = h(`<div class="story"><div class="ch">Ein Anruf aus Zug</div>
-      <p><b>Viktor Kral, MONOLITH Hash AG:</b> „China hat die halbe Branche abgeschaltet. Ich kaufe jetzt. <b>${fmtUSD(usd)}</b> in bar für die Hashwerk GmbH – alle Standorte, alle Maschinen. Sie wären mit Anfang dreißig fertig mit Arbeiten."</p>
+      <p><b>Viktor Kral, MONOLITH Hash AG:</b> „China hat die halbe Branche abgeschaltet. Ich kaufe jetzt. <b>${fmtUSD(usd)}</b> in bar für die Hashwerk GmbH – alle Standorte, alle Maschinen. Sie wären mit Anfang dreißig fertig mit Arbeiten.“</p>
       <p style="color:var(--dim)">Dein aktuelles Vermögen: ${fmtUSD(g.netWorth())}. Deniz schaut dich an und sagt nichts.</p>
       <div class="row" style="justify-content:flex-end"><button class="btn danger" data-a="yes">Verkaufen</button><button class="btn primary" data-a="no">Ablehnen – wir machen weiter</button></div></div>`);
     let answered = false;
@@ -1285,7 +1287,7 @@ export class UI {
     const log = (s.ev?.log || []).filter((e) => g.yearOf(e.d) === y);
     if (!(Y.rev > 0) && !log.length) return false; // z. B. allererstes Jahr ohne Mining: nichts zu erzählen
     const gain = Y.rev - Y.elec - Y.fix, nw = Y.nw0 > 0 ? Y.nw1 / Y.nw0 : 0;
-    const nwTxt = !nw ? '' : nw >= 2 ? `×${fmtNum(nw, nw >= 10 ? 0 : 1)}` : `${nw >= 1 ? '+' : '−'}${Math.round(Math.abs(nw - 1) * 100)} %`;
+    const nwTxt = !nw || Math.round(Math.abs(nw - 1) * 100) === 0 ? '' : nw >= 2 ? `×${fmtNum(nw, nw >= 10 ? 0 : 1)}` : `${nw >= 1 ? '+' : '−'}${Math.round(Math.abs(nw - 1) * 100)} %`;
     const hs = (v, a) => (v > 0 ? `${fmtHash(v, a)}${a !== 'sha256' ? ` <small>${esc(ALGO_LABEL[a] || a)}</small>` : ''}` : '0');
     const cell = (l, v, cls = '') => `<div class="yr-c"><span>${l}</span><b class="${cls}">${v}</b></div>`;
     const rows = [['Hashrate', `${hs(Y.h0, Y.a0)} → <b>${hs(Y.h1, Y.a1)}</b>`], ['Vermögen', `${fmtUSD(Y.nw0)} → <b>${fmtUSD(Y.nw1)}</b>${nwTxt ? ` <small class="${nw >= 1 ? 'pos' : 'neg'}">${nwTxt}</small>` : ''}`]];

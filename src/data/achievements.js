@@ -44,7 +44,7 @@ export const ACHIEVEMENTS = [
   { id: 'prodigy', name: 'Vorzeitig', desc: 'MONOLITH schon vor 2022 überholt.', check: (s) => !!s.stats.wonDay && s.stats.wonDay < toDay('2022-01-01') },
   { id: 'ai', name: 'Zweites Standbein', desc: 'Fläche an eine KI-Firma vermietet.' },
   { id: 'treasure', name: 'Schatzsucher', desc: 'Alle Erinnerungsstücke gefunden.' }, // vergibt die Welt (Fundstücke)
-  { id: 'talker', name: 'Familienmensch', desc: 'Mit drei Menschen aus deiner Familie geredet.', check: (s) => !!s.talk && typeof s.talk === 'object' && Object.values(s.talk).filter((v) => (typeof v === 'number' ? v > 0 : !!v)).length >= 3 },
+  { id: 'talker', name: 'Familienmensch', desc: 'Mit drei Menschen aus deiner Familie geredet.', check: (s) => ['papa', 'mama', 'opa', 'deniz'].filter((k) => s.talk?.last?.[k] != null).length >= 3 },
   { id: 'oldbox', name: 'Der alte Kasten', desc: 'Dein allererster PC steht 2026 noch – und ist an.', hidden: true, check: (s) => s.day >= toDay('2026-01-01') && s.unlocked.some((id) => s.fac[id].objects.some((o) => o.uid === 1 && o.type === 'tower' && o.mode !== 'off' && !o.broken)) },
 ];
 export const ACH = Object.fromEntries(ACHIEVEMENTS.map((a) => [a.id, a]));
