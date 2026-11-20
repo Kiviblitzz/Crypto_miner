@@ -1260,7 +1260,7 @@ export class World {
     let want = 0;
     if (tier >= 2 && s.flags.gmbh) want = 1;
     if (tier >= 3) want += Math.min(7, s.staff.tech);
-    if (tier === 2 && (s.flags.debt || s.flags.shopLost)) want = Math.max(want, 1);
+    if (tier === 2) want = Math.max(want, 1); // Deniz hilft in der Werkstatt mit (früher erst, wenn der Laden gerettet oder verloren war)
     // Familie: Papa in der Werkstatt, Opa im Keller (nach dem Starkstrom)
     const fam = [];
     if (tier === 2) fam.push(['papa', 0x7a5230, 0xd9a983, 1.4, 0.95, Math.PI]);

@@ -993,7 +993,7 @@ export class UI {
     ];
     const need = { B: 'build', M: 'market', H: 'phone', C: 'company', T: 'techs', L: 'ranking', K: 'map', J: 'skills' };
     const act = document.body.classList.contains('show-build') ? 'B' : this.w.empire ? 'K' : ({ market: 'M', phone: 'H', intro: 'H', company: 'C', techs: 'T', ranking: 'L', menu: 'ESC', skills: 'J' })[this.modalKind] || (this.paused ? 'ESC' : null);
-    const les = g.lesson(), lf = les && (FEATURES[les]?.by || les); // Anlernen: der Knopf der laufenden Lektion leuchtet
+    const les = g.lesson(), lf = les && (les === 'bills' ? 'phone' : FEATURES[les]?.by || les); // Anlernen: der Knopf der laufenden Lektion leuchtet (Monatsabrechnung: das Handy)
     for (const [ic, l, key, fn, b] of btns.filter((x) => !need[x[2]] || g.has(need[x[2]]))) { const e = h(`<button class="${act === key ? 'on' : ''} ${lf && need[key] === lf ? 'learn' : ''}" title="${l} (${key})">${ic}${l}<span class="key">${key}</span>${b ? `<span class="bdg">${b}</span>` : ''}</button>`); e.onclick = () => { if (this.stickyModal()) return; fn(); }; el.append(e); }
   }
   toggleMap() {

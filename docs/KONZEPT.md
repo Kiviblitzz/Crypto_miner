@@ -9,19 +9,19 @@
 
 ## 1. Story (eigene Geschichte)
 
-**Oktober 2010, Lindental (Kleinstadt).** Du bist 17. Dein Vater Frank führt seit 25 Jahren
-den kleinen Elektronik-Reparaturladen **„Elektro Brandt"** – aber seit die Leute online
-bestellen, frisst der Laden Schulden. Die Bank will bis Ende 2013 **15.000 $** sehen, sonst
-macht sie dicht. (Wer die Frist verpasst, verliert den Laden: Papa fängt bei Hashwerk an, Herr Öztürk
-vermietet die Werkstatt – die Geschichte geht weiter, Rückkauf ab Ende 2017 möglich.)
+**Oktober 2010, Lindental (Kleinstadt).** Du bist 19 und gerade in deine erste eigene Bude gezogen:
+ein feuchtes Zimmer im Altbau-Hinterhaus, 260 $ warm. Dein Vater Frank (Elektro Brandt, seit 1985) hat dir
+für den Umzug **1.000 $ geliehen** – ohne Zinsen, ohne Frist, zurückzahlen über Papas Kontakt im Handy.
+Einen Plan hast du nicht. Kurz darauf schreibt Deniz von „Bitcoin“ – Internetgeld, das Computer selbst herstellen.
 
-In einem Forum liest du von „Bitcoin" – digitales Geld, das man mit der Grafikkarte
-„schürfen" kann. Du hast einen alten PC, 300 $ Erspartes und ein Zimmer unterm Dach.
+Miete und Strom kommen als **Monatsabrechnung** am Ersten (Handy → Konto). Reicht das Konto nicht, gibt es
+eine Zahlungserinnerung mit Frist, dann Mahngebühren, zuletzt wird am Standort der Strom abgestellt, bis bezahlt ist.
+(Die frühere Bankfrist für Papas Laden – 15.000 $ bis Ende 2013 – ist entfallen; alte Spielstände behalten ihre Geschichte.)
 
 | Figur | Rolle |
 |---|---|
-| **Mama (Sabine)** | Zahlt die Stromrechnung. Meldet sich, wenn dein Zimmer zur Sauna wird. |
-| **Papa (Frank)** | Stolzer Ladenbesitzer, skeptisch – bis du ihm die erste Rate auf den Tisch legst. |
+| **Mama (Sabine)** | Bringt Suppe vorbei. Meldet sich, wenn deine Bude zur Sauna wird – und erinnert dich sanft an Papas Geld. |
+| **Papa (Frank)** | Stolzer Ladenbesitzer, hat dir den Umzug vorgestreckt, vermietet dir später die Werkstatt hinterm Laden. |
 | **Opa Heinz** | Elektriker a. D., knurrig, genial. Verlegt Starkstrom, baut Sicherungskästen. |
 | **Deniz** | Bester Kumpel, Hardware-Nerd, Gamer. Wird später dein CTO. |
 | **Viktor Kral** | CEO der **MONOLITH Hash AG**. Will dich kaufen, später verdrängen. Dein Rivale bis zum Schluss. |
@@ -29,8 +29,8 @@ In einem Forum liest du von „Bitcoin" – digitales Geld, das man mit der Graf
 ### Kapitel (je ein neuer Standort = sichtbares Wachstum)
 | # | Standort | Ab | Fläche | Strom | Ziel / Freischaltung |
 |---|---|---|---|---|---|
-| 1 | **Kinderzimmer** (Dachzimmer) | 10/2010 | 4×3,5 m | 1,8 kW (Mamas Limit) | Erste neue GPU, 1.000 $ verdient, Papa 2.000 $ für die Stromrechnung geben |
-| 2 | **Hobbykeller** | 2011 | 7×5 m | 4,5 → 22 kW (Opa) | Open-Frame-Rig, 3 GH/s, Ladenschulden (15.000 $) tilgen |
+| 1 | **Einzimmerwohnung** (Hinterhaus) | 10/2010 | 4×3,5 m | 1,8 kW (Altbau-Sicherung) | PC bauen, erste Grafikkarte, zweiter PC, Bude voll, Herrn Krause die Strom-Nachzahlung (2.000 $) |
+| 2 | **Hobbykeller** (50 $ Miete) | 2011 | 7×5 m | 4,5 → 22 kW (Opa) | Erstes Rig, Opas Nachtstromzähler, 30 $ Gewinn am Tag (dann vermietet Papa die Werkstatt), Keller voll |
 | 3 | **Werkstatt hinterm Laden** | 2012 | 10×8 m | 25 → 120 kW | Erster ASIC, 1 TH/s, Hashwerk GmbH gründen (25.000 $) |
 | 4 | **Lagerhalle** (Gewerbegebiet) | 06/2015 | 24×16 m | 0,4 → 2 MW | Techniker einstellen, 1 PH/s |
 | 5 | **Rechenzentrum** | 2017 | 36×24 m | 2,5 → 12 MW | 20 PH/s, Firmenwert 4 Mio. $ (ohne Coins) |

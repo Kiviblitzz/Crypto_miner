@@ -1331,6 +1331,7 @@ export class Game {
       for (const c of COINS) { const w = s.wallet[c.id], p = this.price(c.id, day); if (need <= 0 || !p || w.ex <= 0) continue; const n = Math.min(w.ex, need / (p * fk)); w.ex -= n; s.cash += n * p * fk; need -= n * p * fk; }
       if (s.cash < 0) this.dispoDay(day); // Dispo-Zins, ggf. Bankgespräch
     }
+    if (s.cash >= 0 && s.flags.overSince) delete s.flags.overSince;
     // Techniker reparieren
     this.techRepairs(day);
     this.econDay(day);
@@ -1815,7 +1816,9 @@ export class Game {
     const s = this.s; s.cash -= -s.cash * this.dispoRate() / 365;
     const lim = this.dispoLimit(), over = this.owed() - s.cash > lim; // offene Rechnungen zählen mit
     if (!s.flags.warnedNeg || day - s.flags.warnedNeg > 30) { s.flags.warnedNeg = day; this.toast(over ? `Dispo überzogen: ${fmtUSD(s.cash)} bei ${fmtUSD(lim)} Rahmen!` : `Konto im Minus: Dispo ${fmtUSD(-s.cash)} von ${fmtUSD(lim)} (${fmtNum(this.dispoRate() * 100, 0)} % Zinsen)`, 'bad', 8000); }
-    if (over && s.ev && !s.ev.open && day - (s.flags.bankTalk || -99) >= 14) { s.flags.bankTalk = day; this.openEvent(EVENT.bank, 'bank:' + day); }
+    if (over) s.flags.overSince ||= day; else delete s.flags.overSince;
+    // Bankgespräch erst nach einer Woche über dem Rahmen: Miete und Strom kommen am Monatsersten auf einen Schlag, die Einnahmen täglich – keine Pleite am Ersten
+    if (over && day - s.flags.overSince >= 7 && s.ev && !s.ev.open && day - (s.flags.bankTalk || -99) >= 14) { s.flags.bankTalk = day; this.openEvent(EVENT.bank, 'bank:' + day); }
   }
   bankSaleList() { // älteste Geräte zuerst; die Wohnung bleibt, Kühlung und Deko auch
     const all = [];

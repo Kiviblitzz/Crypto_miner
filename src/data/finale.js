@@ -59,10 +59,14 @@ export const relTier = (r) => (r >= 3 ? 2 : r >= 1 ? 1 : 0);
 export const REL_LABEL = ['kühl', 'gut', 'eng'];
 export function epilog(s, end, day = s.day) {
   const f = s.flags, r = s.rel || {}, sold = end === 'sold';
+  const lost = !!f.shopLost && !f.shopBack, L = s.papaLoan || {}; // lost: alte Spielstände (frühere Bankfrist), L: Papas Umzugsdarlehen
+  const loanT = L.total > 0 ? (L.done ? ' Das zurückgezahlte Umzugsgeld liegt immer noch in seiner Keksdose. „Für schlechte Zeiten.“' : L.left > 0 ? ' Das Umzugsgeld von damals erwähnt er nie. Mama schon.' : '') : '';
   const papa = [
-    'Papa hat den Laden irgendwann zugemacht. Ihr telefoniert an Geburtstagen, und er fragt nie nach Hashwerk. Aber in seiner Schublade liegt jeder Zeitungsartikel über dich, ausgeschnitten und gefaltet.',
-    `Elektro Brandt gibt es noch. Papa repariert Radios und erzählt jedem Kunden, dass sein Kind „was mit Computern“ macht. Seit ein paar Jahren sagt er es mit Stolz.${f.papaRepairs ? ' Und wenn keiner hinschaut, repariert er Miner.' : ''}`,
-    `Papa hat Elektro Brandt behalten – aus Spaß, sagt er. Über der Kasse hängt eingerahmt der erste Zeitungsartikel über dich.${f.repaircafe ? ' Samstags ist das Reparatur-Café so voll, dass die Leute auf dem Gehweg löten.' : ' Jeder Kunde bekommt die Geschichte zu hören, ob er will oder nicht.'}`,
+    `Papa hat den Laden irgendwann zugemacht. Ihr telefoniert an Geburtstagen, und er fragt nie nach Hashwerk. Aber in seiner Schublade liegt jeder Zeitungsartikel über dich, ausgeschnitten und gefaltet.${L.left > 0 ? loanT : ''}`,
+    lost ? `Einen Laden hat Papa nie wieder aufgemacht. In der Werkstatt hinterm alten Schaufenster repariert er Radios und erzählt jedem, dass sein Kind „was mit Computern“ macht. Seit ein paar Jahren sagt er es mit Stolz.${loanT}`
+      : `Elektro Brandt gibt es noch. Papa repariert Radios und erzählt jedem Kunden, dass sein Kind „was mit Computern“ macht. Seit ein paar Jahren sagt er es mit Stolz.${f.papaRepairs ? ' Und wenn keiner hinschaut, repariert er Miner.' : ''}${loanT}`,
+    lost ? `Papa hat keinen Laden mehr und vermisst ihn kein bisschen, sagt er. Über seiner Werkbank hängt eingerahmt der erste Zeitungsartikel über dich – gleich neben dem alten Ladenschild.${loanT}`
+      : `Papa hat Elektro Brandt behalten – aus Spaß, sagt er. Über der Kasse hängt eingerahmt der erste Zeitungsartikel über dich.${f.repaircafe ? ' Samstags ist das Reparatur-Café so voll, dass die Leute auf dem Gehweg löten.' : ' Jeder Kunde bekommt die Geschichte zu hören, ob er will oder nicht.'}${loanT}`,
   ];
   const mama = [
     'Mama wäscht deine Wäsche nicht mehr. Den Schimmelfleck in deiner ersten Bude hat sie nie vergessen – und du kommst zu selten zum Essen.',
