@@ -134,13 +134,14 @@ export const CHAPTERS = [
     ],
   },
   {
-    title: 'Kapitel 6 – Die Fjordhalle', unlock: null, minDate: '2020-06-01',
+    title: 'Kapitel 6 – Die Fjordhalle', unlock: null, minDate: '2021-01-01', // frühester Sieg: Neujahr 2021
     intro: 'Wasserkraft, Fjordluft, 30 Megawatt. Jetzt geht es gegen MONOLITH.',
     goals: [
       { id: 'eh1', text: 'Schaff 1 EH/s', check: (s, h) => h.algoHash('sha256') >= 1e18, progress: (s, h) => [h.algoHash('sha256'), 1e18, 'hash'] },
       { id: 'mono', text: 'Überhol MONOLITH', live: true, check: (s, h) => h.algoHash('sha256') > h.monolithHash(), progress: (s, h) => [h.algoHash('sha256'), h.monolithHash(), 'hash'] },
     ],
-    // Kein Wartedatum mehr: die Bonusziele stehen hier direkt unter dem aktuellen Ziel
+    // Wartedatum nur als Sperre gegen einen Sieg vor 2021; sonst stehen die Bonusziele direkt unter dem aktuellen Ziel
+    waitText: 'Die erste Weltrangliste der Miner erscheint im Januar 2021 – bis dahin musst du vorn bleiben.',
     bonus: [
       { id: 'b6cold', until: '2022-11-10', text: 'Bring vier Fünftel deiner Coins in die Cold-Wallet (ab 1 Mio. $)', check: (s, h, g) => { const v = g.coinValue(); return v.all >= 1e6 && v.coldShare >= 0.8; }, reward: { rel: { opa: 1 }, text: 'Opa: „Börsen kommen und gehen.“' } },
       { id: 'b6mw60', text: 'Bau die Fjordhalle auf 60 MW aus', check: (s) => s.fac.fjord.power >= 1, reward: { rel: { papa: 1 }, text: 'Papa fliegt zum ersten Mal nach Norwegen' } },
