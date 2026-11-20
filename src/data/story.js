@@ -26,7 +26,7 @@ const broken = (s, fac) => (s.fac[fac]?.objects || []).some((o) => o.broken || o
 
 // Wer steht da? (Name, Rolle, Anrede im Prompt)
 export const PEOPLE = {
-  papa: { name: 'Papa', full: 'Frank Brandt', role: () => 'Elektro Brandt, seit 1985', as: 'Papa' },
+  papa: { name: 'Papa', full: 'Frank Brandt', role: (s) => (s && lost(s) ? (s.flags.papaJob ? 'Reparaturen bei Hashwerk' : 'Elektro Brandt, 1985–2013') : 'Elektro Brandt, seit 1985'), as: 'Papa' },
   opa: { name: 'Opa Heinz', full: 'Heinz Brandt', role: () => 'Elektromeister a. D.', as: 'Opa' },
   deniz: { name: 'Deniz', full: 'Deniz', role: (s) => (s.flags.gmbh && s.chapter >= 3 ? 'CTO, Hashwerk GmbH' : 'Bester Kumpel, Hardware-Nerd'), as: 'Deniz' },
   tech: { name: 'Techniker', full: 'Techniker', role: () => 'Hashwerk GmbH', as: 'dem Techniker' },
