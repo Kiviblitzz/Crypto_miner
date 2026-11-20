@@ -182,6 +182,7 @@ for (const it of [...PLACEABLES, ...PARTS]) it.releaseDay = toDay(it.release);
 
 export const CATEGORIES = [
   { id: 'rigs', name: 'Rigs', icon: '🖥️' },
+  { id: 'parts', name: 'Teile', icon: '🔧' }, // GPUs, CPUs, Mainboards, Netzteile fürs Lager (Selbstbau)
   { id: 'asic', name: 'Miner', icon: '⛏️' },
   { id: 'holder', name: 'Regale', icon: '🗄️' },
   { id: 'cool', name: 'Kühlung', icon: '❄️' },

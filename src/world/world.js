@@ -562,8 +562,9 @@ export class World {
       const o = this.game.findObj(p.moveUid); o.x = p.x; o.z = p.z; o.rot = p.rot;
       this.cancelPlacement(); this.syncObjects(); return;
     }
-    const o = this.onPlace?.(p.type, p.x, p.z, p.rot, p.template);
-    if (o && !this.player.keys.Shift) { this.cancelPlacement(); this.onPlaced?.(o); }
+    const o = this.onPlace?.(p.type, p.x, p.z, p.rot, p.template); if (!o) return;
+    const again = this.onPlaced?.(o, p) === true || !!this.player.keys.Shift; // Rigs/Miner: gleich noch einen setzen, solange Geld und Platz reichen
+    if (again) this.updatePlacement(); else this.cancelPlacement();
   }
 
   // ---------- Modi & Pointer Lock ----------

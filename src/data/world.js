@@ -35,7 +35,7 @@ export const FACILITIES = [
   {
     id: 'fjord', tier: 5, name: 'Fjordhalle', short: 'Fjord', place: 'Sogn, Norwegen (Wasserkraft)', w: 64, d: 40, h: 12,
     power: [{ kw: 30000, label: '30 MW Wasserkraft' }, { kw: 60000, cost: 8000000, label: '60 MW' }, { kw: 120000, cost: 20000000, label: '120 MW' }],
-    elec: 'fixed', elecFixed: 0.035, rent: 80000, cost: 3000000, baseCool: 3000000, ambient: -12, grid: 0.5, slots: 44,
+    elec: 'fixed', elecFixed: 0.035, rent: 80000, cost: 3000000, baseCool: 3000000, ambient: -12, grid: 0.5, slots: 48,
     style: 'fjord', desc: 'Grüner Strom aus dem Wasserkraftwerk, eiskalte Luft vom Fjord. Das Endspiel.',
   },
 ];
@@ -47,7 +47,7 @@ const devices = (s, g) => (g?.deviceCount ? g.deviceCount() : 0);
 // Kapitel & Ziele (check bekommt den Spielzustand + Hilfsfunktionen)
 export const CHAPTERS = [
   {
-    title: 'Kapitel 1 – Das Kinderzimmer', unlock: 'keller', minDate: '2010-11-01', site: 'kinder', // kein Warten mehr: ist das Zimmer voll und Papas Rechnung bezahlt, räumt Papa den Keller frei
+    title: 'Kapitel 1 – Das Kinderzimmer', unlock: 'keller', minDate: '2011-01-01', site: 'kinder', // volles Zimmer: Papa räumt den Keller sofort frei, sonst über die Feiertage
     intro: 'Oktober 2010. Papas Laden steckt in Schulden. Du hast ein leeres PC-Gehäuse, ein paar alte Teile und eine Idee.',
     goals: [
       { id: 'collect', text: 'Such die PC-Teile im Keller', doneText: 'Alle Teile gefunden! Bring sie hoch zu deinem\u00a0PC.', check: (s) => s.flags.miningStarted || !s.loose || !Object.keys(s.loose).length, progress: (s) => [4 - Object.keys(s.loose || {}).length, 4, 'parts'] },
@@ -56,10 +56,10 @@ export const CHAPTERS = [
       { id: 'sell', text: 'Verkaufe deine Bitcoin am Monitor', doneText: 'Erste Bitcoin verkauft!', check: (s) => s.stats.sold > 0 },
       { id: 'gpu', text: 'Bau eine zweite Grafikkarte ein', doneText: 'Zweite Grafikkarte läuft!', check: (s) => s.flags.boughtGpu },
       { id: 'rig2', text: 'Bau einen zweiten Mining-PC', doneText: 'Zwei PCs schürfen!', check: (s, h) => h.rigsAt('kinder') >= 2, progress: (s, h) => [h.rigsAt('kinder'), 2, 'n'] }, // Katalog B → Rigs → „Fertig bestückt“
-      { id: 'fill1', text: 'Fülle dein Zimmer mit Mining-PCs', doneText: 'Dein Zimmer ist voll!', check: (s) => !!s.full?.kinder, progress: (s, h) => [h.fill('kinder'), 1, 'fill', 'kinder'] }, // alle Plätze belegt oder Strom am Limit
+      { id: 'fill1', text: 'Fülle dein Zimmer mit Mining-PCs', orDate: true, doneText: 'Dein Zimmer ist voll!', check: (s) => !!s.full?.kinder, progress: (s, h) => [h.fill('kinder'), 1, 'fill', 'kinder'] }, // alle Plätze belegt oder Strom am Limit
       { id: 'papa1', text: 'Bezahl Papas Stromrechnung', action: { label: '2.000 $ geben', cost: 2000, flag: 'papa1' }, check: (s) => s.flags.papa1 },
     ],
-    waitText: 'Papa räumt den Hobbykeller für dich frei.',
+    waitText: 'Papa räumt den Hobbykeller über die Feiertage für dich frei – ab Januar gehört er dir.',
     bonus: [
       { id: 'b1top', until: '2010-12-31', from: (s) => !!s.goals.sell, text: 'Verkauf Bitcoin, solange der Kurs über 0,35 $ steht', check: (s) => (s.stats.soldMaxP || 0) >= 0.35, reward: { rel: { deniz: 1 }, xp: { trade: 40 }, text: 'Deniz: „0,39 $! Gutes Timing!“' } },
       { id: 'b1hold', from: (s) => !!s.goals.gpu, text: 'Halte 2.000 Bitcoin auf einmal', check: (s) => s.wallet.BTC.ex + s.wallet.BTC.cold >= 2000, progress: (s) => [s.wallet.BTC.ex + s.wallet.BTC.cold, 2000, 'coin'], reward: { rel: { opa: 1 }, text: 'Opa sammelt ja auch Briefmarken' } },
@@ -109,7 +109,7 @@ export const CHAPTERS = [
     goals: [
       { id: 'tech', text: 'Stell einen Techniker ein', live: true, eod: true, check: (s) => s.staff.tech > 0 }, // zählt erst am Tagesende
       { id: 'rack12', text: 'Bestücke ein Rack komplett', check: (s, h) => h.fullRack() }, // 12 Geräte in einem 42U-Rack
-      { id: 'fill4', text: 'Lagerhalle zu 75 % auslasten', check: (s, h) => h.use('halle') >= 0.75, progress: (s, h) => [h.use('halle'), 0.75, 'use', 'halle'] }, // volle Racks zählen ganz, halbe halb (Game.facUse)
+      { id: 'fill4', text: 'Lagerhalle zu 75 % auslasten', orDate: '2018-03-01', check: (s, h) => h.use('halle') >= 0.75, progress: (s, h) => [h.use('halle'), 0.75, 'use', 'halle'] }, // volle Racks zählen ganz, halbe halb (Game.facUse); orDate: wer den Boom 2017 verpasst, muss im Winter 2018 nicht nachkaufen
     ],
     waitText: 'Das Frankfurter Rechenzentrum ist noch bis Juni 2017 an eine Bank vermietet.',
     bonus: [
@@ -154,6 +154,15 @@ export const CHAPTERS = [
     ],
   },
 ];
+// Standort erstmals voll (Game.checkFull): wer was dazu sagt, und wie es weitergeht
+export const FULL_TALK = {
+  kinder: { from: 'Mama', text: 'Du kannst ja nicht mal mehr zum Bett laufen! Und warm ist es hier wie im Backofen.', next: 'Papa räumt dir den Keller frei.' },
+  keller: { from: 'Papa', text: 'Die Waschmaschine findet keinen Platz mehr, Kind. Ich red mit Herrn Öztürk wegen der Werkstatt.', next: 'Die Werkstatt hinterm Laden wartet.' },
+  werkstatt: { from: 'Papa', text: 'Die Kunden fragen schon, warum der ganze Laden brummt. Hinten passt keine Kiste mehr rein.', next: 'In Lindental-Nord wird eine Lagerhalle gebaut.' },
+  halle: { from: 'Deniz', text: 'Alle Rack-Plätze an der Stromschiene sind belegt. Wir brauchen ein richtiges Rechenzentrum.', next: 'In Frankfurt wird ein Rechenzentrum frei.' },
+  rz: { from: 'Deniz', text: 'Frankfurt ist voll. Kaltgang, Warmgang, alles dicht. In Norwegen gibt es Wasserkraft und Platz ohne Ende.', next: 'Die Fjordhalle in Sogn ruft.' },
+  fjord: { from: 'Deniz', text: 'Mehr Fjord gibt es nicht. Ab jetzt zählt nur noch, was in jedem Container steckt.', next: '' },
+};
 // Jahresrückblick (1. Januar): Titel je Jahr, danach Endlos-Titel
 export const YEAR_TITLES = {
   2010: 'Ein PC und eine Idee', 2011: 'Milchkisten und 30 Dollar', 2012: 'Das erste Halving', 2013: 'ASIC-Goldrausch', 2014: 'Die GoxBank-Pleite',

@@ -24,6 +24,12 @@ world.onPlace = (type, x, z, rot, template) => {
   const fac = game.s.current;
   const def = PLACEABLE[type];
   if (!game.placeableAllowed(def, fac)) { ui.toast('Das passt hier nicht hin.', 'bad'); return null; }
+  if (!game.slotOk(fac, def)) { ui.toast('Kein Platz mehr – Zeit für einen größeren Standort.', 'bad'); world.cancelPlacement(); return null; }
+  if (template?.build) { // Build aus Katalog/Konfigurator: fertig montiert oder als Bausatz
+    const o = game.placeBuild(template.build, fac, x, z, rot, !!template.ready);
+    if (!o) { const blk = game.buildBlocked(template.build); ui.toast(blk ? `${blk} gibt es nicht mehr zu kaufen.` : 'Nicht genug Geld.', 'bad'); return null; }
+    audio.buy(); return o;
+  }
   const o = template ? game.cloneObject(template, fac, x, z, rot) : game.addObject(fac, type, x, z, rot);
   if (!o) { const blk = template && game.cloneBlocked(template); const sold = !blk && (template ? !game.cloneStockOk(template) : game.stockLeft(def) === 0); ui.toast(blk ? `${blk} gibt es nicht mehr zu kaufen.` : sold ? `Kontingent erschöpft – ${game.stockText()}.` : 'Nicht genug Geld.', 'bad'); return null; }
   audio.buy();

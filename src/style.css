@@ -1767,3 +1767,67 @@ body:has(#modal:not(.hidden)) #rbox { visibility: hidden; }
 body:has(.story.event) #xpbox { display: none; }
 /* Bankgespräch bei niedrigen Fenstern: Antworten kompakter */
 @media (max-height: 700px) { .story.event .ev-c { min-height: 40px; padding: 7px 12px !important; } .story.event .ev-choices { gap: 6px; } }
+
+/* ===== Kern-Kreislauf: Plätze & Strom, Fertig-PCs, Bausätze, Teile-Lager, Einbau ===== */
+/* HUD unten links: Platz- und Strombalken des Standorts */
+#sites .site .caps { display: flex; gap: 14px; margin-top: 5px; font: 600 11.5px var(--font); color: rgba(235,226,214,.78); white-space: nowrap; }
+#sites .site .caps .cp { display: inline-flex; align-items: center; gap: 6px; }
+#sites .site .caps em { font-style: normal; color: rgba(235,226,214,.5); }
+#sites .site .caps i { display: inline-block; width: 44px; height: 4px; border-radius: 999px; background: rgba(255,236,210,.16); overflow: hidden; }
+#sites .site .caps i b { display: block; height: 100%; border-radius: 999px; background: var(--acc); }
+#sites .site .caps .cp.full { color: #ffd27a; } #sites .site .caps .cp.full i b { background: #ff9f6b; }
+@media (max-width: 720px) { #sites .site .caps { gap: 8px; } #sites .site .caps i { width: 30px; } }
+/* Katalog-Kopf: Belegung am Standort */
+#build .bhead { gap: 12px; }
+#build .bcap { flex: 1; display: flex; align-items: center; justify-content: flex-end; gap: 14px; flex-wrap: wrap; font: 600 13px var(--font); color: var(--text2, var(--dim)); }
+#build .bcap .bc-n { font: 600 14px var(--font-fun); color: var(--text); }
+#build .bcap .bc-i { display: inline-flex; align-items: center; gap: 7px; }
+#build .bcap em { font-style: normal; color: var(--dim); }
+#build .bcap i { display: inline-block; width: 70px; height: 6px; border-radius: 999px; background: rgba(255,236,210,.14); overflow: hidden; }
+#build .bcap i b { display: block; height: 100%; border-radius: 999px; background: var(--acc); }
+#build .bcap .bc-i.full { color: #ffd27a; } #build .bcap .bc-i.full i b { background: #ff9f6b; }
+#build .bcap .btn { padding: 4px 12px; }
+/* Rig-Karten: Hauptaktion „Fertig bestückt“, daneben selbst bauen */
+#build .item.rigc { display: flex; flex-direction: column; }
+#build .item.rigc .s { flex: 1; }
+#build .item .rc-dim { color: var(--dim); font-size: 12px; }
+#build .item .btn.wide { width: 100%; margin-top: 8px; }
+#build .item .rc-row { display: flex; gap: 6px; margin-top: 6px; }
+#build .item .rc-row .btn { flex: 1; min-width: 0; padding-inline: 8px; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#build .item.lastb { background: rgba(255,176,0,.07) !important; box-shadow: inset 0 0 0 1.5px rgba(255,176,0,.35) !important; }
+/* Teile-Katalog */
+#build .pv-tabs { grid-column: 1 / -1; display: flex; gap: 6px; flex-wrap: wrap; }
+#build .pv-tabs .btn { display: inline-flex; align-items: center; gap: 6px; }
+#build .pv-tabs .btn.on { background: var(--acc-soft) !important; color: var(--acc) !important; box-shadow: inset 0 0 0 1.5px rgba(255,176,0,.45) !important; }
+#build .pv-bag { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 10px 12px; border-radius: 14px; background: rgba(255,236,210,.05); box-shadow: inset 0 0 0 1px var(--stroke, rgba(255,255,255,.08)); }
+#build .pv-bag .pv-h { width: 100%; font: 600 13px var(--font-fun); color: var(--text); }
+#build .pv-bag .pv-e { font-size: 12.5px; color: var(--dim); }
+#build .pv-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 4px 3px 10px; border-radius: 999px; background: rgba(255,236,210,.08); font: 600 12.5px var(--font); color: var(--text2, var(--text)); }
+#build .pv-chip .btn { padding: 2px 9px; font-size: 12px; }
+#build .item .pv-n { color: #9fe8bd; }
+/* Inspektor: „Noch so einen bauen“ und Einbau-Ansicht */
+#inspector .again-sec .btn.wide { width: 100%; }
+.pcb.rb h4 { display: flex; justify-content: space-between; align-items: baseline; }
+.pcb.rb .rb-bag { font: 600 12px var(--font); color: var(--dim); text-transform: none; letter-spacing: 0; }
+.pcb-step.open { background: rgba(255,176,0,.08); box-shadow: inset 0 0 0 1.5px rgba(255,176,0,.4); }
+.rb-pick { display: flex; flex-direction: column; gap: 6px; margin: -2px 0 4px 14px; padding: 8px 10px; border-left: 2px solid rgba(255,176,0,.35); }
+.rb-pick .rb-h { font: 600 11px var(--font); letter-spacing: .06em; text-transform: uppercase; color: var(--dim); margin-top: 2px; }
+.rb-pick .rb-opt { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; }
+.rb-pick .rb-opt span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rb-pick .rb-opt em { font-style: normal; color: var(--dim); font-size: 12px; }
+.rb-pick .rb-out, .rb-pick .rb-more { align-self: flex-start; }
+.pcb.rb .rb-quick { display: flex; flex-wrap: wrap; gap: 6px; }
+/* Konfigurator */
+.cfgr .cf-x { color: var(--text2, var(--dim)); font-size: 13.5px; margin: -4px 0 12px; line-height: 1.45; }
+.cfgr .cf-grid { display: grid; gap: 8px; }
+.cfgr .cf-r { display: grid; grid-template-columns: 120px minmax(0, 1fr) auto; align-items: center; gap: 10px; font: 600 13px var(--font); color: var(--dim); }
+.cfgr .cf-r select { width: 100%; min-width: 0; }
+.cfgr .cf-sum { margin: 14px 0 10px; padding: 10px 12px; border-radius: 14px; background: rgba(255,236,210,.05); }
+.cfgr .cf-why { color: #ffb5a7; font-size: 13px; margin-top: 6px; width: 100%; }
+.cfgr .cf-go { display: flex; gap: 8px; flex-wrap: wrap; }
+.cfgr .cf-go .btn { flex: 1; min-width: 200px; }
+/* Ziele: „voll → schneller weiter“ als zweite Zeile */
+#goals .goal.sub { opacity: .92; margin-top: 6px; font-size: 13px !important; }
+#goals .goal.sub .ck { background: rgba(255,176,0,.55) !important; }
+#goals .goal .gor { color: var(--acc); font-weight: 600; margin-left: 4px; }
+#goals .goal .gfill { min-width: 0 !important; }
