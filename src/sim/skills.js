@@ -185,7 +185,7 @@ export const SKILL_METHODS = {
   // Faustregel 9.4: Eco bei Strom > 35 % des Ertrags oder > 34 °C, Turbo bei < 15 % und < 30 °C
   profRule(facId, kind = 'gpu') {
     const sm = this.summary?.[facId]; if (!sm) return 'std'; let rev = 0, w = 0;
-    for (const o of this.s.fac[facId].objects) { if (this.profKind(o) !== kind) continue; const a = sm.per.get(o.uid); if (!a) continue; for (const u of a.units) rev += u.rev || u.potential || 0; w += a.watt; }
+    for (const o of this.s.fac[facId].objects) { if (this.profKind(o) !== kind) continue; const a = sm.per.get(o.uid); if (!a) continue; for (const u of a.units) { rev += u.rev || u.potential || 0; w += u.w || 0; } } // u.w: Leistung auch pausierter Einheiten (sonst wirkt der Strom gratis)
     if (!(rev > 0)) return 'std'; const share = ((w / 1000) * 24 * this.elecPrice(facId)) / rev;
     return share > 0.35 || sm.temp > 34 ? 'eco' : share < 0.15 && sm.temp < 30 ? 'turbo' : 'std';
   },
