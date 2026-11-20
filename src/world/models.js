@@ -676,13 +676,18 @@ function buildRobi(root) {
   box(root, 0.5, 0.03, 0.46, body, -0.24, 0.435, 0);
   for (let i = 0; i < 4; i++) box(root, 0.06, 0.012, 0.012, body, -0.4 + i * 0.1, 0.36, 0.225);
   box(root, 0.07, 0.07, 0.01, glow, -0.04, 0.33, 0.225); // Ladeanzeige
-  const r = new THREE.Group(); r.name = 'robo'; r.position.set(0.22, 0, 0); root.add(r);
+  box(root, 0.46, 0.012, 0.4, mat('robiPad', { color: 0x3a3f48, roughness: 0.9 }), 0.24, 0.006, 0); // Ladefläche – der Roboter selbst ist ein eigenes Teil (buildRobiBot), damit die Welt ihn fahren lassen kann
+}
+export function buildRobiBot() {
+  const body = mat('robiBody', { color: 0xf2b134, roughness: 0.5, metalness: 0.1 }), dark = mat('robiDark', { color: 0x2b2f36, roughness: 0.7 }), glow = mat('robiEye', { color: 0x7fe3ff, emissive: 0x3ab8ff, emissiveIntensity: 1.2 });
+  const r = new THREE.Group(); r.name = 'robo';
   cyl(r, 0.13, 0.14, 0.16, body, 0, 0.13, 0, 24);
   sph(r, 0.11, mat('robiDome', { color: 0xd8e6f0, roughness: 0.2, metalness: 0.3 }), 0, 0.22, 0, 1, 0.75, 1);
   for (const x of [-0.05, 0.05]) sph(r, 0.018, glow, x, 0.24, 0.095);
   for (const z of [-0.11, 0.11]) cyl(r, 0.05, 0.05, 0.03, dark, 0, 0.05, z, 16, 'z');
   rod(r, [0.1, 0.17, 0], [0.18, 0.2, 0.06], 0.012, dark); box(r, 0.04, 0.025, 0.06, body, 0.19, 0.2, 0.07); // Arm mit USB-Stick
   cyl(r, 0.005, 0.005, 0.12, dark, 0, 0.33, -0.04, 6); sph(r, 0.015, glow, 0, 0.395, -0.04);
+  return r;
 }
 export function buildDecor(type) {
   const root = new THREE.Group();

@@ -277,7 +277,7 @@ export class Game {
   // Die nächste Lektion kommt, sobald die laufende benutzt wurde (learned, z. B. Handy geöffnet) – oder nach LESSON_DAYS Spieltagen
   // (vor dem ersten Mining steht die Zeit: dann wartet die Lektion). Bots, Tests und alte Spielstände (ohne tutor): alles sofort wie bisher.
   startTutor() {
-    const s = this.s; s.flags.tutor = 1; s.flags.sk2 = 1; s.feat = {}; // sk2: Betriebssystem, Bitstream und Shop-Sperren der Fähigkeiten s.learn = { cur: null, q: [], day: s.day, done: {} };
+    const s = this.s; s.flags.tutor = 1; s.flags.sk2 = 1; s.feat = {}; /* sk2: Betriebssystem, Bitstream und Shop-Sperren der Fähigkeiten */ s.learn = { cur: null, q: [], day: s.day, done: {} };
     s.frac = 0.3; // Aufwachen am Morgen
     for (const m of s.messages) if (m.id === 'm0' || m.id === 'm0b') m.read = false;
     this.dayUpdate(true);

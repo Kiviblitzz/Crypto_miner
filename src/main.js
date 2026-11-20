@@ -97,15 +97,17 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // Tastatur (Hotkeys)
-// H = Handy (P geht weiter), I = Wärmebild
-const HOT = { j: () => ui.skills(), g: () => ui.goalActionKey(), b: () => ui.toggleBuild(), m: () => ui.market(), h: () => ui.phone(), p: () => ui.phone(), i: () => ui.toggleHeat(), c: () => ui.company(), t: () => ui.techs(), l: () => ui.ranking(), k: () => ui.toggleMap() };
+// H = Handy (P geht weiter), I = Wärmebild, T = Fähigkeiten-Baum (J geht auch)
+const HOT = { j: () => ui.skills(), g: () => ui.goalActionKey(), b: () => ui.toggleBuild(), m: () => ui.market(), h: () => ui.phone(), p: () => ui.phone(), i: () => ui.toggleHeat(), c: () => ui.company(), t: () => ui.skills(), l: () => ui.ranking(), k: () => ui.toggleMap() };
 function onKey(e) {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || !splash.classList.contains('hidden')) return;
   if (world.cine) { e.preventDefault(); return; } // Aufwachen (World.wakeUp): keine Eingabe
+  if (ui.mg) { e.preventDefault(); return; } // Mini-Spiel hat eigene Tasten (Esc bricht nur es ab)
   const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
   if (e.code === 'Space') { e.preventDefault(); ui.setSpeed(game.s.speed ? 0 : (ui.lastSpeed || 1)); return; }
   if (['1', '2', '3', '4', '5', '6'].includes(e.key)) { ui.setSpeed(+e.key); return; }
   if (k === 'Escape') {
+    if (ui.escLocal()) return; // erst das Offene: Mini-Spiel, Installer, Details im Fähigkeiten-Baum – dann Fenster, dann Pause
     if (world.mode === 'map') { ui.toggleMap(); return; }
     if (world.mode === 'ui') { ui.resume(); return; }
     if (ui.paused) { if (performance.now() - (ui.pausedAt || 0) > 350) ui.resume(); return; } // dasselbe Esc, das gerade die Maus freigab und pausierte, nicht gleich wieder auflösen
@@ -117,9 +119,9 @@ function onKey(e) {
   if (HOT[k] && (world.mode === 'play' || world.mode === 'ui' || ui.paused || world.mode === 'map')) {
     if (world.mode === 'map' && k !== 'k') return;
     if (k === 'b' && world.mode === 'ui' && document.body.classList.contains('show-build')) { ui.resume(); return; }
-    if (k !== 'b' && k !== 'k' && ui.modalKind && ui.modalKind === { m: 'market', p: 'phone', h: 'phone', c: 'company', t: 'techs', l: 'ranking', j: 'skills' }[k]) { ui.resume(); return; }
+    if (k !== 'b' && k !== 'k' && ui.modalKind && ui.modalKind === { m: 'market', p: 'phone', h: 'phone', c: 'company', t: 'skills', l: 'ranking', j: 'skills' }[k]) { ui.resume(); return; }
     if (ui.stickyModal()) return; // Story/Finale/Rückblick nicht wegklicken
-    const NEED = { b: 'build', m: 'market', p: 'phone', h: 'phone', i: 'heat', c: 'company', t: 'techs', l: 'ranking', k: 'map', j: 'skills' };
+    const NEED = { b: 'build', m: 'market', p: 'phone', h: 'phone', i: 'heat', c: 'company', t: 'skills', l: 'ranking', k: 'map', j: 'skills' };
     if (NEED[k] && !game.has(NEED[k])) { ui.toast('Noch nicht freigeschaltet.', 'info', 1800); return; }
     HOT[k](); return;
   }
@@ -146,7 +148,7 @@ function loop(now) {
     world.camera.position.set(3.3, 1.6, 3.05);
     world.controls.target.set(2.35 + Math.sin(t) * 0.4, 1.0 + Math.sin(t * 0.7) * 0.1, 0.4 + Math.cos(t) * 0.25);
     s.frac = 0.83;
-  } else if (s.speed && document.getElementById('modal').classList.contains('hidden') && !ui.paused && (s.flags.miningStarted || !s.feat)) { // Zeit steht, bis der erste PC läuft
+  } else if (s.speed && document.getElementById('modal').classList.contains('hidden') && !ui.paused && !ui.mg && (s.flags.miningStarted || !s.feat)) { // Zeit steht, bis der erste PC läuft
     const slow = ui.showRun && performance.now() < (ui.slowUntil || 0); s.frac += dt / (slow ? Math.max(60, SEC_PER_DAY[s.speed]) : SEC_PER_DAY[s.speed]); // Einschalt-Moment kurz in Zeitlupe
     let n = 0;
     while (s.frac >= 1 && n < 4) { s.frac -= 1; game.advanceDay(); n++; }
