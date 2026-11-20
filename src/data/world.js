@@ -90,7 +90,7 @@ export const CHAPTERS = [
     introLost: 'Elektro Brandt gibt es nicht mehr. Herr Öztürk hat das Haus ersteigert und vermietet dir die Werkstatt hinterm alten Laden. Papa trägt die erste Kiste hinein.', // nach „ladenzu“
     goals: [
       { id: 'asic', text: 'Kauf deinen ersten ASIC-Miner', check: (s) => s.flags.boughtAsic },
-      { id: 'miners20', text: 'Betreibe 20 Miner', check: (s, h) => h.miners() >= 20, progress: (s, h) => [h.miners(), 20, 'n'] }, // ASICs/FPGAs, einzeln oder im Regal
+      { id: 'miners20', text: 'Betreibe 20 ASIC-Miner', check: (s, h) => h.asics() >= 20, progress: (s, h) => [h.asics(), 20, 'n'] }, // einzeln oder im Regal; FPGAs zählen nicht (2012 viel zu teuer für ihren Ertrag)
       { id: 'gmbh', text: 'Gründe die Hashwerk GmbH', action: { label: 'Gründen · 25.000 $', cost: 25000, flag: 'gmbh' }, check: (s) => s.flags.gmbh },
     ],
     waitText: 'Die Halle in Lindental-Nord wird erst im Juni 2015 fertig – der Bauträger ist pleite gegangen, ein neuer baut weiter.',

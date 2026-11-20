@@ -1049,6 +1049,7 @@ export class Game {
       firmValue: () => this.firmValue(), // Bargeld + Hardware − Kredit, ohne Coins
       rigsAt: (id) => this.rigsAt(id), rigsAll: () => this.s.unlocked.reduce((n, id) => n + this.rigsAt(id), 0), // betriebsbereite Rigs/PCs mit GPU
       miners: () => { let n = 0; for (const id of this.s.unlocked) for (const o of this.s.fac[id].objects) { const k = PLACEABLE[o.type].kind; if (k === 'device') n++; else if (k === 'holder') n += o.items.length; } return n; },
+      asics: () => { let n = 0; const ok = (d) => d.kind === 'device' && d.look !== 'fpga'; for (const id of this.s.unlocked) for (const o of this.s.fac[id].objects) { const d = PLACEABLE[o.type]; if (ok(d)) n++; else if (d.kind === 'holder') for (const it of o.items) if (ok(PLACEABLE[it.id])) n++; } return n; }, // ohne FPGAs (die lohnen 2012 nicht)
       fullRack: () => this.s.unlocked.some((id) => this.s.fac[id].objects.some((o) => o.type === 'rack' && o.items.length >= PLACEABLE.rack.slots)),
       fill: (id) => (this.s.unlocked.includes(id) ? this.facCap(id).fill : 0), use: (id) => (this.s.unlocked.includes(id) ? this.facUse(id) : 0),
     };
