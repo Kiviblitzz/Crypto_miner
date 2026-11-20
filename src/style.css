@@ -1592,4 +1592,10 @@ body[data-modal="market"] :is(#st-cash, #st-profit, #st-wallet) { visibility: hi
 @media (prefers-reduced-motion: reduce) { .story.finale .fc-l, .story.finale .cr-row, .story.finale .cr-thanks { animation: none; opacity: 1; } }
 #goals .goal.egoal .eg-k { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--acc); margin-bottom: 1px; }
 #goals .goal.egoal .eg-prog { font-size: 11px; color: var(--dim); }
-#goals .goal.egoal .eg-sub { font-size: 12px; color: var(--text2, var(--dim)); opacity: .85; margin-top: 2px; line-height: 1.35; max-width: 300px; }
+#goals .goal.egoal .eg-sub { font-size: 12px; color: var(--text2, var(--dim)); opacity: .85; margin-top: 2px; line-height: 1.35; max-width: 340px; }
+#goals .goal.egoal { border-radius: 14px !important; align-items: flex-start; width: fit-content; max-width: 420px; }
+#goals .goal.egoal > div:last-child { display: grid !important; white-space: normal !important; row-gap: 2px; justify-items: start; }
+#goals .goal.egoal .ck { margin-top: 3px; }
+#goals .goal.egoal .bar { margin: 3px 0 1px; }
+#goals .goal.egoal .btn { margin-top: 5px; }
+#goals .goal.egoal + .goal.egoal { margin-top: 6px; }

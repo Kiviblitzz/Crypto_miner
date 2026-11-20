@@ -129,7 +129,7 @@ function egoalRow(ui, go, kicker) {
   let prog = '';
   if (go.progress) { const [a, pc] = fmtProg(...go.progress(s, g, st)); prog = `<div class="eg-prog">${esc(a)}</div>${pc != null ? `<div class="bar" style="width:180px"><div style="width:${pc}%;background:#ffb000"></div></div>` : ''}`; }
   const row = h(`<div class="goal egoal${go.action ? ' invest' : ''}"><div class="ck"></div><div><div class="eg-k">${esc(kicker)}</div>${esc(txt)}${prog}${sub ? `<div class="eg-sub">${esc(sub)}</div>` : ''}</div></div>`);
-  if (go.action) { const b = h(`<button class="btn small primary"><kbd>G</kbd>${esc(go.action.label)}</button>`); b.disabled = !g.canAfford(go.action.cost); b.onclick = () => egoalKey(ui, go); row.lastElementChild.append(h('<br/>'), b); }
+  if (go.action) { const b = h(`<button class="btn small primary"><kbd>G</kbd>${esc(go.action.label)}</button>`); b.disabled = !g.canAfford(go.action.cost); b.onclick = () => egoalKey(ui, go); row.lastElementChild.append(b); }
   return row;
 }
 export function endlessGoals(ui, el) {
