@@ -569,6 +569,17 @@ export const EVENTS = [
     fallback: 1,
   },
   {
+    // Aufholhilfe: Wer nach dem langen Winter 2014–2016 ohne Geld in Werkstatt oder Halle festsitzt, bekommt zum Bullenmarkt 2017 einen Neustart
+    id: 'denizanteil', from: 'Deniz', title: 'Deniz steigt ein', when: { date: '2017-05-15', window: 500 },
+    cond: (s, h, g) => s.chapter >= 2 && s.chapter <= 3 && !s.flags.won && g.firmValue() < 15000 && s.cash < 8000,
+    text: (s) => `„${s.flags.gmbh ? 'Ich war die ganzen Jahre dein CTO, ohne einen Cent reinzustecken.' : 'Ich hab die letzten Jahre zugeschaut, wie du dich durch den Winter kämpfst.'} Ich hab <b>8.000 $</b> gespart. Nimm sie – als Anteil an Hashwerk. Ethereum-Karten verdienen sich gerade in drei Monaten ab, und Bitcoin zieht auch an.“`,
+    choices: [
+      { label: 'Annehmen: Deniz wird Teilhaber', hint: '+8.000 $ · Deniz +1', fx: { cash: 8000, rel: { deniz: 1 }, flag: 'denizAnteil', log: 'Mai 2017: Deniz steigt mit 8.000 $ als Teilhaber ein' }, reply: '<b>Deniz:</b> Partner. Klingt besser als „Kumpel mit Schlüssel“.' },
+      { label: '„Behalt dein Geld, Deniz.“', hint: 'Deniz −1 · du schaffst das allein', fx: { rel: { deniz: -1 }, log: 'Mai 2017: Deniz’ Angebot abgelehnt' }, reply: '<b>Deniz:</b> Stur wie dein Opa. Das Angebot steht.' },
+    ],
+    fallback: 0,
+  },
+  {
     id: 'gpuhaendler', from: 'Deniz', title: 'Grafikkarten-Händler aus Leipzig', when: { date: '2017-06-15', window: 14 }, cond: (s) => gpuCount(s) >= 2,
     text: (s, h, g) => `„Alle wollen Ethereum minen, Grafikkarten sind ausverkauft. Ein Händler aus Leipzig zahlt für deine ${gpuCount(s)} Karten in ${rigsWithGpu(s).length} Rigs <b>${usd(rigValue(g))}</b> – den vollen Zeitwert.“ Und leiser: „Pass auf, in Sachsen werden gerade Rigs geklaut.“`,
     choices: [
