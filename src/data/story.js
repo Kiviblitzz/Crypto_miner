@@ -20,7 +20,7 @@ const halving = (s) => HALVINGS.some((d) => s.day >= d - 21 && s.day <= d + 10);
 const recent = (s, id, n = 45) => (s.ev?.log || []).some((l) => l.id === id && s.day - l.d <= n);
 const rel = (s, k) => s.rel?.[k] || 0;
 const winter = (s) => [12, 1, 2].includes(month(s));
-const lost = (s) => !!s.flags?.shopLost && !s.flags.shopBack; // Laden verloren (Ereignis „ladenzu“), nicht zurückgekauft
+const lost = (s) => !!s.flags?.shopLost && !s.flags.shopBack; // Laden verloren (nur alte Spielstände: früheres Ereignis „ladenzu“), nicht zurückgekauft
 const L = (a, b) => (s) => (lost(s) ? b : a); // Zeile mit Variante ohne Laden
 const broken = (s, fac) => (s.fac[fac]?.objects || []).some((o) => o.broken || o.items?.some((i) => i.b));
 
@@ -112,7 +112,7 @@ export const TALK = [
     'Die Werkstatt ist jetzt deine. Ich komm nur noch zum Kaffee. Und zum Gucken. Und manchmal zum Reparieren.',
     'Deine Halle, dein Rechenzentrum, und trotzdem kommst du zu mir an die Werkbank. Das freut mich mehr, als ich sage.',
     'Ein Kunde wollte wissen, ob ich der Vater vom Hashwerk-Brandt bin. Ich hab zweimal Ja gesagt. Damit er es auch versteht.',
-    L('Der Laden läuft wieder. Nicht toll, aber ehrlich. Ich glaube, die Leute kommen auch, um nach dir zu fragen.', 'Manchmal steh ich vorne am alten Schaufenster. Herr Öztürk verkauft da jetzt Fahrräder. Ist auch was Ehrliches.'),
+    L('Der Laden läuft. Nicht toll, aber ehrlich. Ich glaube, die Leute kommen auch, um nach dir zu fragen.', 'Manchmal steh ich vorne am alten Schaufenster. Herr Öztürk verkauft da jetzt Fahrräder. Ist auch was Ehrliches.'),
   ] },
   { who: 'papa', ch: [5, 6], lines: [
     'Norwegen … Ich war mit deiner Mutter mal dort, lange her. Es hat zwei Wochen geregnet, und wir waren trotzdem glücklich.',

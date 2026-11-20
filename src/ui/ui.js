@@ -11,6 +11,7 @@ import { DIFFICULTY } from '../data/world.js';
 import { ROLES, TRAITS, QUOTES } from '../data/staff.js';
 import { CONTACTS, CONTACT, FEE_TIERS, FAMILY_CONTACTS } from '../data/contacts.js';
 import { showFinale, endlessGoals, egoalKey, egoalDone } from './finale.js';
+import { BILL_STAGE, billText, monthName, PAPA_HELP } from '../data/bills.js';
 
 const $ = (s) => document.querySelector(s);
 const h = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
@@ -129,6 +130,9 @@ export class UI {
     game.on('update', () => this.onDay());
     game.on('refresh', () => this.refresh());
     game.on('goal', () => { this.audio?.cash(); });
+    game.on('bill', (b) => this.onBill(b)); // Monatsabrechnung gebucht (b) oder offene Rechnung bezahlt (null)
+    game.on('idea', () => this.ringCard('Deniz')); // Anlernen: Deniz schreibt von Bitcoin
+    game.on('papaLoan', () => { if (this.modalKind === 'company') this.reCompany(); this.dock(); });
     game.on('facfull', (id, c) => this.facFull(id, c));
     game.on('bag', () => this.refresh()); // Teile gekauft/verkauft/ein- und ausgebaut
     game.on('parcels', () => { this.w.syncParcels?.(); this.refresh(); }); // Paket geliefert oder aufgehoben
@@ -203,8 +207,10 @@ export class UI {
     const mOn = !s.feat || s.flags.miningStarted;
     for (const [id, ok] of [['#st-profit', mOn], ['#st-hash', mOn], ['#st-nw', g.has('rigs')], ['#st-btc', !s.flags.tutor || g.has('market')]]) $(id).style.display = ok ? '' : 'none';
     document.body.classList.toggle('tut-nobtc', !!s.flags.tutor && !g.has('market')); // Anlernen: Bitcoin-Kurs erst mit der Börse (CSS erzwingt sonst die Anzeige)
-    $('#st-cash').title = 'Bargeld für Hardware, Strom, Miete und Löhne'; $('#st-nw').title = 'Kontostand + Coins + Wiederverkaufswert der Hardware − Kredit'; $('#st-profit').title = 'Mining-Ertrag minus Strom, Miete, Löhne und Zinsen pro Tag';
-    $('#st-cash').innerHTML = `<div class="l">Kontostand</div><div class="v ${s.cash < 0 ? 'neg' : ''}">${fmtUSD(this.dCash)}</div>`;
+    $('#st-cash').title = 'Bargeld · am 1. jedes Monats werden Miete und Strom abgebucht (Handy → Konto)'; $('#st-nw').title = 'Kontostand + Coins + Wiederverkaufswert der Hardware − Kredit, Papas Darlehen und Rechnungen'; $('#st-profit').title = 'Mining-Ertrag minus Strom, Miete, Löhne und Zinsen pro Tag';
+    const ob = g.owed?.() || 0, dl = (g.nextBillDay?.() ?? s.day + 99) - s.day, est = ob <= 0 && mOn && s.flags.miningStarted && dl <= 5 ? g.billEstimate() : 0;
+    const bsub = ob > 0 ? `<div class="bill-due neg">${esc(BILL_STAGE[Math.min(3, s.bills.open.stage)])}: ${fmtUSD(ob)} offen</div>` : est >= 1 ? `<div class="bill-due">Abrechnung ${dl <= 1 ? 'morgen' : `in ${dl} Tagen`}: ~${fmtUSD(est)}</div>` : ''; // Monatserster: Miete und Strom
+    $('#st-cash').innerHTML = `<div class="l">Kontostand</div><div class="v ${s.cash < 0 ? 'neg' : ''}">${fmtUSD(this.dCash)}</div>${bsub}`;
     $('#st-nw').innerHTML = `<div class="l">Vermögen</div><div class="v">${fmtUSD(this.dNw)}</div>`;
     $('#st-profit').innerHTML = `<div class="l">Gewinn / Tag</div><div class="v ${p.net >= 0 ? 'pos' : 'neg'}">${p.net >= 0 ? '+' : ''}${fmtUSD(p.net)}</div>`;
     $('#st-btc').innerHTML = `<div class="l">Bitcoin</div><div class="v">${fmtUSD(btc)} <small class="${ch >= 0 ? 'pos' : 'neg'}">${ch >= 0 ? '▲' : '▼'} ${Math.abs(ch).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %</small></div>`;
@@ -468,7 +474,7 @@ export class UI {
     this.marketCoin = 'BTC'; this.trade = null; this.lastSpeed = null; this.evSnooze = null; this.delArmed = null;
     clearTimeout(this.featT); this.featQ = []; this.msgQ = []; this.xpQ = []; this.lvQ = null; this.lvBusy = false; $('#featcards').innerHTML = '';
     clearTimeout(this.instT); this.installing = false; this.afterSnap = null; this.showRun = false; this.pickType = null; this.rate = 0; this.rateDay = null;
-    this.visiting = null; this.walkGoal = null; this.lampHinted = false; document.body.classList.remove('visiting', 'show-build', 'show-goals');
+    this.visiting = null; this.walkGoal = null; this.lampHinted = false; this.idea0 = null; this.ideaRead = null; this.ideaSteps0 = 0; this.steps = 0; this.ringOff = null; document.body.classList.remove('visiting', 'show-build', 'show-goals');
     if (this.w.heatMode) this.w.toggleHeat(false);
     if (this.inspUid) { this.inspUid = null; $('#inspector').classList.add('hidden'); this.w.select(null); }
     this.w.focusObject?.(null); this.w.ghostPart?.(null); this.pause(false);
@@ -567,7 +573,7 @@ export class UI {
       const s = this.g.s;
       if (s.feat && !s.flags.miningStarted) { this.toast('Erst den PC bauen, dann schlafen.', 'info', 2500); return; }
       const vf = this.w.visFrac ?? s.frac;
-      this.fade(); const steps = vf >= 0.29 ? 1 : 0; // jederzeit hinlegen: bis zum nächsten Morgen (nachts nach Mitternacht: bis 7 Uhr) for (let i = 0; i < steps; i++) this.g.advanceDay(); s.frac = 0.29; this.w.visFrac = 0.29;
+      this.fade(); const steps = vf >= 0.29 ? 1 : 0; for (let i = 0; i < steps; i++) this.g.advanceDay(); s.frac = 0.29; this.w.visFrac = 0.29; // jederzeit hinlegen: bis zum nächsten Morgen (nachts nach Mitternacht: bis 7 Uhr)
       this.g.learned?.('sleep'); this.toast(s.parcels?.length ? 'Guten Morgen! Vor deiner Wohnungstür liegt ein Paket.' : 'Guten Morgen!', 'good', 3000);
     }
   }
@@ -939,6 +945,7 @@ export class UI {
   }
   // Schritt-für-Schritt-Hinweise (oben in der Mitte)
   tutorial() {
+    this.ideaTick();
     const el = $('#tut'); if (!el) return;
     if (this.g.s.feat) { el.classList.add('hidden'); return; }
     const g = this.g, s = g.s; let t = '';
@@ -1178,15 +1185,16 @@ export class UI {
   }
 
   phone(tab = null) {
-    this.g.learned?.('phone');
+    this.g.learned?.('phone'); this.ringOff?.(); this.ringOff = null;
     const g = this.g;
     const msgs = [...g.s.messages].sort((a, b) => b.day - a.day), unread = msgs.filter((m) => !m.read).length;
     tab = tab || (unread || g.s.ev?.open ? 'msgs' : this.phoneTab || 'msgs'); this.phoneTab = tab;
-    const newC = CONTACTS.filter((c) => g.contactMet(c.id) && !g.contactOn(c.id)).length;
-    const body = h(`<div><h2>Handy</h2><div class="ph-tabs" role="tablist"><button class="btn small ${tab === 'msgs' ? 'on' : ''}" data-t="msgs">Nachrichten${unread ? ` <span class="ph-n">${unread}</span>` : ''}</button><button class="btn small ${tab === 'contacts' ? 'on' : ''}" data-t="contacts">Kontakte${newC ? ` <span class="ph-n">${newC}</span>` : ''}</button></div><div class="phone"></div></div>`);
+    const newC = CONTACTS.filter((c) => g.contactMet(c.id) && !g.contactOn(c.id)).length, owe = g.owed?.() > 0;
+    const body = h(`<div><h2>Handy</h2><div class="ph-tabs" role="tablist"><button class="btn small ${tab === 'msgs' ? 'on' : ''}" data-t="msgs">Nachrichten${unread ? ` <span class="ph-n">${unread}</span>` : ''}</button><button class="btn small ${tab === 'contacts' ? 'on' : ''}" data-t="contacts">Kontakte${newC ? ` <span class="ph-n">${newC}</span>` : ''}</button><button class="btn small ${tab === 'konto' ? 'on' : ''}" data-t="konto">Konto${owe ? ' <span class="ph-n ph-warn">!</span>' : ''}</button></div><div class="phone"></div></div>`);
     body.querySelectorAll('.ph-tabs button').forEach((b) => { b.onclick = () => this.phone(b.dataset.t); });
     const ph = body.querySelector('.phone');
     if (tab === 'contacts') { this.phoneContacts(ph); this.openModal(body, 'narrow', 'phone'); this.dock(); return; }
+    if (tab === 'konto') { g.learned?.('konto'); this.phoneKonto(ph); this.openModal(body, 'narrow', 'phone'); this.dock(); return; }
     const oe = g.s.ev?.open && EVENT[g.s.ev.open.id];
     if (oe) { const card = h(`<div class="msg decide"><div class="fr">${esc(oe.from || '')}<span>Entscheidung offen · noch ${Math.max(0, g.s.ev.open.until - g.s.day)} Tage</span></div><b>${esc(g.evText(oe, 'title'))}</b><div class="row" style="margin-top:8px"><button class="btn small primary">Jetzt entscheiden</button></div></div>`); card.querySelector('button').onclick = () => { this.evSnooze = null; this.closeModal(); this.eventCard(); }; ph.append(card); }
     if (!msgs.length) ph.append(h('<div class="empty">Keine Nachrichten.</div>'));
@@ -1216,8 +1224,67 @@ export class UI {
       const lv = s.rel?.[f.id] || 0, face = f.id;
       const dots = Array.from({ length: 5 }, (_, i) => `<i class="${i < lv ? 'on' : ''}"></i>`).join('');
       const perk = lv >= 3 ? (f.id === 'papa' && s.flags.shopLost && REL_PERK.papaLost ? REL_PERK.papaLost : REL_PERK[f.id]) : '';
-      ph.append(h(`<div class="ct-card fam"><div class="ct-av">${faceSvg(face)}</div><div class="ct-main"><div class="ct-name"><b>${esc(f.name)}</b><span class="ct-rel" title="Beziehung ${lv} von 5">${lv < 0 ? `<em class="neg">verstimmt (${lv})</em>` : `<span class="ct-dots">${dots}</span>`}</span></div><div class="ct-role">${esc(f.role(s))}</div>${perk ? `<div class="ct-perk">${esc(perk)}</div>` : REL_PERK[f.id] ? `<div class="ct-how2">Ab Stufe 3: ${esc(REL_PERK[f.id])}</div>` : ''}</div></div>`));
+      const card = h(`<div class="ct-card fam"><div class="ct-av">${faceSvg(face)}</div><div class="ct-main"><div class="ct-name"><b>${esc(f.name)}</b><span class="ct-rel" title="Beziehung ${lv} von 5">${lv < 0 ? `<em class="neg">verstimmt (${lv})</em>` : `<span class="ct-dots">${dots}</span>`}</span></div><div class="ct-role">${esc(f.role(s))}</div>${perk ? `<div class="ct-perk">${esc(perk)}</div>` : REL_PERK[f.id] ? `<div class="ct-how2">Ab Stufe 3: ${esc(REL_PERK[f.id])}</div>` : ''}</div></div>`);
+      if (f.id === 'papa') { const lb = this.papaLoanBox(); if (lb) card.querySelector('.ct-main').append(lb); }
+      ph.append(card);
     }
+  }
+  // Papas Umzugsdarlehen (Kontakte → Papa): Rest, Raten, alles zurückzahlen
+  papaLoanBox() {
+    const g = this.g, s = g.s, L = s.papaLoan; if (!L || !(L.total > 0)) return null;
+    if (!(L.left > 0)) return h(`<div class="ct-loan done">Umzugsdarlehen <b>zurückgezahlt</b>${L.done ? ` am ${fmtDate(L.done)}` : ''} · ${this.money(L.total)}</div>`);
+    const pc = Math.round(Math.max(0, Math.min(1, 1 - L.left / L.total)) * 100), rate = Math.min(L.left, Math.max(50, Math.round(L.total / 10 / 50) * 50));
+    const el = h(`<div class="ct-loan"><div>Umzugsdarlehen: noch <b>${this.money(L.left)}</b> von ${this.money(L.total)} · ohne Zinsen, ohne Frist</div><div class="bar"><div style="width:${pc}%"></div></div><div class="ct-act"></div></div>`);
+    const act = el.querySelector('.ct-act');
+    const pay = (v) => { const r = g.repayPapa(v); if (r) { this.audio?.cash?.(); this.toast(g.papaLeft() > 0 ? `${this.money(r)} an Papa überwiesen – noch ${this.money(g.papaLeft())}` : `${this.money(r)} an Papa überwiesen – alles zurückgezahlt!`, 'good', 4000); } this.phone('contacts'); };
+    const b1 = h(`<button class="btn small">${this.money(rate)} zurückzahlen</button>`); b1.disabled = !g.canAfford(rate); b1.onclick = () => pay(rate); act.append(b1);
+    if (L.left > rate) { const b2 = h(`<button class="btn small primary">Alles zurückzahlen · ${this.money(L.left)}</button>`); b2.disabled = !g.canAfford(L.left); b2.onclick = () => pay(L.left); act.append(b2); }
+    if (!g.canAfford(rate)) act.append(h('<span class="ct-hint">Dafür reicht dein Konto gerade nicht.</span>'));
+    return el;
+  }
+  // Handy → Konto: Kontostand, nächste Abrechnung, offene Rechnung (Mahnung), laufende Monatskosten, Monatsabrechnungen, Schulden
+  phoneKonto(ph) {
+    const g = this.g, s = g.s, B = s.bills || { hist: [] }, o = B.open, L = s.papaLoan, nb = g.nextBillDay();
+    ph.classList.add('ph-contacts', 'ph-konto');
+    ph.append(h(`<div class="kt-head"><div><span>Kontostand</span><b class="${s.cash < 0 ? 'neg' : ''}">${fmtUSD(s.cash)}</b></div><div><span>Nächste Abrechnung</span><b>${fmtDate(nb)}</b><small>etwa ${fmtUSD(g.billEstimate())} · bisher ${fmtUSD(g.billAccrued())}</small></div></div>`));
+    if (o) {
+      const box = h(`<div class="kt-open st${o.stage}"><div class="kt-oh"><b>${esc(BILL_STAGE[Math.min(3, o.stage)])}</b><span>${fmtUSD(g.owed())} offen</span></div><div class="kt-ot">${billText(s, g)}</div><div class="ct-act"></div></div>`);
+      const act = box.querySelector('.ct-act');
+      if (g.billCoinOk()) { const b = h('<button class="btn small primary">Coins verkaufen und bezahlen</button>'); b.onclick = () => { if (g.payBills(true)) this.audio?.cash?.(); this.phone('konto'); }; act.append(b); }
+      if (g.has('market')) { const b = h('<button class="btn small">Zur Börse</button>'); b.onclick = () => { this.closeModal(); this.market(); }; act.append(b); }
+      if (g.papaHelpOk()) { const b = h('<button class="btn small">Papa um Hilfe bitten</button>'); b.onclick = () => { if (g.papaHelp()) { this.audio?.cash?.(); this.toast(`<b>Papa:</b> ${esc(PAPA_HELP[Math.min(PAPA_HELP.length - 1, (s.papaLoan?.help || 1) - 1)])}`, 'msg', 8000); } this.phone('konto'); }; act.append(b); }
+      ph.append(box);
+    }
+    const mc = g.monthlyCosts(), OTHER = { staff: 'Gehälter', ups: 'Ausbauten (laufend)', deals: 'Laufende Verträge', income: 'Einnahmen aus Verträgen' };
+    const rows = mc.rows.filter((r) => r.rent >= 0.5 || r.elec >= 0.5 || r.pausch).map((r) => [`${esc(FACILITY[r.fac].short)}${r.cut ? ' <em class="neg">gesperrt</em>' : ''}`, [r.rent >= 0.5 ? `Miete ${fmtUSD(r.rent)}` : '', r.pausch ? 'Strom in der Warmmiete' : r.elec >= 0.5 ? `Strom ~${fmtUSD(r.elec)}` : ''].filter(Boolean).join(' · ')]);
+    for (const [k, v] of Object.entries(mc.other)) if (Math.abs(v) >= 0.5) rows.push([OTHER[k], v < 0 ? `<span class="pos">+${fmtUSD(-v)}</span>` : fmtUSD(v)]);
+    ph.append(h('<div class="ct-sec">Monatskosten bei heutiger Last</div>'));
+    ph.append(h(`<div class="kt-card"><div class="kv">${rows.map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join('') || '<div class="k">Noch keine laufenden Kosten</div><div class="v">–</div>'}<div class="k"><b>Pro Monat</b></div><div class="v"><b>${fmtUSD(mc.total)}</b></div></div></div>`));
+    ph.append(h('<div class="ct-sec">Monatsabrechnungen</div>'));
+    if (!B.hist?.length) ph.append(h(`<div class="kt-card kt-empty">Noch keine Abrechnung. Miete und Strom werden am ${fmtDate(nb)} zum ersten Mal abgebucht.</div>`));
+    (B.hist || []).slice(0, 12).forEach((b, i) => ph.append(this.billCard(b, i === 0)));
+    const loan = s.loan || 0;
+    if (L?.total > 0 || loan > 0) {
+      ph.append(h('<div class="ct-sec">Schulden</div>'));
+      const kv = []; if (L?.total > 0) kv.push(['Papas Umzugsdarlehen', L.left > 0 ? `${fmtUSD(L.left)} von ${fmtUSD(L.total)}` : '<span class="pos">zurückgezahlt</span>']); if (loan > 0) kv.push(['Bankkredit', fmtUSD(loan)]);
+      const c = h(`<div class="kt-card"><div class="kv">${kv.map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join('')}</div>${L?.left > 0 ? '<div class="ct-act"></div>' : ''}</div>`);
+      if (L?.left > 0) { const b = h('<button class="btn small">Bei Papa zurückzahlen</button>'); b.onclick = () => this.phone('contacts'); c.querySelector('.ct-act').append(b); c.querySelector('.ct-act').append(h('<span class="ct-hint">ohne Zinsen, ohne Frist – auch in Raten</span>')); }
+      ph.append(c);
+    }
+  }
+  // Eine Monatsabrechnung: Miete und Strom je Standort, sonstige Posten, Summe, Status
+  billCard(b, open = false) {
+    const ST = { ok: ['abgebucht', 'pos'], dispo: ['abgebucht · Dispo', 'warn'], open: ['offen', 'neg'], paid: [`bezahlt am ${b.paidDay ? fmtDate(b.paidDay) : '–'}`, 'pos'], gut: ['gutgeschrieben', 'pos'], insolv: ['Insolvenz', ''] }[b.st] || ['', ''];
+    const OTHER = { staff: 'Gehälter', ups: 'Ausbauten (laufend)', deals: 'Laufende Verträge', income: 'Einnahmen aus Verträgen' }, L = [];
+    for (const it of b.items || []) {
+      const F = FACILITY[it.fac]?.short || it.fac;
+      if (it.rent > 0) L.push([`Miete ${esc(F)}${it.fac === 'kinder' ? ' (warm)' : ''}`, fmtUSD(it.rent)]);
+      if (it.pausch && !(it.elec > 0)) L.push([`Strom ${esc(F)} · ${fmtNum(it.kwh || 0, 0)} kWh`, 'in der Warmmiete']);
+      else if (it.elec > 0) L.push([`Strom ${esc(F)} · ${fmtNum(it.kwh || 0, 0)} kWh`, fmtUSD(it.elec)]);
+    }
+    for (const [k, v] of Object.entries(b.other || {})) L.push([OTHER[k] || esc(k), v < 0 ? `+${fmtUSD(-v)}` : fmtUSD(v)]);
+    const tot = b.total < 0 ? '+' + fmtUSD(-b.total) : fmtUSD(b.total);
+    return h(`<details class="kt-bill kt-card" ${open ? 'open' : ''}><summary><span class="kt-m">${esc(monthName(b.m))}</span><span class="kt-st ${ST[1]}">${ST[0]}</span><b class="kt-sum">${tot}</b></summary><div class="kv">${L.map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join('')}<div class="k"><b>Summe</b></div><div class="v"><b>${tot}</b></div></div></details>`);
   }
 
   // Ereignis mit Entscheidung: erscheint, sobald kein anderes Fenster offen ist
@@ -1233,10 +1300,57 @@ export class UI {
     const box = body.querySelector('.ev-choices');
     for (const c of ch) {
       const b = h(`<button class="btn ${c.i === 0 ? 'primary' : ''} ev-c" ${c.ok ? '' : 'disabled'}><span class="ev-l">${esc(c.label)}${c.cost ? ` <span class="ev-cost">· ${this.money(c.cost)}</span>` : ''}</span>${c.hint ? `<small>${esc(c.hint)}</small>` : ''}${!c.ok && c.cost && !c.needFail ? '<small>Dafür reicht dein Geld nicht.</small>' : ''}${!c.ok && c.needFail ? `<small>${esc(c.needText || 'Gerade nicht möglich.')}</small>` : ''}</button>`);
-      b.onclick = () => { const reply = g.chooseEvent(c.i); this.evSnooze = null; this.closeModal(); this.audio?.cash?.(); if (reply) this.toast(reply, 'msg', 7000); this.refresh(); this.dock(); };
+      b.onclick = () => { const k0 = o.key, reply = g.chooseEvent(c.i); this.evSnooze = null; this.closeModal(); if (g.s.ev?.open && g.s.ev.open.key !== k0) { this.evSnooze = null; setTimeout(() => this.tryEvent(), 600); } this.audio?.cash?.(); if (reply) this.toast(reply, 'msg', 7000); this.refresh(); this.dock(); }; // Folge-Ereignis (z. B. Mahnung → Bankgespräch) gleich zeigen
       box.append(b);
     }
     this.openModal(body, 'narrow', 'event');
+  }
+  // Monatsabrechnung gebucht: kurze Meldung (im Zeitraffer nur die ersten, offene und Dispo-Abbuchungen), Details im Handy → Konto
+  onBill(b) {
+    this.dock(); if (this.modalKind === 'phone' && this.phoneTab === 'konto') this.phone('konto');
+    if (!b || b.st === 'open') return; // offen: chargeBill meldet sich selbst, die Mahnung kommt als Ereignis
+    const s = this.g.s, first = (s.stats.bills || 0) <= 2;
+    if (!first && (s.speed || 0) >= 5 && b.st !== 'dispo') return;
+    const parts = (b.items || []).map((it) => `${FACILITY[it.fac]?.short || it.fac} ${fmtUSD(it.rent + it.elec)}`).join(', ');
+    this.toast(`<b>Monatsabrechnung ${esc(monthName(b.m))}:</b> ${b.total < 0 ? `+${fmtUSD(-b.total)} gutgeschrieben` : `${fmtUSD(b.total)} abgebucht`}${parts ? ` (${esc(parts)})` : ''}${b.st === 'dispo' ? ' – das Konto ist im Dispo' : ''}. Details: Handy → Konto.`, b.st === 'dispo' ? 'bad' : 'info', first ? 9000 : 5000);
+  }
+  // Anlernen: nach Papas Nachricht schreibt Deniz – nach ein paar Schritten oder spätestens 40 Sekunden (liest man das Handy nicht: nach 90 Sekunden)
+  ideaTick() {
+    const g = this.g; if (!g.ideaPending?.() || !g.has('phone')) { if (!g.ideaPending?.()) this.idea0 = null; return; }
+    if (this.w.cine || !$('#splash').classList.contains('hidden')) return;
+    const now = performance.now(); this.idea0 ??= now;
+    if (!this.ideaRead && g.s.messages.find((m) => m.id === 'm0p')?.read) { this.ideaRead = now; this.ideaSteps0 = this.steps || 0; }
+    const t = (now - this.idea0) / 1000, tr = this.ideaRead ? (now - this.ideaRead) / 1000 : 0, st = (this.steps || 0) - (this.ideaSteps0 || 0);
+    if (!((this.ideaRead && tr >= 8 && (st >= 8 || tr >= 40)) || t >= 90)) return;
+    if (this.modalKind === 'phone' || this.paused) return; // erst, wenn das Handy wieder zu ist
+    g.denizIdea();
+  }
+  // Das Handy klingelt (neue Nachricht außerhalb einer Lektion): Karte bis zum Öffnen des Handys
+  ringCard(from) {
+    const box = $('#featcards'); if (!box) return; box.querySelector('.featcard.ring2')?.remove();
+    const el = h(`<div class="featcard ring ring2"><div class="fc-t">${PHONE_SVG}Bzzz … bzzz …</div><div class="fc-h"><kbd class="fc-k">H</kbd>${esc(from)} schreibt dir</div><div class="fc-b">Neue Nachricht! Drück <kbd>H</kbd> für dein Handy.</div></div>`);
+    box.prepend(el); this.audio?.message?.(); this.keysHint(); this.dock();
+    let gone = false; const off = () => { if (gone) return; gone = true; el.classList.add('out'); setTimeout(() => el.remove(), 600); }; this.ringOff = off; setTimeout(off, 15000);
+  }
+  // Firma → Monatskosten: Miete und Strom je Standort (bei heutiger Last), Sonstiges, nächste Abrechnung, Offenes, Papas Darlehen
+  costsSec() {
+    const g = this.g, s = g.s, mc = g.monthlyCosts(), nb = g.nextBillDay(), o = s.bills?.open, L = s.papaLoan;
+    const OTHER = { staff: 'Gehälter', ups: 'Ausbauten (laufend)', deals: 'Laufende Verträge', income: 'Einnahmen aus Verträgen' }, rows = [];
+    for (const r of mc.rows) { if (!(r.rent >= 0.5 || r.elec >= 0.5 || r.pausch)) continue; rows.push([`${esc(FACILITY[r.fac].name)}${r.cut ? ' <em class="neg">· Strom gesperrt</em>' : ''}`, [r.rent >= 0.5 ? `Miete ${fmtUSD(r.rent)}` : '', r.pausch ? 'Strom in der Warmmiete' : r.elec >= 0.5 ? `Strom ~${fmtUSD(r.elec)}` : ''].filter(Boolean).join(' · ')]); }
+    for (const [k, v] of Object.entries(mc.other)) if (Math.abs(v) >= 0.5) rows.push([OTHER[k], v < 0 ? `<span class="pos">+${fmtUSD(-v)}</span>` : fmtUSD(v)]);
+    rows.push(['<b>Pro Monat</b>', `<b>${fmtUSD(mc.total)}</b>`], ['Nächste Abrechnung', `${fmtDate(nb)} · etwa ${fmtUSD(g.billEstimate())}`]);
+    if (o) rows.push([`Offen · ${esc(BILL_STAGE[Math.min(3, o.stage)])}`, `<span class="neg">${fmtUSD(g.owed())}</span>`]);
+    if (L?.left > 0) rows.push(['Papas Umzugsdarlehen', `${fmtUSD(L.left)} · ohne Zinsen`]);
+    const sec = h(`<div class="sec costs"><h4>Monatskosten</h4><div class="kv">${rows.map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join('')}</div><div class="row"></div></div>`), r = sec.querySelector('.row');
+    if (o && g.billCoinOk()) { const b = h('<button class="btn small primary">Coins verkaufen und bezahlen</button>'); b.onclick = () => { if (g.payBills(true)) this.audio?.cash?.(); this.reCompany(); }; r.append(b); }
+    const b = h('<button class="btn small">Abrechnungen im Handy</button>'); b.onclick = () => { this.closeModal(); this.phone('konto'); }; r.append(b);
+    return sec;
+  }
+  rentLabel(f, un) {
+    const g = this.g; if (!f.rent) return 'keine';
+    if (un && g.upgrades(f.id).some((u) => u.fx?.rent === 0 && g.upActive(f.id, u))) return 'keine (gekauft)';
+    if (un && f.id !== 'kinder' && !g.facInUse(f.id)) return `ruht ohne Geräte (${fmtUSD(f.rent)}/Monat)`;
+    const r = f.rent * (un ? g.fx('rent', f.id) : 1); return r >= 0.5 ? `${fmtUSD(r)}/Monat${f.id === 'kinder' ? ' (warm)' : ''}` : 'keine';
   }
   company() {
     this.g.learned?.('company');
@@ -1251,7 +1365,7 @@ export class UI {
       const c = h(`<div class="card ${!un && !can ? 'lock' : ''}"><h3>${un ? '' : can ? '' : ''}${esc(f.name)}</h3><div class="sub">${esc(f.place)} · ${fmtNum(f.w, 1)}×${fmtNum(f.d, 1)} m</div>
         <div class="kv" style="margin:4px 0"><div class="k">Anschluss</div><div class="v">${fmtNum(f.power[fs.power].kw, 1)} kW</div>
         <div class="k">Strompreis</div><div class="v">${g.elecPrice(f.id) ? fmtUSD(g.elecPrice(f.id)) + '/kWh' : 'Pauschale in der Warmmiete'}</div>
-        <div class="k">Miete</div><div class="v">${f.rent ? (un && g.upgrades(f.id).some((u) => u.fx?.rent === 0 && g.upActive(f.id, u)) ? 'keine (gekauft)' : un && !g.facInUse(f.id) ? `ruht ohne Geräte (${fmtUSD(f.rent)}/Monat)` : fmtUSD(f.rent * (un ? g.fx('rent', f.id) : 1)) + '/Monat') : 'keine'}</div>
+        <div class="k">Miete</div><div class="v">${this.rentLabel(f, un)}</div>${un && fs.cut ? '<div class="k">Strom</div><div class="v neg">gesperrt – Rechnung offen</div>' : ''}
         ${un ? `<div class="k">Last</div><div class="v">${fmtWatt(sm.watt)}</div><div class="k">Temperatur</div><div class="v ${sm.temp > 38 ? 'neg' : ''}">${fmtNum(sm.temp, 1)} °C</div><div class="k">Stellplätze</div><div class="v ${g.slotsUsed(f.id) >= g.slotsMax(f.id) ? 'neg' : ''}">${g.slotsUsed(f.id)} / ${g.slotsMax(f.id)}</div>` : `<div class="k">Stellplätze</div><div class="v">${f.slots}</div>`}</div></div>`);
       if (un) {
         const nx = f.power[fs.power + 1];
@@ -1278,8 +1392,9 @@ export class UI {
     const rp = h(`<button class="btn small good">Tilgen (${fmtUSD(Math.min(loan, Math.max(0, s.cash)))})</button>`); rp.disabled = !loan || s.cash <= 0; rp.onclick = () => { const u = g.repayLoan(loan); if (u) this.toast(`${fmtUSD(u)} getilgt`, 'good'); this.company(); }; lr.append(rp);
     if (g.has('loan')) st.append(lb);
     if (stHide) { st.innerHTML = ''; if (g.has('loan')) st.append(lb); }
+    st.prepend(this.costsSec()); // Monatskosten und nächste Abrechnung ganz oben
     const nwc = h('<div class="sec"><h4>Vermögensverlauf (log)</h4><canvas class="nwchart" width="1100" height="260"></canvas></div>'); if (g.has('ranking') && (s.stats.history || []).length >= 3) st.append(nwc); requestAnimationFrame(() => this.nwChart(nwc.querySelector('canvas')));
-    st.append(h(`<div class="sec"><h4>Bilanz pro Tag</h4><div class="kv"><div class="k">Mining-Ertrag</div><div class="v pos">${fmtUSD(p.rev)}</div><div class="k">Strom, Miete, Löhne</div><div class="v neg">−${fmtUSD(p.cost)}</div><div class="k">Gesamt geschürft</div><div class="v">${fmtUSD(s.stats.minedUSD)}</div><div class="k">Stromkosten bisher</div><div class="v">${fmtUSD(s.stats.elec)}</div><div class="k">In Hardware investiert</div><div class="v">${fmtUSD(s.stats.spentHW)}</div></div></div>`));
+    st.append(h(`<div class="sec"><h4>Bilanz pro Tag</h4><div class="kv"><div class="k">Mining-Ertrag</div><div class="v pos">${fmtUSD(p.rev)}</div><div class="k">Strom, Miete, Löhne</div><div class="v neg">−${fmtUSD(p.cost)}</div><div class="k">Abgebucht wird monatlich</div><div class="v">am ${fmtDate(g.nextBillDay())} · etwa ${fmtUSD(g.billEstimate())}</div><div class="k">Gesamt geschürft</div><div class="v">${fmtUSD(s.stats.minedUSD)}</div><div class="k">Stromkosten bisher</div><div class="v">${fmtUSD(s.stats.elec)}</div><div class="k">In Hardware investiert</div><div class="v">${fmtUSD(s.stats.spentHW)}</div></div></div>`));
     this.openModal(body, '', 'company');
   }
 
@@ -1433,10 +1548,10 @@ export class UI {
 
   // ---------- Logbuch: Reiter Rangliste · Erfolge · Chronik ----------
   logShell(tab, pane) {
-    const s = this.g.s, n = ACHIEVEMENTS.filter((a) => s.ach?.[a.id]).length;
+    const s = this.g.s, AL = ACHIEVEMENTS.filter((a) => !a.legacy || s.ach?.[a.id]), n = AL.filter((a) => s.ach?.[a.id]).length;
     const box = h('<div class="logbook"><div class="lb-head"><h2>Logbuch</h2><div class="lb-tabs" role="tablist"></div></div></div>');
     const tabs = box.querySelector('.lb-tabs');
-    for (const [k, l] of [['rank', 'Rangliste'], ['ach', `Erfolge <small>${n}/${ACHIEVEMENTS.length}</small>`], ['log', 'Chronik']]) {
+    for (const [k, l] of [['rank', 'Rangliste'], ['ach', `Erfolge <small>${n}/${AL.length}</small>`], ['log', 'Chronik']]) {
       const b = h(`<button class="lb-tab ${tab === k ? 'on' : ''}" role="tab" aria-selected="${tab === k}">${l}${k === 'ach' && this.achNew && tab !== 'ach' ? '<i class="lb-dot"></i>' : ''}</button>`);
       b.onclick = () => { if (tab !== k) this.ranking(k); };
       tabs.append(b);
@@ -1444,10 +1559,10 @@ export class UI {
     pane.classList.add('lb-pane'); box.append(pane); return box;
   }
   achPane() {
-    const s = this.g.s, got = s.ach || {}, n = ACHIEVEMENTS.filter((a) => got[a.id]).length;
-    const pane = h(`<div class="ach-pane"><div class="ach-sum"><span><b>${n}</b> von ${ACHIEVEMENTS.length} Erfolgen</span><div class="ach-bar"><div style="width:${Math.round((n / ACHIEVEMENTS.length) * 100)}%"></div></div></div><div class="ach-grid"></div></div>`);
+    const s = this.g.s, got = s.ach || {}, AL = ACHIEVEMENTS.filter((a) => !a.legacy || got[a.id]), n = AL.filter((a) => got[a.id]).length; // legacy: nur alte Spielstände
+    const pane = h(`<div class="ach-pane"><div class="ach-sum"><span><b>${n}</b> von ${AL.length} Erfolgen</span><div class="ach-bar"><div style="width:${Math.round((n / AL.length) * 100)}%"></div></div></div><div class="ach-grid"></div></div>`);
     const grid = pane.querySelector('.ach-grid');
-    for (const a of ACHIEVEMENTS) {
+    for (const a of AL) {
       const d = got[a.id], secret = a.hidden && !d;
       grid.append(h(`<div class="ach ${d ? 'got' : 'lock'} ${secret ? 'secret' : ''}"><div class="ach-ic">${ACH_SVG[d ? 'got' : secret ? 'secret' : 'lock']}</div><div class="ach-tx"><b>${secret ? '???' : esc(a.name)}</b><span>${secret ? 'Versteckter Erfolg' : esc(a.desc)}</span>${d ? `<em>${fmtDate(d)}</em>` : ''}</div></div>`));
     }

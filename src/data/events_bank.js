@@ -6,7 +6,7 @@ export const BANK_EVENTS = [
   {
     id: 'bank', chain: true, from: 'Lindentaler Bank', title: 'Bankgespräch', expire: 7, fallback: 1,
     text: (s, h, g) => `Herr Albers von der Lindentaler Bank bittet zum Gespräch. Dein Konto steht bei <b>${usd(s.cash)}</b>, `
-      + `der Dispo-Rahmen liegt bei <b>${usd(g.dispoLimit())}</b>. „So geht das nicht weiter, Herr Brandt. Was schlagen Sie vor?“`,
+      + `${g.owed() > 0 ? `dazu kommen <b>${usd(g.owed())}</b> offene Rechnungen, ` : ''}der Dispo-Rahmen liegt bei <b>${usd(g.dispoLimit())}</b>. „So geht das nicht weiter, Herr Brandt. Was schlagen Sie vor?“`,
     choices: [
       {
         label: 'Coins aus der Cold-Wallet verkaufen',
@@ -31,7 +31,7 @@ export const BANK_EVENTS = [
       },
       {
         label: 'Umschuldung: Kredit zu 13 %',
-        hint: (g) => (g.reschedOk() ? `Das Minus wird zum Bankkredit (${usd(Math.max(0, -g.s.cash) + 1000)}), teurer als der normale Kredit` : 'Die Bank will erst mehr Sicherheiten sehen'),
+        hint: (g) => (g.reschedOk() ? `${g.owed() > 0 ? 'Minus und offene Rechnungen werden' : 'Das Minus wird'} zum Bankkredit (${usd(Math.max(0, g.owed() - g.s.cash) + 1000)}), teurer als der normale Kredit` : 'Die Bank will erst mehr Sicherheiten sehen'),
         need: (s, h, g) => g.reschedOk(),
         fx: (g) => ({ do: () => g.bankReschedule(), log: 'Bankgespräch: Umschuldung zu 13 %' }),
         reply: '<b>Herr Albers:</b> Unterschreiben Sie hier. Und hier. Und hier.',

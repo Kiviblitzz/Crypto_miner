@@ -16,7 +16,7 @@
 //   monthly (Fixkosten/Monat, negativ = Einnahme), powerCost (Stromausbau-Preis, je Standort),
 //   powerWait (mult 0 = Stromausbau bis zum Ablauf gesperrt, je Standort)
 // Beträge skalieren mit der Ära: amt(g, Tage, min) = so viele Tagesumsätze, mindestens min.
-import { FACILITY, CHAPTERS } from './world.js';
+import { FACILITY } from './world.js';
 import { PLACEABLE, PART } from './hardware.js';
 import { toDay, GPU_BOOM } from './history.js';
 import { CONTACT, FEE_TIERS } from './contacts.js';
@@ -139,12 +139,8 @@ function diskFx(g, s, p) {
   loseEx(g, 1, 'disk'); return { log: `April 2011: Festplatte tot – ${nf(0).format(n)} BTC verloren` };
 }
 const diskReply = (g) => (g.s.flags.diskOk ? (g.s.flags.backup ? '<b>Deniz:</b> Backup eingespielt, alles da. Siehst du? Langweilig ist gut.' : '<b>Deniz:</b> ES LÄUFT! Die Wallet ist zurück! Ich brauch ein Bier. Und du ein Backup.') : '<b>Deniz:</b> Weg. Alles weg. Ich … kauf dir einen USB-Stick. Für die nächsten.');
-const debtCost = () => CHAPTERS.flatMap((c) => c.goals).find((x) => x.id === 'debt')?.action?.cost || 15000;
-const debtLeft = (s) => Math.max(0, debtCost() - (s.flags.debtPaid || 0)); // Raten (Ziel-Knopf „1.000 $ einzahlen“, Papas 2.000 $) zählen mit
-// Laden verloren: Werkstatt ein halbes Jahr mietfrei, danach 25 % teurer (Herr Öztürk statt Papa)
-const shopLostMods = () => [{ key: 'rent', mult: 0, days: 182, fac: 'werkstatt' }, { key: 'rent', mult: 1.25, fac: 'werkstatt', src: 'oeztuerk' }];
-// Kapitel 2 gilt mit dem Verlust des Ladens als abgeschlossen (auch ohne Rig und 30 $/Tag – sonst säße ein schwacher Spieler für immer im Keller)
-const closeCh2 = (g, s) => { for (const go of CHAPTERS[1].goals) s.goals[go.id] = true; g.checkGoals(); };
+// Papas Laden: Die Bankfrist (15.000 $ bis Ende 2013) mit „bankdruck“, „ladenzu“ und „ladenrueck“ ist entfallen. Alte Spielstände behalten
+// ihre Flags (debt, shopLost, shopBack, papaJob) – die Texte mit Varianten (REL_PERK.papaLost, story.js, contacts.js) lesen sie weiter.
 
 // Beziehungen ab Stufe 3 (Wirkung in Game.relFx / Game.powerCost)
 export const REL_PERK = {
@@ -356,16 +352,6 @@ export const EVENTS = [
     fallback: 1,
   },
   {
-    id: 'bankdruck', from: 'Papa', title: 'Die Bank macht Druck', when: { date: '2012-04-20', window: 20 }, cond: (s) => !s.flags.debt && s.chapter >= 1,
-    text: (s, h, g) => `„Die Bank hat angerufen. Sie wollen die ${s.flags.debtPaid ? `restlichen ${usd(debtLeft(s))}` : usd(debtCost())} nicht erst Ende 2013 – sie drohen, den Kredit schon dieses Jahr zu kündigen. Ich weiß nicht weiter.“${btc(s) > 1 ? ` Deine <b>${nf(0).format(btc(s))} BTC</b> wären heute ${usd(btc(s) * g.price('BTC'))} wert.` : ''}`,
-    choices: [
-      { label: 'Bitcoin verkaufen und alles zahlen', need: (s, h, g) => s.cash + btc(s) * g.price('BTC') * (1 - g.tradeFee()) >= debtLeft(s), hint: 'Laden sofort gerettet · Papa +2', fx: (g, s) => { const c = debtLeft(s); if (s.cash < c) { const need = (c - s.cash + 100) / (g.price('BTC') * (1 - g.tradeFee())); sellCoins(g, 'BTC', Math.min(1, need / Math.max(1e-9, btc(s)))); } s.cash -= c; s.flags.debtPaid = debtCost(); return { flag: 'debt', rel: { papa: 2 }, do: () => g.checkGoals(), log: `April 2012: Papas Schulden mit Bitcoin bezahlt (${usd(c)})` }; }, reply: '<b>Papa:</b> Ich … ich hab den Brief von der Bank verbrannt. Im Waschbecken. Mama war nicht begeistert.' },
-      { label: (g) => `Papa ${usd(Math.min(2000, debtLeft(g.s)))} für die Raten geben`, cost: (g) => Math.min(2000, debtLeft(g.s)), hint: (g) => `Die Bank gibt bis Ende 2013 Ruhe · zählt als Rate: danach noch ${usd(Math.max(0, debtLeft(g.s) - 2000))} · Papa +1`, fx: (g, s) => { const n = Math.min(2000, debtLeft(s)); s.flags.debtPaid = (s.flags.debtPaid || 0) + n; return { rel: { papa: 1 }, flag: debtLeft(s) <= 0 ? 'debt' : [], do: () => g.checkGoals(), log: `April 2012: Papa ${usd(n)} für die Bank gegeben` }; }, reply: '<b>Papa:</b> Die Bank hält still. Danke, Kind. Den Rest schaffen wir bis Ende 2013.' },
-      { label: '„Die Bank blufft, Papa.“', hint: 'Papa −2', fx: { rel: { papa: -2 }, log: 'April 2012: Papa mit der Bank allein gelassen' }, reply: '<b>Papa:</b> Hoffentlich hast du recht. Ich schlaf seit Wochen schlecht.' },
-    ],
-    fallback: 1,
-  },
-  {
     id: 'bitspar', from: 'Deniz', title: '7 Prozent pro Woche', when: { date: '2012-08-05', window: 10 },
     text: (s) => `„Kennst du BitSpar? Der Typ zahlt 7 % Zinsen – pro <b>Woche</b>. Mein Cousin hat schon 40 Bitcoin Gewinn. Auf dem Papier.“${btc(s) > 0.05 ? ` Du hast ${nf(1).format(btc(s))} BTC.` : ''}`,
     choices: [
@@ -433,17 +419,6 @@ export const EVENTS = [
   },
 
   // ---------- 2014 ----------
-  {
-    // Frist aus m1: Wer Papas Schulden bis Ende 2013 nicht bezahlt, verliert den Laden – Kapitel 2 ist trotzdem geschafft (flag shopLost).
-    // Folgen: Werkstatt gehört Herrn Öztürk (ein halbes Jahr mietfrei, danach +25 % Miete, kein Papa-Rabatt), Papa −2; Rückkauf: 'ladenrueck'.
-    id: 'ladenzu', from: 'Papa', title: 'Die Bank schließt den Laden', when: { date: '2014-01-02', window: 5000 }, cond: (s) => !s.flags.debt && s.chapter === 1,
-    text: (s) => `„${s.day < toDay('2014-02-15') ? 'Die Frist ist um. Die Bank hat Elektro Brandt heute versiegelt.' : 'Ich wollte es dir nicht sagen: Die Bank hat Elektro Brandt schon Silvester 2013 versiegelt.'} Neunundzwanzig Jahre, Kind.“ Bei der Versteigerung kauft Herr Öztürk das Haus – früher Zweirad Öztürk, hinten in der Werkstatt. Er bietet dir die Werkstatt hinterm alten Laden zur Miete an, das erste halbe Jahr umsonst: „Für Ihren Vater.“`,
-    choices: [
-      { label: 'Papa fängt bei dir an', hint: 'Papa −1, Mama +1 · 300 $ Lohn im Monat · dauerhaft −15 % Reparaturkosten und 5 % weniger Ausfälle', fx: { rel: { papa: -1, mama: 1 }, mod: [...shopLostMods(), { key: 'monthly', mult: 300 }, { key: 'repair', mult: 0.85 }, { key: 'fail', mult: 0.95 }], flag: ['shopLost', 'papaJob'], do: closeCh2, log: 'Januar 2014: Die Bank schließt den Laden – Papa arbeitet jetzt bei dir' }, reply: '<b>Papa:</b> Lötkolben kann ich. Hashrate lern ich. Und den Kaffee koch ich sowieso.' },
-      { label: 'Papa braucht erst mal Ruhe', hint: 'Papa −2', fx: { rel: { papa: -2 }, mod: shopLostMods(), flag: 'shopLost', do: closeCh2, log: 'Januar 2014: Die Bank schließt den Laden' }, reply: '<b>Mama:</b> Er sitzt im Garten und sortiert Schrauben. Lass ihm Zeit.' },
-    ],
-    fallback: 1,
-  },
   {
     id: 'goxstop', from: 'Deniz', title: 'GoxBank zahlt nicht mehr aus', when: { date: '2014-02-07', window: 10 }, cond: (s, h, g) => exUSD(g) > 50,
     text: (s, h, g) => `„GoxBank hat alle Auszahlungen gestoppt, angeblich ‚technische Probleme‘. Auf der Börse liegen noch Coins im Wert von <b>${usd(exUSD(g))}</b>. Ein Händler kauft GoxBank-Guthaben – für 75 % des Kurses.“`,
@@ -672,17 +647,6 @@ export const EVENTS = [
     fallback: 2,
   },
 
-  {
-    // Rückkauf nach „ladenzu“: Herr Öztürk verkauft das Haus (Laden + Werkstatt)
-    id: 'ladenrueck', from: 'Herr Öztürk', title: 'Das Haus von Elektro Brandt', when: { date: '2017-11-20', window: 3000 },
-    cond: (s) => !!s.flags.shopLost && !s.flags.shopBack && s.cash > 200000,
-    text: '„Ich werde siebzig und will das Haus verkaufen – Laden, Werkstatt, alles. Ich frage zuerst Sie. Ihr Vater hat da drin neunundzwanzig Jahre Fernseher repariert.“',
-    choices: [
-      { label: 'Elektro Brandt zurückkaufen', cost: memo('rueck', (g) => fam(g, 120000, 1, 600000)), hint: 'Papa +3, Mama +1 · Papa öffnet den Laden wieder · Werkstatt ohne Miete', fx: (g, s) => ({ rel: { papa: 3, mama: 1 }, flag: 'shopBack', do: () => { (s.fac.werkstatt.up ||= {}).buyshop ||= s.day || 1; }, log: 'Elektro Brandt zurückgekauft – Papa schließt den Laden wieder auf' }), reply: '<b>Papa:</b> Das Schild hab ich all die Jahre im Keller aufgehoben. Ich hab es nie jemandem gesagt.' },
-      { label: 'Lieber in Hashwerk investieren', hint: 'Papa −1', fx: { rel: { papa: -1 }, log: 'Das Haus von Elektro Brandt nicht zurückgekauft' }, reply: '<b>Papa:</b> Ist schon recht. Ist ja nur ein Haus.' },
-    ],
-    fallback: 1,
-  },
 
   // ---------- 2018 ----------
   {

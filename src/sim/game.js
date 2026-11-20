@@ -7,19 +7,22 @@ import { ACHIEVEMENTS } from '../data/achievements.js';
 import { UPGRADES, DIFFICULTY, FULL_TALK, FEATURES } from '../data/world.js';
 import { ROLES, TRAITS, FIRST, LAST } from '../data/staff.js';
 import { BANK_EVENTS } from '../data/events_bank.js';
+import { BILL_EVENTS, BILL_GRACE, LANDLORD, SUPPLIER, PAPA_LOAN_MSG, PAPA_THANKS, PAPA_DONE, monthName } from '../data/bills.js';
 import { CONTACT, CONTACTS, READY_BY, FEE_TIERS } from '../data/contacts.js';
 import { FUTURE, futureModel, ENDLESS_GOALS, EGOAL, ENDLESS_NEWS } from '../data/endless.js';
 import { BTC_HASH, POWER_HOUSEHOLD, GPU_BOOM, MONOLITH_SHARE, DAG_AET, DAG_AEC, seasonOffset, noise, toDay, BTC_PRICE, curve, HALVINGS, BTC_REWARD } from '../data/history.js';
 export const SKILL_XP = [0, 150, 500, 1200, 2500, 4500, 7500, 12000, 18000, 26000]; // Erfahrung für Stufe 1–10
 export const SKILL_PCT = 2; // Schrauben: −2 % Hardwarepreis, Mining: +2 % Ertrag je Stufe über 1
 export const TRADE_FEES = [0.04, 0.035, 0.03, 0.025, 0.02, 0.016, 0.013, 0.01, 0.0075, 0.005]; // Börsengebühr je Handel-Stufe
-for (const e of BANK_EVENTS) if (!EVENT[e.id]) { EVENTS.push(e); EVENT[e.id] = e; } // Bankgespräch (nur über Game.dispoDay)
+for (const e of [...BANK_EVENTS, ...BILL_EVENTS]) if (!EVENT[e.id]) { EVENTS.push(e); EVENT[e.id] = e; } // Bankgespräch (Game.dispoDay), Mahnung (Game.billsDay)
 
 const LAST_DATA_DAY = BTC_PRICE.lastDay;
 const FREE_POWER_END = toDay('2011-03-01'); // bis dahin steckt der Strom der Wohnung in der Pauschale der Warmmiete – dann sieht Herr Krause die Abrechnung
 export const SAVE_KEY = 'hashwerk-save-v1';
 const DEFAULT_AUTOSELL = 0.8;
 const LESSON_DAYS = 5; // Anlernen: so viele Spieltage hat eine Lektion, ehe die nächste kommt
+const monthDays = (day) => { const d = new Date(day * 864e5); return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate(); }; // Tage im Monat des Tages
+const round2 = (v) => Math.round(v * 100) / 100;
 export const BUILD_FEE = 0.1; // Montageaufschlag für fertig montierte PCs/Rigs (Neukunde; Stammkunden zahlen weniger: FEE_TIERS in contacts.js)
 
 const RELEASES = [...PLACEABLES, ...PARTS].filter((it) => it.releaseDay > START_DAY && (it.kind === 'device' || it.kind === 'rig' || it.type));
@@ -57,10 +60,13 @@ export class Game {
     this.registerFutureHW([]);
     for (const c of COINS) s.autoSell[c.id] = 0;
     this.initProgress(s);
-    for (const id of ['m0', 'm0b']) { const m = MESSAGES.find((x) => x.id === id); if (m) s.messages.push({ id, day: START_DAY, from: m.from, text: m.text, read: true }); } // Start-Nachrichten (Anlernen: ungelesen, startTutor)
     this.s = s;
     this.cache = {};
     this.initEcon(diff);
+    // Startgeld = Papas Umzugsdarlehen: ohne Frist und Zinsen, zurückzahlen über Papas Kontakt im Handy (repayPapa). Miete und Strom kommen monatlich (s.bills)
+    s.papaLoan = { total: s.cash, left: s.cash, paid: 0, since: START_DAY, last: 0 }; s.bills = { acc: null, open: null, hist: [] };
+    s.messages.push({ id: 'm0p', day: START_DAY, from: 'Papa', text: PAPA_LOAN_MSG(s.cash), read: true });
+    for (const id of ['m0', 'm0b']) { const m = MESSAGES.find((x) => x.id === id); if (m) s.messages.push({ id, day: START_DAY, from: m.from, text: m.text, read: true }); } // Deniz' Bitcoin-Idee (Anlernen: erst nach kurzer Zeit, denizIdea)
     // Start: leeres Gehäuse – den ersten Mining-PC baut der Spieler selbst zusammen.
     // Im Keller liegen nur die billigsten Teile (ohne Grafikkarte): erst CPU-Mining, die erste Grafikkarte bestellt man im Shop
     s.loose = { mobo: 'h55', cpu: 'cel33', psu: 'psu400' }; s.looseN = 3; s.inv = [];
@@ -114,7 +120,9 @@ export class Game {
       s.ev ||= { done: {}, open: null, log: [], later: [], last: 0 }; s.ev.done ||= {}; s.ev.log ||= []; s.ev.later ||= [];
       s.skills ||= { hw: 0, mining: 0, trade: 0 };
       s.rel ||= { papa: 0, mama: 0, opa: 0, deniz: 0 }; s.mods ||= []; s.ach ||= {}; s.flags ||= {};
-      if (!s.flags.tempo6) { s.speed = { 0: 0, 1: 4, 2: 4, 3: 5, 4: 6 }[s.speed] ?? 4; s.flags.tempo6 = true; } // Tempo neu: 1 = Echtzeit; alte Stufen auf die passenden neuen s.stats ||= { minedUSD: 0, sold: 0, spentHW: 0, elec: 0, history: [] };
+      if (!s.flags.tempo6) { s.speed = { 0: 0, 1: 4, 2: 4, 3: 5, 4: 6 }[s.speed] ?? 4; s.flags.tempo6 = true; } // Tempo neu: 1 = Echtzeit; alte Stufen auf die passenden neuen
+      s.stats ||= { minedUSD: 0, sold: 0, spentHW: 0, elec: 0, history: [] }; s.stats.history ||= [];
+      this.migrateBills(s); // Monatsabrechnung, Papas Darlehen, entfallene Bankfrist
       s.futureHW ||= []; s.netEff ||= 1; s.egoals ||= { done: {}, st: {}, cur: null }; s.egoals.done ||= {}; s.egoals.st ||= {}; s.fin ||= {}; s.ngPlus ||= 0; s.enews ||= {};
       s.keep ||= {}; s.talk ||= { last: {}, week: {}, joy: {}, got: {}, seen: {}, line: {} };
       this.initProgress(s);
@@ -283,8 +291,18 @@ export class Game {
   startTutor() {
     const s = this.s; s.flags.tutor = 1; s.feat = {}; s.learn = { cur: null, q: [], day: s.day, done: {} };
     s.frac = 0.3; // Aufwachen am Morgen
-    for (const m of s.messages) if (m.id === 'm0' || m.id === 'm0b') m.read = false;
+    s.messages = s.messages.filter((m) => m.id !== 'm0' && m.id !== 'm0b'); s.flags.idea = 0; delete s.goals.settle; // erst Papas Nachricht, Deniz schreibt kurz danach (denizIdea)
+    for (const m of s.messages) if (m.id === 'm0p') m.read = false;
     this.dayUpdate(true);
+  }
+  // Anlernen: Deniz' Nachricht mit der Bitcoin-Idee – die Oberfläche ruft sie nach kurzer Zeit (oder ein paar Schritten) nach Papas Nachricht,
+  // spätestens kommt sie beim ersten aufgehobenen Teil. Ohne Anlernen (Bots, Tests, alte Stände) liegen die Nachrichten schon beim Start im Handy.
+  ideaPending() { const s = this.s; return !!s.flags?.tutor && !s.flags.idea && !s.flags.miningStarted; }
+  denizIdea() {
+    const s = this.s; if (!this.ideaPending()) return false;
+    s.flags.idea = s.day || 1;
+    for (const id of ['m0', 'm0b']) { const m = MESSAGES.find((x) => x.id === id); if (!m || s.messages.some((x) => x.id === id)) continue; const x = { id, day: s.day, from: m.from, text: m.text, read: false }; s.messages.push(x); this.emit('message', x); }
+    this.emit('idea'); this.checkGoals(); this.emit('refresh'); return true;
   }
   lesson() { return this.s.flags?.tutor ? this.s.learn?.cur || null : null; }
   tutorTick() {
@@ -429,7 +447,7 @@ export class Game {
   creditPending(coin, n) { const s = this.s; if (!(n > 0)) return; s.wallet[coin].ex += n; const n0 = s.accr?.day === s.day && s.accr.coin === coin ? s.accr.n || 0 : 0; s.accr = { day: s.day, f: s.frac, coin, n: n0 + n }; } // n: heute schon gutgeschrieben
   tradeFee() { return Math.max(0, (TRADE_FEES[this.skillLv('trade') - 1] ?? 0.005) - (this.s.staff?.list && this.staffFx().trader ? 0.005 : 0)); }
   // ---------- Herumliegende Teile ----------
-  pickUp(type) { const s = this.s; if (!s.loose?.[type]) return false; s.inv.push(type); s.invIds = { ...(s.invIds || {}), [type]: s.loose[type] }; delete s.loose[type]; this.learned('walk'); this.checkGoals(); this.checkFeatures(); this.emit('loose'); return true; }
+  pickUp(type) { const s = this.s; if (!s.loose?.[type]) return false; if (this.ideaPending()) this.denizIdea(); s.inv.push(type); s.invIds = { ...(s.invIds || {}), [type]: s.loose[type] }; delete s.loose[type]; this.learned('walk'); this.checkGoals(); this.checkFeatures(); this.emit('loose'); return true; }
   installLoose(uid, type) {
     const s = this.s, o = this.findObj(uid); if (!o?.parts || !s.inv?.includes(type)) return false;
     if ((type === 'cpu' || type === 'gpu') && !o.parts.mobo) return false;
@@ -1042,6 +1060,28 @@ export class Game {
     s.nextParcel = Math.max(+s.nextParcel || 0, s.parcels.length + s.unpacked.length);
   }
 
+  // Alte Spielstände: Monatsabrechnung statt täglicher Abbuchung (Aufgelaufenes beginnt mit dem Laden), Wohnung und Keller bleiben mietfrei wie bisher,
+  // kein Darlehen (das Startgeld war eigenes Geld). Bankfrist entfallen: angezahlte Raten für Papas Laden kommen zurück (Laden gerettet oder verloren:
+  // Flags bleiben, wie sie sind), offene Entscheidungen zu entfallenen Ereignissen (bankdruck, ladenzu, ladenrueck) werden verworfen.
+  migrateBills(s) {
+    const old = !s.bills || typeof s.bills !== 'object';
+    if (old) s.bills = { acc: null, open: null, hist: [] };
+    const b = s.bills; b.hist = Array.isArray(b.hist) ? b.hist.filter((x) => x && typeof x === 'object' && Array.isArray(x.items)) : [];
+    if (b.acc && (typeof b.acc !== 'object' || !b.acc.fac || !b.acc.other)) b.acc = null;
+    if (b.open && !(b.open.amt >= 0)) b.open = null;
+    if (b.open) { const o = b.open; o.fee = +o.fee || 0; o.stage = Math.max(0, Math.min(3, o.stage | 0)); o.sites = (o.sites || []).filter((id) => FACILITY[id]); o.months ||= []; o.who ||= []; if (!Number.isFinite(o.due)) o.due = s.day + BILL_GRACE; }
+    for (const [id, f] of Object.entries(s.fac || {})) if (f?.cut && !b.open?.sites?.includes(id)) delete f.cut; // Sperre ohne offene Rechnung: aufheben
+    if (!s.papaLoan || typeof s.papaLoan !== 'object') { s.papaLoan = { total: 0, left: 0, paid: 0, since: s.day || START_DAY, last: 0 }; if (old) s.flags.freeFlat = 1; }
+    const L = s.papaLoan; for (const k of ['total', 'left', 'paid']) L[k] = Math.max(0, +L[k] || 0);
+    const paid = +s.flags.debtPaid || 0;
+    if (paid > 0 && !s.flags.debt && !s.flags.shopLost && !s.flags.debtRefund) { // angezahlt, aber weder gerettet noch verloren: Papa überweist zurück
+      s.cash = (Number.isFinite(s.cash) ? s.cash : 0) + paid; s.flags.debtRefund = s.day || 1;
+      s.messages.push({ id: 'mDebtRefund', day: s.day, from: 'Papa', text: `Die Bank und ich haben uns geeinigt, der Laden ist aus dem Gröbsten raus. Deine ${fmtUSD(paid)} hab ich dir zurücküberwiesen. Danke, Kind – das vergess ich dir nie.`, read: false });
+    }
+    if (s.ev?.open && !EVENT[s.ev.open.id]) s.ev.open = null;
+    if (s.flags.tutor && s.flags.idea === undefined) s.flags.idea = s.messages.some((m) => m.id === 'm0') ? 1 : 0; // Anlernen von früher: Deniz hat schon geschrieben
+  }
+
   // ---------- Geräte-Analyse ----------
   // Liefert pro Objekt: {watt, units:[{hash, vram, coin, rev, algo}], cool, heat, status}
   analyze(o, day = this.s.day, elec = null) {
@@ -1124,7 +1164,7 @@ export class Game {
     let watt = 0, heat = 0, cool = fd.baseCool * this.fx('cool', facId), rev = 0; const per = new Map(); const hashByAlgo = {};
     const elecP = this.elecPrice(facId, day);
     let coolCap = 0, coolW = 0; const coolers = [];
-    for (const o of f.objects) per.set(o.uid, f.mothball ? { watt: 0, cool: 0, heat: 0, units: [], status: 'off', note: 'Eingemottet' } : this.analyze(o, day, elecP));
+    for (const o of f.objects) per.set(o.uid, f.mothball || f.cut ? { watt: 0, cool: 0, heat: 0, units: [], status: 'off', note: f.cut ? 'Strom abgestellt – Rechnung offen' : 'Eingemottet' } : this.analyze(o, day, elecP));
     this.autoLimit(facId, per, elecP, day);
     for (const o of f.objects) {
       const a = per.get(o.uid);
@@ -1205,7 +1245,8 @@ export class Game {
   algoHash(algo) { let h = 0; for (const id of this.s.unlocked) { const sm = this.summary[id]; if (sm && !sm.tripped) h += (sm.hashByAlgo[algo] || 0) * sm.throttle; } return h; }
   walletValue() { let v = 0; for (const c of COINS) { const w = this.s.wallet[c.id]; v += (w.ex + w.cold) * this.price(c.id); } return v; }
   hardwareValue() { let v = this.bagValue() + this.pendingValue(); for (const f of Object.values(this.s.fac)) for (const o of f.objects) v += this.objectValue(o); return v; }
-  netWorth() { return this.s.cash + this.walletValue() + this.hardwareValue() - (this.s.loan || 0); }
+  netWorth() { return this.s.cash + this.walletValue() + this.hardwareValue() - (this.s.loan || 0) - this.privateDebt(); }
+  privateDebt() { return this.papaLeft() + this.owed() + this.billAccrued(); } // Papas Darlehen, offene und aufgelaufene Rechnungen zählen als Schuld
   monolithHash(day = this.s.day) { return day < toDay('2014-03-01') ? 0 : BTC_HASH(Math.min(day, LAST_DATA_DAY)) * MONOLITH_SHARE(day) * (this.s.endless ? this.s.endless.BTC.h : 1) * this.fx('monolith'); }
   dailyProfit() { let rev = 0, cost = 0; for (const id of this.s.unlocked) { const sm = this.summary[id]; if (!sm) continue; if (!sm.tripped) { rev += sm.rev * sm.throttle; cost += Math.max(0, sm.watt / 1000 * 24 - this.solarKwh(id)) * sm.elec; } cost += FACILITY[id].rent / 30.4 * this.fx('rent', id); } cost += this.staffMonthly() / 30.4 + this.extraDaily(this.s.day, true); for (const md of this.s.mods || []) if (md.key === 'monthly' && this.s.day < md.until) cost += md.mult / 30.4; if (this.s.loan > 0) cost += this.s.loan * this.loanRate() / 365; return { rev, cost, net: rev - cost }; }
   techSalary(day = this.s.day) { return Math.round(2600 * Math.pow(1.03, (day - toDay('2014-01-01')) / 365)); }
@@ -1213,6 +1254,7 @@ export class Game {
 
   // Zusammenfassungen für alle Standorte neu berechnen
   dayUpdate(silent = false) {
+    if (this.s.bills?.open && !this.billBusy) { this.billBusy = true; try { this.billAutoPay(); } finally { this.billBusy = false; } } // offene Rechnung: zahlen, sobald das Konto reicht (nach Verkäufen, Krediten …)
     this.summary = {};
     for (const id of this.s.unlocked) this.summary[id] = this.facSummary(id);
     if (this.s.feat) { this.checkFull(); this.checkFeatures(); this.checkGoals(); }
@@ -1231,7 +1273,7 @@ export class Game {
     const D = day - 1, minedByCoin = {}, f0 = s.mineDay0 === D ? s.mineFrac0 || 0 : 0, startK = Math.max(0, 1 - f0);
     // Vorab gutgeschrieben wurde nur der behaltene Anteil eines Coins (s.accr.coin) – Auto-Verkauf und andere Coins laufen voll weiter
     const accrC = s.accr?.day === D ? s.accr.coin || 'BTC' : null, keepK = (c) => (c === accrC && startK > 0 ? Math.max(0, 1 - Math.max(f0, s.accr.f || 0)) / startK : 1);
-    let elecCost = 0;
+    let elecCost = 0; const elecBy = {}; // Strom je Standort: läuft über den Monat auf, abgebucht wird am 1. (issueBill)
     const netOwn = {}, perH = {}, coinPerH = (c) => (perH[c] ??= COIN[c].emission(day) * this.fx('rev') / (this.netHash(c, day) + (s.lastNet[c] || 0))); // je Coin einmal pro Tag
     for (const id of s.unlocked) {
       const f = s.fac[id], sm = this.facSummary(id, day);
@@ -1240,7 +1282,7 @@ export class Game {
       if (sm.tripped && !wasTripped) { this.toast(`Sicherung raus! ${(sm.watt / 1000).toFixed(1)} von ${sm.capKw} kW`, 'bad', 9000); s.flags.everTripped = true; }
       if (!sm.tripped && wasTripped) this.toast(`Strom in „${FACILITY[id].name}" wieder da`, 'good');
       if (sm.tripped) continue;
-      elecCost += Math.max(0, (sm.watt / 1000) * 24 - this.solarKwh(id, day)) * sm.elec;
+      const kwh = Math.max(0, (sm.watt / 1000) * 24 - this.solarKwh(id, day)), ec = kwh * sm.elec; elecCost += ec; elecBy[id] = [ec, kwh, sm.elec];
       for (const o of f.objects) {
         const a = sm.per.get(o.uid);
         for (const u of a.units) {
@@ -1268,17 +1310,21 @@ export class Game {
       const keep = c === accrC && s.accr.n != null ? Math.max(0, n - sell - s.accr.n) : (n - sell) * keepK(c); // vorab Gutgeschriebenes abziehen
       if (s.payoutCold) s.wallet[c].cold += keep; else s.wallet[c].ex += keep;
     }
-    s.cash += sold - elecCost;
+    s.cash += sold;
     s.stats.minedUSD += minedUSD; s.stats.sold += sold; s.stats.elec += elecCost;
     if (minedUSD > 0 && s.skills) this.addXp('mining', 6, true);
-    // Fixkosten
+    // Monatskosten laufen über den Monat auf (Miete und Strom je Standort, Gehälter, Ausbauten, laufende Verträge) und kommen am 1. als Monatsabrechnung
+    const A = this.billAcc(D), md0 = monthDays(D), fac = (id) => (A.fac[id] ||= { rent: 0, elec: 0, kwh: 0 });
+    for (const [id, [ec, kwh, el]] of Object.entries(elecBy)) { const f = fac(id); f.elec += ec; f.kwh += kwh; if (!(el > 0)) f.pausch = 1; } // pausch: Strom steckt in der Warmmiete
     let fixed = 0;
-    for (const id of s.unlocked) fixed += FACILITY[id].rent / 30.4 * this.fx('rent', id);
-    for (const md of s.mods) if (md.key === 'monthly' && day < md.until) fixed += md.mult / 30.4; // laufende Kosten/Erträge aus Ereignissen (negativ = Einnahme)
-    fixed += this.staffMonthly(day) / 30.4 + this.extraDaily(day); // Personal, Ausbauten, Umschuldung
-    if (s.loan > 0) fixed += (s.loan * this.loanRate(day)) / 365;
-    s.cash -= fixed;
+    for (const id of s.unlocked) { const r = (FACILITY[id].rent * this.fx('rent', id)) / md0; if (r) { fac(id).rent += r; fixed += r; } }
+    for (const md of s.mods) if (md.key === 'monthly' && day < md.until) { const v = md.mult / md0; A.other[v < 0 ? 'income' : 'deals'] = (A.other[v < 0 ? 'income' : 'deals'] || 0) + v; fixed += v; } // laufende Kosten/Erträge aus Ereignissen (negativ = Einnahme)
+    { const st = this.staffMonthly(day) / md0, up = this.upMonthly() / md0; if (st) A.other.staff = (A.other.staff || 0) + st; if (up) A.other.ups = (A.other.ups || 0) + up; fixed += st + up; } // Personal, Ausbauten
+    // Bank: Zinsen (Kredit, Umschuldung) gehen weiter täglich vom Konto
+    const bank = (s.loanHi > 0 ? Math.min(s.loanHi, s.loan || 0) * this.hiRate(day) / 365 : 0) + (s.loan > 0 ? (s.loan * this.loanRate(day)) / 365 : 0);
+    s.cash -= bank; fixed += bank;
     if (!Number.isFinite(s.cash)) s.cash = 0;
+    if (new Date(day * 86400000).getUTCDate() === 1) this.issueBill(D); // Monatserster: Abrechnung des Vormonats
     if (s.cash < 0) {
       // Automatisch Coins von der Börse verkaufen, um das Minus auszugleichen
       let need = -s.cash + 50; const fk = 1 - (s.skills ? this.tradeFee() : 0.005);
@@ -1288,6 +1334,7 @@ export class Game {
     // Techniker reparieren
     this.techRepairs(day);
     this.econDay(day);
+    this.billsDay(day); // offene Rechnungen: automatisch zahlen, sobald das Konto reicht, sonst Mahnstufen
     this.deliverDue(day); // Online-Shop: gestrige Bestellungen liegen jetzt vor der Wohnungstür
     // News & Ereignisse
     while (s.newsIdx < NEWS.length && NEWS[s.newsIdx].day <= day) {
@@ -1343,7 +1390,7 @@ export class Game {
     }
   }
   algoHashFrom(netOwn) { return netOwn.BTC || 0; }
-  netWorthFast() { return this.s.cash + this.walletValue() + this.hardwareValue() - (this.s.loan || 0); }
+  netWorthFast() { return this.s.cash + this.walletValue() + this.hardwareValue() - (this.s.loan || 0) - this.privateDebt(); }
 
   wear(o, temp, day) {
     if (this.s.chapter === 0 && this.s.feat) return; // in der ersten Wohnung geht nichts kaputt
@@ -1708,7 +1755,8 @@ export class Game {
     if (key === 'elec') return this.diff('elec') * (facId && s.fac?.[facId]?.up ? this.upFx(facId, 'elec') : 1); // Schwierigkeit: Strompreis
     if (!facId || !s.fac?.[facId]?.up) return 1;
     let m = this.upFx(facId, key);
-    if (key === 'rent' && this.rentProbe !== facId && !this.facInUse(facId)) return 0; // ohne Mining-Geräte: der Mietvertrag ruht, bis das erste Gerät drinsteht
+    if (key === 'rent' && (facId === 'kinder' || facId === 'keller') && s.flags?.freeFlat) return 0; // alte Spielstände: Wohnung und Keller bleiben mietfrei wie bisher
+    if (key === 'rent' && facId !== 'kinder' && this.rentProbe !== facId && !this.facInUse(facId)) return 0; // ohne Mining-Geräte: der Mietvertrag ruht, bis das erste Gerät drinsteht (die Wohnung nicht – hier wohnst du)
     if (key === 'rent' && s.fac[facId].mothball && !(UPGRADES[facId] || []).some((u) => u.keepRent && this.upActive(facId, u))) m *= s.fac[facId].noRent ? 0 : 0.3;
     return m;
   }
@@ -1765,7 +1813,7 @@ export class Game {
   }
   dispoDay(day) {
     const s = this.s; s.cash -= -s.cash * this.dispoRate() / 365;
-    const lim = this.dispoLimit(), over = -s.cash > lim;
+    const lim = this.dispoLimit(), over = this.owed() - s.cash > lim; // offene Rechnungen zählen mit
     if (!s.flags.warnedNeg || day - s.flags.warnedNeg > 30) { s.flags.warnedNeg = day; this.toast(over ? `Dispo überzogen: ${fmtUSD(s.cash)} bei ${fmtUSD(lim)} Rahmen!` : `Konto im Minus: Dispo ${fmtUSD(-s.cash)} von ${fmtUSD(lim)} (${fmtNum(this.dispoRate() * 100, 0)} % Zinsen)`, 'bad', 8000); }
     if (over && s.ev && !s.ev.open && day - (s.flags.bankTalk || -99) >= 14) { s.flags.bankTalk = day; this.openEvent(EVENT.bank, 'bank:' + day); }
   }
@@ -1774,10 +1822,10 @@ export class Game {
     for (const id of this.s.unlocked) { if (id === 'kinder') continue; for (const o of this.s.fac[id].objects) { const k = PLACEABLE[o.type].kind; if (k !== 'decor' && k !== 'cooling') all.push(o); } }
     return all.sort((a, b) => (a.bought || 0) - (b.bought || 0) || a.uid - b.uid);
   }
-  bankSalePreview() { const need = -this.s.cash; let v = 0; for (const o of this.bankSaleList()) { if (v >= need) break; v += this.objectValue(o); } return v; }
+  bankSalePreview() { const need = this.owed() - this.s.cash; let v = 0; for (const o of this.bankSaleList()) { if (v >= need) break; v += this.objectValue(o); } return v; }
   bankFireSale() {
     let n = 0, v = 0;
-    for (const o of this.bankSaleList()) { if (this.s.cash >= 0) break; v += this.objectValue(o); this.removeObject(o.uid); n++; }
+    for (const o of this.bankSaleList()) { if (this.s.cash >= this.owed()) break; v += this.objectValue(o); this.removeObject(o.uid); n++; } // offene Rechnungen zahlt dayUpdate, sobald es reicht
     if (n) this.toast(`Notverkauf: ${n} Gerät(e) für ${fmtUSD(v)} abgegeben.`, 'info', 7000);
     return v;
   }
@@ -1792,10 +1840,11 @@ export class Game {
   }
   savingPossible() { const s = this.s; return (s.staff?.list?.length || 0) + s.unlocked.filter((id) => this.canMothball(id) && !s.fac[id].mothball && (s.fac[id].objects.length || FACILITY[id].rent)).length + s.mods.filter((md) => md.key === 'monthly' && md.mult > 0 && md.until > s.day).length > 0; }
   // Insolvenz: nur wenn nichts mehr hilft – Schulden weg, Kasse 0, Mietverträge eingemotteter Standorte ruhen bis zum Wiederanfahren
-  insolvencyOk() { const s = this.s; return s.cash < -this.dispoLimit() && this.bankSalePreview() <= 0 && this.coldValue() < 1 && !this.reschedOk() && !!s.flags.opaBank && !this.savingPossible(); }
+  insolvencyOk() { const s = this.s; return s.cash - this.owed() < -this.dispoLimit() && this.bankSalePreview() <= 0 && this.coldValue() < 1 && !this.reschedOk() && !!s.flags.opaBank && !this.savingPossible(); }
   bankInsolvency() {
-    const s = this.s; const debt = Math.max(0, -s.cash) + (s.loan || 0);
+    const s = this.s; const debt = Math.max(0, -s.cash) + (s.loan || 0) + this.owed();
     s.cash = 0; s.loan = 0; s.loanHi = 0; s.flags.insolvent = (s.flags.insolvent || 0) + 1;
+    if (s.bills?.open) { for (const id of s.bills.open.sites || []) if (s.fac[id]) delete s.fac[id].cut; s.bills.open = null; for (const b of s.bills.hist) if (b.st === 'open') b.st = 'insolv'; } // offene Rechnungen gehen in die Insolvenz
     for (const id of s.unlocked) if (s.fac[id].mothball) s.fac[id].noRent = 1;
     for (const c of COINS) s.wallet[c.id].ex = 0;
     this.toast(`Insolvenz: ${fmtUSD(debt)} Schulden gestrichen. Neuanfang mit leerer Kasse.`, 'bad', 9000);
@@ -1803,7 +1852,7 @@ export class Game {
   }
   coldValue() { let v = 0; for (const c of COINS) v += (this.s.wallet[c.id]?.cold || 0) * this.price(c.id); return v; }
   bankColdSale() { // Cold-Wallet anzapfen: so viel verkaufen, bis das Konto wieder 1.000 $ im Plus ist (wertvollste Coins zuerst)
-    const s = this.s; let need = Math.max(0, -s.cash) + 1000, got = 0;
+    const s = this.s; let need = Math.max(0, this.owed() - s.cash) + 1000, got = 0;
     for (const c of [...COINS].sort((a, b) => (s.wallet[b.id].cold * this.price(b.id)) - (s.wallet[a.id].cold * this.price(a.id)))) {
       const w = s.wallet[c.id], p = this.price(c.id) * (1 - this.tradeFee()); if (need <= 0 || !p || !(w.cold > 0)) continue;
       const n = Math.min(w.cold, need / p); w.cold -= n; s.cash += n * p; s.stats.sold += n * p; got += n * p; need -= n * p;
@@ -1814,13 +1863,13 @@ export class Game {
   bankAuto() { // ohne Antwort: Geräte, dann Cold-Wallet, dann Sparprogramm – hilft das alles nicht mehr: Opa, zuletzt Insolvenz (keine Endlos-Schulden)
     if (this.bankFireSale()) return 'Notverkauf alter Geräte'; if (this.bankColdSale()) return 'Cold-Wallet angezapft';
     if (this.savingPossible()) { this.bankSaving(); return 'Sparprogramm (eingemottet, Personal entlassen)'; }
-    const s = this.s; if (s.cash >= -this.dispoLimit()) return 'Aufschub';
+    const s = this.s; if (s.cash - this.owed() >= -this.dispoLimit()) return 'Aufschub';
     if (!s.flags.opaBank) { this.applyFx({ cash: 5000, flag: 'opaBank', rel: { opa: 1 } }); this.toast('Opa Heinz springt ein: 5.000 $ fürs Konto.', 'info', 8000); return 'Opa springt ein'; }
     if (this.bankSalePreview() <= 0 && this.coldValue() < 1) { this.bankInsolvency(); this.applyFx({ rel: { papa: -1 } }); return 'Insolvenz'; }
     return 'Aufschub';
   }
-  reschedOk() { const s = this.s, amt = Math.max(0, -s.cash) + 1000; return (s.loan || 0) + amt <= Math.max(20000, this.hardwareValue() * 0.8 + this.walletValue() * 0.5); }
-  bankReschedule() { const s = this.s, amt = Math.ceil((Math.max(0, -s.cash) + 1000) / 100) * 100; s.loan = (s.loan || 0) + amt; s.loanHi = (s.loanHi || 0) + amt; s.cash += amt; return amt; }
+  reschedOk() { const s = this.s, amt = Math.max(0, this.owed() - s.cash) + 1000; return (s.loan || 0) + amt <= Math.max(20000, this.hardwareValue() * 0.8 + this.walletValue() * 0.5); }
+  bankReschedule() { const s = this.s, amt = Math.ceil((Math.max(0, this.owed() - s.cash) + 1000) / 100) * 100; s.loan = (s.loan || 0) + amt; s.loanHi = (s.loanHi || 0) + amt; s.cash += amt; return amt; }
 
   // Kontingente (stock in hardware.js): n Stück pro Kalendermonat bis zum Datum
   firmValue() { return this.s.cash + this.hardwareValue() - (this.s.loan || 0); } // Firmenwert: Kasse + Hardware − Kredit (ohne Coins)
@@ -1904,7 +1953,7 @@ export class Game {
   econDay(day) {
     const s = this.s;
     if (new Date(day * 86400000).getUTCDate() === 1 && s.loan > 0) { const r = this.loanPayment(); s.loan -= r; s.cash -= r; if (s.loanHi) s.loanHi = Math.min(s.loanHi, s.loan); }
-    if (day === FREE_POWER_END && !s.flags.papa1 && s.flags.miningStarted) this.applyFx({ msg: { from: 'Herr Krause', text: 'Ich hab die Nebenkostenabrechnung gesehen. Die Strompauschale in der Warmmiete war für einen Kühlschrank gedacht, nicht für ein Rechenzentrum. Ab März zahlen Sie Ihren Strom nach Zähler.' } });
+    if (day === FREE_POWER_END && !s.flags.papa1 && s.flags.miningStarted) this.applyFx({ msg: { from: 'Herr Krause', text: 'Ich hab die Nebenkostenabrechnung gesehen. Die Strompauschale in der Warmmiete war für einen Kühlschrank gedacht, nicht für ein Rechenzentrum. Ab März zahlen Sie Ihren Strom nach Zähler – steht dann auf Ihrer Monatsabrechnung.' } });
     for (const id of s.unlocked) for (const u of UPGRADES[id] || []) { const d = s.fac[id].up?.[u.id]; if (d && u.days && day - d === u.days) this.toast(`${u.name} (${FACILITY[id].short}) ist ausgelaufen.`, 'info', 7000); }
     if (s.staff?.list && this.staffFx().elec) {
       for (const id of s.unlocked) {
@@ -1912,6 +1961,112 @@ export class Game {
         if (this.facSummary(id, day + 3).tripped) { f.tripWarn = day; const p = this.staffOf('elec')[0]; this.toast(`${p.name}: ${FACILITY[id].name} – in drei Tagen fliegt dort die Sicherung, wenn wir nichts ändern.`, 'bad', 9000); }
       }
     }
+  }
+
+  // ---------- Monatsabrechnung: Miete und Strom je Standort, Gehälter, Ausbauten, Verträge – abgebucht am Monatsersten (Texte: data/bills.js) ----------
+  // s.bills = { acc: { m: 'JJJJ-MM', fac: { id: { rent, elec, kwh, pausch } }, other: { staff, ups, deals, income } }, open: offene Rechnung | null, hist: [Abrechnungen] }
+  // open = { amt, fee, since, stage (0 Erinnerung … 3 gesperrt), due (Frist), sites, months, who, ask }
+  billAcc(day = this.s.day) {
+    const b = (this.s.bills ||= { acc: null, open: null, hist: [] }), m = this.monthKey(day);
+    if (!b.acc) b.acc = { m, fac: {}, other: {} }; else if (b.acc.m !== m) b.acc.m = m; // Sprung über einen Monat (Tests, Laden): Aufgelaufenes kommt mit der nächsten Abrechnung
+    return b.acc;
+  }
+  billAccrued() { const A = this.s.bills?.acc; if (!A) return 0; let v = 0; for (const x of Object.values(A.fac)) v += x.rent + x.elec; for (const x of Object.values(A.other)) v += x; return v; }
+  nextBillDay(day = this.s.day) { return this.stockNext(day); } // der nächste Monatserste
+  // Laufende Monatskosten bei heutiger Last (Firma, Handy): je Standort Miete und Strom, dazu Gehälter, Ausbauten, laufende Verträge
+  monthlyCosts() {
+    const s = this.s, rows = []; let total = 0;
+    for (const id of s.unlocked) {
+      const sm = this.summary?.[id], rent = FACILITY[id].rent * this.fx('rent', id), kwh = sm && !sm.tripped ? Math.max(0, (sm.watt / 1000) * 24 - this.solarKwh(id)) * 30.4 : 0, elec = kwh * (sm?.elec || 0);
+      rows.push({ fac: id, rent, elec, kwh, pausch: kwh > 0 && !(sm.elec > 0), cut: !!s.fac[id]?.cut }); total += rent + elec;
+    }
+    const other = { staff: this.staffMonthly(), ups: this.upMonthly(), deals: 0, income: 0 };
+    for (const md of s.mods || []) if (md.key === 'monthly' && s.day < md.until) other[md.mult < 0 ? 'income' : 'deals'] += md.mult;
+    for (const v of Object.values(other)) total += v;
+    return { rows, other, total };
+  }
+  // Was am nächsten Ersten etwa abgebucht wird: bisher aufgelaufen + der Rest des Monats bei heutiger Last
+  billEstimate() { const s = this.s, n = Math.max(0, this.nextBillDay() - s.day); return this.billAccrued() + (this.monthlyCosts().total / monthDays(s.day)) * n; }
+  owed() { const o = this.s.bills?.open; return o ? o.amt + o.fee : 0; } // offene Rechnungen samt Gebühren
+  dispoOk() { return this.has('loan') && this.s.chapter >= 2; } // Lastschrift über den Dispo erst mit der Firma (Kapitel 3, Bankkredit) – vorher wird gemahnt
+  billPayable(x) { const s = this.s; return x <= 0 || s.cash >= x - 1e-9 || (this.dispoOk() && s.cash - x >= -this.dispoLimit()); }
+  // Monatserster: Aufgelaufenes des Vormonats (D) als Abrechnung buchen und abbuchen – reicht es nicht, bleibt sie offen (Mahnung)
+  issueBill(D = this.s.day - 1) {
+    const s = this.s, b = s.bills, A = b?.acc; if (!A) return null; b.acc = null;
+    const items = [];
+    for (const f of FACILITIES) { const x = A.fac[f.id]; if (!x) continue; const rent = round2(x.rent), elec = round2(x.elec); if (rent < 0.01 && elec < 0.01 && !x.pausch) continue; items.push({ fac: f.id, rent, elec, kwh: Math.round(x.kwh), pausch: x.pausch ? 1 : 0 }); }
+    const other = {}; for (const [k, v] of Object.entries(A.other)) if (Math.abs(v) >= 0.01) other[k] = round2(v);
+    if (!items.length && !Object.keys(other).length) return null;
+    const total = round2(items.reduce((a, it) => a + it.rent + it.elec, 0) + Object.values(other).reduce((a, v) => a + v, 0));
+    const bill = { m: A.m || this.monthKey(D), day: s.day, items, other, total, st: 'ok' };
+    b.hist.unshift(bill); if (b.hist.length > 24) b.hist.length = 24;
+    if (total <= 0) { s.cash -= total; bill.st = 'gut'; } else this.chargeBill(bill); // Gutschrift (z. B. Lachszucht, KI-Mieter)
+    s.stats.bills = (s.stats.bills || 0) + 1;
+    if (s.stats.bills === 1 && bill.st !== 'open') this.pushMsg({ from: 'Lindentaler Bank', text: `Ihr Kontoauszug: Die Monatsabrechnung für ${monthName(bill.m)} ist abgebucht – ${fmtUSD(total)}. Miete und Strom kommen ab jetzt an jedem Monatsersten. Alle Posten finden Sie im Handy unter „Konto“.` });
+    this.grant('bills'); this.emit('bill', bill); return bill;
+  }
+  chargeBill(bill) {
+    const s = this.s, amt = bill.total;
+    if (!s.bills.open && this.billPayable(amt)) { s.cash -= amt; bill.st = s.cash < 0 ? 'dispo' : 'ok'; return true; }
+    const o = (s.bills.open ||= { amt: 0, fee: 0, since: s.day, stage: 0, due: s.day + BILL_GRACE, sites: [], months: [], who: [] });
+    o.amt = round2(o.amt + amt); if (!o.months.includes(bill.m)) o.months.push(bill.m);
+    for (const it of bill.items) {
+      if (!(it.rent > 0 || it.elec > 0)) continue; if (!o.sites.includes(it.fac)) o.sites.push(it.fac);
+      for (const n of [it.rent > 0 && LANDLORD[it.fac], it.elec > 0 && SUPPLIER(it.fac)]) if (n && !o.who.includes(n)) o.who.push(n);
+    }
+    bill.st = 'open'; o.ask = 1; s.stats.billsOpen = (s.stats.billsOpen || 0) + 1;
+    this.toast(`Monatsabrechnung ${monthName(bill.m)}: ${fmtUSD(amt)} – dein Konto reicht nicht. Die Rechnung ist offen.`, 'bad', 8000);
+    return false;
+  }
+  // Täglich: offene Rechnung bezahlen, sobald das Konto reicht – sonst nach jeder Frist die nächste Mahnstufe (Gebühr), zuletzt Strom aus
+  billsDay(day = this.s.day) {
+    const s = this.s, o = s.bills?.open; if (!o) return;
+    if (this.billAutoPay()) return;
+    if (day >= o.due) {
+      if (o.stage < 3) {
+        o.stage++; o.fee = round2(o.fee + Math.max(o.stage === 3 ? 30 : 5, Math.round(o.amt * 0.02))); o.due = day + (o.stage >= 3 ? 30 : BILL_GRACE); o.ask = 1;
+        if (o.stage === 3) { for (const id of o.sites) if (s.fac[id]) s.fac[id].cut = day; s.stats.cuts = (s.stats.cuts || 0) + 1; this.toast(`Strom abgestellt: ${o.sites.map((id) => FACILITY[id].short).join(', ')} – bis die offene Rechnung bezahlt ist.`, 'bad', 10000); this.dayUpdate(true); for (const id of o.sites) this.emit('objects', id); }
+        else this.toast(`${o.stage === 1 ? '2. Mahnung' : 'Letzte Mahnung'}: ${fmtUSD(o.amt + o.fee)} offen, Frist bis ${fmtDate(o.due)}.`, 'bad', 8000);
+      } else { o.due = day + 30; o.ask = 1; } // gesperrt: einmal im Monat erinnern
+    }
+    if (o.ask && s.ev) { // Mahnung zeigen: läuft schon eine, gilt sie weiter (Text zeigt die neue Stufe), sonst sobald keine andere Entscheidung offen ist
+      if (s.ev.open?.id === 'mahnung') { s.ev.open.until = day + (EVENT.mahnung.expire || 7); o.ask = 0; this.emit('event', EVENT.mahnung); }
+      else if (!s.ev.open) { o.ask = 0; this.openEvent(EVENT.mahnung, 'mahnung:' + day); }
+    }
+  }
+  billAutoPay() { const o = this.s.bills?.open; if (!o || !this.billPayable(o.amt + o.fee)) return false; this.payOpen(); return true; }
+  billCoinOk() { return !!this.s.bills?.open && Math.max(0, this.s.cash) + this.coinFunds() >= this.owed() - 1e-6; }
+  // Offenes bezahlen (coins: was fehlt, aus Coins verkaufen – erst Börse, dann Cold-Wallet)
+  payBills(coins = false) { if (!this.s.bills?.open) return false; const amt = this.owed(); if (coins && !this.billPayable(amt)) this.raiseCash(amt); if (!this.billPayable(amt)) return false; this.payOpen(); return true; }
+  payOpen() {
+    const s = this.s, o = s.bills.open, amt = o.amt + o.fee; s.cash -= amt; s.bills.open = null; s.bills.lastWho = o.who?.[0] || '';
+    for (const b of s.bills.hist) if (b.st === 'open') { b.st = 'paid'; b.paidDay = s.day || 1; }
+    if (s.ev?.open?.id === 'mahnung') s.ev.open = null; // Mahnung erledigt
+    const cut = (o.sites || []).filter((id) => s.fac[id]?.cut); for (const id of cut) delete s.fac[id].cut;
+    s.stats.billFees = (s.stats.billFees || 0) + o.fee;
+    this.toast(`Offene Rechnung bezahlt: ${fmtUSD(amt)}${cut.length ? `. Der Strom ist wieder da (${cut.map((id) => FACILITY[id].short).join(', ')})` : ''}.`, 'good', 6000);
+    this.dayUpdate(true); for (const id of cut) this.emit('objects', id); this.emit('bill', null); return amt;
+  }
+  bankTalk() { const s = this.s; s.flags.bankTalk = s.day; this.openEvent(EVENT.bank, 'bank:' + s.day); } // Mahnung → Bankgespräch (Herr Albers)
+
+  // ---------- Papas Umzugsdarlehen (s.papaLoan = { total, left, paid, since, last, n, help, done }): ohne Frist und Zinsen ----------
+  papaLeft() { return Math.max(0, this.s.papaLoan?.left || 0); }
+  repayPapa(usd) {
+    const s = this.s, L = s.papaLoan; if (!L || !(L.left > 0)) return 0;
+    const amt = round2(Math.min(+usd || 0, L.left, Math.max(0, s.cash))); if (!(amt >= 0.01)) return 0;
+    s.cash -= amt; L.left = round2(L.left - amt); L.paid = round2((L.paid || 0) + amt); L.last = s.day || 1; L.n = (L.n || 0) + 1;
+    if (L.left < 0.01) { L.left = 0; L.done = s.day || 1; this.applyFx({ rel: { papa: 1 } }); this.pushMsg({ from: 'Papa', text: PAPA_DONE }); this.logStory('papaLoan', `Papas Umzugsdarlehen zurückgezahlt (${fmtUSD(L.total)})`); this.unlockAch('payback'); }
+    else if (L.n === 1 || L.n % 3 === 0) this.pushMsg({ from: 'Papa', text: PAPA_THANKS[Math.floor(L.n / 3) % PAPA_THANKS.length] });
+    this.dayUpdate(true); this.emit('papaLoan'); return amt;
+  }
+  papaHelpWhy() { const s = this.s; if (!s.bills?.open) return 'Es ist nichts offen'; if (s.chapter > 2) return 'Dafür ist Hashwerk längst zu groß – Papa hat so viel nicht'; if (this.owed() > 5000) return 'So viel hat Papa nicht'; if ((s.rel?.papa || 0) <= -3) return 'Papa geht nicht ans Telefon'; return ''; }
+  papaHelpOk() { return !this.papaHelpWhy(); }
+  // Papa legt die offene Rechnung aus und schreibt sie zum Umzugsdarlehen (ab dem zweiten Mal: Papa −1)
+  papaHelp() {
+    if (!this.papaHelpOk()) return false; const s = this.s, amt = round2(this.owed());
+    const L = (s.papaLoan ||= { total: 0, left: 0, paid: 0, since: s.day, last: 0 }); L.total = round2(L.total + amt); L.left = round2(L.left + amt); L.help = (L.help || 0) + 1; L.since = s.day || 1; delete L.done;
+    if (L.help > 1) this.applyFx({ rel: { papa: -1 } });
+    s.cash += amt; this.payOpen(); this.emit('papaLoan'); return true;
   }
 
   // ---------- Fortschritt: Bonusziele, Jahreswerte, Statistiken für Erfolge ----------
