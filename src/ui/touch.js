@@ -18,6 +18,6 @@ export function initTouch(world, ui) {
   const end = (e) => { if (e.pointerId !== id) return; id = null; knob.style.transform = ''; world.player.touch.x = world.player.touch.y = 0; };
   stick.addEventListener('pointerup', end); stick.addEventListener('pointercancel', end);
   document.getElementById('t-use').onclick = () => world.primaryAction();
-  document.getElementById('t-build').onclick = () => ui.toggleBuild();
+  document.getElementById('t-build').onclick = () => { if (ui.g.has('build')) ui.toggleBuild(); else ui.toast('Noch nicht freigeschaltet.', 'info', 1800); }; // Shop erst, wenn er eingeführt ist (Anlernen)
   document.getElementById('t-menu').onclick = () => { world.setMode('ui'); ui.pause(true); };
 }

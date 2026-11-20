@@ -195,7 +195,8 @@ export class UI {
     const ease = (cur, target) => (cur == null || Math.abs(target - cur) > Math.abs(target) * 0.5 + 1e4 || Math.abs(target - cur) < 0.005 ? target : cur + (target - cur) * k);
     this.dCash = ease(this.dCash, s.cash); this.dNw = ease(this.dNw, nw);
     const mOn = !s.feat || s.flags.miningStarted;
-    for (const [id, ok] of [['#st-profit', mOn], ['#st-hash', mOn], ['#st-nw', g.has('rigs')], ['#st-btc', !s.flags.tutor || g.has('market')]]) $(id).style.display = ok ? '' : 'none'; // Anlernen: Bitcoin-Kurs erst mit der Börse
+    for (const [id, ok] of [['#st-profit', mOn], ['#st-hash', mOn], ['#st-nw', g.has('rigs')], ['#st-btc', !s.flags.tutor || g.has('market')]]) $(id).style.display = ok ? '' : 'none';
+    document.body.classList.toggle('tut-nobtc', !!s.flags.tutor && !g.has('market')); // Anlernen: Bitcoin-Kurs erst mit der Börse (CSS erzwingt sonst die Anzeige)
     $('#st-cash').title = 'Bargeld für Hardware, Strom, Miete und Löhne'; $('#st-nw').title = 'Kontostand + Coins + Wiederverkaufswert der Hardware − Kredit'; $('#st-profit').title = 'Mining-Ertrag minus Strom, Miete, Löhne und Zinsen pro Tag';
     $('#st-cash').innerHTML = `<div class="l">Kontostand</div><div class="v ${s.cash < 0 ? 'neg' : ''}">${fmtUSD(this.dCash)}</div>`;
     $('#st-nw').innerHTML = `<div class="l">Vermögen</div><div class="v">${fmtUSD(this.dNw)}</div>`;
@@ -311,7 +312,7 @@ export class UI {
     const items = g.shopList(this.cat, fac).sort((a, b) => b.releaseDay - a.releaseDay);
     if (this.cat === 'rigs') { const kb = this.kitsBar(fac); if (kb) list.append(kb); }
     if (this.cat === 'rigs' && g.s.lastBuild) { const lb = this.lastBuildCard(fac); if (lb) list.append(lb); }
-    el.style.setProperty('--cols', Math.max(1, Math.min(3, items.length)));
+    el.style.setProperty('--cols', list.querySelector('.unpack, .shipbar') ? 3 : Math.max(1, Math.min(3, items.length))); // Lieferstatus/Ausgepacktes brauchen die volle Breite
     if (!items.length) list.append(h('<div class="empty">Noch nichts da.</div>'));
     for (const it of items) {
       if (it.kind === 'rig') { list.append(this.rigCard(it, fac)); continue; }
@@ -605,7 +606,7 @@ export class UI {
     if (o.broken || (o.items && o.items.some((i) => i.b))) { const rc = g.repairCost(o); const b = h(`<button class="btn good">Reparieren (${fmtUSD(rc)})</button>`); b.onclick = () => { if (!g.repair(uid)) this.toast('Nicht genug Geld.', 'bad'); else this.inspect(uid); }; row.append(b); }
     if (!g.has('build')) { if (row.childElementCount) c.append(row); return; }
     const ks = def.kind === 'rig' && o.parts ? this.kitSec(o) : null;
-    if (g.slotKind(def) && !g.cloneBlocked(o.kit && !g.pcReady(o) ? { ...o, parts: o.kit } : o)) {
+    if (g.slotKind(def) && (def.kind !== 'rig' || g.has('rigs')) && !g.cloneBlocked(o.kit && !g.pcReady(o) ? { ...o, parts: o.kit } : o)) { // weitere PCs erst ab „Mehr PCs“ (nach der ersten Grafikkarte)
       const src = o.kit && !g.pcReady(o) ? { ...o, parts: o.kit } : o; // offener Bausatz: „noch so einen“ = derselbe Bausatz, nicht das leere Gehäuse
       const fac = g.facOf(uid), pm = g.parcelMode(), full = pm ? !g.orderRoomOk(def) : !g.slotOk(fac, def), rig = g.cloneRig(src), lock = rig && (!g.readyOk(o.type) || src !== o), cc = g.cloneCost(src, lock), ck = rig ? g.cloneCost(src, true) : 0, cid = g.readyBy(o.type), ow = rig ? g.cloneWhy(src, lock) : '';
       const kitT = () => ({ type: o.type, rot: o.rot, coin: o.coin, parts: { mobo: null, cpu: null, psu: null, gpus: [] }, kit: true, src }); // Bausatz-Kopie: leeres Gehäuse, Teile ins Lager

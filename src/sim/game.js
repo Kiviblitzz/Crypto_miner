@@ -302,12 +302,13 @@ export class Game {
   learned(key) {
     const s = this.s, L = s.learn; if (!s.flags?.tutor || !L?.cur) return false;
     if (L.cur !== key && FEATURES[L.cur]?.by !== key) return false;
-    L.done[L.cur] = s.day || 1; L.cur = null; this.emit('lesson', null); this.tutorTick(); return true;
+    L.done[L.cur] = s.day || 1; L.cur = null; this.emit('lesson', null); this.tutorTick(); if (!L.cur) this.checkFeatures(); return true; // gleich prüfen, ob die nächste schon dran ist
   }
   checkFeatures() {
     const s = this.s; if (!s.feat) return;
     const btc = s.wallet.BTC ? s.wallet.BTC.ex + s.wallet.BTC.cold : 0;
-    if (s.flags.tutor) { // Anlernen: Börse und Shop gleich nach dem Einschalten, dann Schlafen, Paket, Einbau, Fähigkeiten
+    if (s.flags.tutor) { // Anlernen: Laufen/Benutzen, PC bauen, dann Börse und Shop gleich nach dem Einschalten, Schlafen, Paket, Einbau, Fähigkeiten
+      if (this.has('phone') && !s.flags.miningStarted) { if (Object.keys(s.loose || {}).length) this.grant('walk'); else if (s.inv?.length) this.grant('pcbuild'); }
       if (s.flags.cpuStart && s.flags.miningStarted) { this.grant('market'); this.grant('build'); }
       if (s.flags.gpuOrdered && !s.flags.boughtGpu && s.orders?.length) this.grant('sleep');
       if (!s.flags.boughtGpu && s.parcels?.length) this.grant('parcel');
@@ -328,7 +329,7 @@ export class Game {
     if (s.chapter >= 1) { this.grant('techs'); this.grant('ranking'); } // Opas Werkbank und das Logbuch schon im Keller
     this.tutorTick(); // Anlernen: abgelaufene Lektion beenden, nächste einführen
   }
-  startMining(uid) { const o = this.findObj(uid); if (!o || (o.parts && !(this.isFirstPc(o) ? this.firstReady(o) : this.pcReady(o)))) return false; o.mode = 'auto'; const first = !this.s.flags.miningStarted; if (first) { this.s.mineDay0 = this.s.day; this.s.mineFrac0 = this.s.frac || 0; } this.s.flags.miningStarted = true; this.s.flags.seenPc = true; if (first) this.addXp('mining', 40); this.checkGoals(); this.dayUpdate(true); this.emit('objects', this.facOf(uid)); return true; }
+  startMining(uid) { const o = this.findObj(uid); if (!o || (o.parts && !(this.isFirstPc(o) ? this.firstReady(o) : this.pcReady(o)))) return false; o.mode = 'auto'; const first = !this.s.flags.miningStarted; this.learned('pcbuild'); if (first) { this.s.mineDay0 = this.s.day; this.s.mineFrac0 = this.s.frac || 0; } this.s.flags.miningStarted = true; this.s.flags.seenPc = true; if (first) this.addXp('mining', 40); this.checkGoals(); this.dayUpdate(true); this.emit('objects', this.facOf(uid)); return true; }
   // Zentraler Geld-Check: nur kaufen, was wirklich bezahlt werden kann (kein Kauf bei Minus-Konto)
   canAfford(usd) { return Number.isFinite(usd) && usd >= 0 && Number.isFinite(this.s.cash) && this.s.cash >= usd; }
   addObject(facId, type, x, z, rot, parts, free = false) {
@@ -427,7 +428,7 @@ export class Game {
   creditPending(coin, n) { const s = this.s; if (!(n > 0)) return; s.wallet[coin].ex += n; const n0 = s.accr?.day === s.day && s.accr.coin === coin ? s.accr.n || 0 : 0; s.accr = { day: s.day, f: s.frac, coin, n: n0 + n }; } // n: heute schon gutgeschrieben
   tradeFee() { return Math.max(0, (TRADE_FEES[this.skillLv('trade') - 1] ?? 0.005) - (this.s.staff?.list && this.staffFx().trader ? 0.005 : 0)); }
   // ---------- Herumliegende Teile ----------
-  pickUp(type) { const s = this.s; if (!s.loose?.[type]) return false; s.inv.push(type); s.invIds = { ...(s.invIds || {}), [type]: s.loose[type] }; delete s.loose[type]; this.checkGoals(); this.emit('loose'); return true; }
+  pickUp(type) { const s = this.s; if (!s.loose?.[type]) return false; s.inv.push(type); s.invIds = { ...(s.invIds || {}), [type]: s.loose[type] }; delete s.loose[type]; this.learned('walk'); this.checkGoals(); this.checkFeatures(); this.emit('loose'); return true; }
   installLoose(uid, type) {
     const s = this.s, o = this.findObj(uid); if (!o?.parts || !s.inv?.includes(type)) return false;
     if ((type === 'cpu' || type === 'gpu') && !o.parts.mobo) return false;
