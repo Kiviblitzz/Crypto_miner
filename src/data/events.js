@@ -200,7 +200,7 @@ const XMAS = {
 };
 
 // Kontakt kennenlernen: Nummer speichern (Standard, auch ohne Antwort) oder ablehnen – dann später im Handy unter Kontakte anrufen
-const pct = (f) => `${Math.round(f * 100)} %`;
+const pct = (f) => `${Math.round(f * 100)}\u00a0%`;
 const contactChoices = (id, yes, no, noReply) => [
   { label: yes, hint: `${CONTACT[id].offer} im Katalog (B) · ${pct(FEE_TIERS[0].fee)} Montage, Stammkunden zahlen weniger`, fx: { do: (g) => g.meetContact(id, true), log: `${CONTACT[id].name} (${CONTACT[id].biz}) kennengelernt – liefert fertig montiert` }, reply: `<b>${CONTACT[id].name}:</b> ${CONTACT[id].lines.hello}` },
   { label: no, hint: `Selbst bauen geht immer – ${CONTACT[id].name} kannst du später im Handy (P) unter Kontakte anrufen`, fx: { do: (g) => g.meetContact(id, false), log: `${CONTACT[id].name}s Angebot abgelehnt – lieber selbst gebaut` }, reply: noReply },

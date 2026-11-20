@@ -576,6 +576,7 @@ export class Game {
       if (it.type === 'mobo') { const cap = this.rigGpuCap(o); while (p.gpus.length > cap) this.bagAdd(p.gpus.pop(), 1); }
     }
     this.bagAdd(id, -n); const fresh = (this.s.fresh?.[id] || 0) > 0; if (fresh) this.freshAdd(id, -n);
+    if (o.kit && this.pcReady(o) && !this.kitPlan(o).length) { delete o.kit; this.s.stats.kits = (this.s.stats.kits || 0) + 1; } // Bausatz fertig (auch Teil für Teil eingebaut)
     if (!this.s.flags.miningStarted && o.type === 'tower' && this.pcReady(o)) this.s.flags.pcBuilt = true;
     if (this.s.skills && fresh) this.addXp('hw', 15);
     this.dayUpdate(true); if (it.type === 'gpu') this.capWarn(this.facOf(uid)); this.emit('objects', this.facOf(uid)); this.emit('bag'); return true;
@@ -583,8 +584,9 @@ export class Game {
   // ---------- Bausätze in Serie einbauen ----------
   // Einbauplan aus dem Lager: zuerst die Teile, die zu diesem Bausatz gehören (o.kit), sonst passende Teile aus dem Lager.
   // bag: geteiltes Lager-Abbild, wenn mehrere Bausätze nacheinander geplant werden
-  kitPlan(o, bag = { ...(this.s.bag || {}) }) {
+  kitPlan(o, bag = null, res = null) {
     const p = o?.parts; if (!p) return [];
+    if (!bag) { bag = { ...(this.s.bag || {}) }; if (!o.kit) { res = this.kitReserved(o.uid); for (const [id, n] of Object.entries(res)) bag[id] = (bag[id] || 0) - n; } } // ohne eigenen Bausatz: nichts nehmen, was anderen Bausätzen gehört
     const def = PLACEABLE[o.type], np = this.psuCount(o), out = [], take = (id, n = 1) => { if (!id || !PART[id] || (bag[id] || 0) < n) return false; bag[id] -= n; out.push(id); return true; };
     const k = o.kit, pick = (t) => this.bagList(t).find((b) => (bag[b.id] || 0) >= (t === 'psu' ? np : 1))?.id;
     let mobo = p.mobo;
@@ -597,12 +599,27 @@ export class Game {
     else for (const b of this.bagList('gpu')) while (free > 0 && take(b.id)) free--;
     return out;
   }
+  // Teile, die offene Bausätze (o.kit) noch brauchen – gehören ihnen, auch wenn sie im gemeinsamen Lager liegen
+  kitReserved(except = null) {
+    const r = {}, need = (id, n) => { if (id) r[id] = (r[id] || 0) + n; };
+    for (const f of this.s.unlocked) for (const o of this.s.fac[f]?.objects || []) {
+      if (!o.kit || !o.parts || o.uid === except) continue;
+      if (!o.parts.mobo) need(o.kit.mobo, 1); if (!o.parts.cpu) need(o.kit.cpu, 1); if (!o.parts.psu) need(o.kit.psu, this.psuCount(o));
+      const have = [...o.parts.gpus]; for (const id of o.kit.gpus || []) { const i = have.indexOf(id); if (i >= 0) have.splice(i, 1); else need(id, 1); }
+    }
+    return r;
+  }
   // Offene Bausätze am Standort: Rigs, die noch nicht laufen und für die Teile im Lager liegen
-  kitsOpen(facId = this.s.current) { const bag = { ...(this.s.bag || {}) }; return (this.s.fac[facId]?.objects || []).filter((o) => o.parts && PLACEABLE[o.type].kind === 'rig' && (!this.pcReady(o) || o.kit) && this.kitPlan(o, bag).length > 0); }
+  kitsOpen(facId = this.s.current) {
+    const bag = { ...(this.s.bag || {}) }, res = this.kitReserved(); for (const [id, n] of Object.entries(res)) bag[id] = (bag[id] || 0) - n; // erst die Bausätze mit eigenen Teilen, dann Gehäuse mit Lagerteilen
+    const rigs = (this.s.fac[facId]?.objects || []).filter((o) => o.parts && PLACEABLE[o.type].kind === 'rig' && (!this.pcReady(o) || o.kit));
+    const kb = { ...(this.s.bag || {}) }, withKit = rigs.filter((o) => o.kit && this.kitPlan(o, kb).length > 0);
+    return [...withKit, ...rigs.filter((o) => !o.kit && this.kitPlan(o, bag).length > 0)];
+  }
   assembleKit(uid) {
     const o = this.findObj(uid); if (!o?.parts) return 0; let n = 0;
     for (const id of this.kitPlan(o)) if (this.installPart(uid, id)) n++;
-    if (o.kit && this.pcReady(o) && !this.kitPlan(o).length) delete o.kit; // fertig geschraubt (oder Rest nicht mehr im Lager)
+    if (o.kit && this.pcReady(o) && !this.kitPlan(o).length) { delete o.kit; this.s.stats.kits = (this.s.stats.kits || 0) + 1; } // fertig geschraubt (oder Rest nicht mehr im Lager)
     return n;
   }
   assembleAll(facId = this.s.current) { let kits = 0, parts = 0; for (const o of this.kitsOpen(facId)) { const n = this.assembleKit(o.uid); if (n) { kits++; parts += n; } } return { kits, parts }; }

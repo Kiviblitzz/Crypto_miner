@@ -14,6 +14,8 @@ const gpuEarning = (s, g) => s.unlocked.some((id) => { const sm = g.summary?.[id
 export const ACHIEVEMENTS = [
   { id: 'firstsale', name: 'Hallo Welt', desc: 'Deine ersten Bitcoin verkauft.', check: (s) => s.stats.sold > 0 },
   { id: 'milk', name: 'Milchmann', desc: 'Fünf Milchkisten-Rigs gleichzeitig aufgestellt.', check: (s) => objs(s, (o) => o.type === 'crate') >= 5 },
+  { id: 'selfmade', name: 'Selbst geschraubt', desc: 'Zehn Bausätze selbst zusammengebaut.', check: (s) => (s.stats.kits || 0) >= 10 },
+  { id: 'regular', name: 'Stammkunde', desc: 'Bei Kemal oder Jonas „Bester Kunde“ geworden.', check: (s) => Object.values(s.contacts || {}).some((c) => (c?.n || 0) >= 8) },
   { id: 'cold', name: 'Schuhkarton', desc: 'Coins in die Cold-Wallet gelegt.', check: (s) => Object.values(s.wallet).some((w) => w.cold > 0) },
   { id: 'opa', name: 'Opa hatte recht', desc: 'Dreimal ist die Sicherung rausgeflogen.', check: (s) => (s.stats.trips || 0) >= 3 },
   { id: 'sauna', name: 'Sauna-Club', desc: 'Ein Standort wurde heißer als 40 °C.', hidden: true, check: (s) => (s.stats.tmax || 0) > 40 },
