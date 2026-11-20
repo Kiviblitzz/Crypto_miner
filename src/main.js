@@ -2,7 +2,7 @@
 import { Game, fmtDate, fmtUSD } from './sim/game.js';
 import { World } from './world/world.js';
 import { UI } from './ui/ui.js';
-import { CHAPTERS } from './data/world.js';
+import { CHAPTERS, DIFFICULTY } from './data/world.js';
 import { PLACEABLE } from './data/hardware.js';
 import { Audio } from './ui/audio.js';
 import { initTouch } from './ui/touch.js';
@@ -25,7 +25,7 @@ world.onPlace = (type, x, z, rot, template) => {
   const def = PLACEABLE[type];
   if (!game.placeableAllowed(def, fac)) { ui.toast('Das passt hier nicht hin.', 'bad'); return null; }
   const o = template ? game.cloneObject(template, fac, x, z, rot) : game.addObject(fac, type, x, z, rot);
-  if (!o) { const blk = template && game.cloneBlocked(template); ui.toast(blk ? `${blk} gibt es nicht mehr zu kaufen.` : 'Nicht genug Geld.', 'bad'); return null; }
+  if (!o) { const blk = template && game.cloneBlocked(template); const sold = !blk && (template ? !game.cloneStockOk(template) : game.stockLeft(def) === 0); ui.toast(blk ? `${blk} gibt es nicht mehr zu kaufen.` : sold ? `Kontingent erschöpft – ${game.stockText()}.` : 'Nicht genug Geld.', 'bad'); return null; }
   audio.buy();
   return o;
 };
@@ -40,14 +40,33 @@ if (hasSave) {
   const info = game.saveInfo(); if (info) b.innerHTML = `<span class="bi"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span><span class="bt">Weiterspielen<small>${fmtDate(info.day)} · ${fmtUSD(info.cash)}</small></span>`;
 }
 let splashOrbit = true;
+// Neues Spiel: erst den Schwierigkeitsgrad wählen
+const DIFF_ICON = { easy: '<path d="M4 15c3-6 13-6 16 0"/><path d="M7 19h10"/>', normal: '<path d="M5 12h14"/><path d="M12 5v14"/>', hard: '<path d="M6 4h12v4a6 6 0 0 1-12 0z"/><path d="M12 14v4M8 20h8"/>' };
+function pickDifficulty(start) {
+  const btns = splash.querySelector('.splash-btns'); btns.classList.add('hidden');
+  const box = document.createElement('div'); box.className = 'splash-btns diff-pick';
+  box.innerHTML = '<div class="dp-h">Wie willst du spielen?</div>';
+  for (const [id, d] of Object.entries(DIFFICULTY)) {
+    const b = document.createElement('button'); b.className = 'btn big' + (id === 'normal' ? ' primary' : ''); b.dataset.diff = id;
+    b.innerHTML = `<span class="bi"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${DIFF_ICON[id]}</svg></span><span class="bt">${d.name}<small>${d.desc}</small></span>`;
+    b.onclick = () => { box.remove(); btns.classList.remove('hidden'); start(id); };
+    box.append(b);
+  }
+  const back = document.createElement('button'); back.className = 'dp-back'; back.textContent = 'Zurück';
+  back.onclick = () => { box.remove(); btns.classList.remove('hidden'); };
+  box.append(back);
+  btns.after(box);
+}
 const btnNew = document.getElementById('btn-new');
 btnNew.onclick = () => {
   // Vorhandener Spielstand: erst nach zweitem Klick überschreiben
   if (hasSave && !btnNew.dataset.armed) { const bt = btnNew.querySelector('.bt'), was = bt.innerHTML; btnNew.dataset.armed = '1'; bt.innerHTML = 'Wirklich neu?<small>Nochmal klicken – der Spielstand wird überschrieben</small>'; setTimeout(() => { delete btnNew.dataset.armed; bt.innerHTML = was; }, 4000); return; }
-  game.newGame(); ui.resetSession(); splash.classList.add('hidden'); splashOrbit = false;
+  pickDifficulty((diff) => {
+  game.newGame(diff); ui.resetSession(); splash.classList.add('hidden'); splashOrbit = false;
   world.setMode('ui');
   ui.switchSite('kinder'); world.syncLoose(); ui.speedBar(); ui.ticker();
   ui.introPhone(() => { ui.setSpeed(1); ui.keysHint(); ui.tutorial(); });
+  });
 };
 document.getElementById('btn-continue').onclick = () => {
   if (game.load()) { ui.resetSession(); splash.classList.add('hidden'); splashOrbit = false; ui.switchSite(game.s.current); ui.speedBar(); ui.ticker(); ui.keysHint(); world.setMode('play'); ui.toast('Willkommen zurück!', 'good'); }
