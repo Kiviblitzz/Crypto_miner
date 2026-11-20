@@ -1,7 +1,7 @@
 // DOM-Oberfläche: Topbar, Standorte, Baumenü, Inspektor, Ziele, Dock, Modals (Markt, Handy, Firma, Rangliste, Menü)
 import { COINS, COIN, ALGO_LABEL } from '../data/coins.js';
 import { PLACEABLE, PART, CATEGORIES, PLACEABLES, PARTS } from '../data/hardware.js';
-import { FACILITIES, FACILITY, CHAPTERS, TECHS, FEATURES, MESSAGES, yearTitle, FAMILY_MOOD, moodTier, FULL_TALK } from '../data/world.js';
+import { FACILITIES, FACILITY, CHAPTERS, FEATURES, MESSAGES, yearTitle, FAMILY_MOOD, moodTier, FULL_TALK } from '../data/world.js';
 import { fmtUSD, fmtNum, fmtCoin, fmtHash, fmtDate, fmtWatt, BUILD_FEE } from '../sim/game.js';
 import { skillsMenu, skRefresh, skCloseDetail, osWizard, osAbort, deviceSecs, repairRow, skillCard, pointCard, POT_SVG } from './skills.js'; // Fähigkeiten 2.0 (Taste T)
 import { POTS, SKILL } from '../data/skills.js';
@@ -28,7 +28,6 @@ const PART_ICON = {
 const PNAME = { mobo: 'Mainboard', cpu: 'Prozessor', gpu: 'Grafikkarte', psu: 'Netzteil' };
 const potSvg = (k, size = 22) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${POT_SVG[k] || POT_SVG.w}</svg>`; // Erfahrungstöpfe (Werkstatt, Rechner, Geschäft)
 const partSvg = (t, size = 22) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${PART_ICON[t]}</svg>`;
-const TECH_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5a1.8 1.8 0 0 0 2.5 2.5l5.8-5.8a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg>';
 const ACH_SVG = {
   got: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3.5h8l-1.2 5.2M8 3.5l1.2 5.2"/><circle cx="12" cy="14.5" r="5.5" fill="currentColor" fill-opacity=".18"/><path d="M12 11.8l.9 1.8 2 .3-1.45 1.4.35 2-1.8-.95-1.8.95.35-2-1.45-1.4 2-.3z" fill="currentColor"/></svg>',
   lock: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="10.5" width="13" height="9.5" rx="2.2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg>',
@@ -926,6 +925,7 @@ export class UI {
     if (go.id === 'gpuorder') return g.has('build') ? 'Am <b>Monitor</b> <kbd>E</kbd> oder <kbd>B</kbd>: Shop → Teile → Grafikkarten. Lieferung morgen früh vor deine Wohnungstür.' : '';
     if (go.id === 'gpu') { const inBag = g.bagList('gpu').length; if (inBag) return 'Die Karte liegt im Lager: PC anschauen, <kbd>E</kbd> → Grafikkarte 1 → einbauen.'; if (s0.parcels?.length) return 'Das Paket liegt vor deiner Wohnungstür – hingehen und <kbd>E</kbd>.'; if (s0.orders?.length) return 'Bestellt – morgen früh liegt das Paket vor der Tür. Ab 19 Uhr kannst du schlafen gehen (Bett, <kbd>E</kbd>).'; return ''; }
     const site = { rig2: 'kinder', openrig: 'keller' }[go.id]; if (!site || !g.has('rigs') || !g.s.unlocked.includes(site)) return '';
+    if (g.facObjects(site).some((o) => g.osNeed?.(o) && g.pcReady(o))) return 'Der neue Rig braucht noch ein Betriebssystem: anschauen, <kbd>E</kbd> → System → Installer.'; // Fähigkeiten: ohne System schürft er nicht
     if (g.kitsOpen(site).length) return g.s.current === site ? 'Bausatz steht – anschauen, <kbd>E</kbd> und die Teile aus dem Lager einbauen.' : `Dein Bausatz wartet ${site === 'kinder' ? 'in der Wohnung' : 'im Keller'} aufs Einbauen.`;
     const t = go.id === 'rig2' ? 'tower' : 'crate', nm = t === 'tower' ? 'Tower' : 'Milchkiste';
     if (g.parcelMode()) return g.readyOk(t) ? `<kbd>B</kbd> → Rigs → ${nm}: „Fertig bestellen“ oder als Bausatz. Morgen früh vor der Tür, dann oben im Shop „Aufstellen“.` : `<kbd>B</kbd> → Rigs → ${nm}: „Bausatz bestellen“. Morgen auspacken, aufstellen, selbst einbauen.`;
@@ -1394,20 +1394,6 @@ export class UI {
     det.append(box);
   }
   techs() { this.skills(); } // Technik ist in den Fähigkeiten aufgegangen (Taste T)
-  techsOld() {
-    this.g.learned?.('techs');
-    const g = this.g, s = g.s;
-    const bench = Math.max(...s.unlocked.map((id) => FACILITY[id].tier)) <= 1;
-    const body = h(`<div><h2>${bench ? 'Opas Werkbank' : 'Technik'}</h2>${bench ? '<p class="tech-note">Opa Heinz tüftelt mit dir an Verbesserungen. Größere Ideen brauchen größere Standorte.</p>' : ''}<div class="cards"></div></div>`);
-    const cards = body.querySelector('.cards');
-    for (const t of TECHS) {
-      const own = (s.techs || {})[t.id], av = g.techAvailable(t); if (t.hidden && !own) continue; // versteckt (z. B. ICO, jetzt ein Ereignis) – nur zeigen, wenn schon gekauft
-      const c = h(`<div class="card ${!av && !own ? 'lock' : ''}"><h3><span class="tech-ic">${TECH_SVG}</span>${esc(t.name)}</h3><div class="sub">${own ? `Erforscht am ${fmtDate(own)}` : av ? `Kosten: <b style="color:#ffb000">${fmtUSD(t.cost)}</b>` : `ab ${fmtDate(toDay(t.date))}${t.minTier ? ` · braucht Standort „${FACILITIES.find((f) => f.tier === t.minTier).name}"` : ''}`}</div><div style="font-size:13px">${esc(t.desc)}</div></div>`);
-      if (!own && av) { const b = h(`<button class="btn primary small" style="margin-top:8px">Erforschen</button>`); b.disabled = s.cash < t.cost; b.onclick = () => { if (g.buyTech(t.id)) { this.audio?.fanfare(); this.toast(`${esc(t.name)} erforscht!`, 'good'); this.techs(); this.dock(); } }; c.append(b); }
-      cards.append(c);
-    }
-    this.openModal(body, '', 'techs');
-  }
 
   ranking(tab = this.logTab || 'rank') {
     this.g.learned?.('ranking');
