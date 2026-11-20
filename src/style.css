@@ -1541,6 +1541,102 @@ body[data-modal="market"] :is(#st-cash, #st-profit, #st-wallet) { visibility: hi
 .story.event .ev-c .ev-cost { font-weight: 600; opacity: .8; }
 .story.event .ev-c small { font: 600 12.5px var(--font); opacity: .78; }
 .phone .msg.decide { border: 1px solid rgba(255,194,58,.45); background: rgba(255,194,58,.08) !important; }
+/* ===== Lebendige Welt: Gespräche & Fundstücke ===== */
+.story.talk .tk-who { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+.story.talk .tk-av { width: 56px; height: 56px; flex: none; border-radius: 50%; overflow: hidden; box-shadow: 0 4px 14px rgba(0,0,0,.3), 0 0 0 3px rgba(255,255,255,.08); }
+.story.talk .tk-av svg { display: block; }
+.story.talk .tk-n b { display: block; font: 700 20px var(--font-fun); color: var(--text); }
+.story.talk .tk-n small { display: block; margin-top: 2px; font: 600 13px var(--font); color: var(--dim); }
+.story.talk .tk-line { position: relative; margin: 4px 0 16px; padding: 14px 16px; border-radius: 14px; background: rgba(255,255,255,.06); font: 500 17px/1.55 var(--font); color: var(--text); }
+.story.talk .tk-line::before { content: ''; position: absolute; left: 20px; top: -9px; border: 9px solid transparent; border-top: 0; border-bottom-color: rgba(255,255,255,.06); }
+.story.talk .tk-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.story.talk .tk-joy { display: inline-flex; align-items: center; gap: 7px; font: 600 13px var(--font); color: #ffb4a6; }
+.story.talk .tk-joy.up { color: var(--good); }
+.story.talk .tk-pips { display: inline-flex; gap: 4px; margin-left: 4px; }
+.story.talk .tk-pips b { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,.16); }
+.story.talk .tk-pips b.on { background: #ff8f80; }
+.story.keep .kp-tag { display: inline-block; padding: 4px 10px; border-radius: 999px; background: rgba(255,194,58,.12); color: var(--acc); font: 700 12px var(--font); letter-spacing: 1.5px; text-transform: uppercase; }
+.story.keep .kp-pic { display: grid; place-items: center; height: 150px; margin: 10px 0 6px; border-radius: 14px; background: radial-gradient(ellipse at 50% 62%, rgba(255,214,140,.16), rgba(255,214,140,0) 70%); }
+.story.keep .kp-pic img { max-width: 100%; max-height: 150px; }
+.story.keep p { line-height: 1.55; }
+.story.keep .kp-gain { display: inline-flex; align-items: center; gap: 8px; margin: 2px 0 12px; padding: 7px 12px; border-radius: 10px; background: rgba(95,211,141,.14); color: #bff2d3; font: 700 14px var(--font); }
+.story.keep .kp-all { margin-bottom: 10px; color: var(--acc); font: 700 14px var(--font); }
+/* ===== Fortschritt: Bonusziele, Logbuch (Rangliste · Erfolge · Chronik), Jahresrückblick ===== */
+/* Zielleiste: Wartephase mit Begründung, Bonusziele mehrzeilig statt als Pille */
+#goals .goal.wait, #goals .goal.bonus { display: flex !important; width: fit-content; max-width: 440px; margin-top: 6px; border-radius: 16px !important; align-items: flex-start !important; white-space: normal; }
+#goals .goal.wait > div:last-child, #goals .goal.bonus > div:last-child { display: block !important; white-space: normal !important; }
+#goals .goal.wait .ck { background: rgba(255,236,210,.4) !important; box-shadow: 0 0 0 4px rgba(255,236,210,.1) !important; margin-top: 6px !important; }
+#goals .goal.wait .gw-t { font: 700 14px var(--font) !important; color: var(--text) !important; }
+#goals .goal.wait .gw-x { font: 600 12.5px/1.35 var(--font) !important; color: var(--text2) !important; margin-top: 2px; }
+#goals .goal.bonus .ck { background: #ffd25c !important; box-shadow: 0 0 0 4px rgba(255,210,92,.18) !important; margin-top: 6px !important; }
+#goals .goal.bonus .gb-l { display: block; font: 600 13.5px/1.45 var(--font) !important; color: var(--text) !important; }
+#goals .goal.bonus .gb-tag { display: inline-block; margin-right: 7px; vertical-align: 1px; }
+#goals .goal.bonus .gb-p { margin-left: 7px; white-space: nowrap; }
+#goals .goal .gb-tag, .chron .cr-t em, .msg .tip-tag { font: 700 10.5px/1.5 var(--font); font-style: normal; letter-spacing: .06em; text-transform: uppercase; color: #2a1a08; background: #ffc23a; border-radius: 6px; padding: 0 6px; }
+#goals .goal .gb-p { font: 700 12.5px var(--font-fun); color: var(--acc); }
+#goals .goal.bonus .gb-r { display: flex; flex-wrap: wrap; gap: 2px 10px; margin-top: 3px; font: 600 12px/1.35 var(--font) !important; color: var(--text2) !important; }
+#goals .goal .gb-u { color: var(--dim); }
+/* Logbuch: Kopf mit Reitern */
+.modal-card.logbook-card { width: min(640px, 94vw); }
+.logbook .lb-head { display: flex; align-items: center; justify-content: space-between; gap: 10px 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.logbook .lb-head h2 { margin: 0; }
+.logbook .lb-tabs { display: inline-flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(255,236,210,.07); }
+.logbook .lb-tab { position: relative; border: 0; cursor: pointer; background: none; color: var(--text2); font: 700 13.5px var(--font); padding: 7px 14px; border-radius: 999px; }
+.logbook .lb-tab small { font-weight: 600; opacity: .75; margin-left: 2px; }
+.logbook .lb-tab.on { background: var(--acc); color: #2a1a08; }
+.logbook .lb-tab:not(.on):hover { background: rgba(255,236,210,.09); color: var(--text); }
+.logbook .lb-dot { position: absolute; top: 5px; right: 6px; width: 7px; height: 7px; border-radius: 50%; background: var(--bad); }
+.logbook .lb-sub { margin: 0 0 4px; font: 700 15px var(--font); color: var(--text); }
+/* Erfolge als Raster: freigeschaltete warm, gesperrte grau, versteckte als ??? */
+.ach-sum { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; font: 600 14px var(--font); color: var(--text2); }
+.ach-sum b { color: var(--acc); font: 700 18px var(--font-fun); }
+.ach-bar { flex: 1; height: 6px; border-radius: 999px; background: rgba(255,236,210,.1); overflow: hidden; }
+.ach-bar > div { height: 100%; background: var(--acc); border-radius: inherit; }
+.ach-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
+.ach { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 14px; background: rgba(255,236,210,.05); }
+.ach .ach-ic { flex: none; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: rgba(255,236,210,.07); color: #9a8a78; }
+.ach .ach-tx { display: grid; gap: 1px; min-width: 0; }
+.ach .ach-tx b { font: 700 14px var(--font); color: var(--text); }
+.ach .ach-tx span { font: 600 12.5px/1.35 var(--font); color: var(--dim); }
+.ach .ach-tx em { font: 700 11.5px var(--font); font-style: normal; color: var(--acc); margin-top: 2px; }
+.ach.got { background: rgba(255,194,58,.1); box-shadow: inset 0 0 0 1px rgba(255,194,58,.24); }
+.ach.got .ach-ic { background: rgba(255,194,58,.2); color: var(--acc); }
+.ach.lock { filter: grayscale(1); opacity: .6; }
+.ach.secret .ach-tx b { letter-spacing: .2em; }
+/* Chronik: Entscheidungen nach Jahren */
+.chron { display: grid; gap: 2px; }
+.chron .cr-y { display: flex; align-items: baseline; gap: 10px; margin: 14px 0 4px; }
+.chron .cr-y:first-child { margin-top: 0; }
+.chron .cr-y b { font: 700 20px var(--font-fun); color: var(--acc); }
+.chron .cr-y span { font: 600 13px var(--font); color: var(--text2); }
+.chron .cr-r { display: grid; grid-template-columns: 86px 1fr; gap: 10px; padding: 6px 10px; border-radius: 10px; font: 600 13.5px/1.4 var(--font); background: rgba(255,236,210,.04); }
+.chron .cr-d { color: var(--dim); font-variant-numeric: tabular-nums; }
+.chron .cr-t em { margin-right: 6px; }
+/* Jahresrückblick */
+.modal-card.yr-card { width: min(580px, 94vw); }
+.story.yr .yr-t { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; margin: 4px 0 14px; }
+.story.yr .yr-t b { font: 700 46px/1 var(--font-fun); color: var(--acc); }
+.story.yr .yr-t span { font: 700 22px/1.2 var(--font-fun); color: var(--text); }
+.story.yr .yr-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 10px; }
+.story.yr .yr-c { padding: 9px 11px; border-radius: 14px; background: rgba(255,236,210,.06); display: grid; gap: 2px; min-width: 0; }
+.story.yr .yr-c span { font: 600 11.5px/1.25 var(--font); color: var(--dim); }
+.story.yr .yr-c b { font: 700 16px var(--font-fun); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.story.yr .yr-rows { display: grid; margin-bottom: 4px; }
+.story.yr .yr-r { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 6px 2px; border-bottom: 1px solid rgba(255,236,210,.07); font: 600 14px var(--font); color: var(--text2); }
+.story.yr .yr-r > span:first-child { color: var(--dim); }
+.story.yr .yr-r > span:last-child { text-align: right; }
+.story.yr .yr-r b { color: var(--text); }
+.story.yr .yr-r small { font: 700 12px var(--font); margin-left: 4px; }
+.story.yr .yr-p { font: 600 14.5px/1.45 var(--font); color: var(--text); margin: 10px 0 0; }
+.story.yr .yr-k { display: block; font: 700 11px var(--font); letter-spacing: .07em; text-transform: uppercase; color: var(--acc); margin-bottom: 1px; }
+.story.yr .yr-act { justify-content: space-between; align-items: center; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+.story.yr .yr-off { font: 600 12px var(--font); color: var(--dim); }
+@media (max-width: 560px) { .story.yr .yr-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* Kleinkram: Tipp-Etikett im Handy, Hitzewellen-Symbol, Technik-Symbol */
+.msg .fr .tip-tag { margin: 0 auto 0 6px; }
+#date .hw-ic { display: inline-flex; margin-left: 6px; color: #ff8a3d; vertical-align: -3px; }
+.card h3 .tech-ic { display: inline-flex; vertical-align: -3px; margin-right: 6px; color: var(--acc); }
+.tech-note { margin: -4px 0 12px; font: 600 14px/1.4 var(--font); color: var(--text2); }
 /* ===== Finale, Verkaufs-Ende, Endlosziele ===== */
 .modal-card.finale { width: min(600px, 94vw); }
 .story.finale .fin-steps { display: flex; gap: 6px; justify-content: center; margin: -4px 0 14px; }

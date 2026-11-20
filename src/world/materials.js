@@ -10,7 +10,7 @@ function canvasTex(key, w, h, draw, { repeat = [1, 1], srgb = true } = {}) {
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(...repeat);
   t.anisotropy = 8; if (srgb) t.colorSpace = THREE.SRGBColorSpace;
-  texCache.set(k, t); return t;
+  t.userData.shared = true; texCache.set(k, t); return t; // shared: beim Aufräumen nicht freigeben
 }
 const R = (a, b) => a + Math.random() * (b - a);
 function speckle(g, w, h, n, colors, size = [1, 2]) { for (let i = 0; i < n; i++) { g.fillStyle = colors[(Math.random() * colors.length) | 0]; const s = R(...size); g.fillRect(Math.random() * w, Math.random() * h, s, s); } }
@@ -117,7 +117,7 @@ const matCache = new Map();
 export function mat(key, params) {
   if (matCache.has(key)) return matCache.get(key);
   const m = params.physical ? new THREE.MeshPhysicalMaterial(params) : new THREE.MeshStandardMaterial(params);
-  delete m.physical; m.name = key; matCache.set(key, m); return m;
+  delete m.physical; m.name = key; m.userData.shared = true; matCache.set(key, m); return m;
 }
 
 export const M = {

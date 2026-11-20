@@ -25,7 +25,7 @@ world.onPlace = (type, x, z, rot, template) => {
   const def = PLACEABLE[type];
   if (!game.placeableAllowed(def, fac)) { ui.toast('Das passt hier nicht hin.', 'bad'); return null; }
   const o = template ? game.cloneObject(template, fac, x, z, rot) : game.addObject(fac, type, x, z, rot);
-  if (!o) { ui.toast('Nicht genug Geld.', 'bad'); return null; }
+  if (!o) { const blk = template && game.cloneBlocked(template); ui.toast(blk ? `${blk} gibt es nicht mehr zu kaufen.` : 'Nicht genug Geld.', 'bad'); return null; }
   audio.buy();
   return o;
 };
@@ -40,18 +40,28 @@ if (hasSave) {
   const info = game.saveInfo(); if (info) b.innerHTML = `<span class="bi"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span><span class="bt">Weiterspielen<small>${fmtDate(info.day)} · ${fmtUSD(info.cash)}</small></span>`;
 }
 let splashOrbit = true;
-document.getElementById('btn-new').onclick = () => {
-  game.newGame(); splash.classList.add('hidden'); splashOrbit = false;
+const btnNew = document.getElementById('btn-new');
+btnNew.onclick = () => {
+  // Vorhandener Spielstand: erst nach zweitem Klick überschreiben
+  if (hasSave && !btnNew.dataset.armed) { const bt = btnNew.querySelector('.bt'), was = bt.innerHTML; btnNew.dataset.armed = '1'; bt.innerHTML = 'Wirklich neu?<small>Nochmal klicken – der Spielstand wird überschrieben</small>'; setTimeout(() => { delete btnNew.dataset.armed; bt.innerHTML = was; }, 4000); return; }
+  game.newGame(); ui.resetSession(); splash.classList.add('hidden'); splashOrbit = false;
   world.setMode('ui');
   ui.switchSite('kinder'); world.syncLoose(); ui.speedBar(); ui.ticker();
   ui.introPhone(() => { ui.setSpeed(1); ui.keysHint(); ui.tutorial(); });
 };
 document.getElementById('btn-continue').onclick = () => {
-  if (game.load()) { splash.classList.add('hidden'); splashOrbit = false; ui.switchSite(game.s.current); ui.speedBar(); ui.ticker(); ui.keysHint(); world.setMode('play'); ui.toast('Willkommen zurück!', 'good'); }
+  if (game.load()) { ui.resetSession(); splash.classList.add('hidden'); splashOrbit = false; ui.switchSite(game.s.current); ui.speedBar(); ui.ticker(); ui.keysHint(); world.setMode('play'); ui.toast('Willkommen zurück!', 'good'); }
+  else ui.toast('Spielstand konnte nicht geladen werden', 'bad');
 };
 
-// Beim Verlassen speichern
-window.addEventListener('beforeunload', () => { if (splash.classList.contains('hidden')) game.save(); });
+// Beim Verlassen speichern – auch wenn der Tab nur in den Hintergrund geht (mobil kommt beforeunload oft nicht)
+const saveNow = () => { if (splash.classList.contains('hidden')) game.save(); };
+window.addEventListener('beforeunload', saveNow);
+window.addEventListener('pagehide', saveNow);
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { saveNow(); audio.ctx?.suspend?.().catch(() => {}); } // Ton im Hintergrund-Tab anhalten
+  else audio.ctx?.resume?.().catch(() => {});
+});
 
 // Tastatur (Hotkeys)
 const HOT = { j: () => ui.skills(), g: () => ui.goalActionKey(), b: () => ui.toggleBuild(), m: () => ui.market(), p: () => ui.phone(), c: () => ui.company(), t: () => ui.techs(), l: () => ui.ranking(), k: () => ui.toggleMap() };
@@ -59,7 +69,7 @@ window.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || !splash.classList.contains('hidden')) return;
   const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
   if (e.code === 'Space') { e.preventDefault(); ui.setSpeed(game.s.speed ? 0 : (ui.lastSpeed || 1)); return; }
-  if (['1', '2', '3', '4'].includes(e.key)) { ui.setSpeed(+e.key); ui.lastSpeed = +e.key; return; }
+  if (['1', '2', '3', '4'].includes(e.key)) { ui.setSpeed(+e.key); return; }
   if (k === 'Escape') {
     if (world.mode === 'map') { ui.toggleMap(); return; }
     if (world.mode === 'ui') { ui.resume(); return; }
@@ -77,6 +87,7 @@ window.addEventListener('keydown', (e) => {
   }
   if (e.key === 'Delete' && world.selected) {
     const o = game.findObj(world.selected); if (!o) return;
+    if (!game.canSell(o)) { ui.toast('Den PC brauchst du noch.', 'info', 2500); return; }
     if (ui.delArmed === o.uid) { const v = game.objectValue(o); game.removeObject(o.uid); ui.resume(); ui.delArmed = null; ui.toast(`Verkauft für ${v.toLocaleString('de-DE')} $`, 'good', 2500); }
     else { ui.delArmed = o.uid; ui.toast('Nochmal Entf drücken, um das Objekt zu verkaufen.', 'info', 3000); setTimeout(() => { if (ui.delArmed === o.uid) ui.delArmed = null; }, 3000); }
   }

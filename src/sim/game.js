@@ -2,11 +2,13 @@
 import { COINS, COIN } from '../data/coins.js';
 import { PLACEABLE, PART, PLACEABLES, PARTS, GPUS } from '../data/hardware.js';
 import { FACILITIES, FACILITY, CHAPTERS, MESSAGES, NEWS, START_DAY, TECHS } from '../data/world.js';
-import { EVENTS, EVENT } from '../data/events.js';
+import { EVENTS, EVENT, REL_PERK } from '../data/events.js';
 import { ACHIEVEMENTS } from '../data/achievements.js';
 import { FUTURE, futureModel, ENDLESS_GOALS, EGOAL, ENDLESS_NEWS } from '../data/endless.js';
 import { BTC_HASH, POWER_HOUSEHOLD, GPU_BOOM, MONOLITH_SHARE, DAG_AET, DAG_AEC, seasonOffset, noise, toDay, BTC_PRICE, curve, HALVINGS, BTC_REWARD } from '../data/history.js';
-export const SKILL_XP = [0, 100, 300, 700, 1500]; // Erfahrung für Stufe 1–5
+export const SKILL_XP = [0, 150, 500, 1200, 2500, 4500, 7500, 12000, 18000, 26000]; // Erfahrung für Stufe 1–10
+export const SKILL_PCT = 2; // Schrauben: −2 % Hardwarepreis, Mining: +2 % Ertrag je Stufe über 1
+export const TRADE_FEES = [0.04, 0.035, 0.03, 0.025, 0.02, 0.016, 0.013, 0.01, 0.0075, 0.005]; // Börsengebühr je Handel-Stufe
 
 const LAST_DATA_DAY = BTC_PRICE.lastDay;
 export const SAVE_KEY = 'hashwerk-save-v1';
@@ -43,6 +45,7 @@ export class Game {
     Object.assign(s, { futureHW: [], netEff: 1, egoals: { done: {}, st: {}, cur: null }, fin: {}, ngPlus: 0, enews: {} }); // Endlosmodus & Finale
     this.registerFutureHW([]);
     for (const c of COINS) s.autoSell[c.id] = 0;
+    this.initProgress(s);
     const m0 = MESSAGES.find((m) => m.id === 'm0'); if (m0) s.messages.push({ id: 'm0', day: START_DAY, from: m0.from, text: m0.text, read: true }); // Start-Nachricht (im Intro gezeigt)
     this.s = s;
     this.cache = {};
@@ -50,6 +53,7 @@ export class Game {
     // Alte Teile liegen im Zimmer herum – einsammeln und einbauen
     s.loose = { mobo: 'h55', cpu: 'cel33', gpu: 'rhd4850', psu: 'psu400' }; s.inv = [];
     s.skills = { hw: 0, mining: 0, trade: 0 };
+    s.keep = {}; s.talk = { last: {}, week: {}, joy: {}, got: {}, seen: {}, line: {} }; // Fundstücke, Gespräche (src/data/story.js)
     const pc = this.addObject('kinder', 'tower', 1.75, 0.75, 0, { mobo: null, cpu: null, psu: null, gpus: [] }, true);
     pc.mode = 'off'; // Einschalten erst, wenn alle Teile drin sind
     while (s.newsIdx < NEWS.length && NEWS[s.newsIdx].day < s.day) s.newsIdx++;
@@ -61,9 +65,12 @@ export class Game {
   hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; } }
   saveInfo() { try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); return s ? { day: s.day, cash: s.cash, sites: s.unlocked.length } : null; } catch (e) { return null; } }
   load() {
+    const prev = { s: this.s, cache: this.cache, summary: this.summary }; // bei Fehler zurück zum laufenden Spiel
     try {
       const raw = localStorage.getItem(SAVE_KEY); if (!raw) return false;
       const s = JSON.parse(raw); if (!s || s.version !== 1) return false;
+      s.fac ||= {}; s.wallet ||= {}; s.autoSell ||= {}; s.lastNet ||= {};
+      s.futureHW = Array.isArray(s.futureHW) ? s.futureHW.filter((it) => it?.id && it.hash > 0 && it.watt > 0) : []; this.registerFutureHW(s.futureHW); // Zukunfts-Miner vor dem Aussortieren unbekannter Geräte eintragen
       for (const f of FACILITIES) s.fac[f.id] ||= { power: 0, tripped: false, temp: 21, objects: [] };
       // Alte Spielstände: Parodie-Kürzel auf echte Coins umstellen
       const MIG = { SLV: 'LTC', WUF: 'DOGE', SHD: 'XMR', AET: 'ETH', AEC: 'ETC', ZRP: 'ZEC', CRV: 'RVN', KSK: 'KAS' };
@@ -71,20 +78,49 @@ export class Game {
         if (s.wallet[o]) { s.wallet[n] = s.wallet[o]; delete s.wallet[o]; }
         if (s.autoSell[o] != null) { s.autoSell[n] = s.autoSell[o]; delete s.autoSell[o]; }
         if (s.stats?.coins?.[o] != null) { s.stats.coins[n] = s.stats.coins[o]; delete s.stats.coins[o]; }
+        if (s.endless?.[o]) { s.endless[n] = s.endless[o]; delete s.endless[o]; }
+        if (s.lastNet[o] != null) { s.lastNet[n] = s.lastNet[o]; delete s.lastNet[o]; }
         for (const f of Object.values(s.fac)) for (const ob of f.objects || []) if (ob.coin === o) ob.coin = n;
       }
+      // Unbekannte Objekte und Teile (z. B. aus anderen Spielversionen) aussortieren statt abzustürzen
+      for (const f of Object.values(s.fac)) {
+        f.objects = (f.objects || []).filter((ob) => ob && PLACEABLE[ob.type]);
+        for (const ob of f.objects) {
+          if (ob.coin !== 'auto' && !COIN[ob.coin]) ob.coin = 'auto';
+          if (PLACEABLE[ob.type].kind === 'rig') { ob.parts ||= { mobo: null, cpu: null, psu: null, gpus: [] }; for (const k of ['mobo', 'cpu', 'psu']) if (ob.parts[k] && !PART[ob.parts[k]]) ob.parts[k] = null; ob.parts.gpus = (ob.parts.gpus || []).filter((id) => PART[id]); }
+          if (PLACEABLE[ob.type].kind === 'holder') ob.items = (ob.items || []).filter((it) => it && PLACEABLE[it.id]);
+        }
+      }
+      s.unlocked = (s.unlocked || ['kinder']).filter((id) => FACILITY[id]); if (!s.unlocked.length) s.unlocked = ['kinder'];
+      if (!s.unlocked.includes(s.current)) s.current = s.unlocked[0];
+      if (s.endless) for (const c of COINS) s.endless[c.id] ||= { p: 1, h: 1 };
+      s.staff ||= { tech: 0 }; s.goals ||= {}; s.messages ||= []; s.ticker ||= [];
       if (!Number.isFinite(s.cash)) s.cash = 0;
       for (const c of COINS) { s.wallet[c.id] ||= { ex: 0, cold: 0 }; if (s.autoSell[c.id] == null) s.autoSell[c.id] = DEFAULT_AUTOSELL; }
       s.ev ||= { done: {}, open: null, log: [], later: [], last: 0 }; s.ev.done ||= {}; s.ev.log ||= []; s.ev.later ||= [];
       s.rel ||= { papa: 0, mama: 0, opa: 0, deniz: 0 }; s.mods ||= []; s.ach ||= {}; s.flags ||= {}; s.stats ||= { minedUSD: 0, sold: 0, spentHW: 0, elec: 0, history: [] };
-      s.futureHW ||= []; s.netEff ||= 1; s.egoals ||= { done: {}, st: {}, cur: null }; s.egoals.done ||= {}; s.egoals.st ||= {}; s.fin ||= {}; s.ngPlus ||= 0; s.enews ||= {}; this.registerFutureHW(s.futureHW);
+      s.futureHW ||= []; s.netEff ||= 1; s.egoals ||= { done: {}, st: {}, cur: null }; s.egoals.done ||= {}; s.egoals.st ||= {}; s.fin ||= {}; s.ngPlus ||= 0; s.enews ||= {};
+      s.keep ||= {}; s.talk ||= { last: {}, week: {}, joy: {}, got: {}, seen: {}, line: {} };
+      this.initProgress(s);
       this.s = s; this.cache = {}; this.dayUpdate(true); return true;
-    } catch (e) { console.warn(e); return false; }
+    } catch (e) {
+      console.warn(e); this.registerFutureHW(prev.s?.futureHW || []);
+      if (this.s !== prev.s) { this.s = prev.s; this.cache = prev.cache; this.summary = prev.summary; try { this.dayUpdate(true); } catch (e2) { /* alter Stand bleibt */ } }
+      return false;
+    }
   }
 
   // ---------- Technologien ----------
   fx(key, facId = null) { let m = 1; const u = this.s.techs || {}; for (const t of TECHS) if (u[t.id] && t.fx[key]) m *= t.fx[key];
-    for (const md of this.s.mods || []) if (md.key === key && (!md.fac || md.fac === facId) && this.s.day < md.until) m *= md.mult; if (key === 'rev' && this.s.skills) m *= 1 + 0.04 * (this.skillLv('mining') - 1); return m; }
+    for (const md of this.s.mods || []) if (md.key === key && (!md.fac || md.fac === facId) && this.s.day < md.until) m *= md.mult; if (key === 'rev' && this.s.skills) m *= 1 + (SKILL_PCT / 100) * (this.skillLv('mining') - 1); return m * this.relFx(key, facId); }
+  // Beziehungen ab Stufe 3 wirken (Texte: REL_PERK in events.js; Opa: siehe powerCost)
+  relFx(key, facId) {
+    const r = this.s.rel; if (!r) return 1;
+    if (key === 'rent' && facId === 'werkstatt' && r.papa >= 3) return 0; // Papa: keine Werkstattmiete
+    if (key === 'cool' && facId === 'kinder' && r.mama >= 3) return 1.2; // Mama: +20 % Kühlung im Kinderzimmer
+    if (key === 'fail' && r.deniz >= 3) return 0.9; // Deniz: −10 % Ausfälle
+    return 1;
+  }
   techAvailable(t) { return this.s.day >= toDay(t.date) && (!t.minTier || Math.max(...this.s.unlocked.map((id) => FACILITY[id].tier)) >= t.minTier); }
   buyTech(id) { const t = TECHS.find((x) => x.id === id); if (!t || (this.s.techs ||= {})[id] || !this.techAvailable(t) || !this.canAfford(t.cost)) return false; this.s.cash -= t.cost; this.s.techs[id] = this.s.day;
     if (id === 'ico') { const usd = Math.min(30e6, 600000 + this.netWorthFast() * 0.25); const p = this.price('ETH') || 1; this.s.wallet.ETH.ex += usd / p; this.toast(`ICO ausverkauft: ${fmtUSD(usd)} in Ethereum`, 'good', 9000); }
@@ -93,16 +129,22 @@ export class Game {
   // ---------- Markt ----------
   price(id, day = this.s.day) {
     const c = COIN[id]; if (day < c.start) return 0;
-    if (day > LAST_DATA_DAY && this.s.endless) return c.price(LAST_DATA_DAY) * this.s.endless[id].p;
+    if (day > LAST_DATA_DAY && this.s.endless) return c.price(LAST_DATA_DAY) * this.endlessMult(id, day, 0);
     if (id === 'BTC' && day <= c.price.dailyEnd) return c.price(day); // echte Tageskurse, kein künstliches Rauschen
     const vol = id === 'BTC' ? 0.045 : 0.07;
     return c.price(day) * Math.exp(noise(day, id.charCodeAt(0) + id.charCodeAt(1)) * vol);
   }
   netHash(id, day = this.s.day) {
     const c = COIN[id]; if (day < c.start) return Infinity;
-    if (day > LAST_DATA_DAY && this.s.endless) return c.hash(LAST_DATA_DAY) * this.s.endless[id].h;
+    if (day > LAST_DATA_DAY && this.s.endless) return c.hash(LAST_DATA_DAY) * this.endlessMult(id, day, 1);
     if (id === 'BTC' && day <= c.hash.dailyEnd) return c.hash(day); // echte Netz-Hashrate
     return c.hash(day) * Math.exp(noise(day, 99 + id.charCodeAt(0)) * 0.03);
+  }
+  // Endlosmodus: Kurs- (k=0) bzw. Hashraten-Faktor (k=1) eines vergangenen Tages aus der Historie, heute der laufende Wert
+  endlessMult(id, day, k) {
+    const s = this.s, e = s.endless[id]; if (!e) return 1;
+    const H = s.endlessHist, i = day < s.day && H ? H.ids.indexOf(id) : -1, r = i >= 0 && H.d[day];
+    return r ? r[i * 2 + k] : k ? e.h : e.p;
   }
   coinActive(id, day = this.s.day) { const c = COIN[id]; return day >= c.start && (!c.end || day < c.end); }
   coinAlgo(id, day = this.s.day) { return COIN[id].algo(day); }
@@ -164,7 +206,7 @@ export class Game {
       const ratio = Math.min(2.6, Math.max(0.06, Math.pow(h1 / h0, 0.55)));
       p *= ratio * Math.max(0.35, 1 - 0.1 * years);
     } else p *= Math.pow(1.02, Math.max(0, (day - toDay('2010-01-01')) / 365));
-    if (this.s?.skills) p *= 1 - 0.04 * (this.skillLv('hw') - 1);
+    if (this.s?.skills) p *= 1 - (SKILL_PCT / 100) * (this.skillLv('hw') - 1);
     if (this.s?.mods?.length) p *= this.fx('price') * this.fx('price:' + (item.kind === 'device' ? 'asic' : item.type || item.kind));
     return Math.max(1, Math.round(p));
   }
@@ -172,7 +214,7 @@ export class Game {
     if (day < item.releaseDay) return false;
     const years = (day - item.releaseDay) / 365;
     if (item.type === 'gpu' || item.type === 'cpu') return years < 7;
-    if (item.type === 'mobo' || item.type === 'psu') return years < 9;
+    // Netzteile, Mainboards, Rahmen, Regale, Kühlung, Deko laufen nie aus (sonst ist der Handel im Endlosmodus leer)
     if (item.kind === 'device') return years < 5.5;
     return true;
   }
@@ -208,6 +250,7 @@ export class Game {
     if (s.chapter >= 1 && s.day >= toDay('2011-06-20')) this.grant('cold');
     if (s.unlocked.length >= 2) this.grant('map');
     if (s.chapter >= 2) { this.grant('techs'); this.grant('ranking'); this.grant('loan'); this.grant('buycoins'); this.grant('coins'); this.grant('cold'); this.grant('heat'); }
+    if (s.chapter >= 1) { this.grant('techs'); this.grant('ranking'); } // Opas Werkbank und das Logbuch schon im Keller
   }
   startMining(uid) { const o = this.findObj(uid); if (!o || (o.parts && !this.pcReady(o))) return false; o.mode = 'auto'; const first = !this.s.flags.miningStarted; if (first) { this.s.mineDay0 = this.s.day; this.s.mineFrac0 = this.s.frac || 0; } this.s.flags.miningStarted = true; this.s.flags.seenPc = true; if (first) this.addXp('mining', 40); this.checkGoals(); this.dayUpdate(true); this.emit('objects', this.facOf(uid)); return true; }
   // Zentraler Geld-Check: nur kaufen, was wirklich bezahlt werden kann (kein Kauf bei Minus-Konto)
@@ -220,7 +263,7 @@ export class Game {
     if (!free) { const p = this.itemPrice(def); if (!this.canAfford(p)) return null; this.s.cash -= p; this.s.stats.spentHW += p; if (this.s.skills) this.addXp('hw', 10); }
     this.s.fac[facId].objects.push(o);
     if (def.kind === 'device' && def.look !== 'fpga' && def.look !== 'usb') this.s.flags.boughtAsic = true;
-    this.dayUpdate(true);
+    this.dayUpdate(true); if (!free) this.capWarn(facId);
     this.emit('objects', facId);
     return o;
   }
@@ -235,11 +278,13 @@ export class Game {
   objectValue(o) {
     const def = PLACEABLE[o.type];
     let v = this.itemPrice(def) * 0.5;
-    if (o.parts) for (const pid of this.partIds(o)) v += this.itemPrice(PART[pid]) * 0.5;
+    if (o.parts) for (const pid of this.partIds(o)) v += this.itemPrice(PART[pid]) * 0.5 * (pid === o.parts.psu ? this.psuCount(o) : 1); // Doppel-Netzteil zählt doppelt
     if (o.items) for (const it of o.items) v += this.itemPrice(PLACEABLE[it.id]) * (it.b ? 0.2 : 0.5);
     if (o.broken) v *= 0.4;
     return Math.round(v);
   }
+  // Verkaufen erlaubt? Den einzigen PC im Kinderzimmer braucht man noch (sonst Sackgasse)
+  canSell(o) { return !!o && this.has('build') && !(this.s.chapter === 0 && o.type === 'tower'); }
   partIds(o) { const p = o.parts; return [p.mobo, p.cpu, p.psu, ...p.gpus].filter(Boolean); }
   // Erster PC-Zusammenbau: welche Teile fehlen noch, und wie viel Geld muss für sie übrig bleiben?
   // ---------- Fähigkeiten: lernen durch Tun ----------
@@ -248,8 +293,8 @@ export class Game {
     const s = this.s; if (!s.skills) return; const before = this.skillLv(k); s.skills[k] = (s.skills[k] || 0) + Math.round(n);
     this.grant('skills'); const after = this.skillLv(k); if (!quiet || after > before) this.emit('xp', k, Math.round(n), after > before ? after : 0);
   }
-  creditPending(coin, n) { const s = this.s; if (!(n > 0)) return; s.wallet[coin].ex += n; s.accr = { day: s.day, f: s.frac }; }
-  tradeFee() { return [0.04, 0.03, 0.02, 0.01, 0.005][this.skillLv('trade') - 1] ?? 0.005; }
+  creditPending(coin, n) { const s = this.s; if (!(n > 0)) return; s.wallet[coin].ex += n; const n0 = s.accr?.day === s.day && s.accr.coin === coin ? s.accr.n || 0 : 0; s.accr = { day: s.day, f: s.frac, coin, n: n0 + n }; } // n: heute schon gutgeschrieben
+  tradeFee() { return TRADE_FEES[this.skillLv('trade') - 1] ?? 0.005; }
   // ---------- Herumliegende Teile ----------
   pickUp(type) { const s = this.s; if (!s.loose?.[type]) return false; s.inv.push(type); s.invIds = { ...(s.invIds || {}), [type]: s.loose[type] }; delete s.loose[type]; this.checkGoals(); this.emit('loose'); return true; }
   installLoose(uid, type) {
@@ -283,7 +328,7 @@ export class Game {
       if (slot === 'mobo') { const cap = this.rigGpuCap(o); if (o.parts.gpus.length > cap) { for (const g of o.parts.gpus.slice(cap)) this.s.cash += Math.round(this.itemPrice(PART[g]) * 0.5); o.parts.gpus = o.parts.gpus.slice(0, cap); } }
     }
     if (!this.s.flags.miningStarted && o.type === 'tower' && this.pcReady(o)) this.s.flags.pcBuilt = true;
-    this.dayUpdate(true); this.emit('objects', this.facOf(uid));
+    this.dayUpdate(true); if (partId && slot === 'gpu') this.capWarn(this.facOf(uid)); this.emit('objects', this.facOf(uid));
     return true;
   }
   psuCount(o) { return PLACEABLE[o.type].maxGpu >= 8 ? 2 : 1; }
@@ -311,7 +356,7 @@ export class Game {
   fillGpus(uid, gpuId) {
     const o = this.findObj(uid); if (!o || !o.parts?.mobo) return 0;
     const cap = this.rigGpuCap(o); let n = 0;
-    const maxCap = Math.max(...this.partList('psu').map((x) => x.cap)) * this.psuCount(o);
+    const maxCap = Math.max(0, o.parts.psu ? PART[o.parts.psu].cap : 0, ...this.partList('psu').map((x) => x.cap)) * this.psuCount(o); // ohne Netzteil im Handel kein -Infinity
     while (o.parts.gpus.length < cap && this.canAfford(this.itemPrice(PART[gpuId]))) {
       if (this.rigWatt(o) + PART[gpuId].watt > maxCap) { this.toast(`Mehr GPUs schafft kein verfügbares Netzteil (max. ${maxCap} W).`, 'info'); break; }
       if (!this.setPart(uid, 'gpu', gpuId, o.parts.gpus.length)) break; n++;
@@ -325,24 +370,30 @@ export class Game {
     if (o.items) for (const it of o.items) c += this.itemPrice(PLACEABLE[it.id]);
     return Math.round(c);
   }
+  // Duplizieren nur mit Hardware, die es noch zu kaufen gibt: Name des ersten ausgelaufenen Teils, sonst null
+  cloneBlocked(o) {
+    const items = [PLACEABLE[o.type], ...(o.parts ? this.partIds(o).map((id) => PART[id]) : []), ...(o.items || []).map((it) => PLACEABLE[it.id])];
+    const it = items.find((x) => x && !this.available(x)); return it ? it.name : null;
+  }
   cloneObject(src, facId, x, z, rot) {
+    if (this.cloneBlocked(src)) return null;
     const cost = this.cloneCost(src); if (!this.canAfford(cost)) return null;
     const def = PLACEABLE[src.type];
     const o = { uid: this.s.nextUid++, type: src.type, x, z, rot, coin: src.coin, broken: false, bought: this.s.day };
     if (src.parts) o.parts = JSON.parse(JSON.stringify(src.parts));
     if (src.items) o.items = src.items.map((i) => ({ id: i.id, b: 0 }));
     this.s.cash -= cost; this.s.stats.spentHW += cost;
-    this.s.fac[facId].objects.push(o); this.dayUpdate(true); this.emit('objects', facId); return o;
+    this.s.fac[facId].objects.push(o); this.dayUpdate(true); this.capWarn(facId); this.emit('objects', facId); return o;
   }
   holderAdd(uid, devId, n = 1) {
     const o = this.findObj(uid); if (!o || !o.items) return 0;
-    const def = PLACEABLE[o.type], dev = PLACEABLE[devId];
+    const def = PLACEABLE[o.type], dev = PLACEABLE[devId]; if (!dev) return 0;
     const price = this.itemPrice(dev);
     let added = 0;
     while (added < n && o.items.length < def.slots && this.canAfford(price)) {
       o.items.push({ id: devId, b: 0 }); this.s.cash -= price; this.s.stats.spentHW += price; added++;
     }
-    if (added) { if (dev.look !== 'fpga' && dev.look !== 'usb') this.s.flags.boughtAsic = true; this.dayUpdate(true); this.emit('objects', this.facOf(uid)); }
+    if (added) { if (dev.look !== 'fpga' && dev.look !== 'usb') this.s.flags.boughtAsic = true; this.dayUpdate(true); this.capWarn(this.facOf(uid)); this.emit('objects', this.facOf(uid)); }
     return added;
   }
   holderRemove(uid, idx) {
@@ -357,10 +408,10 @@ export class Game {
     this.dayUpdate(true); this.emit('objects', this.facOf(uid));
   }
   repairCost(o) {
-    if (o.items) { let c = 0; for (const it of o.items) if (it.b) c += this.itemPrice(PLACEABLE[it.id]) * 0.08; return Math.round(c); }
+    if (o.items) { let c = 0; for (const it of o.items) if (it.b) c += this.itemPrice(PLACEABLE[it.id]) * 0.08; return Math.round(c * this.fx('repair')); }
     let base = this.itemPrice(PLACEABLE[o.type]);
     if (o.parts) for (const pid of this.partIds(o)) base += this.itemPrice(PART[pid]);
-    return Math.max(5, Math.round(base * 0.08));
+    return Math.max(5, Math.round(base * 0.08 * this.fx('repair')));
   }
   brokenIn(facId) { let n = 0, c = 0; for (const o of this.s.fac[facId].objects) { if (o.broken || (o.items && o.items.some((i) => i.b))) { n++; c += this.repairCost(o); } } return { n, c }; }
   repairAll(facId) { let n = 0; for (const o of this.s.fac[facId].objects) if ((o.broken || (o.items && o.items.some((i) => i.b))) && this.repair(o.uid)) n++; return n; }
@@ -407,7 +458,7 @@ export class Game {
       for (const [id, n] of Object.entries(groups)) {
         const d = PLACEABLE[id]; const ap = this.fx('asicPower'), ah = this.fx('asicHash');
         r.watt += d.watt * n * ap;
-        r.units.push({ hash: { [d.algo]: d.hash * n * ah }, vram: d.vram || 99, w: d.watt * n * ap });
+        r.units.push({ hash: { [d.algo]: d.hash * n * ah }, vram: d.vram || 99, w: d.watt * n * ap, n });
       }
       r.heat = def.selfCooled ? r.watt * 0.03 : r.watt;
       if (def.selfCooled) r.watt *= 1.06; // Pumpen/Lüfter
@@ -446,8 +497,10 @@ export class Game {
     let watt = 0, heat = 0, cool = fd.baseCool * this.fx('cool', facId), rev = 0; const per = new Map(); const hashByAlgo = {};
     const elecP = this.elecPrice(facId, day);
     let coolCap = 0, coolW = 0; const coolers = [];
+    for (const o of f.objects) per.set(o.uid, this.analyze(o, day, elecP));
+    this.autoLimit(facId, per, elecP, day);
     for (const o of f.objects) {
-      const a = this.analyze(o, day, elecP); per.set(o.uid, a);
+      const a = per.get(o.uid);
       if (PLACEABLE[o.type].kind === 'cooling') { coolCap += a.cool; coolW += a.watt; coolers.push(a); continue; }
       watt += a.watt; heat += a.heat;
       for (const u of a.units) { rev += u.rev; if (u.algo) hashByAlgo[u.algo] = (hashByAlgo[u.algo] || 0) + u.h; }
@@ -458,10 +511,64 @@ export class Game {
     watt += coolW * util; heat += coolW * util; cool += coolCap;
     const capKw = fd.power[f.power].kw * this.fx('cap', facId);
     const ambient = 21 + fd.ambient + seasonOffset(day) * (fd.style === 'basement' ? 0.4 : 1);
-    const temp = ambient + 12 * (heat / Math.max(1, cool));
+    const tripped = watt / 1000 > capKw;
+    const temp = tripped ? ambient : ambient + 12 * (heat / Math.max(1, cool)); // Sicherung raus: nichts läuft, keine Abwärme
     const throttle = (temp > 38 ? Math.max(0.35, 1 - (temp - 38) * 0.05) : 1) * this.fx('hash', facId);
     const elec = this.elecPrice(facId, day);
-    return { watt, heat, cool, rev, per, capKw, tripped: watt / 1000 > capKw, temp, throttle, elec, hashByAlgo };
+    return { watt, heat, cool, rev, per, capKw, tripped, temp, throttle, elec, hashByAlgo };
+  }
+  // Auto-Betrieb: nur so viele Geräte hochfahren, wie Anschluss und Kühlung hergeben – rentabelste zuerst,
+  // Drosselung durch Hitze zählt mit. Der Rest pausiert ('full' = Anschluss voll, sonst zu heiß).
+  autoLimit(facId, per, elec, day) {
+    const f = this.s.fac[facId], fd = FACILITY[facId];
+    const capW = fd.power[f.power].kw * this.fx('cap', facId) * 1000, cool0 = fd.baseCool * this.fx('cool', facId), fxh = this.fx('hash', facId);
+    const ambient = 21 + fd.ambient + seasonOffset(day) * (fd.style === 'basement' ? 0.4 : 1);
+    let W = 0, H = 0, R = 0, coolCap = 0, coolW = 0; const cand = [];
+    for (const o of f.objects) {
+      const a = per.get(o.uid), def = PLACEABLE[o.type];
+      if (def.kind === 'cooling') { coolCap += a.cool; coolW += a.watt; continue; }
+      const auto = (o.mode || 'auto') === 'auto', sc = !!def.selfCooled; let aw = a.watt, ah = a.heat;
+      for (const u of a.units) {
+        if (!auto || u.idle) { R += u.rev; continue; }
+        const we = u.w * (sc ? 1.06 : 1), he = sc ? u.w * 0.03 : u.w;
+        cand.push({ a, u, we, he, n: u.n || 1, rev: u.rev, cost: (we / 1000) * 24 * elec }); aw -= we; ah -= he;
+      }
+      W += Math.max(0, aw); H += Math.max(0, ah);
+    }
+    if (!cand.length) return;
+    const util = (h) => (coolCap ? Math.min(1, Math.max(0.05, (h - fd.baseCool * 0.6) / coolCap)) : 0);
+    const thr = (h) => { const t = ambient + 12 * ((h + coolW * util(h)) / Math.max(1, cool0 + coolCap)); return t > 38 ? Math.max(0.35, 1 - (t - 38) * 0.05) : 1; };
+    cand.sort((x, y) => (y.rev - y.cost) / (y.we || 1) - (x.rev - x.cost) / (x.we || 1));
+    let t0 = thr(H);
+    for (const c of cand) {
+      // Wie viele Geräte der Einheit dürfen laufen? (Regal/Container: auch nur ein Teil)
+      const room = capW - W - coolW * util(H + c.he), jmax = c.we <= room ? c.n : c.n > 1 ? Math.floor((c.n * Math.max(0, room)) / c.we) : 0;
+      const gain = (j) => { const kk = j / c.n; return (R + c.rev * kk) * thr(H + c.he * kk) * fxh - c.cost * kk - R * t0 * fxh; };
+      let j = jmax;
+      if (j > 0 && gain(j) < 0) { let best = 0; j = 0; for (let i = 1; i < jmax; i++) { const gi = gain(i); if (gi > best) { best = gi; j = i; } } }
+      const k = j / c.n, why = j < jmax ? 'heat' : jmax < c.n ? 'full' : '';
+      if (k > 0) { W += c.we * k; H += c.he * k; R += c.rev * k; t0 = thr(H); }
+      if (k >= 1) continue;
+      const a = c.a, u = c.u; a.watt = Math.max(0, a.watt - c.we * (1 - k)); a.heat = Math.max(0, a.heat - c.he * (1 - k));
+      if (k > 0) { u.rev *= k; u.h *= k; u.part = k; } else { u.idle = true; u.potential = u.rev; u.rev = 0; u.h = 0; }
+      a.limit = a.limit === 'full' ? 'full' : why;
+    }
+    for (const a of per.values()) {
+      if (!a.limit) continue;
+      if (a.units.every((u) => u.idle) && (a.status === 'ok' || a.status === 'partial')) { a.status = a.limit === 'full' ? 'full' : 'idle'; a.note = a.limit === 'full' ? 'Pausiert: Anschluss voll' : 'Pausiert: zu heiß, Drosselung frisst den Ertrag'; }
+      else if (!a.note) a.note = a.limit === 'full' ? 'Teilweise pausiert: Anschluss voll' : 'Teilweise pausiert: zu heiß';
+    }
+  }
+  // Warnung beim Kauf: Volllast (alle Geräte an) übersteigt den Anschluss
+  capWarn(facId) {
+    const f = this.s.fac[facId], fd = FACILITY[facId], sm = this.summary?.[facId]; if (!f || !sm) return;
+    let w = 0;
+    for (const o of f.objects) { const a = sm.per.get(o.uid), def = PLACEABLE[o.type]; if (!a) continue; if (def.kind === 'cooling') { w += a.status === 'off' ? 0 : def.watt; continue; } w += a.watt; for (const u of a.units) if (u.idle || u.part) w += u.w * (u.idle ? 1 : 1 - u.part) * (def.selfCooled ? 1.06 : 1); }
+    const cap = fd.power[f.power].kw * this.fx('cap', facId) * 1000; this.capWarned ||= {};
+    if (w <= cap) { delete this.capWarned[facId]; return; }
+    if (this.capWarned[facId] && w < this.capWarned[facId] * 1.5) return; // erst bei deutlich mehr Last erneut warnen
+    this.capWarned[facId] = w;
+    this.toast(`Volllast ${fmtWatt(w)} – mehr als der Anschluss (${fmtWatt(cap)}). Im Auto-Betrieb laufen nur so viele Geräte, wie Strom da ist.`, 'info', 7000);
   }
 
   // ---------- Kennzahlen ----------
@@ -470,7 +577,7 @@ export class Game {
   hardwareValue() { let v = 0; for (const f of Object.values(this.s.fac)) for (const o of f.objects) v += this.objectValue(o); return v; }
   netWorth() { return this.s.cash + this.walletValue() + this.hardwareValue() - (this.s.loan || 0); }
   monolithHash(day = this.s.day) { return day < toDay('2014-03-01') ? 0 : BTC_HASH(Math.min(day, LAST_DATA_DAY)) * MONOLITH_SHARE(day) * (this.s.endless ? this.s.endless.BTC.h : 1) * this.fx('monolith'); }
-  dailyProfit() { let rev = 0, cost = 0; for (const id of this.s.unlocked) { const sm = this.summary[id]; if (!sm) continue; if (!sm.tripped) { rev += sm.rev * sm.throttle; cost += Math.max(0, sm.watt / 1000 * 24 - this.solarKwh(id)) * sm.elec; } cost += FACILITY[id].rent / 30.4 * this.fx('rent', id); } cost += this.s.staff.tech * this.techSalary() / 30.4; if (this.s.loan > 0) cost += this.s.loan * this.loanRate() / 365; return { rev, cost, net: rev - cost }; }
+  dailyProfit() { let rev = 0, cost = 0; for (const id of this.s.unlocked) { const sm = this.summary[id]; if (!sm) continue; if (!sm.tripped) { rev += sm.rev * sm.throttle; cost += Math.max(0, sm.watt / 1000 * 24 - this.solarKwh(id)) * sm.elec; } cost += FACILITY[id].rent / 30.4 * this.fx('rent', id); } cost += this.s.staff.tech * this.techSalary() / 30.4; for (const md of this.s.mods || []) if (md.key === 'monthly' && this.s.day < md.until) cost += md.mult / 30.4; if (this.s.loan > 0) cost += this.s.loan * this.loanRate() / 365; return { rev, cost, net: rev - cost }; }
   techSalary(day = this.s.day) { return Math.round(2600 * Math.pow(1.03, (day - toDay('2014-01-01')) / 365)); }
   techCoverage() { let n = 0; for (const id of this.s.unlocked) for (const o of this.s.fac[id].objects) { const def = PLACEABLE[o.type]; if (def.kind === 'holder') n += o.items.length; else if (def.kind !== 'decor' && def.kind !== 'cooling') n++; } return n ? Math.min(1, (this.s.staff.tech * 60) / n) : 1; }
 
@@ -491,9 +598,11 @@ export class Game {
     this.checkFeatures();
     const day = s.day;
     // Gutschrift nur für den Teil des Tages, der noch nicht gutgeschrieben ist (erster Tag ab dem Einschalten, vorab verkaufte Anteile)
-    const D = day - 1, minedByCoin = {}, startK = Math.max(0, 1 - Math.max(s.mineDay0 === D ? s.mineFrac0 || 0 : 0, s.accr?.day === D ? s.accr.f : 0));
+    const D = day - 1, minedByCoin = {}, f0 = s.mineDay0 === D ? s.mineFrac0 || 0 : 0, startK = Math.max(0, 1 - f0);
+    // Vorab gutgeschrieben wurde nur der behaltene Anteil eines Coins (s.accr.coin) – Auto-Verkauf und andere Coins laufen voll weiter
+    const accrC = s.accr?.day === D ? s.accr.coin || 'BTC' : null, keepK = (c) => (c === accrC && startK > 0 ? Math.max(0, 1 - Math.max(f0, s.accr.f || 0)) / startK : 1);
     let elecCost = 0;
-    const netOwn = {};
+    const netOwn = {}, perH = {}, coinPerH = (c) => (perH[c] ??= COIN[c].emission(day) * this.fx('rev') / (this.netHash(c, day) + (s.lastNet[c] || 0))); // je Coin einmal pro Tag
     for (const id of s.unlocked) {
       const f = s.fac[id], sm = this.facSummary(id, day);
       const wasTripped = f.tripped;
@@ -507,7 +616,7 @@ export class Game {
         for (const u of a.units) {
           if (!u.coin || !u.rev) continue;
           const c = u.coin;
-          const coins = (u.h * sm.throttle) / (this.netHash(c, day) + (s.lastNet[c] || 0)) * COIN[c].emission(day) * this.fx('rev') * startK;
+          const coins = u.h * sm.throttle * coinPerH(c) * startK;
           minedByCoin[c] = (minedByCoin[c] || 0) + coins;
           netOwn[c] = (netOwn[c] || 0) + u.h * sm.throttle;
           if (c === 'LTC' && day >= COIN.DOGE.mergedFrom) { const w = (u.h * sm.throttle) / (this.netHash('DOGE', day) + (s.lastNet.DOGE || 0)) * COIN.DOGE.emission(day); minedByCoin.DOGE = (minedByCoin.DOGE || 0) + w; netOwn.DOGE = (netOwn.DOGE || 0) + u.h * sm.throttle; }
@@ -517,6 +626,8 @@ export class Game {
       }
     }
     s.lastNet = netOwn;
+    // Defekte des Tages: höchstens eine Meldung
+    if (this.broke?.length) { const br = this.broke; this.broke = null; for (const fid of new Set(br.map((o) => this.facOf(o.uid)))) this.emit('objects', fid); this.toast(br.length === 1 ? `${PLACEABLE[br[0].type].name} ist kaputt!` : `${br.length} Geräte kaputt${s.staff.tech ? ' – die Techniker reparieren …' : ' – reparieren nicht vergessen'}`, 'bad'); }
     // Coins gutschreiben & Auto-Verkauf
     let sold = 0, minedUSD = 0;
     s.stats.coins ||= {};
@@ -524,7 +635,7 @@ export class Game {
       const p = this.price(c, day); minedUSD += n * p; s.stats.coins[c] = (s.stats.coins[c] || 0) + n;
       const sell = n * s.autoSell[c];
       sold += sell * p * (s.skills ? 1 - this.tradeFee() : 1);
-      const keep = n - sell;
+      const keep = c === accrC && s.accr.n != null ? Math.max(0, n - sell - s.accr.n) : (n - sell) * keepK(c); // vorab Gutgeschriebenes abziehen
       if (s.payoutCold) s.wallet[c].cold += keep; else s.wallet[c].ex += keep;
     }
     s.cash += sold - elecCost;
@@ -540,8 +651,8 @@ export class Game {
     if (!Number.isFinite(s.cash)) s.cash = 0;
     if (s.cash < 0) {
       // Automatisch Coins von der Börse verkaufen, um das Minus auszugleichen
-      let need = -s.cash + 50;
-      for (const c of COINS) { const w = s.wallet[c.id], p = this.price(c.id, day); if (need <= 0 || !p || w.ex <= 0) continue; const n = Math.min(w.ex, need / (p * 0.995)); w.ex -= n; s.cash += n * p * 0.995; need -= n * p * 0.995; }
+      let need = -s.cash + 50; const fk = 1 - (s.skills ? this.tradeFee() : 0.005);
+      for (const c of COINS) { const w = s.wallet[c.id], p = this.price(c.id, day); if (need <= 0 || !p || w.ex <= 0) continue; const n = Math.min(w.ex, need / (p * fk)); w.ex -= n; s.cash += n * p * fk; need -= n * p * fk; }
       if (s.cash < 0) { s.cash -= Math.min(-s.cash * 0.15 / 365, 5e6); if (!s.flags.warnedNeg || day - s.flags.warnedNeg > 30) { s.flags.warnedNeg = day; this.toast('Konto im Minus!', 'bad', 8000); } }
     }
     // Techniker reparieren
@@ -572,11 +683,12 @@ export class Game {
       this.emit('release', it, text);
     }
     // Story
-    this.checkMessages(); this.checkGoals(); this.checkEvents();
+    this.checkMessages(); this.checkGoals(true); this.checkEvents();
     this.endlessDay();
     if (day % 7 === 0) this.checkAchievements();
     if (day % 30 === 0) s.mods = s.mods.filter((m) => m.until > day);
-    if (day === toDay('2021-05-26') && !s.flags.offerMade && s.unlocked.length >= 4) { s.flags.offerMade = true; this.emit('offer', Math.max(40e6, Math.round(this.netWorthFast() * 1.4 / 1e6) * 1e6)); }
+    if (day >= toDay('2021-05-26') && day <= toDay('2021-12-31') && !s.flags.offerMade && s.flags.gmbh) { s.flags.offerMade = true; this.emit('offer', Math.max(40e6, Math.round(this.netWorthFast() * 1.4 / 1e6) * 1e6)); }
+    this.progressDay(day, minedUSD, elecCost, fixed); // Jahreswerte, Erfolge, Bonus-Serien
     // Statistik
     const d = new Date(day * 86400000);
     if (d.getUTCDay() === 1 || s.stats.history.length === 0) {
@@ -593,7 +705,7 @@ export class Game {
     for (const [v, l] of [[1e9, '1 GH/s'], [1e10, '10 GH/s'], [1e11, '100 GH/s'], [1e12, '1 TH/s'], [1e13, '10 TH/s'], [1e14, '100 TH/s'], [1e15, '1 PH/s'], [1e16, '10 PH/s'], [1e17, '100 PH/s'], [1e18, '1 EH/s'], [1e19, '10 EH/s']]) {
       if (sha >= v && !ms['h' + v]) { ms['h' + v] = this.s.day; this.emit('milestone', `${l} Hashrate`, 'Deine SHA-256-Leistung wächst und wächst.'); }
     }
-    const nw = this.netWorthFast();
+    const nw = this.s.day % 7 ? -Infinity : this.netWorthFast(); // Vermögen (alle Geräte bewerten) nur wöchentlich prüfen
     for (const [v, l, t] of [[1e4, '10.000 $ Vermögen', 'Mehr als Papas Laden im Jahr umsetzt.'], [1e5, '100.000 $ Vermögen', 'Sechsstellig. Mit Internetgeld.'], [1e6, 'Millionär!', 'Die erste Million. Mama glaubt es immer noch nicht.'], [1e7, '10 Mio. $ Vermögen', 'Hashwerk ist ein echtes Unternehmen.'], [1e8, '100 Mio. $ Vermögen', 'Die Wirtschaftspresse ruft an.'], [1e9, 'Milliardär!', 'Vom Kinderzimmer zur Milliarde.']]) {
       if (nw >= v && !ms['n' + v]) { ms['n' + v] = this.s.day; this.emit('milestone', l, t); }
     }
@@ -607,13 +719,13 @@ export class Game {
     const heatMul = (temp < 30 ? 1 : temp < 38 ? 1 + (temp - 30) / 8 : 2 + (temp - 38) * 0.5) * this.fx('fail');
     const life = (def.life || 6) * 365;
     if (def.kind === 'holder') {
-      const base = def.selfCooled ? 0.0004 : 0.0007 * heatMul;
+      const base = def.selfCooled ? 0.0004 * this.fx('fail') : 0.0007 * heatMul;
       for (const it of o.items) { if (it.b) continue; if (Math.random() < base) it.b = 1; }
     } else if (def.kind === 'rig' || def.kind === 'device') {
       if (o.broken) return;
       const age = day - (o.bought || day);
       const p = 0.0009 * heatMul * (age > life ? 2.2 : 1) * (def.kind === 'rig' ? 1 + (o.parts.gpus.length * 0.15) : 1);
-      if (Math.random() < p) { o.broken = true; this.toast(`${def.name} ist kaputt!`, 'bad'); this.emit('objects', this.facOf(o.uid)); }
+      if (Math.random() < p) { o.broken = true; (this.broke ||= []).push(o); } // Meldung gesammelt am Tagesende (advanceDay)
     }
   }
   techRepairs() {
@@ -649,6 +761,10 @@ export class Game {
       const em0 = c.emission(LAST_DATA_DAY) || 1, target = Math.max(1e-6, (c.emission(s.day) / em0) * e.p / (s.netEff || 1));
       e.h *= Math.exp(gauss() * 0.006 + (Math.log(target) - Math.log(e.h)) / 160);
     }
+    // Verlauf merken (Charts, Wochenvergleich), begrenzt auf ~2000 Tage
+    const H = (s.endlessHist ||= { ids: COINS.map((c) => c.id), d: {} });
+    H.d[s.day] = H.ids.flatMap((id) => (s.endless[id] ? [+s.endless[id].p.toPrecision(6), +s.endless[id].h.toPrecision(6)] : [1, 1]));
+    delete H.d[s.day - 2000];
     this.futureStep(); this.endlessNews();
   }
 
@@ -765,6 +881,7 @@ export class Game {
       algoHash: (a) => this.algoHash(a), netWorth: () => this.netWorth(), monolithHash: () => this.monolithHash(), dailyRev: () => this.dailyProfit().rev,
       maxTemp: () => Math.max(...this.s.unlocked.map((id) => this.s.fac[id].temp || 21)),
       facilityTripped: () => this.s.unlocked.some((id) => this.s.fac[id].tripped),
+      firmValue: () => this.firmValue(), // Bargeld + Hardware − Kredit, ohne Coins
     };
   }
   checkMessages() {
@@ -838,7 +955,7 @@ export class Game {
     if (fx.cash) s.cash += fx.cash;
     for (const [c, n] of Object.entries(fx.coin || {})) { const w = s.wallet[c]; if (!w) continue; if (n >= 0) w.ex += n; else { let r = -n; const a = Math.min(w.ex, r); w.ex -= a; r -= a; w.cold = Math.max(0, w.cold - r); } }
     for (const [c, f] of Object.entries(fx.sellFrac || {})) this.sell(c, f);
-    for (const [k, n] of Object.entries(fx.rel || {})) { s.rel[k] = Math.max(-3, Math.min(5, (s.rel[k] || 0) + n)); }
+    for (const [k, n] of Object.entries(fx.rel || {})) { const old = s.rel[k] || 0; s.rel[k] = Math.max(-3, Math.min(5, old + n)); if (old < 3 && s.rel[k] >= 3 && REL_PERK[k]) this.toast(REL_PERK[k], 'good', 8000); }
     for (const m of fx.mod || []) s.mods.push({ key: m.key, mult: m.mult, fac: m.fac || null, until: m.days ? s.day + m.days : 1e9, src: m.src || null });
     for (const f of [].concat(fx.flag || [])) s.flags[f] = s.day || 1;
     for (const a of [].concat(fx.ach || [])) this.unlockAch(a);
@@ -853,10 +970,17 @@ export class Game {
   unlockAch(id) { const s = this.s; s.ach ||= {}; if (s.ach[id]) return false; s.ach[id] = s.day || 1; this.emit('achievement', id); return true; }
   relLv(k) { return this.s.rel?.[k] || 0; }
   chapter() { return CHAPTERS[Math.min(this.s.chapter, CHAPTERS.length - 1)]; }
-  checkGoals() {
+  // eod = Tagesabschluss: Ziele mit eod:true zählen nur dort (z. B. Techniker eingestellt und bezahlt)
+  checkGoals(eod = false) {
     const s = this.s, h = this.helpers();
     const ch = CHAPTERS[s.chapter]; if (!ch) return;
-    for (const g of ch.goals) if (!s.goals[g.id] && g.check(s, h)) { s.goals[g.id] = true; if (g.doneText !== '') this.toast(g.doneText || `Geschafft: ${g.text}`, 'good'); this.emit('goal', g); }
+    for (const g of ch.goals) {
+      if (g.live && s.goals[g.id] && !g.check(s, h)) { delete s.goals[g.id]; continue; } // live: gilt nur, solange es erfüllt ist (z. B. vor MONOLITH liegen)
+      if (s.goals[g.id] || (g.eod && !eod) || !g.check(s, h)) continue;
+      s.goals[g.id] = true; const again = g.live && s.flags['goal:' + g.id]; if (g.live) s.flags['goal:' + g.id] = s.day || 1; // erneut erreicht: keine zweite Meldung
+      if (g.doneText !== '' && !again) this.toast(g.doneText || `Geschafft: ${g.text}`, 'good'); if (!again) this.emit('goal', g);
+    }
+    this.checkBonus(ch);
     const done = ch.goals.every((g) => s.goals[g.id]);
     if (done && s.day >= toDay(ch.minDate)) {
       if (ch.unlock) {
@@ -866,9 +990,10 @@ export class Game {
     }
   }
   canPayGoal(g) { return this.canAfford(g.action.cost) || this.s.cash + this.exchangeValue() >= g.action.cost; }
-  exchangeValue() { let v = 0; for (const c of COINS) { const w = this.s.wallet[c.id]; if (w && w.ex > 0) v += w.ex * this.price(c.id) * 0.995; } return v; }
+  exchangeValue() { const fk = 1 - (this.s.skills ? this.tradeFee() : 0.005); let v = 0; for (const c of COINS) { const w = this.s.wallet[c.id]; if (w && w.ex > 0) v += w.ex * this.price(c.id) * fk; } return v; }
   goalAction(g) {
-    if (!this.canAfford(g.action.cost) && this.canPayGoal(g)) { let need = g.action.cost - this.s.cash + 0.01; for (const c of COINS) { const w = this.s.wallet[c.id], p = this.price(c.id); if (need <= 0 || !p || !(w.ex > 0)) continue; const n = Math.min(w.ex, need / (p * 0.995)); w.ex -= n; this.s.cash += n * p * 0.995; this.s.stats.sold += n * p * 0.995; need -= n * p * 0.995; } }
+    const fk = 1 - (this.s.skills ? this.tradeFee() : 0.005);
+    if (!this.canAfford(g.action.cost) && this.canPayGoal(g)) { let need = g.action.cost - this.s.cash + 0.01; for (const c of COINS) { const w = this.s.wallet[c.id], p = this.price(c.id); if (need <= 0 || !p || !(w.ex > 0)) continue; const n = Math.min(w.ex, need / (p * fk)); w.ex -= n; this.s.cash += n * p * fk; this.s.stats.sold += n * p * fk; need -= n * p * fk; } }
     if (!this.canAfford(g.action.cost)) return false;
     this.s.cash -= g.action.cost; this.s.flags[g.action.flag] = true;
     this.checkGoals(); this.checkFeatures(); this.dayUpdate(true); return true;
@@ -886,10 +1011,93 @@ export class Game {
   }
   upgradePower(facId) {
     const f = this.s.fac[facId], fd = FACILITY[facId];
-    const next = fd.power[f.power + 1]; if (!next || !this.canAfford(next.cost)) return false;
-    this.s.cash -= next.cost; f.power++; this.dayUpdate(true); return true;
+    const next = fd.power[f.power + 1]; if (!next) return false;
+    const wait = this.powerWaitUntil(facId); if (wait) { this.toast(`Der Netzbetreiber lässt dich warten: Ausbau ab ${fmtDate(wait)}.`, 'info', 7000); return false; }
+    const cost = this.powerCost(facId); if (!this.canAfford(cost)) return false;
+    this.s.cash -= cost; f.power++; this.dayUpdate(true); return true;
   }
+  // Preis des nächsten Stromausbaus: Ereignis-Modifikatoren (powerCost) und Opa ab Stufe 3 (−25 % in Keller/Werkstatt)
+  powerCost(facId) {
+    const f = this.s.fac[facId], next = FACILITY[facId].power[f.power + 1]; if (!next) return 0;
+    let c = next.cost * this.fx('powerCost', facId);
+    if ((facId === 'keller' || facId === 'werkstatt') && this.relLv('opa') >= 3) c *= 0.75;
+    return Math.round(c);
+  }
+  // Ereignis-Sperre (Netzbetreiber, Gemeinde Sogn): Tag, bis zu dem nicht ausgebaut werden darf, sonst 0
+  powerWaitUntil(facId) { let u = 0; for (const md of this.s.mods || []) if (md.key === 'powerWait' && md.mult === 0 && (!md.fac || md.fac === facId) && this.s.day < md.until) u = Math.max(u, md.until); return u; }
   hireTech(n) { if (FACILITY[this.s.unlocked[this.s.unlocked.length - 1]].tier < 3 && !this.s.flags.gmbh) return false; if (n > 0 && !this.canAfford(n * this.techSalary())) return false; this.s.staff.tech = Math.max(0, this.s.staff.tech + n); this.dayUpdate(true); return true; }
+
+  // ---------- Fortschritt: Bonusziele, Jahreswerte, Statistiken für Erfolge ----------
+  initProgress(s) {
+    s.stats.y ||= {}; s.stats.trips ||= 0; s.stats.halv ||= 0; s.stats.tmax ||= 0; s.bonus ||= {}; s.streak ||= {};
+  }
+  inWait(ch) { return !!ch && ch.goals.every((go) => this.s.goals[go.id]) && this.s.day < toDay(ch.minDate); }
+  // Sparphase: es fehlt nur noch eine Zahlung (z. B. Papas Stromrechnung), für die das Geld noch nicht reicht
+  saving(ch) { const open = ch ? ch.goals.filter((go) => !this.s.goals[go.id]) : []; return open.length > 0 && open.every((go) => go.action && !this.canPayGoal(go)); }
+  idlePhase(ch) { return this.inWait(ch) || this.saving(ch); }
+  bonusOpen(ch, b) { const s = this.s; return !s.bonus?.[b.id] && !(b.until && s.day > toDay(b.until)) && (!b.from || b.from(s)) && (!b.wait || this.idlePhase(ch)); }
+  checkBonus(ch = CHAPTERS[this.s.chapter]) {
+    const s = this.s; if (!ch?.bonus || !s.bonus) return; const h = this.helpers();
+    for (const b of ch.bonus) { if (!this.bonusOpen(ch, b)) continue; if (b.streak ? (s.streak[b.id] || 0) >= b.streak : b.check(s, h, this)) this.grantBonus(b); }
+  }
+  // Serien („N Tage am Stück“) zählen einmal pro Tag
+  bonusStreaks() {
+    const s = this.s, ch = CHAPTERS[s.chapter]; if (!ch?.bonus) return; const h = this.helpers();
+    for (const b of ch.bonus) { if (!b.streak || s.bonus[b.id]) continue; s.streak[b.id] = this.bonusOpen(ch, b) && b.check(s, h, this) ? (s.streak[b.id] || 0) + 1 : 0; }
+  }
+  bonusProgress(b) { const s = this.s; if (b.streak) return [s.streak?.[b.id] || 0, b.streak, 'days']; return b.progress ? b.progress(s, this.helpers(), this) : null; }
+  grantBonus(b) {
+    const s = this.s; s.bonus[b.id] = s.day || 1;
+    const r = b.reward || {}, txt = this.rewardText(r);
+    this.applyFx(r);
+    s.ev.log.push({ d: s.day, id: 'bonus:' + b.id, i: 0, t: `Bonus: ${b.text}` }); if (s.ev.log.length > 300) s.ev.log.shift();
+    this.emit('milestone', 'Bonus', txt ? `${b.text} · ${txt}` : b.text); this.emit('bonus', b);
+  }
+  rewardText(r = {}) {
+    const NAME = { papa: 'Papa', mama: 'Mama', opa: 'Opa', deniz: 'Deniz' }, out = [];
+    if (r.cash) out.push(`+${fmtUSD(r.cash)}`);
+    for (const [k, n] of Object.entries(r.rel || {})) out.push(`${NAME[k] || k} ${n > 0 ? '+' : '−'}${Math.abs(n)}`);
+    if (r.text) out.push(r.text);
+    return out.join(' · ');
+  }
+  firmValue() { return this.s.cash + this.hardwareValue() - (this.s.loan || 0); }
+  // Effizienz der laufenden Flotte eines Algorithmus in J/TH (bzw. J pro 10^12 Hash); Infinity ohne Leistung
+  fleetJTH(algo = 'sha256') { let w = 0, hs = 0; for (const id of this.s.unlocked) { const sm = this.summary?.[id]; if (!sm || sm.tripped) continue; for (const a of sm.per.values()) for (const u of a.units || []) if (u.algo === algo && u.h > 0 && !u.idle) { w += u.w || 0; hs += u.h; } } return hs > 0 ? (w / hs) * 1e12 : Infinity; }
+  coinValue() { let ex = 0, cold = 0; for (const c of COINS) { const w = this.s.wallet[c.id], p = this.price(c.id); ex += w.ex * p; cold += w.cold * p; } return { ex, cold, all: ex + cold, coldShare: ex + cold > 0 ? cold / (ex + cold) : 0 }; }
+  deviceCount() { let n = 0; for (const id of this.s.unlocked) for (const o of this.s.fac[id].objects) { const k = PLACEABLE[o.type]?.kind; if (k === 'holder') n += o.items.length; else if (k === 'rig' || k === 'device') n++; } return n; }
+  // Leitwert Hashrate: SHA-256, sonst der erste andere Algorithmus mit Leistung (wie oben in der Leiste)
+  mainHash() { for (const a of ['sha256', 'scrypt', 'ethash', 'kawpow', 'kheavy', 'equihash', 'rx', 'cn']) { const v = this.algoHash(a); if (v > 0) return [v, a]; } return [0, 'sha256']; }
+  yearOf(day) { return new Date(day * 86400000).getUTCFullYear(); }
+  progressDay(day, mined = 0, elec = 0, fixed = 0) {
+    const s = this.s, st = s.stats; this.initProgress(s);
+    const D = day - 1, y = this.yearOf(D);
+    let Y = st.y[y];
+    if (!Y) { const [h0, a0] = this.mainHash(); Y = st.y[y] = { d0: D, rev: 0, elec: 0, fix: 0, nw0: Math.round(this.netWorthFast()), h0, a0, p0: this.price('BTC', D) }; }
+    Y.rev += Number.isFinite(mined) ? mined : 0; Y.elec += Number.isFinite(elec) ? elec : 0; Y.fix += Number.isFinite(fixed) ? fixed : 0;
+    // Sicherungen, Höchsttemperatur, Leerlauf (für Erfolge und Tipps)
+    st.tp ||= {}; let idle = 0;
+    for (const id of s.unlocked) {
+      const f = s.fac[id]; if (f.tripped && !st.tp[id]) { st.trips++; Y.trips = (Y.trips || 0) + 1; } st.tp[id] = !!f.tripped;
+      if (Number.isFinite(f.temp)) st.tmax = Math.max(st.tmax || 0, f.temp);
+      const sm = this.summary?.[id]; if (sm && !sm.tripped) for (const a of sm.per.values()) if (a.status === 'idle') idle++;
+    }
+    st.idle = idle;
+    if (HALVINGS.includes(day) && mined > 0) st.halv++;
+    if (s.flags.boughtAsic && !st.asicDay) st.asicDay = day;
+    if (s.flags.won && !st.wonDay) st.wonDay = day;
+    if (s.cash < 0 && !st.neg1) st.neg1 = day;
+    if (day <= toDay('2011-03-31')) st.btc2010 = st.coins?.BTC || 0; // „erster Winter“ für den Was-wäre-wenn-Vergleich
+    if ((st.sold || 0) > (st.soldPrev ?? st.sold) + 0.01) { const p = Math.max(this.price('BTC', D), this.price('BTC', day)); st.soldMaxP = Math.max(st.soldMaxP || 0, p); if (p >= 1000) st.sold1000 ||= day; }
+    st.soldPrev = st.sold || 0;
+    this.bonusStreaks(); this.checkBonus();
+    // Jahreswechsel: Abschluss des alten Jahres + Rückblick
+    if (this.yearOf(day) !== y) {
+      const [h1, a1] = this.mainHash();
+      Object.assign(Y, { nw1: Math.round(this.netWorthFast()), h1, a1, btc: s.wallet.BTC.ex + s.wallet.BTC.cold, cash: Math.round(s.cash), p1: this.price('BTC', day), rel: { ...s.rel } });
+      this.emit('year', y);
+    }
+    this.checkAchievements();
+  }
 
   // ---------- Solaranlage (Green Mining wie im Vorbild) ----------
   solarStep(facId) { return { kinder: 0, keller: 6, werkstatt: 30, halle: 250, rz: 400, fjord: 0 }[facId] || 0; }
@@ -906,12 +1114,13 @@ export class Game {
   // ---------- Wallet ----------
   sell(coin, frac) {
     const w = this.s.wallet[coin]; const n = w.ex * frac; if (n <= 0) return 0;
-    const usd = n * this.price(coin) * (1 - (this.s.skills ? this.tradeFee() : 0.005)); w.ex -= n; this.s.cash += usd; this.s.stats.sold += usd; if (this.s.skills) this.addXp('trade', 15 + Math.min(60, usd / 10)); this.dayUpdate(true); return usd;
+    const usd = n * this.price(coin) * (1 - (this.s.skills ? this.tradeFee() : 0.005)); w.ex -= n; this.s.cash += usd; this.s.stats.sold += usd; if (this.s.skills && usd >= 1) this.addXp('trade', Math.min(75, Math.max(2, usd / 10))); this.dayUpdate(true); return usd; // EP nach Volumen, nicht pro Klick
   }
   buy(coin, usd) {
+    if (!this.has('buycoins')) return 0;
     usd = Math.min(+usd || 0, this.s.cash); if (!(usd > 0) || !this.canAfford(usd)) return 0;
     const p = this.price(coin); if (!p) return 0;
-    const fee = this.s.skills ? this.tradeFee() : 0.005; this.s.wallet[coin].ex += (usd * (1 - fee)) / p; this.s.cash -= usd; if (this.s.skills) this.addXp('trade', 10 + Math.min(40, usd / 10)); this.dayUpdate(true); return usd;
+    const fee = this.s.skills ? this.tradeFee() : 0.005; this.s.wallet[coin].ex += (usd * (1 - fee)) / p; this.s.cash -= usd; if (this.s.skills && usd >= 1) this.addXp('trade', Math.min(50, Math.max(2, usd / 10))); this.dayUpdate(true); return usd;
   }
   transfer(coin, toCold) {
     const w = this.s.wallet[coin];

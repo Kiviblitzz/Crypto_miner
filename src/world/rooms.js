@@ -36,7 +36,7 @@ function windowFrame(group, from, to, y0, y1, thick, frameMat = M.white()) {
 }
 
 function poster(group, tex, w, h, x, y, z = 0.01) {
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat('poster_' + tex.uuid, { map: tex, roughness: 0.7 }));
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.7 })); // eigenes Material: wird mit dem Raum freigegeben
   m.position.set(x, y, z); group.add(m); return m;
 }
 
@@ -391,7 +391,7 @@ export function buildOutside(kind, def) {
       const e = document.createElement('canvas'); e.width = 256; e.height = 256; const ge = e.getContext('2d'); ge.fillStyle = '#000'; ge.fillRect(0, 0, 256, 256);
       for (let y = 0; y < 3; y++) for (let x = 0; x < 4; x++) { const px = 22 + x * 58, py = 30 + y * 74; gg.fillStyle = '#5b6b78'; gg.fillRect(px, py, 34, 44); gg.fillStyle = '#f4efe6'; gg.fillRect(px - 3, py + 44, 40, 5); gg.fillRect(px + 15, py, 4, 44); if (rand() < 0.45) { ge.fillStyle = rand() < 0.5 ? '#ffcf7a' : '#ffb35c'; ge.fillRect(px, py, 34, 44); } }
       const t = new THREE.CanvasTexture(c), te = new THREE.CanvasTexture(e); t.colorSpace = te.colorSpace = THREE.SRGBColorSpace;
-      const m = new THREE.MeshStandardMaterial({ map: t, emissive: 0xffffff, emissiveMap: te, emissiveIntensity: 0, roughness: 0.9 }); facadeCache.set(key, m); nightMats.push(m); return m; };
+      const m = new THREE.MeshStandardMaterial({ map: t, emissive: 0xffffff, emissiveMap: te, emissiveIntensity: 0, roughness: 0.9 }); m.userData.shared = t.userData.shared = te.userData.shared = true; facadeCache.set(key, m); nightMats.push(m); return m; };
     for (let i = 0; i < 16; i++) {
       const a = (i / 16) * Math.PI * 2 + rnd(-0.1, 0.1), front = inView(a, 80); let r = rnd(16, 30); if (front) r = rnd(40, 48);
       const x = w / 2 + Math.cos(a) * r, z = d / 2 + Math.sin(a) * r;
