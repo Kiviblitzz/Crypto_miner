@@ -473,6 +473,7 @@ export class UI {
   lessonDone() { const el = document.querySelector('#featcards .featcard.lesson'); if (el) { el.classList.add('out'); setTimeout(() => el.remove(), 600); } this.dock(); this.keysHint(); }
   // Neues Spiel: Aufwachen in der Wohnung (Kamerafahrt der Welt, wenn es sie gibt), dann vibriert das Handy
   wakeUp() {
+    this.w.visFrac = this.g.s.frac; // Morgenlicht sofort (sonst dämmert es erst langsam vom Titelbild-Abend herüber)
     this.w.setMode('play');
     let done = false; const go = () => { if (done) return; done = true; this.g.grant('phone'); this.setSpeed(1); this.keysHint(); this.dock(); };
     if (this.w.wakeUp) { try { this.w.wakeUp(go); setTimeout(go, 15000); return; } catch (e) { /* ohne Kamerafahrt weiter */ } }
