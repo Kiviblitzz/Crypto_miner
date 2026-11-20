@@ -303,7 +303,7 @@ function buildStatic(T, glass) {
   B(g, PX1, EX, -0.3, -0.15, SZ, KZ2, T.kceil);                                // Decke Kellergang (Süd)
   // ---- Wände ----
   // West (Wohnungsseite): dünne Putzschicht vor der Wohnungswand, außen Fassade
-  wallZ(g, 4.15, WX, NZ - 0.15, SZ + 0.15, LE - 0.15, LC + 0.15, T.plaster, [{ z0: 2.6, z1: 3.45, y0: L0, y1: 2.05 }, { z0: HF.zs, z1: SZ + 0.2, y0: LE - 0.3, y1: L0 - 0.25 }]);
+  wallZ(g, 4.15, WX, NZ - 0.15, SZ + 0.15, LE - 0.15, LC + 0.15, T.plaster, [{ z0: 2.6, z1: 3.45, y0: L0, y1: 2.05 }, { z0: HF_END, z1: SZ + 0.2, y0: LE - 0.3, y1: L0 - 0.25 }]);
   B(g, 4.0, 4.15, LE - 0.3, LC + 0.15, NZ - 0.15, -0.15, T.plaster); B(g, 4.0, 4.15, -0.3, LC + 0.15, 3.5, SZ + 0.15, T.plaster);
   wallZ(g, 4.15, WX, UP.zs, SZ, LK - 0.15, -0.3, T.kwall, [{ z0: 3.4, z1: 4.3, y0: LK, y1: LK + 2.05 }]);  // Kellergang: Tür zum Kellerraum
   B(g, 4.0, 4.15, LK - 0.15, -0.3, SZ, SZ + 0.15, T.kwall);
@@ -358,6 +358,9 @@ function buildStatic(T, glass) {
   B(g, 4.0, WX + 0.01, 2.02, 2.05, 2.6, 3.45, T.frame);
   for (const [z0, z1] of [[2.53, 2.6], [3.45, 3.52]]) B(g, WX, WX + 0.02, L0, 2.12, z0, z1, T.frame);
   B(g, WX, WX + 0.02, 2.05, 2.12, 2.53, 3.52, T.frame);
+  // Türschwellen (schließen den Boden in der Maueröffnung)
+  B(g, 3.98, WX + 0.02, L0 - 0.12, L0 + 0.008, 2.6, 3.45, mat('hSill', { color: 0x6b4a30, roughness: 0.55 }));
+  B(g, 3.98, WX + 0.02, LK - 0.15, LK + 0.01, 3.4, 4.3, T.steel);
   // Kellertür (Gangseite)
   for (const [z0, z1] of [[3.4, 3.43], [4.27, 4.3]]) B(g, 4.0, WX + 0.01, LK, LK + 2.05, z0, z1, T.steel);
   B(g, 4.0, WX + 0.01, LK + 2.02, LK + 2.05, 3.4, 4.3, T.steel);
@@ -491,7 +494,7 @@ export function buildHouse() {
   S(4.0, WX, 3.45, 4.3, LK + 2.05, 7); S(4.0, WX, 4.3, KZ2 + 0.15);
   S(EX, EX + 0.15, NZ - 0.15, KZ2 + 0.15); S(4.0, EX + 0.15, NZ - 0.15, NZ);
   S(4.0, EX + 0.15, SZ, SZ + 0.15, -0.3, 7); S(4.0, PX1, SZ, KZ2 + 0.15, -4, -0.3); S(PX1, EX, KZ, KZ + 0.06, -4, -0.3);
-  S(PX0, PX1, HF.zs, UP.zs, -4, L0 + 1.0); S(PX0 - 0.03, PX1 + 0.03, HF.zs - 0.1, HF.zs, -4, LE + 1.12); // Brüstung + Antrittspfosten
+  S(PX0, PX1, HF.zs, UP.zs, -4, L0 + 1.0); S(PX0 - 0.03, PX1, HF.zs - 0.1, HF.zs, -4, LE + 1.12); // Brüstung + Antrittspfosten
   S(5.78, 6.45, 3.32, 4.16, -0.3, 1.1);                          // Kinderwagen
   S(6.38, EX, -1.95, -0.55, LE - 0.1, LE + 1.1);                 // Fahrrad
   S(4.32, 5.36, SZ - 0.15, SZ, 0.9, 1.5);                        // Briefkästen
@@ -504,7 +507,9 @@ export function buildHouse() {
   };
   const glassMats = [glass];
   const lampMats = [[T.globe, 1.6], [T.globeK, 1.8], [T.globeDim, 0.7]]; // Treppenhauslicht: geht an, sobald man im Flur ist
-  return { root, doors, parcels, lights, walk, solid, points: P, glass: glassMats, lampMats, switchDown: -1.95, switchUp: -1.6 };
+  // Decken/Böden als Sichtschutz für den Zielstrahl (z. B. Pakete auf dem Podest nicht durch die Kellerdecke anvisieren)
+  const slabs = [{ x0: WX, x1: EX, z0: UP.zs, z1: SZ, y0: -0.3, y1: -0.04 }, { x0: WX, x1: PX1, z0: HF.zs, z1: UP.zs, y0: LK, y1: -0.04 }, { x0: PX1, x1: EX, z0: SZ, z1: KZ2, y0: -0.3, y1: -0.15 }, { x0: WX, x1: EX, z0: NZ, z1: HF.zs, y0: LE - 0.15, y1: LE }, { x0: WX, x1: EX, z0: NZ, z1: SZ, y0: LC, y1: LC + 0.15 }];
+  return { root, doors, parcels, lights, walk, solid, slabs, points: P, glass: glassMats, lampMats, switchDown: -1.95, switchUp: -1.6 };
 }
 
 const hofMats = new Map();

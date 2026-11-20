@@ -132,12 +132,14 @@ export function buildRoom(def) {
     put('chair', 3.3, 0.95, 0.42 + 0.45);
     B.blocked.push(blk(3.05, 0.7, 3.55, 1.2));
     put('movingboxes', 3.74, 0.22);
-    B.blocked.push(blk(3.5, 0, 4.0, 0.85));
-    put('kitchenette', 2.4, 3.22, Math.PI);
-    B.blocked.push(blk(1.85, 2.94, 2.95, 3.5));
-    put('beercrate', 1.22, 3.27, 0.1);
-    B.blocked.push(blk(1.0, 3.05, 1.44, 3.5));
-    put('pizzabox', 1.32, 2.02, 0.4);
+    B.blocked.push(blk(3.5, 0, 4.0, 0.5));
+    // Neu gegenüber dem alten Kinderzimmer: steht in alten Spielständen dort schon ein Gerät, bleibt das Teil weg (World.updateOptional)
+    B.optional = [];
+    const opt = (o, r, block = true) => { B.optional.push({ o, r }); if (block) B.blocked.push(r); return o; };
+    opt(put('openbox', 3.76, 0.64, -0.2), blk(3.52, 0.46, 4.0, 0.84));
+    opt(put('kitchenette', 2.4, 3.22, Math.PI), blk(1.85, 2.94, 2.95, 3.5));
+    opt(put('beercrate', 1.22, 3.27, 0.1), blk(1.0, 3.05, 1.44, 3.5));
+    opt(put('pizzabox', 1.32, 2.02, 0.4), blk(1.1, 1.8, 1.55, 2.25), false);
     // abgetretener Läufer
     const rug = new THREE.Mesh(new THREE.PlaneGeometry(1.25, 0.9), mat('rugOld', { map: TEX.carpet([1, 1], 24), color: 0xb7a48c, roughness: 1 })); rug.rotation.x = -Math.PI / 2; rug.rotation.z = 0.06; rug.position.set(2.15, 0.005, 2.05); rug.receiveShadow = true; g.add(rug);
     put('barebulb', 2.0, 1.8).position.y = h;

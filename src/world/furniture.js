@@ -147,7 +147,16 @@ export function furniture(type) {
     for (const z of [-0.45, 0.45]) { rod(g, [0, 0.04, z], [0, 1.62, z], 0.012, ch, 10); rod(g, [-0.22, 0.04, z], [0.22, 0.04, z], 0.012, ch, 10); for (const x of [-0.2, 0.2]) sph(g, 0.022, M.black(), x, 0.022, z); }
     rod(g, [0, 1.62, -0.47], [0, 1.62, 0.47], 0.012, ch, 10);
     const cols = [0x3c4a5e, 0x8a3b32, 0x2f2f33, 0x6f7f5e, 0xc9b48c, 0x4a5160];
-    for (let i = 0; i < 6; i++) { const z = -0.36 + i * 0.145; tube(g, [[0, 1.62, z], [0.01, 1.58, z], [0.16, 1.5, z]], 0.004, ch, 6, 4); const sh = soft(g, 0.42, 0.74, 0.05, mat('shirt' + i, { color: cols[i], roughness: 0.95 }), 0, 0.78, z, 0.02); sh.rotation.y = Math.PI / 2 + (i % 2 ? 0.08 : -0.06); }
+    // T-Shirts und Hoodies als Umriss (Ebene quer zur Stange), weich abgerundet, auf Drahtbügeln
+    const garment = (col, z, long, i) => {
+      const P = long ? [[-0.07, 0], [0.07, 0], [0.2, -0.05], [0.29, -0.52], [0.23, -0.55], [0.17, -0.26], [0.17, -0.74], [-0.17, -0.74], [-0.17, -0.26], [-0.23, -0.55], [-0.29, -0.52], [-0.2, -0.05]]
+        : [[-0.06, 0], [0.06, 0], [0.19, -0.05], [0.25, -0.2], [0.16, -0.24], [0.16, -0.68], [-0.16, -0.68], [-0.16, -0.24], [-0.25, -0.2], [-0.19, -0.05]];
+      const s = new THREE.Shape(); P.forEach(([x, y], k) => (k ? s.lineTo(x, y) : s.moveTo(x, y)));
+      const geo = new THREE.ExtrudeGeometry(s, { depth: 0.018, bevelEnabled: true, bevelSize: 0.008, bevelThickness: 0.008, bevelSegments: 2, curveSegments: 4 }); geo.translate(0, 0, -0.009);
+      const m = new THREE.Mesh(geo, mat('shirt' + i, { color: col, roughness: 0.95 })); m.position.set(0, 1.575, z); m.rotation.y = ((i * 37) % 7 - 3) * 0.03; g.add(m);
+      tube(g, [[0, 1.62, z], [0, 1.6, z], [-0.17, 1.53, z], [0.17, 1.53, z], [0, 1.6, z]], 0.003, ch, 10, 4);
+    };
+    for (let i = 0; i < 6; i++) garment(cols[i], -0.36 + i * 0.145, i % 3 === 1, i);
     soft(g, 0.4, 0.3, 0.5, mat('ikeaBag', { color: 0x2a5aa8, roughness: 0.7 }), 0.02, 0.0, 0.05, 0.04);
   } else if (type === 'kitchenette') {
     // Pantryküche 1,1 m: Unterschrank mit Minikühlschrank, Spüle, zwei Kochplatten, Wasserkocher (Front +Z)
@@ -180,11 +189,12 @@ export function furniture(type) {
     // Umzugskartons, gestapelt, einer offen
     const c = mat('movBox', { color: 0xb58d5c, roughness: 0.92 }), t = mat('movTape', { color: 0xc8b07c, roughness: 0.5 }), wr = mat('movWrite', { color: 0x2a2a2a, roughness: 0.8 });
     for (const [x, y, z, w, h, d, ry] of [[0, 0, 0, 0.48, 0.34, 0.38, 0.03], [0.02, 0.34, 0.01, 0.46, 0.32, 0.36, -0.06], [-0.01, 0.66, 0, 0.42, 0.28, 0.34, 0.1]]) { box(g, w, h, d, c, x, y, z, ry, 0.008); box(g, w * 1.004, 0.004, 0.06, t, x, y + h, z, ry, 0); box(g, 0.14, 0.04, 0.002, wr, x + 0.05, y + h * 0.55, z + d / 2 + 0.002, ry, 0); }
-    // offener Karton daneben am Boden mit aufgeklappten Laschen
-    box(g, 0.4, 0.3, 0.34, c, 0.02, 0, 0.42, -0.2, 0.006);
-    const flap = (x, z, ry, rx) => { const f = box(g, 0.4, 0.004, 0.16, c, x, 0.3, z, ry, 0); f.rotation.x = rx; };
-    flap(0.04, 0.27, -0.2, 0.7); flap(0.0, 0.57, -0.2, -0.7);
-    soft(g, 0.32, 0.12, 0.28, mat('boxStuff', { color: 0x6a5a8a, roughness: 0.9 }), 0.02, 0.2, 0.42, 0.03);
+  } else if (type === 'openbox') {
+    // offener Umzugskarton mit aufgeklappten Laschen, oben Klamotten
+    const c = mat('movBox', { color: 0xb58d5c, roughness: 0.92 });
+    box(g, 0.4, 0.3, 0.34, c, 0, 0, 0, 0, 0.006);
+    for (const [z, rx] of [[-0.17, -0.7], [0.17, 0.7]]) { const f = box(g, 0.4, 0.004, 0.16, c, 0, 0.3, z + Math.sign(z) * 0.05, 0, 0); f.rotation.x = rx; }
+    soft(g, 0.32, 0.12, 0.28, mat('boxStuff', { color: 0x6a5a8a, roughness: 0.9 }), 0, 0.2, 0, 0.03);
   } else if (type === 'barebulb') {
     // Nackte Glühbirne am Kabel (Ursprung an der Decke)
     cyl(g, 0.0035, 0.0035, 0.42, M.cable(), 0, -0.21, 0, 6);

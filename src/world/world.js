@@ -212,26 +212,18 @@ export class World {
     const t0 = performance.now();
     this.cancelPlacement(); this.select(null); this.onHover?.(null);
     if (this.room) { this.scene.remove(this.room.root); this.scene.remove(this.outside); if (!this.room.cached) { disposeTree(this.room.root); disposeTree(this.outside); } }
-    for (const e of this.entries.values()) { this.objGroup.remove(e.group); disposeTree(e.group); }
-    this.entries.clear();
+    // Geräte: Wohnung und Keller behalten ihre Modelle (Wechsel auf der Treppe baut nichts neu), sonst freigeben
+    const prevFac = this.facId; this.entryStash ||= {};
+    if (HOUSE_OFF[prevFac] && HOUSE_OFF[id]) { for (const e of this.entries.values()) this.objGroup.remove(e.group); this.entryStash[prevFac] = this.entries; this.entries = new Map(); }
+    else { for (const e of this.entries.values()) { this.objGroup.remove(e.group); disposeTree(e.group); } this.entries = new Map(); if (!HOUSE_OFF[id]) this.dropStash(); }
     const def = this.def = FACILITY[id]; this.facId = id;
+    if (this.entryStash[id]) { this.entries = this.entryStash[id]; delete this.entryStash[id]; for (const e of this.entries.values()) this.objGroup.add(e.group); }
     if (this.gtao) this.gtao.enabled = this.quality === 'high' && def.tier <= 2; // in großen Hallen zu teuer; Grafikstufe beachten
     // Verstaubter Keller, solange er noch nicht ausgebaut ist: Gerümpel, Spinnweben, Staub, schwaches Flackerlicht
     const dusty = (this.dusty = id === 'keller' && !!this.game.s?.feat && !this.game.s.unlocked.includes('keller'));
     const off = (this.hoff = HOUSE_OFF[id] || null);
     // Wohnung und Keller bleiben gebaut (Zwischenspeicher): der Wechsel auf der Treppe kostet dann kaum Zeit
-    const ck = off ? id + (dusty ? ':dusty' : '') : null;
-    let built = ck && this.roomCache.get(ck);
-    if (!built) {
-      const room = buildRoom(def);
-      if (dusty) { const dc = buildDustyClutter(def); room.root.add(dc.group); room.blocked.push(...dc.blocked); room.dustPts = dc.group.userData.dust; for (const L of room.lights) { L.intensity *= 0.3; L.dist = 3.6; L.color = 0xffc98a; } room.lights.splice(1); room.lights.push({ pos: [6.45, 1.9, 3.85], color: 0xffd9a8, intensity: 0.35, dist: 3.2 }); const bl = room.bulbs || []; if (bl[1]) bl[1].material = mat('bulbDead', { color: 0x4a443c, roughness: 0.3 }); if (bl[0]) { bl[0].material = bl[0].material.clone(); bl[0].material.userData.shared = false; room.dustBulb = bl[0]; } room.props = []; }
-      built = { room, outside: buildOutside(room.outside, def, off) };
-      if (ck) {
-        room.cached = true; this.roomCache.set(ck, built);
-        const stale = this.roomCache.get(id + (dusty ? '' : ':dusty')); // anderer Zustand desselben Kellers (z. B. nach dem Ausräumen): freigeben
-        if (stale) { disposeTree(stale.room.root); disposeTree(stale.outside); this.roomCache.delete(id + (dusty ? '' : ':dusty')); }
-      }
-    }
+    const built = this.buildFacRoom(id, dusty);
     this.room = built.room; this.outside = built.outside; this.scene.add(this.room.root); this.screensDirty = true;
     this.dustBulb = dusty ? this.room.dustBulb || null : null; this.dustPts = dusty ? this.room.dustPts || null : null;
     this.syncLoose();
@@ -293,6 +285,56 @@ export class World {
     this.syncObjects();
     this.syncParcels();
     this.lastLoadMs = performance.now() - t0; // Messung: Szenenwechsel auf der Treppe
+    if (off && !opt.pose) this.prewarmHouse(); // beim normalen Laden (unter der Überblendung) die andere Haushälfte vorbereiten
+  }
+  // Raum eines Standorts bauen; Wohnung und Keller (je Zustand verstaubt/frei) bleiben im Zwischenspeicher
+  buildFacRoom(id, dusty) {
+    const def = FACILITY[id], off = HOUSE_OFF[id] || null, ck = off ? id + (dusty ? ':dusty' : '') : null;
+    let built = ck && this.roomCache.get(ck);
+    if (built) return built;
+    const room = buildRoom(def);
+    if (dusty) { const dc = buildDustyClutter(def); room.root.add(dc.group); room.blocked.push(...dc.blocked); room.dustPts = dc.group.userData.dust; for (const L of room.lights) { L.intensity *= 0.3; L.dist = 3.6; L.color = 0xffc98a; } room.lights.splice(1); room.lights.push({ pos: [6.45, 1.9, 3.85], color: 0xffd9a8, intensity: 0.35, dist: 3.2 }); const bl = room.bulbs || []; if (bl[1]) bl[1].material = mat('bulbDead', { color: 0x4a443c, roughness: 0.3 }); if (bl[0]) { bl[0].material = bl[0].material.clone(); bl[0].material.userData.shared = false; room.dustBulb = bl[0]; } room.props = []; }
+    built = { room, outside: buildOutside(room.outside, def, off) };
+    if (ck) {
+      room.cached = true; this.roomCache.set(ck, built);
+      const sk = id + (dusty ? '' : ':dusty'), stale = this.roomCache.get(sk); // anderer Zustand desselben Kellers (z. B. nach dem Ausräumen): freigeben
+      if (stale) { disposeTree(stale.room.root); disposeTree(stale.outside); this.roomCache.delete(sk); } // steht nicht (mehr) in der Szene
+    }
+    return built;
+  }
+  // Modell + Status-Symbol für ein Gerät
+  makeEntry(o, oldSp = null) {
+    const g = objectModel(o); g.traverse((m) => { m.userData.uid = o.uid; });
+    const sp = oldSp || new THREE.Sprite(new THREE.SpriteMaterial({ map: this.icons.warn, depthTest: false, transparent: true })); sp.visible = false; sp.renderOrder = 10;
+    g.add(sp); g.position.set(o.x, 0, o.z); g.rotation.y = -o.rot * Math.PI / 2;
+    return { group: g, key: this.objKey(o), sprite: sp, obj: o };
+  }
+  dropStash() { for (const [k, m] of Object.entries(this.entryStash || {})) { for (const e of m.values()) disposeTree(e.group); delete this.entryStash[k]; } }
+  // Andere Hälfte des Hauses vorbereiten: Raum bauen, Geräte modellieren, Shader übersetzen (gleiche Lichtzahl) –
+  // so ruckelt der Wechsel mitten auf der Treppe später nicht
+  prewarmHouse() {
+    const other = this.facId === 'kinder' ? 'keller' : this.facId === 'keller' ? 'kinder' : null; if (!other || !this.hoff) return;
+    const t0 = performance.now(), s = this.game.s, o1 = this.hoff, o2 = HOUSE_OFF[other];
+    const built = this.buildFacRoom(other, other === 'keller' && !!s?.feat && !s.unlocked.includes('keller'));
+    let st = this.entryStash[other];
+    if (!st) { st = new Map(); for (const o of this.game.facObjects(other)) st.set(o.uid, this.makeEntry(o)); this.entryStash[other] = st; }
+    if (built.room.looseSpots && s?.loose && Object.keys(s.loose).length) { const cur = this.room; this.room = built.room; this.syncLoose(); this.room = cur; this.syncLoose(); } // Teile im Keller schon modellieren (bleiben ausgeblendet)
+    const tmp = new THREE.Group(); tmp.position.set(o2[0] - o1[0], o2[1] - o1[1], o2[2] - o1[2]);
+    const parts = [built.room.root, built.outside, ...[...st.values()].map((e) => e.group)];
+    for (const p of parts) tmp.add(p);
+    this.scene.add(tmp);
+    // Shader so übersetzen, wie sie später gebraucht werden: Szene in den Zwischenpuffer des Composers (ohne Tonemapping),
+    // dazu einmal komplett rendern (Schattenkarte, Leuchtrand der Teile, Umgebungsverdeckung)
+    const r = this.renderer, prevRT = r.getRenderTarget(), glow = { on: this.glow.enabled, sel: this.glow.selectedObjects };
+    try {
+      if (this.quality !== 'low') r.setRenderTarget(this.composer.readBuffer);
+      r.compile(this.scene, this.camera); r.setRenderTarget(prevRT);
+      this.glow.enabled = true; this.glow.selectedObjects = [built.room.root];
+      if (this.quality === 'low') r.render(this.scene, this.camera); else this.composer.render();
+    } catch (e) { /* nur Vorwärmen */ }
+    r.setRenderTarget(prevRT); this.glow.enabled = glow.on; this.glow.selectedObjects = glow.sel;
+    this.scene.remove(tmp); for (const p of parts) tmp.remove(p);
+    this.prewarmMs = performance.now() - t0;
   }
 
   // ---------- Haus: Treppenhaus zwischen Wohnung und Keller ----------
@@ -301,7 +343,7 @@ export class World {
     const h = (this.house = buildHouse()); this.scene.add(h.root);
     // grobe, unsichtbare Verdecker (Wände) für Zielstrahl und Taschenlampe – statt der Detail-Geometrie
     const occ = new THREE.Group(), om = new THREE.MeshBasicMaterial({ visible: false });
-    for (const s of h.solid) { const y0 = Math.max(s.y0, -3.2), y1 = Math.min(s.y1, 6); if (y1 <= y0) continue; const m = new THREE.Mesh(new THREE.BoxGeometry(s.x1 - s.x0, y1 - y0, s.z1 - s.z0), om); m.position.set((s.x0 + s.x1) / 2, (y0 + y1) / 2, (s.z0 + s.z1) / 2); m.userData.occ = true; occ.add(m); }
+    for (const s of [...h.solid, ...h.slabs]) { const y0 = Math.max(s.y0, -3.2), y1 = Math.min(s.y1, 6); if (y1 <= y0) continue; const m = new THREE.Mesh(new THREE.BoxGeometry(s.x1 - s.x0, y1 - y0, s.z1 - s.z0), om); m.position.set((s.x0 + s.x1) / 2, (y0 + y1) / 2, (s.z0 + s.z1) / 2); m.userData.occ = true; occ.add(m); }
     h.root.add(occ); h.occ = occ;
     h.aimables = [occ, h.parcels, ...h.root.children.filter((c) => c.userData.hit), ...Object.values(h.doors).map((d) => d.pivot)];
     return h;
@@ -355,7 +397,10 @@ export class World {
       const toward = ws > 0.3 && (dx * wish.x + dz * wish.z) / (dist * ws + 1e-6) > 0.55;
       let want = level && !this.cine && (dist < 1.2 || (dist < 2.4 && toward) || (d.t > 0.05 && dist < 1.9));
       if (key === 'apt') want = want && this.facId === 'kinder';
-      if (key === 'keller') want = want && this.facId === 'keller' && this.kellerOpenable();
+      if (key === 'keller') { // abgeschlossen, außer Keller frei / Teile-Suche – wer drin war, kommt aber auch wieder raus
+        const ok = this.facId === 'keller' && this.kellerOpenable(); if (ok) d.hold = true; else if (dist >= 1.7) d.hold = false;
+        want = want && this.facId === 'keller' && (ok || (d.hold && d.t > 0));
+      }
       const prev = d.t; d.t = Math.max(0, Math.min(1, d.t + (want ? dt / 0.45 : -dt / 0.7)));
       if (prev === 0 && d.t > 0) this.onDoorSound?.(key, true); else if (prev > 0 && d.t === 0) this.onDoorSound?.(key, false);
       const k = d.t * d.t * (3 - 2 * d.t); d.pivot.rotation.y = d.open * k;
@@ -479,16 +524,13 @@ export class World {
       if (e && e.key === '__anim' && this.install?.uid === o.uid) { e.obj = o; continue; }
       let oldSp = null; // Status-Symbol beim Neuaufbau weiterverwenden (kein neues Material pro Umbau)
       if (e && e.key !== key) { this.objGroup.remove(e.group); oldSp = e.sprite; e.group.remove(oldSp); disposeTree(e.group); e = null; }
-      if (!e) {
-        const g = objectModel(o); g.traverse((m) => { m.userData.uid = o.uid; });
-        const sp = oldSp || new THREE.Sprite(new THREE.SpriteMaterial({ map: this.icons.warn, depthTest: false, transparent: true })); sp.visible = false; sp.renderOrder = 10;
-        g.add(sp);
-        e = { group: g, key, sprite: sp }; this.entries.set(o.uid, e); this.objGroup.add(g);
-      }
+      if (!e) { e = this.makeEntry(o, oldSp); this.entries.set(o.uid, e); this.objGroup.add(e.group); }
       e.group.position.set(o.x, 0, o.z); e.group.rotation.y = -o.rot * Math.PI / 2;
       e.obj = o;
     }
     for (const [uid, e] of this.entries) if (!seen.has(uid)) { this.objGroup.remove(e.group); disposeTree(e.group); this.entries.delete(uid); if (this.selected === uid) this.select(null); }
+    // Deko, die es im alten Kinderzimmer noch nicht gab: weglassen, wo ein Gerät aus einem alten Spielstand steht
+    for (const d of this.room.optional || []) { const r = d.r; d.o.visible = !objs.some((o) => { const a = this.rectOf(o); return a.x0 < r.x1 && a.x1 > r.x0 && a.z0 < r.z1 && a.z1 > r.z0; }); }
     this.updateStatus(); this.syncPeople(); if (this.ghostSpec && !this.ghost?.parent?.parent) this.applyGhost();
   }
   updateStatus() {
@@ -599,6 +641,8 @@ export class World {
     if (!this.looseGroup) { this.looseGroup = new THREE.Group(); this.scene.add(this.looseGroup); }
     const s = this.game.s, spots = this.room?.looseSpots, want = spots && s?.loose ? Object.keys(s.loose).filter((t) => spots[t]) : [];
     this.looseItems ||= {};
+    // Raum ohne Fundstellen (Wohnung beim Gang über die Treppe): Teile nur ausblenden, nicht neu modellieren
+    if (!spots && this.hoff && s?.loose && Object.keys(s.loose).length) { this.looseGroup.visible = false; this.glow.selectedObjects = []; this.glow.enabled = false; return; }
     for (const [t, g] of Object.entries(this.looseItems)) if (!want.includes(t) && !g.userData.flying) { this.looseGroup.remove(g); if (g.userData.haloMesh) { this.looseGroup.remove(g.userData.haloMesh); disposeTree(g.userData.haloMesh); } disposeTree(g); delete this.looseItems[t]; }
     for (const t of want) {
       if (this.looseItems[t]) continue;
@@ -802,7 +846,7 @@ export class World {
     this.controls.enabled = m === 'map';
     if (m === 'play') this.requestLock();
     else if (document.pointerLockElement) { this.expectUnlock = true; document.exitPointerLock(); }
-    if (this.looseGroup) { this.looseGroup.visible = m !== 'title'; this.glow.enabled = m !== 'title' && this.glow.selectedObjects.length > 0; }
+    if (this.looseGroup) { this.looseGroup.visible = m !== 'title' && !!this.room?.looseSpots; this.glow.enabled = m !== 'title' && this.glow.selectedObjects.length > 0; }
     if (m !== 'play') { this.aim = null; this.onAim?.(null); if (!this.selected) this.selBox.visible = false; this.popups?.forEach((p) => (p.visible = false)); }
     this.onModeChange?.(m);
   }

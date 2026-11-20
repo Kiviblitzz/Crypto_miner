@@ -226,7 +226,7 @@ export class UI {
       const pc = g.facObjects('kinder').find((o) => o.type === 'tower'); if (pc && !s.flags.miningStarted) { pos = [pc.x, 0.78, pc.z]; label = 'Dein PC'; aimed = w.aim?.uid === pc.uid; }
     }
     if (!pos && s.chapter === 0 && play && (where === 'apt' || (!where && w.facId === 'kinder')) && s.flags.miningStarted && g.has('market') && !(s.stats.sold > 0)) { const pr = w.room?.props?.find((p) => p.action === 'market'); if (pr) { pos = [pr.c[0], pr.c[1] + 0.16, pr.c[2]]; label = 'Bitcoin verkaufen'; aimed = w.aim?.prop === pr; } }
-    if (!pos && play && !this.visiting && s.flags.miningStarted) { // neuer Standort frei: im Haus an der Haustür (Keller: an der Kellertür), sonst an der Tür
+    if (!pos && play && (where || !this.visiting) && s.flags.miningStarted) { // neuer Standort frei: im Haus an der Haustür (Keller: an der Kellertür), sonst an der Tür
       const fu = FACILITIES.find((f) => g.canUnlock(f.id)), door = w.room?.doors?.[0];
       if (fu && where) { if (fu.id === 'keller') { route('keller', `${fu.short} freischalten`); final = where === 'low'; tdoor = { kind: 'kellertuer', label: 'Kellertür' }; } else { route('haustuer', `${fu.short} freischalten`); tdoor = { kind: 'haustuer', label: 'Haustür' }; } }
       else if (fu && door && !door.auto) { pos = [door.c[0], Math.min(1.7, door.c[1] + 0.5), door.c[2]]; label = `${fu.short} freischalten`; aimed = w.aim?.door === door; }
@@ -846,7 +846,7 @@ export class UI {
     const f = FACILITY[id];
     if (!this.g.unlockFacility(id)) { this.toast(`Du brauchst ${fmtUSD(f.cost)}.`, 'bad'); return; }
     if ((id === 'keller' || id === 'kinder') && this.w.hoff && !this.w.empire) { // im Haus: kein Teleport, die Kellertür ist jetzt offen
-      if (this.w.facId === 'keller') this.w.reloadHere(); // verstaubten Keller gegen den freien tauschen
+      if (this.w.facId === 'keller') this.w.reloadHere(); else this.w.prewarmHouse?.(); // verstaubten Keller gegen den freien tauschen (unter der Story-Karte)
       this.houseMove(this.w.facId); if (this.w.facId !== id) this.walkGoal = { id, until: performance.now() + 90000 };
     } else this.switchSite(id);
     const ci = CHAPTERS.findIndex((c) => c.unlock === id);
