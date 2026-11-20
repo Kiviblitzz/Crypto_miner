@@ -509,13 +509,13 @@ export class UI {
     const ks = def.kind === 'rig' && o.parts ? this.kitSec(o) : null;
     if (g.slotKind(def) && !g.cloneBlocked(o.kit && !g.pcReady(o) ? { ...o, parts: o.kit } : o)) {
       const src = o.kit && !g.pcReady(o) ? { ...o, parts: o.kit } : o; // offener Bausatz: „noch so einen“ = derselbe Bausatz, nicht das leere Gehäuse
-      const fac = g.facOf(uid), full = !g.slotOk(fac, def), rig = g.cloneRig(src), lock = rig && (!g.readyOk(o.type) || src !== o), cc = g.cloneCost(src, lock), ck = rig ? g.cloneCost(src, true) : 0, cid = g.readyBy(o.type);
+      const fac = g.facOf(uid), full = !g.slotOk(fac, def), rig = g.cloneRig(src), lock = rig && (!g.readyOk(o.type) || src !== o), cc = g.cloneCost(src, lock), ck = rig ? g.cloneCost(src, true) : 0, cid = g.readyBy(o.type), ow = !lock && rig ? g.cloneWhy(src, false) : '';
       const kitT = () => ({ type: o.type, rot: o.rot, coin: o.coin, parts: { mobo: null, cpu: null, psu: null, gpus: [] }, kit: true, src }); // Bausatz-Kopie: leeres Gehäuse, Teile ins Lager
-      const ag = h(`<button class="btn ${ks ? '' : 'primary'} wide again" ${full || cc > g.s.cash ? 'disabled' : ''} title="${full ? 'Alle Plätze belegt' : lock ? 'Gleiches Gehäuse, alle Teile ins Lager – selbst einbauen' : rig && cid ? `Gleicher Rig, fertig montiert von ${esc(CONTACT[cid].name)} (${Math.round(g.buildFee(o.type) * 100)} % Montage)` : 'Gleiches Gerät mit allen Teilen noch mal kaufen und hinstellen'}">${full ? 'Kein Platz mehr hier' : lock ? `Noch so einen als Bausatz · ${this.money(cc)}` : `Noch so einen bauen · ${this.money(cc)}`}</button>`);
+      const ag = h(`<button class="btn ${ks ? '' : 'primary'} wide again" ${full || ow || cc > g.s.cash ? 'disabled' : ''} title="${full ? 'Alle Plätze belegt' : ow ? esc(ow) : lock ? 'Gleiches Gehäuse, alle Teile ins Lager – selbst einbauen' : rig && cid ? `Gleicher Rig, fertig montiert von ${esc(CONTACT[cid].name)} (${Math.round(g.buildFee(o.type) * 100)} % Montage)` : 'Gleiches Gerät mit allen Teilen noch mal kaufen und hinstellen'}">${full ? 'Kein Platz mehr hier' : lock ? `Noch so einen als Bausatz · ${this.money(cc)}` : `Noch so einen bauen · ${this.money(cc)}`}</button>`);
       ag.onclick = () => { this.resume(); this.w.startPlacement(o.type, null, lock ? kitT() : o); };
       const as = h('<div class="sec again-sec"></div>'); as.append(ag);
       if (rig && !full && lock && cid && !g.readyOk(o.type)) { const ll = h(this.lockLine(cid)); this.lockWire(ll); as.append(ll); }
-      else if (rig && !full && !lock) { const kb = h(`<button class="btn small again-kit" ${ck > g.s.cash ? 'disabled' : ''} title="Gleiches Gehäuse, alle Teile ins Lager – selbst einbauen (günstiger, Schrauben-EP)">Als Bausatz · ${this.money(ck)}</button>`); kb.onclick = () => { this.resume(); this.w.startPlacement(o.type, null, kitT()); }; as.append(kb); }
+      else if (rig && !full && !lock) { if (ow) as.append(h(`<div class="again-why">${esc(ow)}.</div>`)); const kb = h(`<button class="btn small again-kit" ${ck > g.s.cash ? 'disabled' : ''} title="Gleiches Gehäuse, alle Teile ins Lager – selbst einbauen (günstiger, Schrauben-EP)">Als Bausatz · ${this.money(ck)}</button>`); kb.onclick = () => { this.resume(); this.w.startPlacement(o.type, null, kitT()); }; as.append(kb); }
       c.prepend(as);
     }
     if (ks) c.prepend(ks);
@@ -1692,11 +1692,12 @@ export class UI {
       sum.innerHTML = `<div class="kv"><div class="k">Rechenleistung</div><div class="v">${algo ? `${fmtHash(kit.hash[algo] || 0, algo)} → ${COIN[kit.coin].name}` : '–'}</div><div class="k">Verbrauch</div><div class="v ${kit.cap && kit.watt > kit.cap ? 'neg' : ''}">${fmtWatt(kit.watt)} von ${fmtWatt(kit.cap)}</div><div class="k">Ertrag / Tag</div><div class="v pos">${fmtUSD(kit.rev)}</div><div class="k">Strom / Tag</div><div class="v neg">−${fmtUSD(kit.rev - kit.net)}</div><div class="k">Gewinn / Tag</div><div class="v"><b class="${kit.net >= 0 ? 'pos' : 'neg'}">${fmtUSD(kit.net)}</b></div><div class="k">Amortisation</div><div class="v">${Number.isFinite(rd.roi) ? `${Math.round(kit.roi)} Tage (Bausatz) · ${Math.round(rd.roi)} Tage (montiert)` : 'lohnt sich hier nicht'}</div></div>${kit.why ? `<div class="cf-why">${esc(kit.why)}</div>` : ''}`;
       const full = !g.slotOk(fac, PLACEABLE[cfg.type]);
       const lt = lock && cid ? this.lockText(cid) : null; // gesperrt: statt „Fertig montiert“ der Weg dorthin (abgelehnt: gleich anrufen)
-      const bk = h(`<button class="btn big ${lock ? 'primary' : ''}" ${full || kit.price > g.s.cash ? 'disabled' : ''} title="Gehäuse wird aufgestellt, die Teile liegen im Lager – selbst einbauen">Bausatz · ${this.money(kit.price)}</button>`);
+      const bk = h(`<button class="btn big ${lock ? 'primary' : ''}" ${full || !kit.ok || kit.price > g.s.cash ? 'disabled' : ''} title="Gehäuse wird aufgestellt, die Teile liegen im Lager – selbst einbauen">Bausatz · ${this.money(kit.price)}</button>`);
       const br = lt?.call ? h(`<button class="btn big cf-call" title="${esc(lt.long)} Danach geht’s fertig montiert.">${esc(CONTACT[cid].name)} anrufen</button>`) : h(`<button class="btn big ${lock ? 'locked' : 'primary'}" ${full || lock || !rd.ok || rd.price > g.s.cash ? 'disabled' : ''} title="${lt ? esc(lt.long) : 'Läuft sofort'}">${lock ? `${LOCK_SVG}Fertig montiert · bald` : `Fertig montiert · ${this.money(rd.price)}`}</button>`);
       bk.onclick = () => this.startBuild(cfg, false); br.onclick = () => { if (lt?.call) { this.callContact(cid); this.configurator(cfg.type, cfg); return; } this.startBuild(cfg, true); };
       goEl.append(bk, br);
       if (full) goEl.append(h('<div class="cf-why">Kein Platz mehr – Zeit für einen größeren Standort.</div>'));
+      else if (!kit.ok) goEl.append(h(`<div class="cf-why">${esc(kit.why)}${fit && fit.id !== cfg.psu ? ' – „Passendes nehmen“ beim Netzteil' : ''}.</div>`));
       else if (kit.price > g.s.cash) goEl.append(h(`<div class="cf-why">${this.missText(kit.price)}.</div>`));
     };
     render();

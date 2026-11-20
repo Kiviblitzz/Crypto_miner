@@ -558,7 +558,7 @@ export class Game {
   placeBuild(cfg, facId, x, z, rot, ready = true) {
     const def = PLACEABLE[cfg.type]; if (def?.kind !== 'rig' || this.buildBlocked(cfg) || !this.slotOk(facId, def)) return null;
     if (ready && !this.readyOk(cfg.type)) return null; // fertig montiert erst über einen Kontakt (Kemal, Jonas)
-    const st = this.buildStats(cfg, facId, ready); if (ready && !st.ok) return null;
+    const st = this.buildStats(cfg, facId, ready); if (!st.ok) return null; // auch als Bausatz nur mit passendem Netzteil
     if (!this.canAfford(st.price)) return null;
     const o = { uid: this.s.nextUid++, type: cfg.type, x, z, rot, coin: 'auto', broken: false, bought: this.s.day, parts: ready ? JSON.parse(JSON.stringify(st.parts)) : { mobo: null, cpu: null, psu: null, gpus: [] } };
     if (!ready) { const p = st.parts; for (const id of [p.mobo, p.cpu, ...p.gpus]) if (id) { this.bagAdd(id, 1); this.freshAdd(id, 1); } if (p.psu) { this.bagAdd(p.psu, st.np); this.freshAdd(p.psu, st.np); } o.kit = JSON.parse(JSON.stringify(p)); } // kit: welche Teile zu diesem Bausatz gehören (Serien-Einbau)
@@ -701,6 +701,8 @@ export class Game {
     let free = Math.min(def.maxGpu, PART[mobo].slots) - p.gpus.length;
     if (k) { const have = [...p.gpus]; for (const id of k.gpus || []) { if (free <= 0) break; const i = have.indexOf(id); if (i >= 0) { have.splice(i, 1); continue; } if (take(id)) free--; } }
     else for (const b of this.bagList('gpu')) while (free > 0 && take(b.id)) free--;
+    const ps = p.psu || out.find((id) => PART[id].type === 'psu'); // Karten, für die das Netzteil nicht reicht, bleiben im Lager (sonst bliebe der Bausatz ewig „offen“)
+    if (ps) { const cap = PART[ps].cap * np; let w = this.rigWatt(o) + out.reduce((a, id) => a + (PART[id].type === 'psu' ? 0 : PART[id].watt || 0), 0); for (let i = out.length - 1; i >= 0 && w > cap; i--) if (PART[out[i]].type === 'gpu') { w -= PART[out[i]].watt || 0; bag[out[i]] = (bag[out[i]] || 0) + 1; out.splice(i, 1); } }
     return out;
   }
   // Teile, die offene Bausätze (o.kit) noch brauchen – gehören ihnen, auch wenn sie im gemeinsamen Lager liegen
