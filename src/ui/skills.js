@@ -2,11 +2,10 @@
 // Äste je Kategorie als Farbe, ziehen = verschieben, Rad/Pinch = zoomen, Klick auf einen Knoten öffnet rechts die Details.
 // Dazu die Handgriffe im Inspektor (Betriebssystem-Installer, BIOS-Profile, Firmware, Wartung, Wasserkühlung, Bitstream, Roboter)
 // und die Reparatur-Knöpfe (selbst = Mini-Spiel, Routine, reparieren lassen). Esc: erst Details/Installer zu, dann der Baum, dann Pause.
-import { SKILLS, SKILL, SKILL_CATS, SKILL_CAT, POTS, PROFILES, OS, BOOK } from '../data/skills.js';
-import { PLACEABLE, PART } from '../data/hardware.js';
+import { SKILLS, SKILL, SKILL_CAT, POTS, PROFILES, OS, TEACHERS } from '../data/skills.js';
+import { PLACEABLE } from '../data/hardware.js';
 import { FACILITY } from '../data/world.js';
 import { fmtUSD, fmtHash, fmtWatt, fmtDate } from '../sim/game.js';
-import { toDay } from '../data/history.js';
 import { playMinigame } from './minigame.js';
 
 const h = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
@@ -90,7 +89,7 @@ function renderHead(ui, el) {
   const g = ui.g, s = g.s, L = s.sk?.learning, T = s.sk?.teach;
   const pot = (p) => { const e = g.epProgress(p), free = g.fpFree(p); return `<div class="skh-pot ${free ? 'has' : ''}"><div class="skh-pn"><b>${POTS[p].name}</b><span>${free ? `${free} ${free === 1 ? 'Punkt' : 'Punkte'} frei` : 'kein Punkt frei'}</span></div><div class="skh-bar"><i style="width:${e.pc}%"></i></div><div class="skh-ep">${e.cur.toLocaleString('de-DE')} / ${e.need.toLocaleString('de-DE')} Erfahrung bis zum nächsten Punkt</div></div>`; };
   const now = L ? (() => { const k = SKILL[L.id], tot = Math.max(1, L.until - L.d0), pc = Math.round(Math.min(1, (s.day - L.d0) / tot) * 100), left = Math.max(0, L.until - s.day); return `<div class="skh-now"><span class="skh-k">${{ forum: 'Im Forum', book: 'Buch', course: 'Kurs' }[L.via] || 'Gerade'}</span><b>${esc(k?.name || L.id)}</b><div class="skh-bar"><i style="width:${pc}%"></i></div><span class="skh-left">noch ${left} ${left === 1 ? 'Tag' : 'Tage'}${s.sk.queue.length ? ` · danach: ${esc(s.sk.queue.map((q) => SKILL[q.id]?.name || q.id).join(', '))}` : ''}</span><button class="btn small skh-stop">Abbrechen</button></div>`; })() : `<div class="skh-now idle"><span class="skh-k">Gerade</span><b>Nichts in Arbeit</b><span class="skh-left">Wähl unten einen leuchtenden Knoten und fang an.</span></div>`;
-  const teach = T ? `<div class="skh-teach">${esc(T.who === 'opa' ? 'Opa' : T.who === 'papa' ? 'Papa' : T.who === 'mama' ? 'Mama' : T.who[0].toUpperCase() + T.who.slice(1))} bringt dir „${esc(SKILL[T.id]?.name || T.id)}“ bei – morgen kannst du es.</div>` : '';
+  const teach = T ? `<div class="skh-teach">${esc(TEACHERS[T.who]?.name || T.who)} bringt dir „${esc(SKILL[T.id]?.name || T.id)}“ bei – morgen kannst du es.</div>` : '';
   el.innerHTML = `<div class="skh-t"><h2>Fähigkeiten</h2><span class="skh-sub">Was du kannst, schaltet Handgriffe frei – nichts wirkt von allein.</span><button class="modal-x skh-x" title="Schließen (T oder Esc)">✕</button></div><div class="skh-row">${['w', 'r', 'g'].map(pot).join('')}${now}</div>${teach}`;
   el.querySelector('.skh-x').onclick = () => ui.resume();
   const st = el.querySelector('.skh-stop'); if (st) st.onclick = () => { g.stopLearn(); ui.toast('Abgebrochen. Ein Buch bleibt, im Forum fängst du neu an.', 'info', 3500); skRefresh(ui); };
@@ -146,7 +145,7 @@ function showDetail(ui, id) {
   el.querySelector('.skd-x').onclick = () => select(ui, null);
   el.querySelectorAll('[data-go]').forEach((n) => (n.onclick = () => select(ui, n.dataset.go)));
   const ways = el.querySelector('.skd-ways');
-  if (st.st === 'known') { const how = s.sk.src[id] || ''; ways.append(h(`<div class="skd-done">Gelernt am ${fmtDate(s.sk.known[id])}${how ? ` · ${esc({ pts: 'mit Punkten', forum: 'im Forum', book: 'aus dem Buch', course: 'im Kurs', msg: 'per Handy', migr: 'schon früher' }[how] || (how.startsWith('person:') ? 'bei ' + how.slice(7) : ''))}` : ''}</div>`)); if (k.where) { const b = h('<button class="btn primary wide">Zeig mir wo</button>'); b.onclick = () => showWhere(ui, k); ways.append(b); } return; }
+  if (st.st === 'known') { const how = s.sk.src[id] || ''; ways.append(h(`<div class="skd-done">Gelernt am ${fmtDate(s.sk.known[id])}${how ? ` · ${esc({ pts: 'mit Punkten', forum: 'im Forum', book: 'aus dem Buch', course: 'im Kurs', msg: 'per Handy', migr: 'schon früher' }[how] || (how.startsWith('person:') ? 'bei ' + (TEACHERS[how.slice(7)]?.name || how.slice(7)) : ''))}` : ''}</div>`)); if (k.where) { const b = h('<button class="btn primary wide">Zeig mir wo</button>'); b.onclick = () => showWhere(ui, k); ways.append(b); } return; }
   if (later || st.st === 'auto') return;
   const L = s.sk.learning;
   if (st.st === 'learning' && L?.id === id) { const left = Math.max(0, L.until - s.day); ways.append(h(`<div class="skd-done">${{ forum: 'Du liest im Forum mit', book: 'Du liest das Buch', course: 'Du bist im Kurs' }[L.via] || 'Wird gelernt'} – noch ${left} ${left === 1 ? 'Tag' : 'Tage'}.</div>`)); return; }
