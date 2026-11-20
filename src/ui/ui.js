@@ -78,7 +78,7 @@ export class UI {
     world.onLamp = (on) => { if (on) this.lampHint?.remove(); this.toast(on ? 'Taschenlampe an' : 'Taschenlampe aus', 'info', 1500); this.keysHint(); };
     world.onPause = () => this.pause(true);
     world.onCanvasClickInUI = () => this.resume();
-    world.onPlaced = (o, p) => this.placedAgain(o, p); // true = gleich noch einen setzen (Rigs, Miner, Regale)
+    world.onPlaced = (o, p) => { const again = this.placedAgain(o, p); this.pauseHint(this.g.facOf(o.uid) || this.g.s.current); return again; }; // true = gleich noch einen setzen (Rigs, Miner, Regale)
     world.onModeChange = (m) => { document.body.dataset.mode = m; this.dock(); };
     world.onLockChange = (locked) => { $('#clickhint').classList.toggle('hidden', locked || this.w.mode !== 'play' || this.w.touchMode || !!this.paused); };
     $('#modal .modal-x').onclick = () => this.closeModal();
@@ -1479,8 +1479,10 @@ export class UI {
   rigCard(it, fac) {
     const g = this.g, r = g.readyRig(it.id, fac), cp = g.itemPrice(it), full = !g.slotOk(fac, it), isNew = g.s.day - it.releaseDay < 120, price = r ? r.price : cp;
     const spec = r ? `Fertig: ${r.n}× ${esc(PART[r.gpu].name)} · ${fmtWatt(r.watt)}<br/>≈ <b class="${r.net >= 0 ? 'pos' : 'neg'}">${r.net >= 0 ? '+' : ''}${fmtUSD(r.net)}/Tag</b> hier · ${this.roiText(r.roi)}` : esc(it.desc || '');
-    const fd = full ? 'data-full="1"' : '';
-    const card = h(`<div class="item rigc ${full || price > g.s.cash ? 'dis' : ''}" data-rig="1" data-price="${price}" data-id="${it.id}" ${fd}><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${this.money(price)}</span></div><div class="s">${spec}<br/><span class="rc-dim">bis ${it.maxGpu} Grafikkarten${full ? '' : ` · Platz ${g.slotsUsed(fac)}/${g.slotsMax(fac)}`}</span></div><div class="miss">${full ? 'Kein Platz mehr – Zeit für einen größeren Standort' : price > g.s.cash ? `Dir fehlen ${this.money(price - g.s.cash)}` : ''}</div>${r ? `<button class="btn small primary wide rc-ready" data-p="${r.price}" ${fd} ${full || r.price > g.s.cash ? 'disabled' : ''}>Fertig bestückt · ${this.money(r.price)}</button>` : ''}<div class="rc-row"><button class="btn small rc-cfg" data-p="0" ${fd} ${full ? 'disabled' : ''} title="Teile selbst wählen: als Bausatz oder fertig montiert">Selbst bauen</button><button class="btn small rc-case" data-p="${cp}" ${fd} ${full || cp > g.s.cash ? 'disabled' : ''} title="Leeres Gehäuse – Teile einzeln einbauen">Gehäuse · ${this.money(cp)}</button></div></div>`);
+    const fd = full ? 'data-full="1"' : '', sm = g.summary?.[fac];
+    // Passt noch einer rein, ohne dass es zu heiß wird oder der Anschluss nicht reicht?
+    const warn = r && sm && !sm.tripped && !full ? (sm.watt + r.watt > sm.capKw * 1000 ? 'Anschluss reicht nicht – erst Strom ausbauen' : sm.temp + (12 * r.watt) / Math.max(1, sm.cool) > 38 ? 'Wird hier zu heiß – erst Kühlung aufstellen' : '') : '';
+    const card = h(`<div class="item rigc ${full || price > g.s.cash ? 'dis' : ''}" data-rig="1" data-price="${price}" data-id="${it.id}" ${fd}><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${this.money(price)}</span></div><div class="s">${spec}<br/><span class="rc-dim">bis ${it.maxGpu} Grafikkarten${full ? '' : ` · Platz ${g.slotsUsed(fac)}/${g.slotsMax(fac)}`}</span>${warn ? `<br/><b class="rc-warn">${warn}</b>` : ''}</div><div class="miss">${full ? 'Kein Platz mehr – Zeit für einen größeren Standort' : price > g.s.cash ? `Dir fehlen ${this.money(price - g.s.cash)}` : ''}</div>${r ? `<button class="btn small primary wide rc-ready" data-p="${r.price}" ${fd} ${full || r.price > g.s.cash ? 'disabled' : ''}>Fertig bestückt · ${this.money(r.price)}</button>` : ''}<div class="rc-row"><button class="btn small rc-cfg" data-p="0" ${fd} ${full ? 'disabled' : ''} title="Teile selbst wählen: als Bausatz oder fertig montiert">Selbst bauen</button><button class="btn small rc-case" data-p="${cp}" ${fd} ${full || cp > g.s.cash ? 'disabled' : ''} title="Leeres Gehäuse – Teile einzeln einbauen">Gehäuse · ${this.money(cp)}</button></div></div>`);
     try { const url = this.w.thumbnail(it.id); if (url) card.prepend(h(`<div class="thumb"><img alt="" src="${url}"/></div>`)); } catch (e) { /* ohne Vorschau weiter */ }
     const go = (fn) => (e) => { e?.stopPropagation(); if (!g.slotOk(fac, it)) { this.toast('Kein Platz mehr – Zeit für einen größeren Standort.', 'bad'); return; } fn(); };
     const ready = go(() => { const r2 = g.readyRig(it.id, fac); if (!r2) return; this.startBuild(r2, true); });
@@ -1510,6 +1512,16 @@ export class UI {
     if (st.price > g.s.cash) { this.toast(`Dir fehlen ${this.money(st.price - g.s.cash)}.`, 'bad'); return; }
     this.resume();
     this.w.startPlacement(cfg.type, null, { type: cfg.type, rot: 0, coin: 'auto', parts: ready ? st.parts : { mobo: null, cpu: null, psu: null, gpus: [] }, build: { type: cfg.type, mobo: cfg.mobo, cpu: cfg.cpu, psu: cfg.psu, gpu: cfg.gpu, n: st.n }, ready });
+  }
+  // Nach dem Setzen: pausieren Geräte, weil es zu heiß ist oder der Anschluss voll? Dann sagen, was hilft.
+  pauseHint(fac) {
+    const g = this.g, sm = g.summary?.[fac]; if (!sm || sm.tripped || !g.s.flags?.miningStarted) return;
+    let heat = 0, full = 0; for (const a of sm.per.values()) { if (a.status === 'idle' && a.limit === 'heat') heat++; else if (a.status === 'full') full++; }
+    if (!heat && !full) { this.pauseKey = null; return; }
+    const key = `${fac}:${heat}:${full}`; if (this.pauseKey === key) return; this.pauseKey = key;
+    const n = (k) => `${k} ${k === 1 ? 'Gerät pausiert' : 'Geräte pausieren'}`;
+    if (full) this.toast(`Anschluss voll: ${n(full)}. Mehr Strom: <kbd>B</kbd> Bauen → oben „Strom ausbauen“.`, 'info', 7000);
+    else { const fan = g.shopList('cool', fac).sort((x, y) => g.itemPrice(x) - g.itemPrice(y))[0]; this.toast(`Zu heiß hier: ${n(heat)}. Stell Kühlung auf: <kbd>B</kbd> Bauen → Kühlung${fan ? ` (${esc(fan.name)} ab ${this.money(g.itemPrice(fan))})` : ''}.`, 'info', 7000); }
   }
   // Nach dem Setzen: gleich noch einen? (Rigs, Miner, Regale – solange Geld, Platz und Kontingent reichen)
   placedAgain(o, p) {

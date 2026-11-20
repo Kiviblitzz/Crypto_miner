@@ -1837,3 +1837,4 @@ body:has(.story.event) #xpbox { display: none; }
 .cfgr .cf-go .btn { white-space: nowrap; font-size: 15px; padding-inline: 14px; min-width: 180px; }
 /* Niedrige Fenster: Katalog unter die Datumsbox schieben, damit das Schließen-Kreuz frei bleibt */
 @media (min-width: 721px) and (max-height: 900px) { body.show-build #build { top: calc(50% + 32px) !important; max-height: min(640px, calc(100vh - 190px)) !important; } }
+#build .item .rc-warn { color: #ffb36b; font-size: 12px; }
