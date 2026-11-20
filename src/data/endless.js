@@ -34,7 +34,7 @@ export function nextHalving(day) {
 const yearOf = (day) => new Date(day * 864e5).getUTCFullYear();
 
 // KRAL Compute: Viktor Krals KI-Firma nach dem Ende von MONOLITH. Tagesumsatz in $.
-export const kralComputeRev = (day) => 260000 * Math.pow(1.04, Math.max(0, day - toDay('2027-01-01')) / 365);
+export const kralComputeRev = (day) => 320000 * Math.pow(1.04, Math.max(0, day - toDay('2027-01-01')) / 365);
 // Umsatz pro Tag: Mining + KI-Miete (feste Einnahmen aus Ereignissen)
 export const dayRevenue = (g) => { let r = g.dailyProfit().rev; for (const m of g.s.mods || []) if (m.key === 'monthly' && m.mult < 0 && g.s.day < m.until) r += -m.mult / 30.4; return r; };
 
