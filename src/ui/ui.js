@@ -622,7 +622,7 @@ export class UI {
     this.inspUid = uid;
     if (!uid) { el.classList.add('hidden'); this.pickType = null; this.showRun = false; this.w.focusObject?.(null); this.w.ghostPart?.(null); return; }
     const o = this.g.findObj(uid); if (!o) { el.classList.add('hidden'); this.inspUid = null; return; }
-    el.classList.remove('hidden');
+    el.classList.toggle('hidden', !!this.mg); // Mini-Spiel ersetzt den Inspektor, bis es vorbei ist
     const def = PLACEABLE[o.type], g = this.g;
     this.w.focusObject?.(o.type === 'tower' && o.parts && g.s.chapter === 0 ? uid : null);
     const firstPc = o.type === 'tower' && g.facObjects('kinder').find((x) => x.type === 'tower')?.uid === uid; // nur der allererste PC heißt „Dein PC“
