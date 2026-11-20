@@ -364,7 +364,7 @@ export const UPGRADES = {
 
 // Schwierigkeitsgrade (Faktoren über Game.diff(key))
 export const DIFFICULTY = {
-  easy: { name: 'Gemütlich', desc: 'Mehr Startgeld, weniger Pech, günstigere Hardware und 15 % billigerer Strom.', cash: 500, wear: 0.5, dispo: 0.5, exLoss: 0.5, badEvents: 0.6, hw: 0.9, elec: 0.85, tips: 1 },
+  easy: { name: 'Gemütlich', desc: 'Mehr Startgeld, weniger Pech, günstigere Hardware, billigerer Strom, 10 % mehr Ertrag und ein langsamerer Rivale.', cash: 500, wear: 0.5, dispo: 0.5, exLoss: 0.5, badEvents: 0.6, hw: 0.9, elec: 0.85, rev: 1.1, monolith: 0.8, tips: 1 },
   normal: { name: 'Normal', desc: 'So, wie die Geschichte gedacht ist.', cash: 300, wear: 1, dispo: 1, exLoss: 1, badEvents: 1, hw: 1, tips: 1 },
   hard: { name: 'Historiker', desc: 'Mehr Verschleiß, teurer Dispo, 10 % teurerer Strom, öfter Pech, keine Tipps.', cash: 300, wear: 1.3, dispo: 1.5, exLoss: 1, badEvents: 1.3, hw: 1, elec: 1.1, tips: 0 },
 };

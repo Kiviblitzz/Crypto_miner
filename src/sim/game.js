@@ -121,7 +121,7 @@ export class Game {
   // ---------- Technologien ----------
   fx(key, facId = null) { let m = 1; const u = this.s.techs || {}; for (const t of TECHS) if (u[t.id] && t.fx[key]) m *= t.fx[key];
     m *= this.fxExt(key, facId);
-    for (const md of this.s.mods || []) if (md.key === key && (!md.fac || md.fac === facId) && this.s.day < md.until) m *= md.mult; if (key === 'rev' && this.s.skills) m *= 1 + (SKILL_PCT / 100) * (this.skillLv('mining') - 1); return m * this.relFx(key, facId); }
+    for (const md of this.s.mods || []) if (md.key === key && (!md.fac || md.fac === facId) && this.s.day < md.until) m *= md.mult; if (key === 'rev' && this.s.skills) m *= 1 + (SKILL_PCT / 100) * (this.skillLv('mining') - 1); return m * this.relFx(key, facId) * (key === 'rev' || key === 'monolith' ? this.diff(key) : 1); }
   // Beziehungen ab Stufe 3 wirken (Texte: REL_PERK in events.js; Opa: siehe powerCost)
   relFx(key, facId) {
     const r = this.s.rel; if (!r) return 1;
