@@ -12,7 +12,8 @@
 **Oktober 2010, Lindental (Kleinstadt).** Du bist 17. Dein Vater Frank führt seit 25 Jahren
 den kleinen Elektronik-Reparaturladen **„Elektro Brandt"** – aber seit die Leute online
 bestellen, frisst der Laden Schulden. Die Bank will bis Ende 2013 **15.000 $** sehen, sonst
-macht sie dicht.
+macht sie dicht. (Wer die Frist verpasst, verliert den Laden: Papa fängt bei Hashwerk an, Herr Öztürk
+vermietet die Werkstatt – die Geschichte geht weiter, Rückkauf ab Ende 2017 möglich.)
 
 In einem Forum liest du von „Bitcoin" – digitales Geld, das man mit der Grafikkarte
 „schürfen" kann. Du hast einen alten PC, 300 $ Erspartes und ein Zimmer unterm Dach.
@@ -31,8 +32,8 @@ In einem Forum liest du von „Bitcoin" – digitales Geld, das man mit der Graf
 | 1 | **Kinderzimmer** (Dachzimmer) | 10/2010 | 4×3,5 m | 1,8 kW (Mamas Limit) | Erste neue GPU, 1.000 $ verdient, Papa 2.000 $ für die Stromrechnung geben |
 | 2 | **Hobbykeller** | 2011 | 7×5 m | 4,5 → 22 kW (Opa) | Open-Frame-Rig, 3 GH/s, Ladenschulden (15.000 $) tilgen |
 | 3 | **Werkstatt hinterm Laden** | 2012 | 10×8 m | 25 → 120 kW | Erster ASIC, 1 TH/s, Hashwerk GmbH gründen (25.000 $) |
-| 4 | **Lagerhalle** (Gewerbegebiet) | 2014 | 24×16 m | 0,4 → 2 MW | Techniker einstellen, 1 PH/s |
-| 5 | **Rechenzentrum** | 2017 | 36×24 m | 2,5 → 12 MW | 20 PH/s, 10 Mio. $ Vermögen |
+| 4 | **Lagerhalle** (Gewerbegebiet) | 06/2015 | 24×16 m | 0,4 → 2 MW | Techniker einstellen, 1 PH/s |
+| 5 | **Rechenzentrum** | 2017 | 36×24 m | 2,5 → 12 MW | 20 PH/s, Firmenwert 4 Mio. $ (ohne Coins) |
 | 6 | **Fjordhalle** (Norwegen, Wasserkraft) | 2020 | 64×40 m | 30 → 120 MW | 1 EH/s, **MONOLITH überholen** → Ende + Endlosmodus |
 
 Alle Standorte laufen parallel weiter – das Zimmer bleibt als „Museum" deines Anfangs.

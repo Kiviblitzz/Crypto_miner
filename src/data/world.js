@@ -83,7 +83,7 @@ export const CHAPTERS = [
     ],
   },
   {
-    title: 'Kapitel 3 – Die Werkstatt', unlock: 'halle', minDate: '2014-06-01',
+    title: 'Kapitel 3 – Die Werkstatt', unlock: 'halle', minDate: '2015-06-01', // nicht mitten in den Hashpreis-Absturz 2014: wer im Sommer 2014 eine Halle füllt, verliert alles
     intro: 'Elektro Brandt ist gerettet, und Zweirad Öztürk ist ausgezogen. Papa drückt dir den Schlüssel zur Werkstatt hinterm Laden in die Hand.',
     introLost: 'Elektro Brandt gibt es nicht mehr. Herr Öztürk hat das Haus ersteigert und vermietet dir die Werkstatt hinterm alten Laden. Papa trägt die erste Kiste hinein.', // nach „ladenzu“
     goals: [
@@ -91,7 +91,7 @@ export const CHAPTERS = [
       { id: 'th1', text: 'Schaff 1 TH/s', check: (s, h) => h.algoHash('sha256') >= 1e12, progress: (s, h) => [h.algoHash('sha256'), 1e12, 'hash'] },
       { id: 'gmbh', text: 'Gründe die Hashwerk GmbH', action: { label: 'Gründen · 25.000 $', cost: 25000, flag: 'gmbh' }, check: (s) => s.flags.gmbh },
     ],
-    waitText: 'Die Halle in Lindental-Nord wird erst im Juni 2014 fertig.',
+    waitText: 'Die Halle in Lindental-Nord wird erst im Juni 2015 fertig – der Bauträger ist pleite gegangen, ein neuer baut weiter.',
     bonus: [
       { id: 'b3cold', until: '2014-02-23', text: 'Hab mindestens die Hälfte deiner Coins in der Cold-Wallet (ab 10.000 $)', check: (s, h, g) => { const v = g.coinValue(); return v.all >= 1e4 && v.coldShare >= 0.5; }, reward: { rel: { papa: 1 }, text: 'Papa: „Wie früher bei der Sparkasse.“' } },
       { id: 'b3top', until: '2014-05-31', text: 'Verkauf Coins, solange Bitcoin über 1.000 $ steht', check: (s) => !!s.stats.sold1000, reward: { rel: { opa: 1 }, xp: { trade: 120 }, text: 'Opa: „Oben verkaufen. Kluger Junge.“' } },
