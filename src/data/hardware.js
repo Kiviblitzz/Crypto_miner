@@ -108,14 +108,14 @@ export const PARTS = [...GPUS, ...CPUS, ...PSUS, ...MOBOS];
 export const PLACEABLES = [
   // Rig-Rahmen
   { id: 'tower', kind: 'rig', cat: 'rigs', name: 'Tower-PC-Gehäuse', release: '2005-01', price: 60, size: [0.5, 0.5], maxGpu: 3, minTier: 0, maxTier: 2, desc: 'Klassisches Gehäuse mit Glasseite. Max. 3 GPUs.' },
-  { id: 'crate', kind: 'rig', cat: 'rigs', name: 'Milchkisten-Rig', release: '2011-01', price: 15, size: [0.5, 0.5], maxGpu: 4, minTier: 0, maxTier: 3, desc: 'Der Klassiker 2011: Mainboard in der Milchkiste, GPUs an Risern obendrauf. Max. 4.' },
-  { id: 'frame6', kind: 'rig', cat: 'rigs', name: 'Alu-Open-Frame 6×', release: '2013-06', price: 70, size: [1.0, 0.5], maxGpu: 6, minTier: 0, desc: 'Offener Alu-Rahmen für 6 Karten.' },
-  { id: 'frame8', kind: 'rig', cat: 'rigs', name: 'Alu-Open-Frame 8×', release: '2016-01', price: 90, size: [1.0, 0.5], maxGpu: 8, minTier: 1, desc: 'Breiter Rahmen für 8 Karten.' },
-  { id: 'frame12', kind: 'rig', cat: 'rigs', name: 'Stahl-Rahmen 12×', release: '2017-06', price: 150, size: [1.5, 0.5], maxGpu: 12, minTier: 2, desc: 'Profi-Rahmen für 12 GPUs.' },
+  { id: 'crate', kind: 'rig', cat: 'rigs', skill: 'riser', name: 'Milchkisten-Rig', release: '2011-01', price: 15, size: [0.5, 0.5], maxGpu: 4, minTier: 0, maxTier: 3, desc: 'Der Klassiker 2011: Mainboard in der Milchkiste, GPUs an Risern obendrauf. Max. 4.' },
+  { id: 'frame6', kind: 'rig', cat: 'rigs', skill: 'riser', name: 'Alu-Open-Frame 6×', release: '2013-06', price: 70, size: [1.0, 0.5], maxGpu: 6, minTier: 0, desc: 'Offener Alu-Rahmen für 6 Karten.' },
+  { id: 'frame8', kind: 'rig', cat: 'rigs', skill: 'riser', name: 'Alu-Open-Frame 8×', release: '2016-01', price: 90, size: [1.0, 0.5], maxGpu: 8, minTier: 1, desc: 'Breiter Rahmen für 8 Karten.' },
+  { id: 'frame12', kind: 'rig', cat: 'rigs', skill: 'riser', name: 'Stahl-Rahmen 12×', release: '2017-06', price: 150, size: [1.5, 0.5], maxGpu: 12, minTier: 2, desc: 'Profi-Rahmen für 12 GPUs.' },
 
   // Einzelgeräte (FPGA / USB / ASIC) – algo + hash
-  { id: 'fpga1', kind: 'device', cat: 'asic', name: 'Fieldforge FX-1 (FPGA)', release: '2011-07', price: 580, watt: 20, algo: 'sha256', hash: 210 * M, size: [0.5, 0.5], minTier: 0, look: 'fpga', life: 6 },
-  { id: 'fpga4', kind: 'device', cat: 'asic', name: 'Fieldforge Quad (FPGA)', release: '2012-04', price: 1100, watt: 50, algo: 'sha256', hash: 830 * M, size: [0.5, 0.5], minTier: 0, look: 'fpga', life: 6 },
+  { id: 'fpga1', kind: 'device', cat: 'asic', skill: 'fpga', name: 'Fieldforge FX-1 (FPGA)', release: '2011-07', price: 580, watt: 20, algo: 'sha256', hash: 210 * M, size: [0.5, 0.5], minTier: 0, look: 'fpga', life: 6 },
+  { id: 'fpga4', kind: 'device', cat: 'asic', skill: 'fpga', name: 'Fieldforge Quad (FPGA)', release: '2012-04', price: 1100, watt: 50, algo: 'sha256', hash: 830 * M, size: [0.5, 0.5], minTier: 0, look: 'fpga', life: 6 },
   { id: 'usbhub', kind: 'device', cat: 'asic', name: 'HashStick U1 ×10 (USB-Hub)', release: '2013-06', price: 380, watt: 30, algo: 'sha256', hash: 3.3 * G, size: [0.5, 0.5], minTier: 0, look: 'usb', life: 4 },
   { id: 'gla1', kind: 'device', cat: 'asic', name: 'Glacier A1', release: '2013-02', price: 1300, watt: 620, algo: 'sha256', hash: 66 * G, size: [0.5, 0.5], minTier: 0, look: 'asic_old', life: 4, stock: { n: 2, until: '2014-01-01', mult: 2 } },
   { id: 'gridstone', kind: 'device', cat: 'asic', name: 'Gridstone G1 (Scrypt)', release: '2014-03', price: 90, watt: 7, algo: 'scrypt', hash: 350 * K, size: [0.5, 0.5], minTier: 0, look: 'usb', life: 4 },
@@ -166,6 +166,9 @@ export const PLACEABLES = [
   { id: 'evap', kind: 'cooling', cat: 'cool', name: 'Verdunstungskühler', release: '2000-01', price: 8000, watt: 3000, cool: 85000, size: [1.5, 1.0], minTier: 3 },
   { id: 'crac', kind: 'cooling', cat: 'cool', name: 'Präzisionsklima (CRAC)', release: '2000-01', price: 45000, watt: 45000, cool: 260000, size: [2.0, 1.0], minTier: 4 },
 
+  // Roboter (Fähigkeiten Nr. 46–48): Ladestation mit Robi – braucht Platz und Strom, kein Gehalt. Module im Inspektor (Game.roboMod)
+  { id: 'robi', kind: 'robot', cat: 'robo', skill: 'robo_usb', name: 'Robi mit Ladestation', release: '2014-01', price: 6000, watt: 120, size: [1.0, 0.5], minTier: 3, desc: 'Fährt zu neuen Rigs und steckt den USB-Stick mit dem Mining-Image ein. Nachrüstbar: Greifarm, Lötkopf.' },
+
   // Deko
   { id: 'plant', kind: 'decor', cat: 'decor', name: 'Zimmerpflanze', release: '2000-01', price: 25, size: [0.5, 0.5], minTier: 0 },
   { id: 'lamp', kind: 'decor', cat: 'decor', name: 'Stehlampe', release: '2000-01', price: 40, watt: 0, size: [0.5, 0.5], minTier: 0 },
@@ -186,5 +189,6 @@ export const CATEGORIES = [
   { id: 'asic', name: 'Miner', icon: '⛏️' },
   { id: 'holder', name: 'Regale', icon: '🗄️' },
   { id: 'cool', name: 'Kühlung', icon: '❄️' },
+  { id: 'robo', name: 'Roboter', icon: '🤖' },
   { id: 'decor', name: 'Deko', icon: '🪴' },
 ];

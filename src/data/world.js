@@ -153,7 +153,7 @@ export const CHAPTERS = [
       { id: 'b6mw60', text: 'Bau die Fjordhalle auf 60 MW aus', check: (s) => s.fac.fjord.power >= 1, reward: { rel: { papa: 1 }, text: 'Papa fliegt zum ersten Mal nach Norwegen' } },
       { id: 'b6eff', text: 'Bring deine SHA-256-Flotte unter 30 J/TH (ab 100 PH/s)', check: (s, h, g) => h.algoHash('sha256') >= 1e17 && g.fleetJTH() <= 30, progress: (s, h, g) => [g.fleetJTH(), 30, 'jth'], reward: { rel: { deniz: 1 }, text: 'Deniz: „Das ist Weltspitze.“' } },
       { id: 'b6full', text: 'Fülle die Fjordhalle mit Containern', check: (s) => !!s.full?.fjord, progress: (s, h) => [h.fill('fjord'), 1, 'fill', 'fjord'], reward: { rel: { deniz: 1 }, text: 'Deniz: „Mehr Fjord gibt es nicht.“' } },
-      { id: 'b6heat', text: 'Lass die Abwärme ganz Sogn heizen', check: (s) => !!s.techs?.heatsale, reward: { rel: { mama: 1 }, text: 'Mama: „Ein ganzes Dorf warm – das ist mein Kind!“' } },
+      { id: 'b6heat', text: 'Lass die Abwärme ganz Sogn heizen (Ausbau „Fernwärme Sogn“)', check: (s) => !!s.techs?.heatsale || !!s.fac.fjord?.up?.fernwaerme, reward: { rel: { mama: 1 }, text: 'Mama: „Ein ganzes Dorf warm – das ist mein Kind!“' } },
     ],
   },
 ];
@@ -308,7 +308,7 @@ export const NEWS = [
 
 export const START_DAY = toDay('2010-10-01');
 
-// Technologien (wie die Forschung im Vorbild): einmal kaufen, wirken dauerhaft
+// Alte Technologien (bis 11/2026 Taste T): sind in den Fähigkeiten aufgegangen (data/skills.js TECH_MAP). Bleiben nur für alte Spielstände und die Migration.
 export const TECHS = [
   { id: 'undervolt', name: 'Undervolting-Guide', icon: '🪫', date: '2010-12-01', cost: 300, desc: 'GPU-Rigs brauchen 12 % weniger Strom bei gleicher Leistung.', fx: { rigPower: 0.88 } },
   { id: 'pool', name: 'Eigener Pool-Server', icon: '🖧', date: '2011-06-01', cost: 2500, desc: 'Keine Poolgebühren mehr: +2 % Ertrag auf alles.', fx: { rev: 1.02 } },
@@ -335,7 +335,7 @@ export const FEATURES = {
   sleep: { title: 'Schlafen', key: 'E', pseudo: true, text: 'Morgen früh kommt das Paket. Ab 19 Uhr ins <b>Bett</b> legen (<kbd>E</kbd>) – oder die Zeit einfach laufen lassen.', from: 'Deniz', msg: 'Bestellt? Sehr gut. Jetzt heißt es warten – leg dich hin, morgen früh steht das Paket vor deiner Tür.', stale: (s) => !s.orders?.length || !!s.flags.boughtGpu },
   parcel: { title: 'Paket abholen', key: 'E', pseudo: true, text: 'Vor deiner <b>Wohnungstür</b> liegt ein Paket. Hingehen und <kbd>E</kbd>.', stale: (s) => !s.parcels?.length },
   install: { title: 'Lager & Einbau', key: 'E', pseudo: true, text: 'Ausgepackte Teile liegen im <b>Lager</b>. PC anschauen, <kbd>E</kbd> → Grafikkarte einbauen.', from: 'Deniz', msg: 'Die Karte ist da? Dann rein damit: PC anschauen, E drücken, Grafikkarte einbauen. Und nicht an die goldenen Kontakte fassen!', stale: (s) => !!s.flags.boughtGpu },
-  skills: { title: 'Fähigkeiten', key: 'J', by: 'skills', text: 'Was du tust, lernst du. <kbd>J</kbd> zeigt deine Fähigkeiten.', from: 'Opa Heinz', msg: 'Selbst eingebaut? So lernt man das, Junge. Jeder Handgriff macht dich besser – was du schon kannst, siehst du mit J.' },
+  skills: { title: 'Fähigkeiten', key: 'T', by: 'skills', text: '<kbd>T</kbd> zeigt deinen Fähigkeiten-Baum: was du kannst, was du als Nächstes lernst – durch Tun, aus Büchern, im Forum oder bei Leuten.', from: 'Opa Heinz', msg: 'Selbst eingebaut? Sauber, Junge. Wer schraubt, lernt was. Drück mal T: Da siehst du, was du schon kannst und was du als Nächstes lernen kannst – aus Büchern, im Forum oder bei mir.' },
   speed2: { title: 'Zeitraffer', key: '2', by: 'speed2', text: '<kbd>1</kbd> Echtzeit · <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd> schneller · <kbd>Leertaste</kbd> Pause.', from: 'Deniz', msg: 'Jetzt heißt es: laufen lassen. Mit 2, 3 und 4 spulst du vor – bei der 4 ist ein Tag in 4 Sekunden rum. Leertaste hält an.' },
   heat: { title: 'Wärmebild', key: 'I', by: 'heat', text: '<kbd>I</kbd> zeigt im Wärmebild, wo es zu heiß wird.', from: 'Deniz', msg: 'Bei dir wird’s warm! Mit I siehst du im Wärmebild, wo die Hitze steht. Lüfter gibt’s im Shop unter Kühlung.' },
   rigs: { title: 'Mehr PCs', key: 'B', by: 'build', text: 'Shop (<kbd>B</kbd>) → Rigs: als Bausatz bestellen und selbst einbauen. Teile gibt es auch einzeln. Fertig bestückt liefern dir später Kontakte.', from: 'Deniz', msg: 'Ein PC ist gut, zwei sind besser. Im Shop unter „Rigs“ gibt’s Gehäuse als Bausatz – Teile rein, fertig.' },
@@ -345,7 +345,6 @@ export const FEATURES = {
   coins: { title: 'Mehr Coins', key: 'E', by: 'inspect', text: 'Schau ein Gerät an (<kbd>E</kbd>): Dort wählst du, was es schürft.', from: 'Deniz', msg: 'Es gibt jetzt mehr als Bitcoin! Schau dir deine Rechner an (E) – dort stellst du ein, welchen Coin sie schürfen.' },
   cold: { title: 'Cold-Wallet', key: 'M', by: 'market', text: 'Sicher vor Börsenpleiten. Findest du in der Börse (<kbd>M</kbd>).', from: 'Deniz', msg: 'Lass nicht alles auf der Börse liegen! In der Börse kannst du deine Coins jetzt in eine Cold-Wallet legen – da kommt kein Hacker ran.' },
   map: { title: 'Karte', key: 'K', by: 'map', text: '<kbd>K</kbd> zeigt alle Standorte.', from: 'Papa', msg: 'Der Hobbyraum im Keller ist frei! Auf der Karte (K) siehst du alle deine Standorte auf einen Blick.' },
-  techs: { title: 'Technik', key: 'T', by: 'techs', text: '<kbd>T</kbd>: An Opas Werkbank Verbesserungen austüfteln.', from: 'Opa Heinz', msg: 'Komm mal an meine Werkbank (T). Ich hab da ein paar Ideen, wie deine Kisten weniger Strom fressen.' },
   ranking: { title: 'Logbuch', key: 'L', by: 'ranking', text: '<kbd>L</kbd>: Rangliste, Erfolge und Chronik.', from: 'Deniz', msg: 'Ich hab dir ein Logbuch angelegt: Rangliste, Erfolge, Chronik. Drück L.' },
   loan: { title: 'Bankkredit', key: 'C', by: 'company', text: 'Die Bank leiht dir Geld. Mit Zinsen. Steht in der Firma (<kbd>C</kbd>).', from: 'Papa', msg: 'Mein Bankberater sagt, dir würden sie jetzt Geld leihen. Mit Zinsen, natürlich. Steht in der Firmenübersicht (C).' },
   buycoins: { title: 'Coins kaufen', key: 'M', by: 'market', text: 'In der Börse (<kbd>M</kbd>) kannst du jetzt auch kaufen.', from: 'Deniz', msg: 'An der Börse kannst du jetzt auch kaufen. Günstig rein, teuer raus – theoretisch.' },
@@ -369,22 +368,31 @@ export const UPGRADES = {
   werkstatt: [
     { id: 'doorvent', name: 'Rolltor-Lüftung', cost: 1500, fx: { coolMul: 1.25 }, eff: 'Kühlung ×1,25', desc: 'Lamellen im Rolltor und ein Abluftgebläse unterm Dach.' },
     { id: 'alarm', name: 'Alarmanlage', cost: 900, secure: true, eff: 'Diebstahlschutz', desc: 'Bewegungsmelder und eine Sirene, die halb Lindental weckt.' },
+    { id: 'dustmat', name: 'Staubfilter-Matten', cost: 1500, from: '2012-06-01', fx: { fail: 0.8 }, eff: 'Ausfälle ×0,8', desc: 'Filtermatten vor jedem Lufteinlass. Einmal im Monat ausklopfen, fertig.' },
     { id: 'buyshop', name: 'Werkstatt von Papa kaufen', cost: 45000, fx: { rent: 0 }, rel: { papa: 1 }, eff: 'Keine Miete mehr · Papa freut sich', desc: 'Papa verkauft dir die Werkstatt. Das Geld steckt er in den Laden.', lost: { name: 'Werkstatt von Herrn Öztürk kaufen', rel: null, eff: 'Keine Miete mehr', desc: 'Herr Öztürk verkauft dir die Werkstatt hinterm alten Laden. Papa hilft beim Umschreiben der Schilder.' } },
   ],
   halle: [
     { id: 'lease5', name: '5-Jahres-Mietvertrag', cost: 4000, days: 1826, keepRent: true, obsoleteBy: 'buyhall', fx: { rent: 0.75 }, eff: 'Miete −25 % für 5 Jahre', desc: 'Lange Bindung, kleinere Miete. Einmotten spart dann aber keine Miete mehr.' },
     { id: 'guard', name: 'Wachdienst', monthly: 1200, cancel: true, secure: true, eff: 'Diebstahlschutz', desc: 'Nachts fährt ein Wachmann zweimal ums Gelände. Monatlich kündbar.' },
     { id: 'roofvent', name: 'Dachventilatoren', cost: 25000, fx: { coolMul: 1.3 }, eff: 'Kühlung ×1,3', desc: 'Sechs große Ventilatoren im Hallendach ziehen die Hitze ab.' },
+    { id: 'dustmat', name: 'Staubfilter-Matten', cost: 6000, from: '2012-06-01', fx: { fail: 0.8 }, eff: 'Ausfälle ×0,8', desc: 'Filtermatten vor den Hallentoren und Racks.' },
+    { id: 'aisle', name: 'Kalt-/Warmgang-Einhausung', cost: 90000, from: '2017-06-01', fx: { coolMul: 1.35 }, eff: 'Kühlung ×1,35', desc: 'Plexiglas-Türen und Dachplatten trennen kalte und warme Luft zwischen den Rack-Reihen.' },
     { id: 'buyhall', name: 'Halle kaufen', cost: 240000, fx: { rent: 0 }, eff: 'Keine Miete mehr', desc: 'Der Vermieter will in Rente. Die Halle gehört dann dir.' },
   ],
   rz: [
     { id: 'diesel', name: 'Notstromdiesel', cost: 400000, ups: true, fx: { cap: 1.1 }, eff: 'USV · +10 % Anschluss', desc: 'Ein Diesel im Hof fängt Stromausfälle ab und deckt Lastspitzen.' },
     { id: 'green', name: 'Ökostrom-Vertrag', cost: 250000, fx: { elec: 0.88 }, eff: 'Strom −12 %', desc: 'Zehn Jahre Windstrom aus der Nordsee zum Festpreis.' },
+    { id: 'dustmat', name: 'Staubfilter-Matten', cost: 30000, from: '2012-06-01', fx: { fail: 0.8 }, eff: 'Ausfälle ×0,8', desc: 'Feinstaubfilter in der ganzen Klimaanlage.' },
+    { id: 'aisle', name: 'Kalt-/Warmgang-Einhausung', cost: 160000, from: '2017-06-01', fx: { coolMul: 1.35 }, eff: 'Kühlung ×1,35', desc: 'Der Doppelboden bekommt endlich dichte Kaltgänge.' },
+    { id: 'immersion', name: 'Immersionsbecken', cost: 1200000, skill: 'immersion', imm: true, fx: { fail: 0.7 }, eff: 'Ausfälle ×0,7 · Turbo +12 %', desc: 'Die Miner baden in Kühlflüssigkeit. Mit Turbo takten sie höher, ohne sich kaputtzuheizen.' },
     { id: 'buyrz', name: 'Rechenzentrum kaufen', cost: 3600000, fx: { rent: 0 }, eff: 'Keine Miete mehr', desc: 'Der Betreiber zieht nach Amsterdam und verkauft das Gebäude.' },
   ],
   fjord: [
     { id: 'icechim', name: 'Eiskamin', cost: 1500000, fx: { coolMul: 1.2, hash: 1.03 }, eff: 'Kühlung ×1,2 · +3 % Hashrate', desc: 'Ein Schacht saugt Gletscherluft an. Die Miner takten etwas höher.' },
     { id: 'salmon', name: 'Lachszucht mit Abwärme', cost: 2500000, monthly: -60000, eff: '+60.000 $/Monat', desc: 'Die Abwärme hält die Becken der Lachszucht nebenan warm. Die zahlt dafür.' },
+    { id: 'dustmat', name: 'Staubfilter-Matten', cost: 60000, from: '2012-06-01', fx: { fail: 0.8 }, eff: 'Ausfälle ×0,8', desc: 'Filter vor jedem Container – der Fjordwind bringt Salz und Sand.' },
+    { id: 'immersion', name: 'Immersionsbecken', cost: 2500000, skill: 'immersion', imm: true, fx: { fail: 0.7 }, eff: 'Ausfälle ×0,7 · Turbo +12 %', desc: 'Tauchbecken für die Container-Miner. Mit Turbo takten sie höher, ohne sich kaputtzuheizen.' },
+    { id: 'fernwaerme', name: 'Fernwärme Sogn', cost: 3000000, from: '2022-01-01', skill: 'abwaerme', fx: { elec: 0.8 }, eff: 'Strom −20 % · das Dorf heizt mit', desc: 'Wärmetauscher und eine Leitung ins Dorf: Schwimmbad, Schule und Fischfabrik heizen mit deiner Abwärme.' },
     { id: 'buyfjord', name: 'Fjordhalle kaufen', cost: 9600000, fx: { rent: 0 }, eff: 'Keine Miete mehr', desc: 'Die Gemeinde Sogn verkauft dir die Halle samt Kai.' },
     { id: 'hydro', name: 'Anteil am Wasserkraftwerk', cost: 30000000, fx: { elec: 0.6 }, eff: 'Strom −40 % in der Fjordhalle', desc: 'Ein Drittel des Kraftwerks gehört dann Hashwerk. Strom fast zum Selbstkostenpreis.' },
   ],

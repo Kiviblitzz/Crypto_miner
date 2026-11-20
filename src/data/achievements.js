@@ -4,7 +4,9 @@
 // Statistiken dafür sammelt Game.progressDay (s.stats: y, trips, tmax, halv, asicDay, wonDay, neg1, btc2010).
 import { toDay } from './history.js';
 
-const SKILL_MAX = 10; // höchste Fähigkeitsstufe (SKILL_XP in game.js)
+import { SKILLS, SKILL_CATS } from './skills.js';
+// Meisterbrief: alle Fähigkeiten einer Kategorie, die man schon lernen kann (ohne „bald“)
+const catDone = (s, g) => SKILL_CATS.some((c) => { const l = SKILLS.filter((k) => k.cat === c.id && !k.soon); return l.length >= 3 && l.every((k) => g.knows(k.id)); });
 
 const yearGain = (s, y) => { const Y = s.stats.y?.[y]; return Y && Y.nw1 != null ? Y.rev - Y.elec - Y.fix : null; };
 const objs = (s, fn) => { let n = 0; for (const id of s.unlocked) n += s.fac[id].objects.filter(fn).length; return n; };
@@ -29,10 +31,11 @@ export const ACHIEVEMENTS = [
   { id: 'eth', name: 'Weltcomputer', desc: 'Dein erstes Ethereum geschürft.', check: (s) => (s.stats.coins?.ETH || 0) > 0 },
   { id: 'blackzero', name: 'Schwarze Null', desc: 'Bis Ende 2015 kein einziger Tag im Minus.', check: (s) => s.day >= toDay('2016-01-01') && !!s.stats.y?.[2011] && !s.stats.neg1 && s.stats.minedUSD > 0 },
   { id: 'winter15', name: 'Überwintert', desc: 'Das Jahr 2015 mit Gewinn abgeschlossen.', check: (s) => yearGain(s, 2015) > 0 },
-  { id: 'tinker', name: 'Tüftler', desc: 'Fünf Techniken entwickelt.', check: (s) => Object.keys(s.techs || {}).length >= 5 },
+  { id: 'tinker', name: 'Tüftler', desc: 'Fünf Fähigkeiten aus Büchern oder dem Forum gelernt.', check: (s) => Object.values(s.sk?.src || {}).filter((v) => v === 'book' || v === 'forum').length + Object.keys(s.techs || {}).length >= 5 },
+  { id: 'loetmeister', name: 'Lötmeister', desc: 'Zehn saubere Reparaturen selbst gelötet.', check: (s) => (s.sk?.clean || 0) >= 10 },
   { id: 'kraltorn', name: 'Kein Anschluss', desc: 'Krals Visitenkarte vor seinen Augen zerrissen.', hidden: true, check: (s) => !!s.flags.kralTorn },
   { id: 'ice18', name: 'Eiszeit', desc: 'Das Jahr 2018 mit Gewinn abgeschlossen.', check: (s) => yearGain(s, 2018) > 0 },
-  { id: 'master', name: 'Meisterbrief', desc: 'Eine Fähigkeit auf die höchste Stufe gebracht.', check: (s, h, g) => !!s.skills && ['hw', 'mining', 'trade'].some((k) => g.skillLv(k) >= SKILL_MAX) },
+  { id: 'master', name: 'Meisterbrief', desc: 'Alle Fähigkeiten eines Astes gelernt.', check: (s, h, g) => !!s.sk && catDone(s, g) },
   { id: 'sun', name: 'Sonnenkind', desc: '1 MWp Solar auf deinen Dächern.', check: (s) => Object.values(s.fac).reduce((a, f) => a + (f.solar || 0), 0) >= 1000 },
   { id: 'onepct', name: 'Ein Prozent', desc: 'Im ASIC-Zeitalter (ab 2015) 1 % der weltweiten Bitcoin-Hashrate.', check: (s, h, g) => s.day >= toDay('2015-01-01') && h.algoHash('sha256') >= g.netHash('BTC') * 0.01 },
   { id: 'prodigal', name: 'Brezeln zur Begrüßung', desc: 'Deniz ist von MONOLITH zurückgekommen.', hidden: true, check: (s) => !!s.flags.denizReturned },

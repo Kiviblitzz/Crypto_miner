@@ -63,7 +63,7 @@ const facMods = (facs, key, mult, days) => facs.map((fac) => ({ key, mult, days,
 function sellCoins(g, c, frac) {
   const s = g.s, w = s.wallet[c], p = g.price(c); const n = (w.ex + w.cold) * frac; if (!(n > 0) || !p) return 0;
   const a = Math.min(w.ex, n); w.ex -= a; w.cold = Math.max(0, w.cold - (n - a));
-  const v = n * p * (1 - g.tradeFee()); s.cash += v; s.stats.sold += v; if (s.skills) g.addXp('trade', 15 + Math.min(60, v / 10)); return v;
+  const v = n * p * (1 - g.tradeFee()); s.cash += v; s.stats.sold += v; g.addXp('trade', 15 + Math.min(60, v / 10)); return v;
 }
 const sellDo = (c, frac, logText) => (g) => { const v = sellCoins(g, c, frac); return { log: `${logText} (${usd(v)})` }; };
 // GPU-Rigs (ohne den allerersten PC in der Wohnung)
@@ -882,7 +882,7 @@ export const EVENTS = [
     id: 'sogn', from: 'Gemeinde Sogn', title: 'Der Gemeinderat von Sogn', when: { from: '2020-06-01', chance: 1, repeat: 30 }, cond: (s) => has(s, 'fjord') && !s.flags.sognDone,
     text: (s) => `„Willkommen in Sogn! Bevor die Fjordhalle über 30 Megawatt wächst, möchte der Gemeinderat wissen: Was passiert mit der Wärme? Wir heizen hier noch mit Öl.“${s.flags.norwegen ? ' Deine Mutter war 2019 übrigens hier – der Bürgermeister erinnert sich an „die Frau mit den vielen Fragen“.' : ''}`,
     choices: [
-      { label: (g) => (g.s.techs?.heatsale ? 'Fernwärme fürs Dorf (deine Abwärme-Technik passt)' : 'Fernwärme fürs ganze Dorf bauen'), cost: (g) => (g.s.techs?.heatsale ? 0 : 3000000), hint: 'Ausbau frei · −10 % Strom in der Fjordhalle (Wärmeverkauf) · Opa +1', fx: { mod: [{ key: 'elec', mult: 0.9, fac: 'fjord' }], rel: { opa: 1 }, flag: ['sognDone', 'sognOk'], log: 'Sogn: Fernwärme aus der Fjordhalle' }, reply: '<b>Bürgermeisterin:</b> Das Schwimmbad hat jetzt 28 Grad. Im Februar! Velkommen, Hashwerk.' },
+      { label: (g) => (g.s.techs?.heatsale || g.s.fac?.fjord?.up?.fernwaerme ? 'Fernwärme fürs Dorf (deine Abwärme-Leitung passt)' : 'Fernwärme fürs ganze Dorf bauen'), cost: (g) => (g.s.techs?.heatsale || g.s.fac?.fjord?.up?.fernwaerme ? 0 : 3000000), hint: 'Ausbau frei · −10 % Strom in der Fjordhalle (Wärmeverkauf) · Opa +1', fx: { mod: [{ key: 'elec', mult: 0.9, fac: 'fjord' }], rel: { opa: 1 }, flag: ['sognDone', 'sognOk'], log: 'Sogn: Fernwärme aus der Fjordhalle' }, reply: '<b>Bürgermeisterin:</b> Das Schwimmbad hat jetzt 28 Grad. Im Februar! Velkommen, Hashwerk.' },
       { label: 'Nur Schule und Schwimmbad heizen', cost: 1500000, hint: 'Ausbau frei · Mama +1', fx: { rel: { mama: 1 }, flag: ['sognDone', 'sognOk'], log: 'Sogn: Schule und Schwimmbad mit Abwärme beheizt' }, reply: '<b>Bürgermeisterin:</b> Ein Anfang. Die Kinder danken es Ihnen.' },
       { label: 'Erst mal bei 30 MW bleiben', hint: 'Stromausbau der Fjordhalle ein Jahr gesperrt', fx: { mod: [{ key: 'powerWait', mult: 0, days: 365, fac: 'fjord' }], flag: 'sognDone', log: 'Sogn: Ausbau der Fjordhalle vorerst gesperrt' }, reply: '<b>Bürgermeisterin:</b> Dann sprechen wir nächstes Jahr wieder.' },
     ],
