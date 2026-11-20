@@ -4,11 +4,12 @@ import { PLACEABLE, PART, CATEGORIES, PLACEABLES, PARTS } from '../data/hardware
 import { FACILITIES, FACILITY, CHAPTERS, TECHS, FEATURES, MESSAGES, yearTitle, FAMILY_MOOD, moodTier, FULL_TALK } from '../data/world.js';
 import { fmtUSD, fmtNum, fmtCoin, fmtHash, fmtDate, fmtWatt, SKILL_XP, SKILL_PCT, TRADE_FEES, BUILD_FEE } from '../sim/game.js';
 import { toDay, BTC_HASH, inHeatwave, HALVINGS, BTC_REWARD } from '../data/history.js';
-import { EVENT } from '../data/events.js';
+import { EVENT, REL_PERK } from '../data/events.js';
 import { ACH, ACHIEVEMENTS } from '../data/achievements.js';
 import { talkTo, PEOPLE, talkWho, KEEPSAKES, KEEPSAKE, pickKeepsake, keepsakeCount, TALK_REL } from '../data/story.js';
 import { DIFFICULTY } from '../data/world.js';
 import { ROLES, TRAITS, QUOTES } from '../data/staff.js';
+import { CONTACTS, CONTACT, FEE_TIERS, FAMILY_CONTACTS } from '../data/contacts.js';
 import { showFinale, endlessGoals, egoalKey, egoalDone } from './finale.js';
 
 const $ = (s) => document.querySelector(s);
@@ -36,6 +37,7 @@ const ACH_SVG = {
   lock: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="10.5" width="13" height="9.5" rx="2.2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg>',
   secret: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.2 9.3a2.9 2.9 0 1 1 4.1 2.6c-.8.4-1.3 1-1.3 1.9v.6"/><circle cx="12" cy="17.6" r=".6" fill="currentColor"/></svg>',
 };
+const LOCK_SVG = '<svg class="lock-ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5.5" y="10.5" width="13" height="9.5" rx="2.2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg>';
 const MONTH_RE = /^(Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)\s+\d{4}:\s*/;
 
 // Gesprächskarte: gezeichnetes Gesicht (kein Emoji), passend zu den Figuren in der Welt
@@ -44,6 +46,9 @@ const FACES = {
   opa: { bg: '#5b6b4a', shirt: '#46533a', skin: '#ecc4a2', hair: '#e4e4e4', extra: '<g fill="none" stroke="#4a3b2c" stroke-width="1.4"><circle cx="27" cy="29" r="3.6"/><circle cx="37" cy="29" r="3.6"/><path d="M30.6 29h2.8"/></g><path d="M27.5 36.6q4.5-1.8 9 0" stroke="#d8d8d8" stroke-width="2.2" fill="none" stroke-linecap="round"/>', top: '<path d="M19.6 30c-1.4-4 .2-8.4 2.6-9.6c-.6 3 .2 5.2-.4 9.6zM44.4 30c1.4-4-.2-8.4-2.6-9.6c.6 3-.2 5.2.4 9.6z" fill="#e4e4e4"/>' },
   deniz: { bg: '#2e6fd6', shirt: '#24539e', skin: '#c89a72', hair: '#231811', extra: '', top: '<path d="M19 28c-2-10 4.5-15.5 13-15.5S47 18 45 28c-.8-3.6-2.4-5.6-4.4-6.6c-.6 2-3.4 2.6-5 .8c-1.4 1.8-4.6 1.8-5.6-.2c-1.4 1.6-4.6 1.4-5.2-.6c-2.6 1-4.6 3.2-5.8 6.6z" fill="#231811"/>' },
   tech: { bg: '#e07a10', shirt: '#b45f0a', skin: '#e0b394', hair: '#3a2a1c', extra: '', top: '<path d="M18.6 26.5a13.4 12 0 0 1 26.8 0z" fill="#ffd400"/><rect x="16.5" y="25.4" width="31" height="3" rx="1.5" fill="#f2c600"/><rect x="30.6" y="14.6" width="2.8" height="8" rx="1.2" fill="#f2c600"/>' },
+  mama: { bg: '#c2577a', shirt: '#9c3f5d', skin: '#efc3a0', hair: '#7a4a2a', extra: '', top: '<path d="M18.8 31c-.8 6.4.4 11.4 2.6 14.4l3.2-1.2c-2-3.6-2.6-8.6-2.4-13.2zM45.2 31c.8 6.4-.4 11.4-2.6 14.4l-3.2-1.2c2-3.6 2.6-8.6 2.4-13.2z" fill="#7a4a2a"/><path d="M18.6 31.5c-1.6-11 4-18.4 13.4-18.4S47 20.5 45.4 31.5c-1-3-1.8-6.4-3-8.6c-3 1.8-7.4 2-10.6.4c-3.4 1.6-7.6 1.4-10.4-.4c-1.2 2.2-2 5.6-2.8 8.6z" fill="#7a4a2a"/>' },
+  kemal: { bg: '#2f9d6e', shirt: '#22724f', skin: '#c9946b', hair: '#1c140f', extra: '<g fill="none" stroke="#1c140f" stroke-width="1.5"><rect x="23.2" y="26.4" width="7.4" height="5.4" rx="1.5"/><rect x="33.4" y="26.4" width="7.4" height="5.4" rx="1.5"/><path d="M30.6 28.6h2.8"/></g>', top: '<path d="M19.4 27.5c-1.2-9 4.6-14 12.6-14s13.8 5 12.6 14c-1.2-4-3.4-6.6-6-7.6c-3.4 1.4-9.8 1.4-13.2 0c-2.6 1-4.8 3.6-6 7.6z" fill="#1c140f"/>' },
+  jonas: { bg: '#4f6fd0', shirt: '#3a4f99', skin: '#f0c7a6', hair: '#c9a25a', extra: '', top: '<path d="M20.4 29c.4-2.4 2.6-3.6 5.4-3.4l-.6 2.2c-1.8-.2-3.4.2-4.8 1.2zM43.6 29c-.4-2.4-2.6-3.6-5.4-3.4l.6 2.2c1.8-.2 3.4.2 4.8 1.2z" fill="#c9a25a"/><path d="M18.8 25.6a13.2 12.6 0 0 1 26.4 0z" fill="#d8643a"/><rect x="17.4" y="23.6" width="29.2" height="4.6" rx="2.3" fill="#b8502c"/><circle cx="32" cy="12.6" r="2.6" fill="#d8643a"/>' },
 };
 function faceSvg(who) {
   const f = FACES[who] || FACES.tech;
@@ -114,6 +119,7 @@ export class UI {
     game.on('goal', () => { this.audio?.cash(); });
     game.on('facfull', (id, c) => this.facFull(id, c));
     game.on('bag', () => this.refresh()); // Teile gekauft/verkauft/ein- und ausgebaut
+    game.on('contact', () => { this.lastBuildDay = -99; this.refresh(); }); // Kontakt kennengelernt/angerufen: Katalog zeigt „Fertig bestückt“
     game.on('unlockable', (id) => { this.milestone('Kapitel geschafft', `${FACILITY[id].short} ist frei`); this.toast(`<b>${FACILITY[id].short}</b> ist frei`, 'good', 8000); this.goals(); this.sites(); });
     this.initProgress(); // Jahresrückblick, Erfolge im Logbuch, Bonusziele
     setInterval(() => { this.top(); this.buildAfford(); }, 200);
@@ -494,7 +500,16 @@ export class UI {
     const st = g.summary[g.facOf(uid)]?.per.get(uid);
     if (o.broken || (o.items && o.items.some((i) => i.b))) { const rc = g.repairCost(o); const b = h(`<button class="btn good">Reparieren (${fmtUSD(rc)})</button>`); b.onclick = () => { if (!g.repair(uid)) this.toast('Nicht genug Geld.', 'bad'); else this.inspect(uid); }; row.append(b); }
     if (!g.has('build')) { if (row.childElementCount) c.append(row); return; }
-    if (g.slotKind(def) && !g.cloneBlocked(o)) { const fac = g.facOf(uid), cc = g.cloneCost(o), full = !g.slotOk(fac, def); const ag = h(`<button class="btn primary wide again" ${full || cc > g.s.cash ? 'disabled' : ''} title="${full ? 'Alle Plätze belegt' : 'Gleiches Gerät mit allen Teilen noch mal kaufen und hinstellen'}">${full ? 'Kein Platz mehr hier' : `Noch so einen bauen · ${this.money(cc)}`}</button>`); ag.onclick = () => { this.resume(); this.w.startPlacement(o.type, null, o); }; const as = h('<div class="sec again-sec"></div>'); as.append(ag); c.prepend(as); }
+    if (g.slotKind(def) && !g.cloneBlocked(o)) {
+      const fac = g.facOf(uid), full = !g.slotOk(fac, def), rig = g.cloneRig(o), lock = rig && !g.readyOk(o.type), cc = g.cloneCost(o, lock), ck = rig ? g.cloneCost(o, true) : 0, cid = g.readyBy(o.type);
+      const kitT = () => ({ type: o.type, rot: o.rot, coin: o.coin, parts: { mobo: null, cpu: null, psu: null, gpus: [] }, kit: true, src: o }); // Bausatz-Kopie: leeres Gehäuse, Teile ins Lager
+      const ag = h(`<button class="btn primary wide again" ${full || cc > g.s.cash ? 'disabled' : ''} title="${full ? 'Alle Plätze belegt' : lock ? 'Gleiches Gehäuse, alle Teile ins Lager – selbst einbauen' : rig && cid ? `Gleicher Rig, fertig montiert von ${esc(CONTACT[cid].name)} (${Math.round(g.buildFee(o.type) * 100)} % Montage)` : 'Gleiches Gerät mit allen Teilen noch mal kaufen und hinstellen'}">${full ? 'Kein Platz mehr hier' : lock ? `Noch so einen als Bausatz · ${this.money(cc)}` : `Noch so einen bauen · ${this.money(cc)}`}</button>`);
+      ag.onclick = () => { this.resume(); this.w.startPlacement(o.type, null, lock ? kitT() : o); };
+      const as = h('<div class="sec again-sec"></div>'); as.append(ag);
+      if (rig && !full && lock && cid) { const ll = h(this.lockLine(cid)); this.lockWire(ll); as.append(ll); }
+      else if (rig && !full) { const kb = h(`<button class="btn small again-kit" ${ck > g.s.cash ? 'disabled' : ''} title="Gleiches Gehäuse, alle Teile ins Lager – selbst einbauen (günstiger, Schrauben-EP)">Als Bausatz · ${this.money(ck)}</button>`); kb.onclick = () => { this.resume(); this.w.startPlacement(o.type, null, kitT()); }; as.append(kb); }
+      c.prepend(as);
+    }
     const mv = h('<button class="btn">✥ Verschieben</button>'); mv.onclick = () => { this.resume(); this.w.startPlacement(o.type, uid); }; row.append(mv);
     const rt = h('<button class="btn">⟳ Drehen</button>'); rt.onclick = () => { const r0 = o.rot; o.rot = (o.rot + 1) % 4; if (!this.w.canPlace(def, o.x, o.z, o.rot, uid)) { o.rot = r0; this.toast('Kein Platz zum Drehen.', 'bad'); } this.w.syncObjects(); }; row.append(rt);
     if (def.kind !== 'decor' && !g.slotKind(def)) { const blk = g.cloneBlocked(o); const dp = h(`<button class="btn" title="${blk ? esc(blk) + ' gibt es nicht mehr zu kaufen' : 'Gleiches Objekt inkl. Teilen noch mal kaufen'}" ${blk ? 'disabled' : ''}>⧉ Duplizieren ${blk ? '· Teile nicht mehr im Handel' : `(${fmtUSD(this.g.cloneCost ? this.g.cloneCost(o) : 0)})`}</button>`); dp.onclick = () => { this.resume(); this.w.startPlacement(o.type, null, o); }; row.append(dp); }
@@ -768,6 +783,7 @@ export class UI {
       if (go && !rest) t = s.cash >= go.action.cost ? `Drück <b>G</b>: ${esc(go.action.label)}.` : `Spare für „${esc(go.action.label)}“ – ${fmtUSD(s.cash)} / ${fmtUSD(go.action.cost)}.`;
     }
     if (!t && FACILITIES.some((f) => g.canUnlock(f.id))) t = 'Ein neuer Standort ist frei: Geh zur <b>Tür</b>, schau sie an und drück <b>E</b>.';
+    if (!t && s.chapter === 0 && s.goals.gpu && !s.goals.rig2) t = g.readyOk('tower') ? 'Drück <b>B</b> → Rigs → Tower: <b>Fertig bestückt</b> kaufen und hinstellen – oder als Bausatz selbst bauen.' : 'Drück <b>B</b> → Rigs → Tower: <b>Als Bausatz</b> kaufen und hinstellen. Dann anschauen, <b>E</b> und die Teile aus dem Lager einbauen.';
     if (!t && s.chapter === 1 && !s.goals.openrig) t = 'Drück <b>B</b> → Rigs: Stell eine <b>Milchkiste</b> auf. Dann anschauen, <b>E</b> und bestücken (Mainboard, CPU, Netzteil, GPUs).';
     if (!t) { const ch = CHAPTERS[s.chapter], go = ch && ch.goals.find((x) => !s.goals[x.id]); if (go) t = `Nächstes Ziel: ${esc(go.text)}`; }
     if (el.dataset.t !== t) { el.dataset.t = t; el.innerHTML = t; el.classList.toggle('hidden', !t); if (t) { el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); } }
@@ -998,17 +1014,46 @@ export class UI {
     if (logScale && !mini) { ctx.fillStyle = '#9a8a78'; ctx.textAlign = 'right'; ctx.fillText('log. Skala', W - padR, 14); ctx.textAlign = 'left'; }
   }
 
-  phone() {
+  phone(tab = null) {
     const g = this.g;
-    const msgs = [...g.s.messages].sort((a, b) => b.day - a.day);
-    const body = h(`<div><h2>Handy</h2><div class="phone"></div></div>`);
+    const msgs = [...g.s.messages].sort((a, b) => b.day - a.day), unread = msgs.filter((m) => !m.read).length;
+    tab = tab || (unread || g.s.ev?.open ? 'msgs' : this.phoneTab || 'msgs'); this.phoneTab = tab;
+    const newC = CONTACTS.filter((c) => g.contactMet(c.id) && !g.contactOn(c.id)).length;
+    const body = h(`<div><h2>Handy</h2><div class="ph-tabs" role="tablist"><button class="btn small ${tab === 'msgs' ? 'on' : ''}" data-t="msgs">Nachrichten${unread ? ` <span class="ph-n">${unread}</span>` : ''}</button><button class="btn small ${tab === 'contacts' ? 'on' : ''}" data-t="contacts">Kontakte${newC ? ` <span class="ph-n">${newC}</span>` : ''}</button></div><div class="phone"></div></div>`);
+    body.querySelectorAll('.ph-tabs button').forEach((b) => { b.onclick = () => this.phone(b.dataset.t); });
     const ph = body.querySelector('.phone');
+    if (tab === 'contacts') { this.phoneContacts(ph); this.openModal(body, 'narrow', 'phone'); this.dock(); return; }
     const oe = g.s.ev?.open && EVENT[g.s.ev.open.id];
     if (oe) { const card = h(`<div class="msg decide"><div class="fr">${esc(oe.from || '')}<span>Entscheidung offen · noch ${Math.max(0, g.s.ev.open.until - g.s.day)} Tage</span></div><b>${esc(g.evText(oe, 'title'))}</b><div class="row" style="margin-top:8px"><button class="btn small primary">Jetzt entscheiden</button></div></div>`); card.querySelector('button').onclick = () => { this.evSnooze = null; this.closeModal(); this.eventCard(); }; ph.append(card); }
     if (!msgs.length) ph.append(h('<div class="empty">Keine Nachrichten.</div>'));
     for (const m of msgs) { if (m.old) continue; const tip = MESSAGES.find((x) => x.id === m.id)?.tip; ph.append(h(`<div class="msg f-${m.from.split(' ')[0]} ${m.read ? '' : 'unread'} ${tip ? 'tip' : ''}"><div class="fr">${esc(m.from)}${tip ? '<em class="tip-tag">Tipp</em>' : ''}<span>${fmtDate(m.day)}</span></div>${esc(m.text)}</div>`)); }
     msgs.forEach((m) => (m.read = true));
     this.openModal(body, 'narrow', 'phone'); this.dock();
+  }
+  // Handy → Kontakte: Geschäftskontakte (fertig montierte Hardware, Stammkunden-Rabatt) und Familie (Beziehung, Wirkung ab Stufe 3)
+  phoneContacts(ph) {
+    const g = this.g, s = g.s;
+    ph.classList.add('ph-contacts');
+    ph.append(h('<div class="ct-sec">Geschäftlich</div>'));
+    for (const c of CONTACTS) {
+      const st = g.contactState(c.id), met = !!st?.met, on = !!st?.on, tier = g.contactTier(c.id), T = FEE_TIERS[tier], nx = FEE_TIERS[tier + 1], n = st?.n || 0;
+      const badge = on ? '<span class="ct-b on">Freigeschaltet</span>' : met ? '<span class="ct-b off">Nicht gespeichert</span>' : '<span class="ct-b lock">Noch nicht kennengelernt</span>';
+      const tierLine = on ? `<div class="ct-tier"><b>${esc(T.label)}</b> · ${Math.round(T.fee * 100)} % Montage · ${n} ${n === 1 ? 'Auftrag' : 'Aufträge'}${nx ? `<br/><span>Noch ${nx.n - n} bis „${esc(nx.label)}“ (${Math.round(nx.fee * 100)} %)</span>` : ''}</div>` : '';
+      const last = on ? [...s.messages].reverse().find((m) => m.from === c.name) : null;
+      const card = h(`<div class="ct-card ${on ? 'on' : met ? 'met' : 'unknown'}"><div class="ct-av">${met ? faceSvg(c.id) : `<span class="ct-q">?</span>`}</div><div class="ct-main"><div class="ct-name"><b>${esc(met ? c.name : c.unknown)}</b>${met ? `<span class="ct-biz">${esc(c.biz)}</span>` : ''}${badge}</div>${met ? `<div class="ct-role">${esc(c.role)}</div>` : ''}<div class="ct-offer">${on ? 'Liefert' : 'Bietet'}: ${esc(c.offer)}</div>${tierLine}${last ? `<div class="ct-last">„${esc(last.text)}“</div>` : ''}${!met ? `<div class="ct-how">${LOCK_SVG}<span>${esc(c.meet(s, g, fmtDate))}</span></div>` : ''}<div class="ct-act"></div></div></div>`);
+      const act = card.querySelector('.ct-act');
+      if (met && !on) { const b = h(`<button class="btn small primary">${esc(c.name)} anrufen</button>`); b.onclick = () => { this.callContact(c.id); this.phone('contacts'); }; act.append(b); act.append(h('<span class="ct-hint">Danach gibt’s fertig bestückte Geräte im Katalog.</span>')); }
+      if (on && g.has('build')) { const b = h('<button class="btn small">Zum Katalog</button>'); b.onclick = () => { this.closeModal(); this.cat = 'rigs'; this.toggleBuild(); }; act.append(b); }
+      if (!act.childElementCount) act.remove();
+      ph.append(card);
+    }
+    ph.append(h('<div class="ct-sec">Familie</div>'));
+    for (const f of FAMILY_CONTACTS) {
+      const lv = s.rel?.[f.id] || 0, face = f.id;
+      const dots = Array.from({ length: 5 }, (_, i) => `<i class="${i < lv ? 'on' : ''}"></i>`).join('');
+      const perk = lv >= 3 ? (f.id === 'papa' && s.flags.shopLost && REL_PERK.papaLost ? REL_PERK.papaLost : REL_PERK[f.id]) : '';
+      ph.append(h(`<div class="ct-card fam"><div class="ct-av">${faceSvg(face)}</div><div class="ct-main"><div class="ct-name"><b>${esc(f.name)}</b><span class="ct-rel" title="Beziehung ${lv} von 5">${lv < 0 ? `<em class="neg">verstimmt (${lv})</em>` : `<span class="ct-dots">${dots}</span>`}</span></div><div class="ct-role">${esc(f.role(s))}</div>${perk ? `<div class="ct-perk">${esc(perk)}</div>` : REL_PERK[f.id] ? `<div class="ct-how2">Ab Stufe 3: ${esc(REL_PERK[f.id])}</div>` : ''}</div></div>`));
+    }
   }
 
   // Ereignis mit Entscheidung: erscheint, sobald kein anderes Fenster offen ist
@@ -1477,20 +1522,36 @@ export class UI {
   }
   // Rig-Karte: fertig bestückt (Hauptaktion), selbst zusammenstellen, nur Gehäuse
   rigCard(it, fac) {
-    const g = this.g, r = g.readyRig(it.id, fac), cp = g.itemPrice(it), full = !g.slotOk(fac, it), isNew = g.s.day - it.releaseDay < 120, price = r ? r.price : cp;
-    const spec = r ? `Fertig: ${r.n}× ${esc(PART[r.gpu].name)} · ${fmtWatt(r.watt)}<br/>≈ <b class="${r.net >= 0 ? 'pos' : 'neg'}">${r.net >= 0 ? '+' : ''}${fmtUSD(r.net)}/Tag</b> hier · ${this.roiText(r.roi)}` : esc(it.desc || '');
-    const fd = full ? 'data-full="1"' : '', warn = r && !full ? this.rigWarn(fac, r.watt) : '';
-    const card = h(`<div class="item rigc ${full || price > g.s.cash ? 'dis' : ''}" data-rig="1" data-price="${price}" data-id="${it.id}" ${fd}><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${this.money(price)}</span></div><div class="s">${spec}<br/><span class="rc-dim">bis ${it.maxGpu} Grafikkarten${full ? '' : ` · Platz ${g.slotsUsed(fac)}/${g.slotsMax(fac)}`}</span>${warn ? `<br/><b class="rc-warn">${warn}</b>` : ''}</div><div class="miss">${full ? 'Kein Platz mehr – Zeit für einen größeren Standort' : price > g.s.cash ? `Dir fehlen ${this.money(price - g.s.cash)}` : ''}</div>${r ? `<button class="btn small primary wide rc-ready" data-p="${r.price}" ${fd} ${full || r.price > g.s.cash ? 'disabled' : ''}>Fertig bestückt · ${this.money(r.price)}</button>` : ''}<div class="rc-row"><button class="btn small rc-cfg" data-p="0" ${fd} ${full ? 'disabled' : ''} title="Teile selbst wählen: als Bausatz oder fertig montiert">Selbst bauen</button><button class="btn small rc-case" data-p="${cp}" ${fd} ${full || cp > g.s.cash ? 'disabled' : ''} title="Leeres Gehäuse – Teile einzeln einbauen">Gehäuse · ${this.money(cp)}</button></div></div>`);
+    const g = this.g, lock = !g.readyOk(it.id), r = g.readyRig(it.id, fac, g.s.cash, !lock), cp = g.itemPrice(it), full = !g.slotOk(fac, it), isNew = g.s.day - it.releaseDay < 120, price = r ? r.price : cp;
+    const spec = r ? `${lock ? 'Bausatz' : 'Fertig'}: ${r.n}× ${esc(PART[r.gpu].name)} · ${fmtWatt(r.watt)}<br/>≈ <b class="${r.net >= 0 ? 'pos' : 'neg'}">${r.net >= 0 ? '+' : ''}${fmtUSD(r.net)}/Tag</b> hier · ${this.roiText(r.roi)}` : esc(it.desc || '');
+    const fd = full ? 'data-full="1"' : '', warn = r && !full ? this.rigWarn(fac, r.watt) : '', cid = g.readyBy(it.id);
+    const main = !r ? '' : lock ? `<button class="btn small primary wide rc-kit" data-p="${r.price}" ${fd} ${full || r.price > g.s.cash ? 'disabled' : ''} title="Gehäuse wird aufgestellt, die Teile liegen im Lager – selbst einbauen (Schrauben-EP)">Als Bausatz · ${this.money(r.price)}</button>` : `<button class="btn small primary wide rc-ready" data-p="${r.price}" ${fd} ${full || r.price > g.s.cash ? 'disabled' : ''} title="${cid ? `Fertig montiert von ${esc(CONTACT[cid].name)} · ${Math.round(g.buildFee(it.id) * 100)} % Montage` : 'Fertig montiert'}">Fertig bestückt · ${this.money(r.price)}</button>`;
+    const card = h(`<div class="item rigc ${full || price > g.s.cash ? 'dis' : ''}" data-rig="1" data-price="${price}" data-id="${it.id}" ${fd}><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${this.money(price)}</span></div><div class="s">${spec}<br/><span class="rc-dim">bis ${it.maxGpu} Grafikkarten${full ? '' : ` · Platz ${g.slotsUsed(fac)}/${g.slotsMax(fac)}`}</span>${warn ? `<br/><b class="rc-warn">${warn}</b>` : ''}</div>${lock && cid ? this.lockLine(cid) : ''}<div class="miss">${full ? 'Kein Platz mehr – Zeit für einen größeren Standort' : price > g.s.cash ? `Dir fehlen ${this.money(price - g.s.cash)}` : ''}</div>${main}<div class="rc-row"><button class="btn small rc-cfg" data-p="0" ${fd} ${full ? 'disabled' : ''} title="Teile selbst wählen${lock ? '' : ': als Bausatz oder fertig montiert'}">Selbst bauen</button><button class="btn small rc-case" data-p="${cp}" ${fd} ${full || cp > g.s.cash ? 'disabled' : ''} title="Leeres Gehäuse – Teile einzeln einbauen">Gehäuse · ${this.money(cp)}</button></div></div>`);
     try { const url = this.w.thumbnail(it.id); if (url) card.prepend(h(`<div class="thumb"><img alt="" src="${url}"/></div>`)); } catch (e) { /* ohne Vorschau weiter */ }
     const go = (fn) => (e) => { e?.stopPropagation(); if (!g.slotOk(fac, it)) { this.toast('Kein Platz mehr – Zeit für einen größeren Standort.', 'bad'); return; } fn(); };
     const ready = go(() => { const r2 = g.readyRig(it.id, fac); if (!r2) return; this.startBuild(r2, true); });
+    const kit = go(() => { const r2 = g.readyRig(it.id, fac, g.s.cash, false); if (!r2) return; this.startBuild(r2, false); });
     const caseOnly = go(() => { if (g.itemPrice(it) > g.s.cash) { this.toast('Nicht genug Geld.', 'bad'); return; } this.resume(); this.w.startPlacement(it.id); });
     card.querySelector('.rc-ready')?.addEventListener('click', ready);
+    card.querySelector('.rc-kit')?.addEventListener('click', kit);
     card.querySelector('.rc-case').onclick = caseOnly;
     card.querySelector('.rc-cfg').onclick = go(() => this.configurator(it.id));
-    card.onclick = r ? ready : caseOnly;
+    this.lockWire(card);
+    card.onclick = r ? (lock ? kit : ready) : caseOnly;
     return card;
   }
+  // Gesperrt: wer liefert fertig montiert, und wie lernt man ihn kennen? (abgelehnt: gleich anrufen)
+  lockText(cid) {
+    const g = this.g, c = CONTACT[cid], st = g.contactState(cid);
+    if (st?.met) return { short: `Fertig bestückt liefert dir ${esc(c.name)}, sobald du ihn anrufst.`, long: `${c.name} (${c.biz}): ${c.offer}. Auch im Handy (P) unter Kontakte.`, call: true };
+    return { short: esc(c.soon), long: c.meet(g.s, g, fmtDate), call: false };
+  }
+  lockLine(cid) {
+    const t = this.lockText(cid);
+    return `<div class="rc-lock" title="${esc(t.long)}">${LOCK_SVG}<span>${t.short}</span>${t.call ? `<button class="btn small rc-call" data-c="${cid}">${esc(CONTACT[cid].name)} anrufen</button>` : ''}</div>`;
+  }
+  lockWire(el) { el.querySelectorAll('.rc-call').forEach((b) => { b.onclick = (e) => { e.stopPropagation(); this.callContact(b.dataset.c); }; }); }
+  callContact(id) { if (!this.g.callContact(id)) return; this.audio?.message?.(); this.toast(`<b>${esc(CONTACT[id].name)}:</b> ${esc(CONTACT[id].lines.call)}`, 'msg', 6000); this.refresh(); }
   // Passt noch einer rein, ohne dass es zu heiß wird oder der Anschluss nicht reicht?
   rigWarn(fac, watt) {
     const sm = this.g.summary?.[fac]; if (!sm || sm.tripped || !watt) return '';
@@ -1498,18 +1559,21 @@ export class UI {
   }
   lastBuildCard(fac) {
     const g = this.g, lb = g.s.lastBuild; if (!lb || g.buildBlocked(lb) || !g.placeableAllowed(PLACEABLE[lb.type], fac)) return null;
-    const st = g.buildStats(lb, fac, lb.ready), full = !g.slotOk(fac, PLACEABLE[lb.type]), fd = full ? 'data-full="1"' : '';
-    const card = h(`<div class="item rigc lastb ${full || st.price > g.s.cash ? 'dis' : ''}" data-rig="1" data-price="${st.price}" ${fd}><div class="t"><span>Wie zuletzt</span><span class="p">${this.money(st.price)}</span></div><div class="s">${esc(PLACEABLE[lb.type].name)} · ${st.n}× ${esc(PART[lb.gpu]?.name || 'ohne Grafikkarte')}<br/>${lb.ready ? 'fertig montiert' : 'als Bausatz zum Selbsteinbauen'}<br/>≈ <b class="${st.net >= 0 ? 'pos' : 'neg'}">${st.net >= 0 ? '+' : ''}${fmtUSD(st.net)}/Tag</b> · ${this.roiText(st.roi)}${!full && st.ok ? ((w) => (w ? `<br/><b class="rc-warn">${w}</b>` : ''))(this.rigWarn(fac, st.watt)) : ''}</div><div class="miss">${full ? 'Kein Platz mehr – Zeit für einen größeren Standort' : ''}</div><button class="btn small primary wide" data-p="${st.price}" ${fd} ${full || st.price > g.s.cash ? 'disabled' : ''}>Nochmal bauen · ${this.money(st.price)}</button><div class="rc-row"><button class="btn small" data-p="0" ${fd}>Ändern</button></div></div>`);
-    const [again, edit] = card.querySelectorAll('button');
-    again.onclick = (e) => { e.stopPropagation(); this.startBuild(lb, lb.ready); };
+    const lock = lb.ready && !g.readyOk(lb.type), ready = lb.ready && !lock; // fertig montiert gesperrt (z. B. alter Stand): als Bausatz wiederholen
+    const st = g.buildStats(lb, fac, ready), full = !g.slotOk(fac, PLACEABLE[lb.type]), fd = full ? 'data-full="1"' : '';
+    const card = h(`<div class="item rigc lastb ${full || st.price > g.s.cash ? 'dis' : ''}" data-rig="1" data-price="${st.price}" ${fd}><div class="t"><span>Wie zuletzt</span><span class="p">${this.money(st.price)}</span></div><div class="s">${esc(PLACEABLE[lb.type].name)} · ${st.n}× ${esc(PART[lb.gpu]?.name || 'ohne Grafikkarte')}<br/>${ready ? `fertig montiert${g.readyBy(lb.type) ? ` von ${esc(CONTACT[g.readyBy(lb.type)].name)}` : ''}` : 'als Bausatz zum Selbsteinbauen'}<br/>≈ <b class="${st.net >= 0 ? 'pos' : 'neg'}">${st.net >= 0 ? '+' : ''}${fmtUSD(st.net)}/Tag</b> · ${this.roiText(st.roi)}${!full && st.ok ? ((w) => (w ? `<br/><b class="rc-warn">${w}</b>` : ''))(this.rigWarn(fac, st.watt)) : ''}</div>${lock ? this.lockLine(g.readyBy(lb.type)) : ''}<div class="miss">${full ? 'Kein Platz mehr – Zeit für einen größeren Standort' : ''}</div><button class="btn small primary wide lb-again" data-p="${st.price}" ${fd} ${full || st.price > g.s.cash ? 'disabled' : ''}>${lock ? 'Nochmal als Bausatz' : 'Nochmal bauen'} · ${this.money(st.price)}</button><div class="rc-row"><button class="btn small lb-edit" data-p="0" ${fd}>Ändern</button></div></div>`);
+    const again = card.querySelector('.lb-again'), edit = card.querySelector('.lb-edit');
+    again.onclick = (e) => { e.stopPropagation(); this.startBuild(lb, ready); };
     edit.onclick = (e) => { e.stopPropagation(); this.configurator(lb.type, lb); };
-    card.onclick = () => this.startBuild(lb, lb.ready);
+    this.lockWire(card);
+    card.onclick = () => this.startBuild(lb, ready);
     return card;
   }
   // Build kaufen und hinstellen (mehrere hintereinander: Platzier-Modus bleibt an)
   startBuild(cfg, ready) {
     const g = this.g, fac = g.s.current, st = g.buildStats(cfg, fac, ready), blk = g.buildBlocked(cfg);
     if (blk) { this.toast(`${esc(blk)} gibt es nicht mehr zu kaufen.`, 'bad'); return; }
+    if (ready && !g.readyOk(cfg.type)) { this.toast(`${this.lockText(g.readyBy(cfg.type)).short} Als Bausatz geht’s sofort.`, 'info', 5000); return; }
     if (ready && !st.ok) { this.toast(esc(st.why), 'bad'); return; }
     if (!g.slotOk(fac, PLACEABLE[cfg.type])) { this.toast('Kein Platz mehr – Zeit für einen größeren Standort.', 'bad'); return; }
     if (st.price > g.s.cash) { this.toast(`Dir fehlen ${this.money(st.price - g.s.cash)}.`, 'bad'); return; }
@@ -1530,11 +1594,11 @@ export class UI {
   // Nach dem Setzen: gleich noch einen? (Rigs, Miner, Regale – solange Geld, Platz und Kontingent reichen)
   placedAgain(o, p) {
     const g = this.g, d = PLACEABLE[o.type], fac = g.facOf(o.uid) || g.s.current, t = p?.template, n = (this.placedRun = (this.placedRun || 0) + 1);
-    const empty = (d.kind === 'rig' && !g.pcReady(o)) || (d.kind === 'holder' && !o.items?.length);
-    const tipE = () => { if (empty) this.toast(t?.build && !t.ready ? 'Bausatz steht. Teile liegen im Lager – anschauen und <kbd>E</kbd>: einbauen' : 'Anschauen und <kbd>E</kbd>: bestücken', 'good', 5000); };
+    const empty = (d.kind === 'rig' && !g.pcReady(o)) || (d.kind === 'holder' && !o.items?.length), src = t?.kit ? t.src : t;
+    const tipE = () => { if (empty) this.toast((t?.build && !t.ready) || t?.kit ? 'Bausatz steht. Teile liegen im Lager – anschauen und <kbd>E</kbd>: einbauen' : 'Anschauen und <kbd>E</kbd>: bestücken', 'good', 5000); };
     if (!g.slotKind(d)) { tipE(); return false; }
-    const cost = t?.build ? g.buildStats(t.build, fac, t.ready).price : t ? g.cloneCost(t) : g.itemPrice(d);
-    const why = !g.slotOk(fac, d) ? 'full' : !g.canAfford(cost) ? 'money' : (t?.build ? g.buildBlocked(t.build) : t ? g.cloneBlocked(t) || !g.cloneStockOk(t) : g.stockLeft(d) < 1) ? 'stock' : '';
+    const cost = t?.build ? g.buildStats(t.build, fac, t.ready).price : src ? g.cloneCost(src, !!t.kit) : g.itemPrice(d);
+    const why = !g.slotOk(fac, d) ? 'full' : !g.canAfford(cost) ? 'money' : (t?.build ? g.buildBlocked(t.build) : src ? g.cloneBlocked(src) || !g.cloneStockOk(src) : g.stockLeft(d) < 1) ? 'stock' : '';
     if (!why) { this.hint(`${n} gesetzt · Klick = noch einer (${this.money(cost)}) · R = drehen · Rechtsklick = fertig`); return true; }
     tipE();
     if (why === 'full') this.toast(`${n > 1 ? `${n} Stück gesetzt. ` : ''}Kein Platz mehr – Zeit für einen größeren Standort.`, 'info', 5000);
@@ -1546,11 +1610,13 @@ export class UI {
     const g = this.g, fac = g.s.current;
     const base = cfg0 || g.readyRig(type, fac, Infinity, false) || { type };
     const cfg = { type: base.type || type, mobo: base.mobo, cpu: base.cpu, psu: base.psu, gpu: base.gpu, n: base.n ?? 1 };
-    const body = h(`<div class="cfgr"><h2>PC zusammenstellen</h2><p class="cf-x">Als <b>Bausatz</b> kommen die Teile ins Lager und du baust sie selbst ein (günstiger, Schrauben-EP). <b>Fertig montiert</b> läuft er sofort (+${Math.round(BUILD_FEE * 100)} % Montage).</p><div class="cf-grid"></div><div class="cf-sum"></div><div class="cf-go"></div></div>`);
-    const grid = body.querySelector('.cf-grid'), sum = body.querySelector('.cf-sum'), goEl = body.querySelector('.cf-go'), el = g.elecPrice(fac);
+    const body = h(`<div class="cfgr"><h2>PC zusammenstellen</h2><p class="cf-x"></p><div class="cf-grid"></div><div class="cf-sum"></div><div class="cf-go"></div></div>`);
+    const grid = body.querySelector('.cf-grid'), sum = body.querySelector('.cf-sum'), goEl = body.querySelector('.cf-go'), el = g.elecPrice(fac), cfx = body.querySelector('.cf-x');
     const val = (it) => { const c = g.bestCoin(it.hash, it.vram); const r = c ? g.revenueFor(it.hash, c, it.vram) : 0; return r - (it.watt / 1000) * 24 * el; };
     const render = () => {
       grid.innerHTML = ''; goEl.innerHTML = '';
+      const cid = g.readyBy(cfg.type), lock = !g.readyOk(cfg.type), fee = Math.round(g.buildFee(cfg.type) * 100);
+      cfx.innerHTML = `Als <b>Bausatz</b> kommen die Teile ins Lager und du baust sie selbst ein (günstiger, Schrauben-EP). ${lock ? `<b>Fertig montiert</b> gibt’s erst über ${cid && g.contactMet(cid) ? esc(CONTACT[cid].name) : 'einen Kontakt'} – bis dahin baust du selbst.` : `<b>Fertig montiert</b> läuft er sofort (+${fee} % Montage${cid ? ` bei ${esc(CONTACT[cid].name)}` : ''}).`}`;
       const rigs = PLACEABLES.filter((x) => x.kind === 'rig' && g.available(x) && g.placeableAllowed(x, fac));
       const np = g.psuCount({ type: cfg.type });
       const sel = (lab, list, cur, txt, key, num = false) => { const r = h(`<label class="cf-r"><span>${lab}</span><select>${list.map((it) => `<option value="${it.id}" ${String(it.id) === String(cur) ? 'selected' : ''}>${esc(txt(it))}</option>`).join('')}</select></label>`); r.querySelector('select').onchange = (e) => { cfg[key] = num ? +e.target.value : e.target.value; if (key === 'type' || key === 'mobo') cfg.n = Math.max(cfg.n, 1); render(); }; grid.append(r); return r; };
@@ -1570,9 +1636,10 @@ export class UI {
       const kit = g.buildStats(cfg, fac, false), rd = g.buildStats(cfg, fac, true), algo = kit.coin ? g.coinAlgo(kit.coin) : null;
       sum.innerHTML = `<div class="kv"><div class="k">Rechenleistung</div><div class="v">${algo ? `${fmtHash(kit.hash[algo] || 0, algo)} → ${COIN[kit.coin].name}` : '–'}</div><div class="k">Verbrauch</div><div class="v ${kit.cap && kit.watt > kit.cap ? 'neg' : ''}">${fmtWatt(kit.watt)} von ${fmtWatt(kit.cap)}</div><div class="k">Ertrag / Tag</div><div class="v pos">${fmtUSD(kit.rev)}</div><div class="k">Strom / Tag</div><div class="v neg">−${fmtUSD(kit.rev - kit.net)}</div><div class="k">Gewinn / Tag</div><div class="v"><b class="${kit.net >= 0 ? 'pos' : 'neg'}">${fmtUSD(kit.net)}</b></div><div class="k">Amortisation</div><div class="v">${Number.isFinite(rd.roi) ? `${Math.round(kit.roi)} Tage (Bausatz) · ${Math.round(rd.roi)} Tage (montiert)` : 'lohnt sich hier nicht'}</div></div>${kit.why ? `<div class="cf-why">${esc(kit.why)}</div>` : ''}`;
       const full = !g.slotOk(fac, PLACEABLE[cfg.type]);
-      const bk = h(`<button class="btn big" ${full || kit.price > g.s.cash ? 'disabled' : ''} title="Gehäuse wird aufgestellt, die Teile liegen im Lager – selbst einbauen">Bausatz · ${this.money(kit.price)}</button>`), br = h(`<button class="btn big primary" ${full || !rd.ok || rd.price > g.s.cash ? 'disabled' : ''} title="Läuft sofort">Fertig montiert · ${this.money(rd.price)}</button>`);
+      const bk = h(`<button class="btn big ${lock ? 'primary' : ''}" ${full || kit.price > g.s.cash ? 'disabled' : ''} title="Gehäuse wird aufgestellt, die Teile liegen im Lager – selbst einbauen">Bausatz · ${this.money(kit.price)}</button>`), br = h(`<button class="btn big ${lock ? 'locked' : 'primary'}" ${full || lock || !rd.ok || rd.price > g.s.cash ? 'disabled' : ''} title="${lock ? 'Noch gesperrt' : 'Läuft sofort'}">${lock ? LOCK_SVG : ''}Fertig montiert · ${this.money(rd.price)}</button>`);
       bk.onclick = () => this.startBuild(cfg, false); br.onclick = () => this.startBuild(cfg, true);
       goEl.append(bk, br);
+      if (lock && cid) { const ll = h(this.lockLine(cid)); ll.classList.add('cf-lock'); this.lockWire(ll); goEl.append(ll); }
       if (full) goEl.append(h('<div class="cf-why">Kein Platz mehr – Zeit für einen größeren Standort.</div>'));
       else if (kit.price > g.s.cash) goEl.append(h(`<div class="cf-why">Dir fehlen ${this.money(kit.price - g.s.cash)}.</div>`));
     };

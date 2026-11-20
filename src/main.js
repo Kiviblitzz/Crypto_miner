@@ -27,11 +27,12 @@ world.onPlace = (type, x, z, rot, template) => {
   if (!game.slotOk(fac, def)) { ui.toast('Kein Platz mehr – Zeit für einen größeren Standort.', 'bad'); world.cancelPlacement(); return null; }
   if (template?.build) { // Build aus Katalog/Konfigurator: fertig montiert oder als Bausatz
     const o = game.placeBuild(template.build, fac, x, z, rot, !!template.ready);
-    if (!o) { const blk = game.buildBlocked(template.build); ui.toast(blk ? `${blk} gibt es nicht mehr zu kaufen.` : 'Nicht genug Geld.', 'bad'); return null; }
+    if (!o) { const blk = game.buildBlocked(template.build), lock = template.ready && !game.readyOk(template.build.type); ui.toast(blk ? `${blk} gibt es nicht mehr zu kaufen.` : lock ? 'Fertig bestückt geht erst über einen Kontakt – als Bausatz geht’s sofort.' : 'Nicht genug Geld.', 'bad'); if (lock) world.cancelPlacement(); return null; }
     audio.buy(); return o;
   }
-  const o = template ? game.cloneObject(template, fac, x, z, rot) : game.addObject(fac, type, x, z, rot);
-  if (!o) { const blk = template && game.cloneBlocked(template); const sold = !blk && (template ? !game.cloneStockOk(template) : game.stockLeft(def) === 0); ui.toast(blk ? `${blk} gibt es nicht mehr zu kaufen.` : sold ? `Kontingent erschöpft – ${game.stockText()}.` : 'Nicht genug Geld.', 'bad'); return null; }
+  const src = template?.kit ? template.src : template; // kit: Kopie als Bausatz (leeres Gehäuse, Teile ins Lager)
+  const o = src ? game.cloneObject(src, fac, x, z, rot, !!template.kit) : game.addObject(fac, type, x, z, rot);
+  if (!o) { const blk = src && game.cloneBlocked(src), lock = src && !template.kit && game.cloneRig(src) && !game.readyOk(src.type); const sold = !blk && !lock && (src ? !game.cloneStockOk(src) : game.stockLeft(def) === 0); ui.toast(blk ? `${blk} gibt es nicht mehr zu kaufen.` : lock ? 'Fertig bestückt geht erst über einen Kontakt – als Bausatz geht’s sofort.' : sold ? `Kontingent erschöpft – ${game.stockText()}.` : 'Nicht genug Geld.', 'bad'); if (lock) world.cancelPlacement(); return null; }
   audio.buy();
   return o;
 };

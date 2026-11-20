@@ -7,6 +7,7 @@ import { ACHIEVEMENTS } from '../data/achievements.js';
 import { UPGRADES, DIFFICULTY, FULL_TALK } from '../data/world.js';
 import { ROLES, TRAITS, FIRST, LAST } from '../data/staff.js';
 import { BANK_EVENTS } from '../data/events_bank.js';
+import { CONTACT, CONTACTS, READY_BY, FEE_TIERS } from '../data/contacts.js';
 import { FUTURE, futureModel, ENDLESS_GOALS, EGOAL, ENDLESS_NEWS } from '../data/endless.js';
 import { BTC_HASH, POWER_HOUSEHOLD, GPU_BOOM, MONOLITH_SHARE, DAG_AET, DAG_AEC, seasonOffset, noise, toDay, BTC_PRICE, curve, HALVINGS, BTC_REWARD } from '../data/history.js';
 export const SKILL_XP = [0, 150, 500, 1200, 2500, 4500, 7500, 12000, 18000, 26000]; // Erfahrung für Stufe 1–10
@@ -18,7 +19,7 @@ const LAST_DATA_DAY = BTC_PRICE.lastDay;
 const FREE_POWER_END = toDay('2011-03-01'); // ab dann kostet der Strom im Kinderzimmer, auch ohne Papas Rechnung
 export const SAVE_KEY = 'hashwerk-save-v1';
 const DEFAULT_AUTOSELL = 0.8;
-export const BUILD_FEE = 0.1; // Montageaufschlag für fertig montierte PCs/Rigs
+export const BUILD_FEE = 0.1; // Montageaufschlag für fertig montierte PCs/Rigs (Neukunde; Stammkunden zahlen weniger: FEE_TIERS in contacts.js)
 
 const RELEASES = [...PLACEABLES, ...PARTS].filter((it) => it.releaseDay > START_DAY && (it.kind === 'device' || it.kind === 'rig' || it.type));
 const BASE_EFF = Math.min(...PLACEABLES.filter((p) => p.kind === 'device' && p.algo === 'sha256').map((p) => p.watt / (p.hash / 1e12))); // bestes J/TH bei Datenende
@@ -49,6 +50,7 @@ export class Game {
       ev: { done: {}, open: null, log: [], later: [], last: 0 }, rel: { papa: 0, mama: 0, opa: 0, deniz: 0 }, mods: [], ach: {},
       full: {}, // Standort erstmals voll: Tag (Story-Moment, Kapitelziele)
       bag: {}, lastBuild: null, // Teile-Lager {Teil-ID: Anzahl}, zuletzt gekaufter Build
+      contacts: {}, since: {}, // Geschäftskontakte (fertig montierte Hardware, src/data/contacts.js), Tag der Standort-Übernahme
     };
     Object.assign(s, { futureHW: [], netEff: 1, egoals: { done: {}, st: {}, cur: null }, fin: {}, ngPlus: 0, enews: {} }); // Endlosmodus & Finale
     this.registerFutureHW([]);
@@ -115,6 +117,9 @@ export class Game {
       this.migrateEcon(s);
       const oldFull = !s.full; s.full ||= {};
       s.bag ||= {}; for (const id of Object.keys(s.bag)) if (!PART[id] || !(s.bag[id] > 0)) delete s.bag[id]; if (s.lastBuild && !PLACEABLE[s.lastBuild.type]) s.lastBuild = null;
+      s.since ||= {}; const oldContacts = !s.contacts || typeof s.contacts !== 'object'; if (oldContacts) s.contacts = {};
+      for (const id of Object.keys(s.contacts)) { const c = s.contacts[id]; if (!CONTACT[id] || !c || typeof c !== 'object') delete s.contacts[id]; else { c.met = +c.met || 0; c.on = +c.on || 0; c.n = Math.max(0, +c.n || 0); } }
+      if (oldContacts) this.migrateContacts(s); // alte Stände: Kontakte, die man nach dem Spielstand schon hätte, still freischalten
       this.s = s; this.cache = {};
       if (oldFull) { this.summary = {}; for (const id of s.unlocked) this.summary[id] = this.facSummary(id); this.checkFull(true); } // alte Stände: schon volle Standorte ohne Story-Moment merken
       this.dayUpdate(true); return true;
@@ -387,30 +392,36 @@ export class Game {
     if (o.parts.psu && this.rigWatt(o) > PART[o.parts.psu].cap * this.psuCount(o)) { const ps = this.fitPsu(o); if (ps && ps.id !== o.parts.psu) this.setPart(uid, 'psu', ps.id); }
     return n;
   }
-  cloneCost(o) {
+  // Noch so einen: Rigs mit Teilen kommen fertig montiert (Montageaufschlag des Kontakts) oder als Bausatz (kit: Teile ins Lager)
+  cloneCost(o, kit = false) {
     const def = PLACEABLE[o.type]; let c = this.itemPrice(def);
     if (o.parts) { for (const id of this.partIds(o)) c += this.itemPrice(PART[id]) * (id === o.parts.psu ? this.psuCount(o) : 1); }
     if (o.items) for (const it of o.items) c += this.itemPrice(PLACEABLE[it.id]);
+    if (this.cloneRig(o) && !kit) c *= 1 + this.buildFee(o.type);
     return Math.round(c);
   }
+  cloneRig(o) { return !!o?.parts && PLACEABLE[o.type]?.kind === 'rig' && this.partIds(o).length > 0; } // Rig mit Teilen: Kopie = fertig montierter Auftrag
   // Duplizieren nur mit Hardware, die es noch zu kaufen gibt: Name des ersten ausgelaufenen Teils, sonst null
   cloneBlocked(o) {
     const items = [PLACEABLE[o.type], ...(o.parts ? this.partIds(o).map((id) => PART[id]) : []), ...(o.items || []).map((it) => PLACEABLE[it.id])];
     const it = items.find((x) => x && !this.available(x)); return it ? it.name : null;
   }
-  cloneObject(src, facId, x, z, rot) {
+  cloneObject(src, facId, x, z, rot, kit = false) {
     if (this.cloneBlocked(src)) return null;
-    const cost = this.cloneCost(src); if (!this.canAfford(cost)) return null;
+    const rig = this.cloneRig(src); kit = kit && rig;
+    if (rig && !kit && !this.readyOk(src.type)) return null; // fertig montiert erst über einen Kontakt
+    const cost = this.cloneCost(src, kit); if (!this.canAfford(cost)) return null;
     if (!this.cloneStockOk(src)) return null; // Kontingent erschöpft
     const def = PLACEABLE[src.type];
     if (!this.slotOk(facId, def)) return null; // alle Stellplätze belegt
     const o = { uid: this.s.nextUid++, type: src.type, x, z, rot, coin: src.coin, broken: false, bought: this.s.day };
-    if (src.parts) o.parts = JSON.parse(JSON.stringify(src.parts));
+    if (src.parts) o.parts = kit ? { mobo: null, cpu: null, psu: null, gpus: [] } : JSON.parse(JSON.stringify(src.parts));
+    if (kit) { const np = this.psuCount(src); for (const id of this.partIds(src)) { const n = id === src.parts.psu ? np : 1; this.bagAdd(id, n); this.freshAdd(id, n); } }
     if (src.items) o.items = src.items.map((i) => ({ id: i.id, b: 0 }));
     this.s.cash -= cost; this.s.stats.spentHW += cost; this.cloneStockOk(src, true);
     if (def.kind === 'device' && def.look !== 'fpga' && def.look !== 'usb') this.s.flags.boughtAsic = true;
     if (this.s.skills) this.addXp('hw', 10, true);
-    this.s.fac[facId].objects.push(o); this.dayUpdate(true); this.capWarn(facId); this.emit('objects', facId); return o;
+    this.s.fac[facId].objects.push(o); if (rig && !kit) this.contactOrder(src.type); this.dayUpdate(true); this.capWarn(facId); this.emit('objects', facId); if (kit) this.emit('bag'); return o;
   }
   // ---------- Schnell bauen & Stellplätze (Kern-Kreislauf: mehr Geräte → Standort voll → größerer Standort) ----------
   // Stellplätze: Rigs, Einzelgeräte und Halter (Regal, Rack, Container) brauchen je einen, Kühlung und Deko nicht
@@ -473,7 +484,7 @@ export class Game {
   buildStats(cfg, facId = this.s.current, ready = true, day = this.s.day, elec = null) {
     const def = PLACEABLE[cfg.type], parts = this.buildParts(cfg), np = this.psuCount({ type: cfg.type }), pr = (it) => (it ? this.itemPrice(it, day) : 0);
     const ids = [parts.mobo, parts.cpu, ...parts.gpus].filter(Boolean), watt = 25 + ids.reduce((a, id) => a + (PART[id].watt || 0), 0), cap = parts.psu ? PART[parts.psu].cap * np : 0;
-    const kit = pr(def) + ids.reduce((a, id) => a + pr(PART[id]), 0) + pr(PART[parts.psu]) * np, price = Math.round(ready ? kit * (1 + BUILD_FEE) : kit);
+    const kit = pr(def) + ids.reduce((a, id) => a + pr(PART[id]), 0) + pr(PART[parts.psu]) * np, price = Math.round(ready ? kit * (1 + this.buildFee(cfg.type)) : kit);
     const hash = {}; for (const id of [parts.cpu, ...parts.gpus].filter(Boolean)) for (const [a, v] of Object.entries(PART[id].hash)) hash[a] = (hash[a] || 0) + v;
     const vram = parts.gpus.length ? Math.min(...parts.gpus.map((id) => PART[id].vram)) : 99, ok = !!(parts.mobo && parts.cpu && parts.psu) && watt <= cap;
     const coin = ok ? this.bestCoin(hash, vram, day) : null, rev = coin ? this.revenueFor(hash, coin, vram, day) : 0, w = Math.round(watt * this.fx('rigPower')), net = rev - (w / 1000) * 24 * (elec ?? this.elecPrice(facId, day, true)); // Katalog: regulärer Strompreis (Mamas Gratisstrom endet bald)
@@ -484,13 +495,52 @@ export class Game {
   // Build platzieren: fertig montiert (Teile drin, +10 %) oder als Bausatz (leeres Gehäuse, Teile ins Lager)
   placeBuild(cfg, facId, x, z, rot, ready = true) {
     const def = PLACEABLE[cfg.type]; if (def?.kind !== 'rig' || this.buildBlocked(cfg) || !this.slotOk(facId, def)) return null;
+    if (ready && !this.readyOk(cfg.type)) return null; // fertig montiert erst über einen Kontakt (Kemal, Jonas)
     const st = this.buildStats(cfg, facId, ready); if (ready && !st.ok) return null;
     if (!this.canAfford(st.price)) return null;
     const o = { uid: this.s.nextUid++, type: cfg.type, x, z, rot, coin: 'auto', broken: false, bought: this.s.day, parts: ready ? JSON.parse(JSON.stringify(st.parts)) : { mobo: null, cpu: null, psu: null, gpus: [] } };
     if (!ready) { const p = st.parts; for (const id of [p.mobo, p.cpu, ...p.gpus]) if (id) { this.bagAdd(id, 1); this.freshAdd(id, 1); } if (p.psu) { this.bagAdd(p.psu, st.np); this.freshAdd(p.psu, st.np); } }
     this.s.cash -= st.price; this.s.stats.spentHW += st.price; if (this.s.skills) this.addXp('hw', 10, true);
     this.s.lastBuild = { type: cfg.type, mobo: cfg.mobo, cpu: cfg.cpu, psu: cfg.psu, gpu: cfg.gpu, n: st.n, ready };
-    this.s.fac[facId].objects.push(o); this.dayUpdate(true); this.capWarn(facId); this.emit('objects', facId); if (!ready) this.emit('bag'); return o;
+    this.s.fac[facId].objects.push(o); if (ready) this.contactOrder(cfg.type); this.dayUpdate(true); this.capWarn(facId); this.emit('objects', facId); if (!ready) this.emit('bag'); return o;
+  }
+  // ---------- Kontakte: fertig montierte Hardware gibt es erst über Leute, die man kennenlernt (src/data/contacts.js) ----------
+  contactState(id) { return this.s.contacts?.[id] || null; }
+  contactMet(id) { return !!this.s.contacts?.[id]?.met; }
+  contactOn(id) { return !!this.s.contacts?.[id]?.on; }
+  readyBy(type) { return READY_BY[type] || null; } // wer liefert diesen Typ fertig bestückt?
+  readyOk(type) { const c = READY_BY[type]; return !c || this.contactOn(c); } // Typen ohne Kontakt: immer
+  contactTier(id) { const n = this.s.contacts?.[id]?.n || 0; let t = 0; for (let i = 0; i < FEE_TIERS.length; i++) if (n >= FEE_TIERS[i].n) t = i; return t; }
+  buildFee(type) { const c = READY_BY[type]; return c ? FEE_TIERS[this.contactTier(c)].fee : BUILD_FEE; }
+  // Meldet er sich jetzt? (Ereignis-Bedingung): noch nicht kennengelernt, möglich, und selbst gebaut oder spätestens am Stichtag
+  contactDue(id) { const c = CONTACT[id], s = this.s; return !!c && !this.contactMet(id) && c.can(s, this) && (c.trigger(s, this) || s.day >= c.due(s)); }
+  // Kennenlernen: save = Nummer gespeichert (sonst später über die Kontaktliste anrufen)
+  meetContact(id, save = true) {
+    const c = CONTACT[id]; if (!c) return false; const st = ((this.s.contacts ||= {})[id] ||= { met: 0, on: 0, n: 0 });
+    st.met ||= this.s.day || 1;
+    if (save && !st.on) { st.on = this.s.day || 1; this.s.messages.push({ id: `ct:${id}:hi`, day: this.s.day, from: c.name, text: c.lines.hello, read: true }); } // die Antwort im Ereignis zeigt die Zeile schon
+    this.emit('contact', id); return true;
+  }
+  callContact(id) {
+    const st = this.s.contacts?.[id], c = CONTACT[id]; if (!c || !st?.met || st.on) return false;
+    st.on = this.s.day || 1; this.contactMsg(id, c.lines.call); this.logStory('contact', `${c.name} (${c.biz}) angerufen – liefert jetzt fertig montiert`);
+    this.emit('contact', id); return true;
+  }
+  contactMsg(id, text) { const c = CONTACT[id]; if (!c || !text) return; const m = { id: `ct:${id}:${this.s.day}:${Math.random().toString(36).slice(2, 6)}`, day: this.s.day, from: c.name, text, read: false }; this.s.messages.push(m); this.emit('message', m); }
+  // Fertig montierter Auftrag: zählt für den Stammkunden-Rabatt; erste Lieferung, Rabattstufen und jede 5. Lieferung mit Nachricht
+  contactOrder(type) {
+    const id = READY_BY[type], st = id && this.s.contacts?.[id]; if (!st) return;
+    const t0 = this.contactTier(id); st.n = (st.n || 0) + 1; const t1 = this.contactTier(id), L = CONTACT[id].lines;
+    if (t1 > t0) this.contactMsg(id, L.tier[t1]);
+    else if (st.n === 1) this.contactMsg(id, L.first);
+    else if (st.n % 5 === 0) this.contactMsg(id, L.order[(st.n / 5 - 1) % L.order.length]);
+  }
+  // Alte Spielstände (ohne s.contacts): wer schon so weit ist oder fertige Geräte gekauft hat, kennt die Leute schon – still, ohne Ereignis
+  migrateContacts(s) {
+    const lb = s.lastBuild, kinds = (types) => { let n = 0; for (const f of Object.values(s.fac || {})) for (const o of f.objects || []) if (types.includes(o.type) && o.parts && (o.parts.gpus?.length || o.parts.mobo)) n++; return n; };
+    const kemal = s.chapter >= 1 || s.day >= CONTACT.kemal.due(s) || kinds(CONTACTS.flatMap((c) => c.types)) >= 2 || !!lb?.ready;
+    const jonas = s.chapter >= 2 || (s.unlocked.includes('keller') && s.day >= CONTACT.jonas.due(s)) || kinds(CONTACT.jonas.types) > 0 || (!!lb?.ready && CONTACT.jonas.types.includes(lb.type));
+    for (const [id, on] of [['kemal', kemal], ['jonas', jonas]]) if (on) { s.contacts[id] = { met: s.day || 1, on: s.day || 1, n: 0 }; s.ev.done[CONTACT[id].intro] = 'migr'; }
   }
   // ---------- Teile-Lager: kaufen, einbauen, ausbauen, tauschen, verkaufen ----------
   bagN(id) { return this.s.bag?.[id] || 0; }
@@ -1184,7 +1234,7 @@ export class Game {
   unlockFacility(facId) {
     const f = FACILITY[facId];
     if (!this.canUnlock(facId) || !this.canAfford(f.cost)) return false;
-    this.s.cash -= f.cost; this.s.unlocked.push(facId);
+    this.s.cash -= f.cost; this.s.unlocked.push(facId); (this.s.since ||= {})[facId] = this.s.day;
     this.dayUpdate(true); this.emit('unlocked', facId); return true;
   }
   upgradePower(facId) {

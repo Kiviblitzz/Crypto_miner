@@ -19,6 +19,7 @@
 import { FACILITY, CHAPTERS } from './world.js';
 import { PLACEABLE, PART } from './hardware.js';
 import { toDay, GPU_BOOM } from './history.js';
+import { CONTACT, FEE_TIERS } from './contacts.js';
 
 const nf = (d) => new Intl.NumberFormat('de-DE', { maximumFractionDigits: d, minimumFractionDigits: 0 });
 export const usd = (v) => { const a = Math.abs(v), s = v < 0 ? '−' : ''; if (a >= 1e9) return `${s}${nf(2).format(a / 1e9)} Mrd. $`; if (a >= 1e6) return `${s}${nf(2).format(a / 1e6)} Mio. $`; if (a >= 100) return `${s}${nf(0).format(a)} $`; return `${s}${nf(2).format(a)} $`; };
@@ -198,7 +199,27 @@ const XMAS = {
   2026: 'Sechzehn Jahre seit dem ersten PC im Kinderzimmer. Der alte Kasten steht immer noch da.',
 };
 
+// Kontakt kennenlernen: Nummer speichern (Standard, auch ohne Antwort) oder ablehnen – dann später im Handy unter Kontakte anrufen
+const pct = (f) => `${Math.round(f * 100)} %`;
+const contactChoices = (id, yes, no, noReply) => [
+  { label: yes, hint: `${CONTACT[id].offer} im Katalog (B) · ${pct(FEE_TIERS[0].fee)} Montage, Stammkunden zahlen weniger`, fx: { do: (g) => g.meetContact(id, true), log: `${CONTACT[id].name} (${CONTACT[id].biz}) kennengelernt – liefert fertig montiert` }, reply: `<b>${CONTACT[id].name}:</b> ${CONTACT[id].lines.hello}` },
+  { label: no, hint: `Selbst bauen geht immer – ${CONTACT[id].name} kannst du später im Handy (P) unter Kontakte anrufen`, fx: { do: (g) => g.meetContact(id, false), log: `${CONTACT[id].name}s Angebot abgelehnt – lieber selbst gebaut` }, reply: noReply },
+];
+
 export const EVENTS = [
+  // ---------- Kontakte (src/data/contacts.js): fertig montierte Hardware gibt es erst über sie ----------
+  {
+    id: 'kemal', from: 'Deniz', title: 'Mein Cousin Kemal', when: { date: '2010-10-01', window: 9000 }, expire: 14, fallback: 0,
+    cond: (s, h, g) => g.contactDue('kemal'),
+    text: (s, h, g) => `${CONTACT.kemal.trigger(s, g) ? '„Respekt, deinen zweiten PC hast du komplett selbst zusammengeschraubt!' : '„Du schraubst ja jeden Abend an deinem PC.'} Mein Cousin <b>Kemal</b> hat eine kleine PC-Ecke in der Bahnhofstraße. Der baut dir Mining-PCs fertig zusammen – verkabelt, getestet, läuft sofort. ${pct(FEE_TIERS[0].fee)} Montage, für Stammkunden weniger. Soll ich dir seine Nummer schicken?“`,
+    choices: contactChoices('kemal', 'Nummer speichern', 'Ich schraub lieber selbst', '<b>Deniz:</b> Auch gut, Schrauben macht schlau. Kemals Nummer liegt in deinem Handy, falls du es dir anders überlegst.'),
+  },
+  {
+    id: 'jonas', from: 'Jonas', title: 'Post aus dem Mining-Forum', when: { date: '2011-01-01', window: 9000 }, expire: 14, fallback: 0,
+    cond: (s, h, g) => g.contactDue('jonas'),
+    text: (s, h, g) => `${CONTACT.jonas.trigger(s, g) ? '„Moin! Deniz hat ein Foto von deinem Rig ins Forum gestellt. Sauber verkabelt, Respekt!' : '„Moin! Deniz erzählt im Forum, dass du jetzt im Keller Rigs baust.'} Ich bin Jonas, im Forum „Rahmenwerk“. In meiner Garage in Kassel baue ich Open-Frame-Rigs: Rahmen, Riser, Karten – fertig verkabelt und getestet, Lieferung per Spedition. ${pct(FEE_TIERS[0].fee)} Montage, Stammkunden zahlen weniger. Interesse?“`,
+    choices: contactChoices('jonas', 'Klar, schick mir deine Nummer', 'Danke, ich bau selbst', '<b>Jonas:</b> Alles klar, Selbstbauer-Ehre! Meine Nummer hast du ja. Melde dich einfach.'),
+  },
   // ---------- jedes Jahr ----------
   {
     id: 'pizza', from: 'Deniz', title: 'Pizza-Tag', when: { yearly: '05-22', from: '2011', window: 5 },

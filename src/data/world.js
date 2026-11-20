@@ -55,7 +55,7 @@ export const CHAPTERS = [
       { id: 'look', text: 'Schalte deinen PC ein', doneText: 'Dein PC läuft!', check: (s) => s.flags.miningStarted },
       { id: 'sell', text: 'Verkaufe deine Bitcoin am Monitor', doneText: 'Erste Bitcoin verkauft!', check: (s) => s.stats.sold > 0 },
       { id: 'gpu', text: 'Bau eine zweite Grafikkarte ein', doneText: 'Zweite Grafikkarte läuft!', check: (s) => s.flags.boughtGpu },
-      { id: 'rig2', text: 'Bau einen zweiten Mining-PC', doneText: 'Zwei PCs schürfen!', check: (s, h) => h.rigsAt('kinder') >= 2, progress: (s, h) => [h.rigsAt('kinder'), 2, 'n'] }, // Katalog B → Rigs → „Fertig bestückt“
+      { id: 'rig2', text: 'Bau einen zweiten Mining-PC', doneText: 'Zwei PCs schürfen!', check: (s, h) => h.rigsAt('kinder') >= 2, progress: (s, h) => [h.rigsAt('kinder'), 2, 'n'] }, // Katalog B → Rigs → „Als Bausatz“ (selbst einbauen); danach stellt Deniz Kemal vor (fertig bestückt, contacts.js)
       { id: 'fill1', text: 'Fülle dein Zimmer mit Mining-PCs', orDate: true, skip: true, doneText: 'Dein Zimmer ist voll!', check: (s) => !!s.full?.kinder, progress: (s, h) => [h.fill('kinder'), 1, 'fill', 'kinder'] }, // alle Plätze belegt oder Strom am Limit
       { id: 'papa1', text: 'Bezahl Papas Stromrechnung', action: { label: '2.000 $ geben', cost: 2000, flag: 'papa1' }, check: (s) => s.flags.papa1 },
     ],
@@ -325,7 +325,7 @@ export const FEATURES = {
   build: { title: 'Bauen', key: 'B', text: '<kbd>B</kbd> öffnet den Katalog. Klick stellt hin.' },
   speed2: { title: 'Zeitraffer', key: '2', text: '<kbd>1</kbd> <kbd>2</kbd> Tempo, <kbd>Leertaste</kbd> Pause.' },
   heat: { title: 'Wärmebild', key: 'H', text: '<kbd>H</kbd> zeigt, wo es zu heiß wird.' },
-  rigs: { title: 'Mehr PCs', key: 'B', text: '<kbd>B</kbd> → Rigs: fertig bestückt kaufen oder selbst zusammenstellen. Teile gibt es auch einzeln.' },
+  rigs: { title: 'Mehr PCs', key: 'B', text: '<kbd>B</kbd> → Rigs: als Bausatz kaufen und selbst einbauen. Teile gibt es auch einzeln. Fertig bestückt liefern dir später Kontakte.' },
   autosell: { title: 'Auto-Verkauf', key: 'E', text: 'Neue Coins werden automatisch verkauft.' },
   speed3: { title: 'Schneller vorspulen', key: '3', text: '<kbd>3</kbd> <kbd>4</kbd> spulen schneller vor.' },
   company: { title: 'Firma', key: 'C', text: '<kbd>C</kbd>: Strom ausbauen, Kosten sehen.' },
