@@ -2023,8 +2023,8 @@ export class Game {
 const nf = (d) => new Intl.NumberFormat('de-DE', { maximumFractionDigits: d, minimumFractionDigits: d });
 export function fmtUSD(v, compact = true) {
   const a = Math.abs(v), sign = v < 0 ? '−' : '';
-  if (compact && a >= 1e9) return `${sign}${nf(2).format(a / 1e9)} Mrd. $`;
-  if (compact && a >= 1e6) return `${sign}${nf(2).format(a / 1e6)} Mio. $`;
+  if (compact && a >= 0.995e9) return `${sign}${nf(2).format(a / 1e9)} Mrd. $`; // 999,996 Mio. → „1,00 Mrd.“ statt „1.000,00 Mio.“
+  if (compact && a >= 0.995e6) return `${sign}${nf(2).format(a / 1e6)} Mio. $`;
   if (a >= 100) return `${sign}${nf(0).format(a)} $`;
   if (a >= 1) return `${sign}${nf(2).format(a)} $`;
   if (a < 1e-5) return '0 $';

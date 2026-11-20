@@ -1892,3 +1892,11 @@ body:has(.story.event) #xpbox { display: none; }
 .msg.f-Herr .fr { color: #e6b98a; } .msg.f-Paketdienst .fr { color: #ffd27a; }
 body.tut-nobtc #st-btc, body.tut-nobtc #rbox > #st-btc, body.tut-nobtc #top #st-btc { display: none !important; }
 #build .item.part .rc-row .btn.place { flex: 1 1 auto; } #build .item.part .rc-row .btn:not(.place) { flex: 0 0 56px; }
+/* Aufwachen (World.wakeUp): Augenlider oben/unten, HUD ausgeblendet, keine Eingabe */
+#wake { position: fixed; inset: 0; z-index: 33; pointer-events: none; }
+#wake.hidden { display: none; }
+#wake .lid { position: absolute; left: -5vw; right: -5vw; height: 52vh; background: #050302; }
+#wake .lid.top { top: 0; border-radius: 0 0 50% 50% / 0 0 26% 26%; box-shadow: 0 18px 40px 26px #050302; }
+#wake .lid.bot { bottom: 0; border-radius: 50% 50% 0 0 / 26% 26% 0 0; box-shadow: 0 -18px 40px 26px #050302; }
+body.cine #crosshair, body.cine #prompt, body.cine #objmark, body.cine #keys, body.cine #clickhint, body.cine #touchpad, body.cine #tut { display: none !important; }
+body.cine #hud > :not(#toasts) { opacity: 0; transition: opacity .6s; }

@@ -101,13 +101,16 @@ document.addEventListener('visibilitychange', () => {
 const HOT = { j: () => ui.skills(), g: () => ui.goalActionKey(), b: () => ui.toggleBuild(), m: () => ui.market(), h: () => ui.phone(), p: () => ui.phone(), i: () => ui.toggleHeat(), c: () => ui.company(), t: () => ui.techs(), l: () => ui.ranking(), k: () => ui.toggleMap() };
 function onKey(e) {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || !splash.classList.contains('hidden')) return;
+  if (world.cine) { e.preventDefault(); return; } // Aufwachen (World.wakeUp): keine Eingabe
   const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
   if (e.code === 'Space') { e.preventDefault(); ui.setSpeed(game.s.speed ? 0 : (ui.lastSpeed || 1)); return; }
   if (['1', '2', '3', '4'].includes(e.key)) { ui.setSpeed(+e.key); return; }
   if (k === 'Escape') {
     if (world.mode === 'map') { ui.toggleMap(); return; }
     if (world.mode === 'ui') { ui.resume(); return; }
-    if (ui.paused) { ui.resume(); return; }
+    if (ui.paused) { if (performance.now() - (ui.pausedAt || 0) > 350) ui.resume(); return; } // dasselbe Esc, das gerade die Maus freigab und pausierte, nicht gleich wieder auflösen
+    // Im Spiel ohne eingefangene Maus (z. B. gerade ein Fenster mit Esc geschlossen, eingebettete Seite): das nächste Esc öffnet die Pause
+    if (world.mode === 'play' && !world.cine && document.pointerLockElement !== world.canvas) { ui.pause(true); return; }
     return;
   }
   if (world.mode === 'ui' && k === 'e' && ui.inspUid && document.getElementById('modal').classList.contains('hidden') && performance.now() - (ui.openedAt || 0) > 200) { ui.resume(); return; }

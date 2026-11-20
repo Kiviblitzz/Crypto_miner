@@ -132,6 +132,79 @@ export function furniture(type) {
     for (let i = 0; i < 16; i++) box(g, 0.045, 0.54, 0.07, wht, -0.4 + i * 0.054, 0.0, 0, 0, 0.012);
     box(g, 0.9, 0.03, 0.05, wht, 0, 0.03, 0, 0, 0.01); box(g, 0.9, 0.03, 0.05, wht, 0, 0.5, 0, 0, 0.01);
     cyl(g, 0.022, 0.022, 0.07, M.white(), 0.48, 0.42, 0, 16); cyl(g, 0.02, 0.02, 0.04, mat('thermoCap', { color: 0xdedad2, roughness: 0.5 }), 0.48, 0.48, 0, 16);
+  } else if (type === 'mattress') {
+    // Matratze direkt auf dem Boden (Kopfende bei +Z), zerknautschte Decke, plattes Kissen
+    soft(g, 0.9, 0.17, 1.98, mat('mattressOld', { color: 0xe6dfcf, roughness: 0.95 }), 0, 0, 0, 0.06);
+    box(g, 0.91, 0.012, 1.99, mat('mattressSeam', { color: 0xcfc4ae, roughness: 0.9 }), 0, 0.08, 0, 0, 0.004);
+    const duv = mat('duvetOld', { color: 0x6c7f8f, roughness: 0.97 });
+    const d1 = soft(g, 0.95, 0.1, 0.95, duv, -0.02, 0.16, -0.32, 0.045); d1.rotation.set(0.03, 0.08, -0.04);
+    const d2 = soft(g, 0.62, 0.13, 0.55, duv, 0.12, 0.2, 0.32, 0.06); d2.rotation.set(-0.12, -0.35, 0.08);
+    const d3 = soft(g, 0.4, 0.09, 0.42, mat('duvetIn', { color: 0xd9dfe4, roughness: 0.95 }), -0.24, 0.19, 0.18, 0.04); d3.rotation.set(0.1, 0.6, 0.05);
+    const p = soft(g, 0.56, 0.1, 0.36, mat('pillowOld', { color: 0xf0ece2, roughness: 0.95 }), -0.05, 0.17, 0.74, 0.05); p.rotation.set(0.12, 0.08, 0.05);
+  } else if (type === 'clothesrail') {
+    // Kleiderstange auf Rollen mit ein paar Hemden und Hoodies (entlang Z)
+    const ch = X.chrome();
+    for (const z of [-0.45, 0.45]) { rod(g, [0, 0.04, z], [0, 1.62, z], 0.012, ch, 10); rod(g, [-0.22, 0.04, z], [0.22, 0.04, z], 0.012, ch, 10); for (const x of [-0.2, 0.2]) sph(g, 0.022, M.black(), x, 0.022, z); }
+    rod(g, [0, 1.62, -0.47], [0, 1.62, 0.47], 0.012, ch, 10);
+    const cols = [0x3c4a5e, 0x8a3b32, 0x2f2f33, 0x6f7f5e, 0xc9b48c, 0x4a5160];
+    // T-Shirts und Hoodies als Umriss (Ebene quer zur Stange), weich abgerundet, auf Drahtbügeln
+    const garment = (col, z, long, i) => {
+      const P = long ? [[-0.07, 0], [0.07, 0], [0.2, -0.05], [0.29, -0.52], [0.23, -0.55], [0.17, -0.26], [0.17, -0.74], [-0.17, -0.74], [-0.17, -0.26], [-0.23, -0.55], [-0.29, -0.52], [-0.2, -0.05]]
+        : [[-0.06, 0], [0.06, 0], [0.19, -0.05], [0.25, -0.2], [0.16, -0.24], [0.16, -0.68], [-0.16, -0.68], [-0.16, -0.24], [-0.25, -0.2], [-0.19, -0.05]];
+      const s = new THREE.Shape(); P.forEach(([x, y], k) => (k ? s.lineTo(x, y) : s.moveTo(x, y)));
+      const geo = new THREE.ExtrudeGeometry(s, { depth: 0.018, bevelEnabled: true, bevelSize: 0.008, bevelThickness: 0.008, bevelSegments: 2, curveSegments: 4 }); geo.translate(0, 0, -0.009);
+      const m = new THREE.Mesh(geo, mat('shirt' + i, { color: col, roughness: 0.95 })); m.position.set(0, 1.575, z); m.rotation.y = ((i * 37) % 7 - 3) * 0.03; g.add(m);
+      tube(g, [[0, 1.62, z], [0, 1.6, z], [-0.17, 1.53, z], [0.17, 1.53, z], [0, 1.6, z]], 0.003, ch, 10, 4);
+    };
+    for (let i = 0; i < 6; i++) garment(cols[i], -0.36 + i * 0.145, i % 3 === 1, i);
+    soft(g, 0.4, 0.3, 0.5, mat('ikeaBag', { color: 0x2a5aa8, roughness: 0.7 }), 0.02, 0.0, 0.05, 0.04);
+  } else if (type === 'kitchenette') {
+    // Pantryküche 1,1 m: Unterschrank mit Minikühlschrank, Spüle, zwei Kochplatten, Wasserkocher (Front +Z)
+    const body = mat('kitBody', { color: 0xdedbd2, roughness: 0.6 }), top = mat('kitTop', { color: 0x8a7a64, roughness: 0.55 }), steel = X.chrome();
+    box(g, 1.1, 0.84, 0.55, body, 0, 0.0, 0, 0, 0.01);
+    box(g, 1.12, 0.035, 0.57, top, 0, 0.84, 0, 0, 0.006);
+    box(g, 0.5, 0.78, 0.012, mat('fridgeDoor', { color: 0xecebe6, roughness: 0.45 }), -0.28, 0.03, 0.281, 0, 0.004); box(g, 0.02, 0.18, 0.02, steel, -0.06, 0.5, 0.29, 0, 0.004);
+    box(g, 0.5, 0.78, 0.012, mat('kitDoor', { color: 0xd4cfc2, roughness: 0.55 }), 0.28, 0.03, 0.281, 0, 0.004); box(g, 0.02, 0.18, 0.02, steel, 0.06, 0.5, 0.29, 0, 0.004);
+    box(g, 0.44, 0.012, 0.36, mat('sinkSteel', { color: 0xb9bec4, roughness: 0.25, metalness: 0.9 }), 0.26, 0.876, -0.03, 0, 0.004);
+    box(g, 0.34, 0.006, 0.26, mat('sinkHole', { color: 0x52575c, roughness: 0.35, metalness: 0.8 }), 0.26, 0.884, -0.03, 0, 0.002);
+    rod(g, [0.26, 0.876, -0.24], [0.26, 1.08, -0.24], 0.012, steel, 10); rod(g, [0.26, 1.08, -0.24], [0.26, 1.06, -0.1], 0.01, steel, 10);
+    box(g, 0.44, 0.05, 0.4, M.black(), -0.27, 0.875, -0.02, 0, 0.01);
+    for (const x of [-0.37, -0.17]) cyl(g, 0.075, 0.075, 0.012, mat('hotplate', { color: 0x2a2b2e, roughness: 0.6, metalness: 0.3 }), x, 0.93, -0.02, 24);
+    for (const x of [-0.4, -0.3]) cyl(g, 0.014, 0.014, 0.02, M.offwhite(), x, 0.9, 0.18, 12, 'z');
+    lathe(g, [[0, 0], [0.07, 0], [0.075, 0.12], [0.06, 0.2], [0, 0.21]], mat('kettle', { color: 0xc9cbd0, roughness: 0.3, metalness: 0.6 }), -0.15, 0.875, 0.1, 20);
+    // schmutziges Geschirr in der Spüle
+    cyl(g, 0.1, 0.1, 0.012, M.white(), 0.22, 0.896, -0.04, 24); cyl(g, 0.1, 0.1, 0.012, M.white(), 0.24, 0.91, -0.02, 24);
+    lathe(g, [[0, 0], [0.034, 0], [0.038, 0.09], [0, 0.09]], mat('mug2', { color: 0x3a6b8a, roughness: 0.35 }), 0.36, 0.89, -0.12, 18);
+  } else if (type === 'beercrate') {
+    // Bierkiste als Nachttisch: Wecker, Handyladekabel, Wasserflasche
+    const red = mat('crateRed', { color: 0x9c2a20, roughness: 0.55 });
+    box(g, 0.3, 0.3, 0.4, red, 0, 0, 0, 0, 0.012);
+    for (let i = 0; i < 2; i++) for (let j = 0; j < 4; j++) cyl(g, 0.03, 0.03, 0.06, mat('bottleCap', { color: 0xd9b440, roughness: 0.4, metalness: 0.6 }), -0.075 + i * 0.15, 0.31, -0.15 + j * 0.1, 12);
+    box(g, 0.32, 0.018, 0.42, mat('crateBoard', { color: 0xb59a76, roughness: 0.8 }), 0, 0.34, 0, 0, 0.004);
+    box(g, 0.11, 0.07, 0.05, M.black(), -0.06, 0.358, -0.1, 0.3, 0.012);
+    box(g, 0.08, 0.035, 0.002, mat('clockFace', { color: 0x120808, emissive: 0xff3a2a, emissiveIntensity: 1.4 }), -0.055, 0.37, -0.073, 0.3, 0);
+    lathe(g, [[0, 0], [0.035, 0], [0.035, 0.2], [0.012, 0.25], [0.012, 0.28], [0, 0.28]], mat('waterBottle', { color: 0xbfd8e8, roughness: 0.1, transparent: true, opacity: 0.55 }), 0.08, 0.358, 0.12, 16);
+    tube(g, [[0.05, 0.36, -0.15], [0.12, 0.33, -0.21], [0.16, 0.1, -0.21], [0.2, 0.01, -0.12]], 0.0025, M.white(), 12, 4);
+  } else if (type === 'movingboxes') {
+    // Umzugskartons, gestapelt, einer offen
+    const c = mat('movBox', { color: 0xb58d5c, roughness: 0.92 }), t = mat('movTape', { color: 0xc8b07c, roughness: 0.5 }), wr = mat('movWrite', { color: 0x2a2a2a, roughness: 0.8 });
+    for (const [x, y, z, w, h, d, ry] of [[0, 0, 0, 0.48, 0.34, 0.38, 0.03], [0.02, 0.34, 0.01, 0.46, 0.32, 0.36, -0.06], [-0.01, 0.66, 0, 0.42, 0.28, 0.34, 0.1]]) { box(g, w, h, d, c, x, y, z, ry, 0.008); box(g, w * 1.004, 0.004, 0.06, t, x, y + h, z, ry, 0); box(g, 0.14, 0.04, 0.002, wr, x + 0.05, y + h * 0.55, z + d / 2 + 0.002, ry, 0); }
+  } else if (type === 'openbox') {
+    // offener Umzugskarton mit aufgeklappten Laschen, oben Klamotten
+    const c = mat('movBox', { color: 0xb58d5c, roughness: 0.92 });
+    box(g, 0.4, 0.3, 0.34, c, 0, 0, 0, 0, 0.006);
+    for (const [z, rx] of [[-0.17, -0.7], [0.17, 0.7]]) { const f = box(g, 0.4, 0.004, 0.16, c, 0, 0.3, z + Math.sign(z) * 0.05, 0, 0); f.rotation.x = rx; }
+    soft(g, 0.32, 0.12, 0.28, mat('boxStuff', { color: 0x6a5a8a, roughness: 0.9 }), 0, 0.2, 0, 0.03);
+  } else if (type === 'barebulb') {
+    // Nackte Glühbirne am Kabel (Ursprung an der Decke)
+    cyl(g, 0.0035, 0.0035, 0.42, M.cable(), 0, -0.21, 0, 6);
+    cyl(g, 0.022, 0.02, 0.06, mat('bulbSocketOld', { color: 0x2a2622, roughness: 0.5 }), 0, -0.45, 0, 14);
+    cyl(g, 0.04, 0.04, 0.01, M.white(), 0, -0.004, 0, 16);
+    sph(g, 0.033, mat('bareBulb', { color: 0x6a5a40, emissive: 0xffc878, emissiveIntensity: 2.6, roughness: 0.2 }), 0, -0.505, 0, 1, 1.2, 1, 16, 12);
+  } else if (type === 'pizzabox') {
+    box(g, 0.33, 0.04, 0.33, mat('pizzaBox', { color: 0xcfb48a, roughness: 0.9 }), 0, 0, 0, 0, 0.004);
+    box(g, 0.18, 0.002, 0.12, mat('pizzaPrint', { color: 0xb8322a, roughness: 0.8 }), 0.02, 0.04, 0.03, 0, 0);
+    box(g, 0.33, 0.04, 0.33, mat('pizzaBox', { color: 0xcfb48a, roughness: 0.9 }), 0.03, 0.042, -0.02, 0.15, 0.004);
   } else if (type === 'bookshelf') {
     const wood = mat('shelfWood', { color: 0xbfa77f, roughness: 0.6 }), side = mat('desk', { color: 0xd8c3a0, roughness: 0.5 });
     for (const s of [-1, 1]) box(g, 0.022, 1.9, 0.32, side, s * 0.214, 0, 0, 0, 0.006);
