@@ -5,37 +5,37 @@ export const FACILITIES = [
   {
     id: 'kinder', tier: 0, name: 'Kinderzimmer', short: 'Zimmer', place: 'Lindental, Dachgeschoss', w: 4, d: 3.5, h: 2.6,
     power: [{ kw: 1.8, label: 'Mamas Limit' }, { kw: 3.6, cost: 250, label: 'Eigener Stromkreis' }],
-    elec: 'household', elecMult: 1.0, rent: 0, cost: 0, baseCool: 600, ambient: 0, grid: 0.5, slots: 6,
+    elec: 'household', elecMult: 1.0, rent: 0, cost: 0, baseCool: 600, ambient: 0, grid: 0.5, slots: 6, move: 0, // move: Umzugskosten je Gerät (Game.moveFee)
     style: 'bedroom', desc: 'Dein Zimmer unterm Dach. Bett, Schreibtisch, ein altes Poster – und ein PC.',
   },
   {
     id: 'keller', tier: 1, name: 'Hobbykeller', short: 'Keller', place: 'Lindental, Elternhaus', w: 7, d: 5, h: 2.4,
     power: [{ kw: 4.5, label: 'Hausanschluss' }, { kw: 11, cost: 1500, label: 'Starkstrom 16 A' }, { kw: 22, cost: 4000, label: 'Starkstrom 32 A' }],
-    elec: 'household', elecMult: 0.6, rent: 0, cost: 0, baseCool: 1600, ambient: -3, grid: 0.5, slots: 16, // läuft über Papas Heizstrom-Tarif
+    elec: 'household', elecMult: 0.6, rent: 0, cost: 0, baseCool: 1600, ambient: -3, grid: 0.5, slots: 16, move: 0, // läuft über Papas Heizstrom-Tarif; Zimmer ↔ Keller: selbst runtertragen
     style: 'basement', desc: 'Kühl, staubig, mit Waschmaschine. Perfekt für die ersten Open-Frame-Rigs.',
   },
   {
     id: 'werkstatt', tier: 2, name: 'Werkstatt hinterm Laden', short: 'Werkstatt', place: 'Lindental, Hinterhof Elektro Brandt', w: 10, d: 8, h: 3.6,
     power: [{ kw: 25, label: 'Gewerbeanschluss' }, { kw: 60, cost: 12000, label: 'Verstärkter Anschluss' }, { kw: 120, cost: 30000, label: 'Eigener Trafo-Abgang' }],
-    elec: 'household', elecMult: 0.72, rent: 450, cost: 0, baseCool: 5000, ambient: 0, grid: 0.5, slots: 40,
+    elec: 'household', elecMult: 0.72, rent: 450, cost: 0, baseCool: 5000, ambient: 0, grid: 0.5, slots: 40, move: 10, // Papas Lieferwagen
     style: 'workshop', desc: 'Papas alte Lagerwerkstatt mit Rolltor. Hier beginnt die ASIC-Ära.',
   },
   {
     id: 'halle', tier: 3, name: 'Lagerhalle', short: 'Halle', place: 'Gewerbegebiet Lindental-Nord', w: 24, d: 16, h: 7,
     power: [{ kw: 400, label: 'Mittelspannung' }, { kw: 1000, cost: 180000, label: 'Trafostation 1 MVA' }, { kw: 2000, cost: 400000, label: 'Zweite Trafostation' }],
-    elec: 'household', elecMult: 0.45, rent: 2000, cost: 20000, baseCool: 50000, ambient: 0, grid: 0.5, slots: 60,
+    elec: 'household', elecMult: 0.45, rent: 2000, cost: 20000, baseCool: 50000, ambient: 0, grid: 0.5, slots: 60, move: 25,
     style: 'warehouse', desc: 'Eine echte Halle. Stahlträger, Rolltore, Hallenstrahler. Zeit für Racks.',
   },
   {
     id: 'rz', tier: 4, name: 'Rechenzentrum', short: 'RZ', place: 'Frankfurt-Ost', w: 36, d: 24, h: 5,
     power: [{ kw: 2500, label: '2,5 MW' }, { kw: 6000, cost: 1500000, label: '6 MW Ausbau' }, { kw: 12000, cost: 3500000, label: '12 MW Umspannwerk' }],
-    elec: 'household', elecMult: 0.27, rent: 30000, cost: 500000, baseCool: 220000, ambient: -1, grid: 0.5, slots: 200,
+    elec: 'household', elecMult: 0.27, rent: 30000, cost: 500000, baseCool: 220000, ambient: -1, grid: 0.5, slots: 200, move: 150, // Spedition nach Frankfurt
     style: 'datacenter', desc: 'Doppelboden, Kaltgang/Warmgang, Präzisionsklima. Hashwerk wird erwachsen.',
   },
   {
     id: 'fjord', tier: 5, name: 'Fjordhalle', short: 'Fjord', place: 'Sogn, Norwegen (Wasserkraft)', w: 64, d: 40, h: 12,
     power: [{ kw: 30000, label: '30 MW Wasserkraft' }, { kw: 60000, cost: 8000000, label: '60 MW' }, { kw: 120000, cost: 20000000, label: '120 MW' }],
-    elec: 'fixed', elecFixed: 0.035, rent: 80000, cost: 3000000, baseCool: 3000000, ambient: -12, grid: 0.5, slots: 48,
+    elec: 'fixed', elecFixed: 0.035, rent: 80000, cost: 3000000, baseCool: 3000000, ambient: -12, grid: 0.5, slots: 48, move: 400, // Schwertransport nach Norwegen
     style: 'fjord', desc: 'Grüner Strom aus dem Wasserkraftwerk, eiskalte Luft vom Fjord. Das Endspiel.',
   },
 ];
@@ -71,8 +71,9 @@ export const CHAPTERS = [
     intro: 'Papa staunt. Der Keller gehört dir – solange die Waschmaschine weiterläuft.',
     goals: [
       { id: 'openrig', text: 'Bau dein erstes Rig im Keller', check: (s, h) => h.rigsAt('keller') > 0 }, // mit mindestens 1 GPU
-      { id: 'rigs8', text: 'Betreibe 8 Rigs oder Miner', orDate: true, check: (s, h) => h.rigsAll() + h.miners() >= 8, progress: (s, h) => [h.rigsAll() + h.miners(), 8, 'n'] }, // Zimmer + Keller; Miner zählen mit; orDate: 2012 lohnen neue GPUs kaum, keine Pflicht
-      { id: 'debt', text: 'Rette Papas Laden – Frist der Bank: Ende 2013', action: { label: '15.000 $ überweisen', cost: 15000, flag: 'debt' }, check: (s) => s.flags.debt || !!s.flags.shopLost }, // nach der Frist: Ereignis „ladenzu“ (events.js)
+      // Ausbauten kennenlernen: Opas Nachtstromzähler (UPGRADES.keller nightmeter, −30 % Strom im Keller) – Knopf im Ziel oder Firma (C) → Ausbauten
+      { id: 'night', text: 'Lass Opa den alten Nachtstromzähler anklemmen (Firma → Ausbauten, 400 $)', orDate: '2011-10-01', open: 'company', doneText: 'Nachtstrom! Im Keller kostet der Strom jetzt 30 % weniger. In der Firma (C) gibt es weitere Ausbauten.', check: (s) => !!s.fac.keller?.up?.nightmeter }, // open: Knopf im Ziel-Panel öffnet die Firma; orDate: kein Muss (sonst ab Oktober 2011)
+      { id: 'debt', text: 'Rette Papas Laden – Frist der Bank: Ende 2013', action: { label: '15.000 $ überweisen', cost: 15000, flag: 'debt', part: 1000 }, check: (s) => s.flags.debt || !!s.flags.shopLost }, // part: in Raten zu 1.000 $ (s.flags.debtPaid); nach der Frist: Ereignis „ladenzu“ (events.js)
       { id: 'fill2', text: 'Fülle den Keller', orDate: true, skip: true, doneText: 'Der Keller ist voll!', check: (s) => !!s.full?.keller, progress: (s, h) => [h.fill('keller'), 1, 'fill', 'keller'] }, // orDate: ab minDate auch ohne vollen Keller erledigt
     ],
     waitText: 'Papas Untermieter Zweirad Öztürk zieht erst im Juni 2012 aus der Werkstatt aus.',
@@ -223,6 +224,7 @@ export const MESSAGES = [
   { id: 'm35', cond: (s) => s.flags.won, from: 'Deniz', text: 'WIR HABEN MONOLITH ÜBERHOLT. Vom Kinderzimmer bis hier. Wahnsinn.' },
   { id: 'm36', date: '2026-11-19', from: 'Deniz', text: 'Wir sind im Heute angekommen. Ab jetzt weiß keiner, was kommt.' },
   // ---------- Deniz-Tipps (ab Kapitel 2; tip: true – fallen z. B. bei „keine Tipps“ weg) ----------
+  { id: 't_gpuwait', tip: true, cond: (s) => s.chapter === 1 && s.day < toDay('2013-01-20') && (s.stats.pauseRun || 0) >= 30, from: 'Deniz', text: 'GPUs lohnen gerade nicht – Bitcoin halten, 2013 kommen ASICs. Spul ruhig vor (Tempo 4).' }, // ≥ 75 % der Rigs seit 30 Tagen unrentabel pausiert (Game.progressDay)
   { id: 't_idle', tip: true, cond: (s) => s.chapter >= 1 && s.stats.idle > 0, from: 'Deniz', text: 'Eins deiner Geräte pausiert – der Strom kostet mehr, als es schürft. Stell es auf einen anderen Coin oder verkauf es, solange es noch was wert ist.' },
   { id: 't_hot', tip: true, cond: (s, h) => s.chapter >= 1 && h.maxTemp() > 34, from: 'Deniz', text: 'Über 34 Grad bei dir! Ab 38 drosseln die Karten, und heiße Hardware geht schneller kaputt. Im Katalog (B) gibt es Lüfter.' },
   { id: 't_trip', tip: true, cond: (s) => s.chapter >= 1 && !!s.flags.everTripped, from: 'Deniz', text: 'Im Firmenfenster (C) siehst du, wie viel dein Anschluss schafft. Erst den Strom ausbauen, dann neue Geräte hinstellen.' },

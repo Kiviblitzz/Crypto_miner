@@ -140,6 +140,7 @@ function diskFx(g, s, p) {
 }
 const diskReply = (g) => (g.s.flags.diskOk ? (g.s.flags.backup ? '<b>Deniz:</b> Backup eingespielt, alles da. Siehst du? Langweilig ist gut.' : '<b>Deniz:</b> ES LÄUFT! Die Wallet ist zurück! Ich brauch ein Bier. Und du ein Backup.') : '<b>Deniz:</b> Weg. Alles weg. Ich … kauf dir einen USB-Stick. Für die nächsten.');
 const debtCost = () => CHAPTERS.flatMap((c) => c.goals).find((x) => x.id === 'debt')?.action?.cost || 15000;
+const debtLeft = (s) => Math.max(0, debtCost() - (s.flags.debtPaid || 0)); // Raten (Ziel-Knopf „1.000 $ einzahlen“, Papas 2.000 $) zählen mit
 // Laden verloren: Werkstatt ein halbes Jahr mietfrei, danach 25 % teurer (Herr Öztürk statt Papa)
 const shopLostMods = () => [{ key: 'rent', mult: 0, days: 182, fac: 'werkstatt' }, { key: 'rent', mult: 1.25, fac: 'werkstatt', src: 'oeztuerk' }];
 // Kapitel 2 gilt mit dem Verlust des Ladens als abgeschlossen (auch ohne Rig und 30 $/Tag – sonst säße ein schwacher Spieler für immer im Keller)
@@ -267,7 +268,7 @@ export const EVENTS = [
   },
   {
     id: 'opastrom', from: 'Opa Heinz', title: 'Opa und der Starkstrom', when: { date: '2011-03-10', window: 120 },
-    cond: (s) => !!opaFac(s),
+    cond: (s, h, g) => { const id = opaFac(s), sm = id && g.summary?.[id]; return !!sm && sm.watt >= kw(s, id) * 600 && s.cash >= opaCost(s); }, // erst wenn die Leitung zu 60 % ausgelastet ist und das Material bezahlbar
     text: (s) => { const id = opaFac(s), nx = id && FACILITY[id].power[s.fac[id].power + 1]; if (!nx) return '„Na, Junge, deine Leitungen sind ja schon dick genug. Sag Bescheid, wenn du mehr brauchst.“'; return `„Junge, deine Sicherung fliegt bald. Ich leg dir ${inn(id)} <b>${nx.label}</b> (${nf(1).format(nx.kw)} kW). Du zahlst das Material, ich die Arbeit. Und du hilfst mit.“ Beim Elektriker kostet das ${usd(nx.cost)}.`; },
     choices: [
       { label: 'Opa machen lassen', cost: (g) => opaCost(g.s), hint: '40 % günstiger · Opa +1 · viel Hardware-Erfahrung', fx: (g, s) => ({ do: () => { const id = opaFac(s); if (id) s.fac[id].power++; }, rel: { opa: 1 }, xp: { hw: 80 }, flag: 'opaStrom', log: 'Opa hat den Starkstrom gelegt' }), reply: '<b>Opa:</b> Rot ist Phase, Blau ist Null. Und Finger weg, wenn ich „weg“ sage.' },
@@ -356,10 +357,10 @@ export const EVENTS = [
   },
   {
     id: 'bankdruck', from: 'Papa', title: 'Die Bank macht Druck', when: { date: '2012-04-20', window: 20 }, cond: (s) => !s.flags.debt && s.chapter >= 1,
-    text: (s, h, g) => `„Die Bank hat angerufen. Sie wollen die ${usd(debtCost())} nicht erst Ende 2013 – sie drohen, den Kredit schon dieses Jahr zu kündigen. Ich weiß nicht weiter.“${btc(s) > 1 ? ` Deine <b>${nf(0).format(btc(s))} BTC</b> wären heute ${usd(btc(s) * g.price('BTC'))} wert.` : ''}`,
+    text: (s, h, g) => `„Die Bank hat angerufen. Sie wollen die ${s.flags.debtPaid ? `restlichen ${usd(debtLeft(s))}` : usd(debtCost())} nicht erst Ende 2013 – sie drohen, den Kredit schon dieses Jahr zu kündigen. Ich weiß nicht weiter.“${btc(s) > 1 ? ` Deine <b>${nf(0).format(btc(s))} BTC</b> wären heute ${usd(btc(s) * g.price('BTC'))} wert.` : ''}`,
     choices: [
-      { label: 'Bitcoin verkaufen und alles zahlen', need: (s, h, g) => s.cash + btc(s) * g.price('BTC') * (1 - g.tradeFee()) >= debtCost(), hint: 'Laden sofort gerettet · Papa +2', fx: (g, s) => { const c = debtCost(); if (s.cash < c) { const need = (c - s.cash + 100) / (g.price('BTC') * (1 - g.tradeFee())); sellCoins(g, 'BTC', Math.min(1, need / Math.max(1e-9, btc(s)))); } s.cash -= c; return { flag: 'debt', rel: { papa: 2 }, do: () => g.checkGoals(), log: `April 2012: Papas Schulden mit Bitcoin bezahlt (${usd(c)})` }; }, reply: '<b>Papa:</b> Ich … ich hab den Brief von der Bank verbrannt. Im Waschbecken. Mama war nicht begeistert.' },
-      { label: 'Papa 2.000 $ für die Raten geben', cost: 2000, hint: 'Die Bank gibt bis Ende 2013 Ruhe · Papa +1', fx: { rel: { papa: 1 }, log: 'April 2012: Papa 2.000 $ für die Bank gegeben' }, reply: '<b>Papa:</b> Die Bank hält still. Danke, Kind. Den Rest schaffen wir bis Ende 2013.' },
+      { label: 'Bitcoin verkaufen und alles zahlen', need: (s, h, g) => s.cash + btc(s) * g.price('BTC') * (1 - g.tradeFee()) >= debtLeft(s), hint: 'Laden sofort gerettet · Papa +2', fx: (g, s) => { const c = debtLeft(s); if (s.cash < c) { const need = (c - s.cash + 100) / (g.price('BTC') * (1 - g.tradeFee())); sellCoins(g, 'BTC', Math.min(1, need / Math.max(1e-9, btc(s)))); } s.cash -= c; s.flags.debtPaid = debtCost(); return { flag: 'debt', rel: { papa: 2 }, do: () => g.checkGoals(), log: `April 2012: Papas Schulden mit Bitcoin bezahlt (${usd(c)})` }; }, reply: '<b>Papa:</b> Ich … ich hab den Brief von der Bank verbrannt. Im Waschbecken. Mama war nicht begeistert.' },
+      { label: (g) => `Papa ${usd(Math.min(2000, debtLeft(g.s)))} für die Raten geben`, cost: (g) => Math.min(2000, debtLeft(g.s)), hint: (g) => `Die Bank gibt bis Ende 2013 Ruhe · zählt als Rate: danach noch ${usd(Math.max(0, debtLeft(g.s) - 2000))} · Papa +1`, fx: (g, s) => { const n = Math.min(2000, debtLeft(s)); s.flags.debtPaid = (s.flags.debtPaid || 0) + n; return { rel: { papa: 1 }, flag: debtLeft(s) <= 0 ? 'debt' : [], do: () => g.checkGoals(), log: `April 2012: Papa ${usd(n)} für die Bank gegeben` }; }, reply: '<b>Papa:</b> Die Bank hält still. Danke, Kind. Den Rest schaffen wir bis Ende 2013.' },
       { label: '„Die Bank blufft, Papa.“', hint: 'Papa −2', fx: { rel: { papa: -2 }, log: 'April 2012: Papa mit der Bank allein gelassen' }, reply: '<b>Papa:</b> Hoffentlich hast du recht. Ich schlaf seit Wochen schlecht.' },
     ],
     fallback: 1,

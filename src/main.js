@@ -32,7 +32,7 @@ world.onPlace = (type, x, z, rot, template) => {
   }
   const src = template?.kit ? template.src : template; // kit: Kopie als Bausatz (leeres Gehäuse, Teile ins Lager)
   const o = src ? game.cloneObject(src, fac, x, z, rot, !!template.kit) : game.addObject(fac, type, x, z, rot);
-  if (!o) { const blk = src && game.cloneBlocked(src), lock = src && !template.kit && game.cloneRig(src) && !game.readyOk(src.type); const sold = !blk && !lock && (src ? !game.cloneStockOk(src) : game.stockLeft(def) === 0); ui.toast(blk ? `${blk} gibt es nicht mehr zu kaufen.` : lock ? 'Fertig bestückt geht erst über einen Kontakt – als Bausatz geht’s sofort.' : sold ? `Kontingent erschöpft – ${game.stockText()}.` : 'Nicht genug Geld.', 'bad'); if (lock) world.cancelPlacement(); return null; }
+  if (!o) { const blk = src && game.cloneWhy(src, !!template.kit), lock = !blk && src && !template.kit && game.cloneRig(src) && !game.readyOk(src.type); const sold = !blk && !lock && (src ? !game.cloneStockOk(src) : game.stockLeft(def) === 0); ui.toast(blk ? `${blk}.` : lock ? 'Fertig bestückt geht erst über einen Kontakt – als Bausatz geht’s sofort.' : sold ? `Kontingent erschöpft – ${game.stockText()}.` : 'Nicht genug Geld.', 'bad'); if (lock || blk) world.cancelPlacement(); return null; }
   audio.buy();
   return o;
 };
