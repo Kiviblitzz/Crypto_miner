@@ -46,6 +46,9 @@ Zitate sind wörtlich (Tippfehler bleiben stehen), damit der Ton erhalten bleibt
 - **Veralten:** „alle fähigkeiten bleiben aber gpu übertakten geht nur für gpus“. Nichts geht verloren, wirkt aber nur auf passende Hardware.
 - **Roadmap später:** „man kann ja maybe auch später zum ai center upgraden … da bräuchte man ja wieder gpus“ (KI-Rechenzentrum mit GPUs).
 - **Technik-Menü (T):** „erklär mir das nochmal genauer“. Offen, muss einfacher erklärt und neu gefragt werden.
+- **Technik-Menü (T), entschieden:** „So skills nicht also nicht einfach son skill 15% weniger Strom soll es nicht geben. Das soll alles in T aufgehen eine große skill Seite“. T wird die eine Fähigkeiten-Seite, die TECHS gehen darin auf, es gibt keine Klick-Boni mehr.
+- **Papas Laden, entschieden:** „Erstmal weglassen alles mit Papa aber im Hinterkopf Ideen oder stell mir nochmal andere Ideen vor“. Bankfrist und Schulden-Drama fallen weg; die Werkstatt bleibt (Papa vermietet sie). Neue Laden-Ideen kommen später; die ersten vier Vorschläge (Laden wächst mit, Bitcoin-Dilemma, Übergabe, Kreditrate) hat er nicht genommen.
+- **Startgeld, entschieden:** „Man muss wirklich erstmal damit verdienen aber man kann vielleicht bei Papa zurück zahlen oder so also so papa leiht einem Geld für den Auszug dass das so anfängt und dann macht man aber nichts und dann kommt die Nachricht vom Kumpel“. Papas Umzugsdarlehen ohne Frist und Zinsen; Miete und Strom bezahlt man nur aus dem Mining. Man wacht ohne Plan auf, erst Deniz' Nachricht bringt die Bitcoin-Idee.
 - **Arbeitsweise:** „der ideen typ soll mit dir quatschen und mit mir in einem andern chat so dass du nicht auf antworten warten musst“. Der Spieler-Vertreter läuft als eigener Chat, fragt den Auftraggeber dort und schickt die Ergebnisse an den Entwicklungs-Chat.
 
 ## Roadmap (später)
@@ -53,6 +56,4 @@ Zitate sind wörtlich (Tippfehler bleiben stehen), damit der Ton erhalten bleibt
 
 ## Offene Fragen (für den nächsten Fragebogen)
 - Fähigkeiten: Kategorien (Entwurf in docs/faehigkeiten.md, 40 Stück in 6 Kategorien), muss bestätigt werden.
-- Technik-Menü (T): in Fähigkeiten aufgehen lassen oder als Firmen-Forschung behalten? Einfach erklären, dann neu fragen.
-- Papas Laden: Was ersetzt die Bankfrist? Ideen sammeln und abfragen.
-- Woher kommt am Anfang das Geld für Miete und Strom (Azubi-Gehalt, Nebenjob, Eltern)?
+- Papas Laden: neue Ideen sammeln (die ersten vier hat er abgelehnt).
