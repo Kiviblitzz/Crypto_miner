@@ -44,7 +44,7 @@ export class Game {
       unlocked: ['kinder'], current: 'kinder',
       fac: Object.fromEntries(FACILITIES.map((f) => [f.id, { power: 0, tripped: false, temp: 21, objects: [] }])),
       staff: { tech: 0 },
-      chapter: 0, goals: {}, flags: {}, messages: [], newsIdx: 0, ticker: [],
+      chapter: 0, goals: {}, flags: { tempo6: true }, messages: [], newsIdx: 0, ticker: [],
       stats: { minedUSD: 0, sold: 0, spentHW: 0, elec: 0, history: [] },
       endless: null, lastNet: {},
       feat: { phone: 1 },
@@ -113,7 +113,8 @@ export class Game {
       for (const c of COINS) { s.wallet[c.id] ||= { ex: 0, cold: 0 }; if (s.autoSell[c.id] == null) s.autoSell[c.id] = DEFAULT_AUTOSELL; }
       s.ev ||= { done: {}, open: null, log: [], later: [], last: 0 }; s.ev.done ||= {}; s.ev.log ||= []; s.ev.later ||= [];
       s.skills ||= { hw: 0, mining: 0, trade: 0 };
-      s.rel ||= { papa: 0, mama: 0, opa: 0, deniz: 0 }; s.mods ||= []; s.ach ||= {}; s.flags ||= {}; s.stats ||= { minedUSD: 0, sold: 0, spentHW: 0, elec: 0, history: [] };
+      s.rel ||= { papa: 0, mama: 0, opa: 0, deniz: 0 }; s.mods ||= []; s.ach ||= {}; s.flags ||= {};
+      if (!s.flags.tempo6) { s.speed = { 0: 0, 1: 4, 2: 4, 3: 5, 4: 6 }[s.speed] ?? 4; s.flags.tempo6 = true; } // Tempo neu: 1 = Echtzeit; alte Stufen auf die passenden neuen s.stats ||= { minedUSD: 0, sold: 0, spentHW: 0, elec: 0, history: [] };
       s.futureHW ||= []; s.netEff ||= 1; s.egoals ||= { done: {}, st: {}, cur: null }; s.egoals.done ||= {}; s.egoals.st ||= {}; s.fin ||= {}; s.ngPlus ||= 0; s.enews ||= {};
       s.keep ||= {}; s.talk ||= { last: {}, week: {}, joy: {}, got: {}, seen: {}, line: {} };
       this.initProgress(s);

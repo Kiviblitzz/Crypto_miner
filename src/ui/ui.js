@@ -15,7 +15,7 @@ import { showFinale, endlessGoals, egoalKey, egoalDone } from './finale.js';
 const $ = (s) => document.querySelector(s);
 const h = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const SPEEDS = [{ l: 'II', v: 0, t: 'Pause (Leertaste)' }, { l: '1×', v: 1, t: '1 Tag = 4 Sekunden (Taste 1)' }, { l: '2×', v: 2, t: '1 Tag = 1,6 Sekunden (Taste 2)' }, { l: '3×', v: 3, t: '2 Tage pro Sekunde (Taste 3)' }, { l: '4×', v: 4, t: '8 Tage pro Sekunde (Taste 4)' }];
+const SPEEDS = [{ l: 'II', v: 0, t: 'Pause (Leertaste)' }, { l: '1×', v: 1, t: 'Echtzeit – eine Sekunde ist eine Sekunde (Taste 1)' }, { l: '60×', v: 2, t: '1 Minute pro Sekunde (Taste 2)' }, { l: '1 h/s', v: 3, t: '1 Stunde pro Sekunde – ein Tag in 24 s (Taste 3)' }, { l: '6 h/s', v: 4, t: '6 Stunden pro Sekunde – ein Tag in 4 s (Taste 4)' }, { l: '2 T/s', v: 5, t: '2 Tage pro Sekunde (Taste 5)' }, { l: '8 T/s', v: 6, t: '8 Tage pro Sekunde (Taste 6)' }];
 const pctDE = (x) => (x * 100).toPrecision(3).replace('.', ',');
 
 const PART_ICON = {
@@ -183,8 +183,8 @@ export class UI {
     el.style.display = this.g.s.flags?.tutor && !this.g.has('speed2') ? 'none' : ''; // Anlernen: Tempo-Knöpfe erst mit dem Zeitraffer
     this.setSpeed(this.g.s.speed ?? 0);
   }
-  speedOk(v) { const g = this.g; return v <= 1 || (v === 2 && g.has('speed2')) || (v >= 3 && g.has('speed3')); }
-  setSpeed(v) { if (!this.speedOk(v)) { this.toast('Noch nicht freigeschaltet.', 'info', 1800); return; } this.g.s.speed = v; if (v) this.lastSpeed = v; this.g.s.paused = v === 0; if (v >= 2) this.g.learned?.('speed2'); if (v >= 3) this.g.learned?.('speed3'); [...$('#speed').children].forEach((b, i) => b.classList.toggle('on', SPEEDS[i].v === v)); }
+  speedOk(v) { const g = this.g; return v <= 1 || (v <= 4 && g.has('speed2')) || (v >= 5 && g.has('speed3')); } // Zeitraffer: Minuten bis 6 Std/s, schneller vorspulen: Tage pro Sekunde
+  setSpeed(v) { if (!this.speedOk(v)) { this.toast('Noch nicht freigeschaltet.', 'info', 1800); return; } this.g.s.speed = v; if (v) this.lastSpeed = v; this.g.s.paused = v === 0; if (v >= 2) this.g.learned?.('speed2'); if (v >= 5) this.g.learned?.('speed3'); [...$('#speed').children].forEach((b, i) => b.classList.toggle('on', SPEEDS[i].v === v)); }
   top() {
     const g = this.g, s = g.s;
     const vf = this.w.visFrac ?? s.frac, day = vf > 0.27 && vf < 0.79;
@@ -567,8 +567,7 @@ export class UI {
       const s = this.g.s;
       if (s.feat && !s.flags.miningStarted) { this.toast('Erst den PC bauen, dann schlafen.', 'info', 2500); return; }
       const vf = this.w.visFrac ?? s.frac;
-      if (vf > 0.25 && vf < 0.8) { this.toast('Noch nicht müde – schlafen kannst du ab 19 Uhr.', 'info', 3000); return; }
-      this.fade(); const steps = vf >= 0.8 ? 1 : 0; for (let i = 0; i < steps; i++) this.g.advanceDay(); s.frac = 0.29; this.w.visFrac = 0.29;
+      this.fade(); const steps = vf >= 0.29 ? 1 : 0; // jederzeit hinlegen: bis zum nächsten Morgen (nachts nach Mitternacht: bis 7 Uhr) for (let i = 0; i < steps; i++) this.g.advanceDay(); s.frac = 0.29; this.w.visFrac = 0.29;
       this.g.learned?.('sleep'); this.toast(s.parcels?.length ? 'Guten Morgen! Vor deiner Wohnungstür liegt ein Paket.' : 'Guten Morgen!', 'good', 3000);
     }
   }
@@ -949,7 +948,7 @@ export class UI {
       else if (!g.has('market')) t = this.inspUid ? 'Dein PC schürft jetzt Bitcoin. Schließ das Fenster mit <kbd>E</kbd> und lass ihn ein paar Tage arbeiten.' : 'Dein PC schürft Bitcoin. Lass ihn ein paar Tage arbeiten, bis sich etwas angesammelt hat …';
       else if (!(s.stats.sold > 0)) t = this.modalKind === 'market' ? 'Klick auf <b>Alles verkaufen</b>.' : `Du hast ${fmtCoin(btc)} BTC. Geh zum <b>PC-Monitor</b> auf dem Schreibtisch und drück <kbd>E</kbd>, um sie zu verkaufen.`;
       else if (!s.flags.boughtGpu) t = this.inspUid ? 'Klick auf den <b>freien GPU-Slot</b> und kauf eine zweite Grafikkarte.' : 'Mehr Grafikkarten = mehr Bitcoin. Schau deinen PC an (<kbd>E</kbd>) und bau eine zweite Karte ein.';
-      else if (!s.goals.earn) t = 'Lass den PC arbeiten (Tempo mit <kbd>1</kbd> <kbd>2</kbd>) und verkauf regelmäßig am Monitor. Ziel: 1.000 $ verdient.';
+      else if (!s.goals.earn) t = 'Lass den PC arbeiten (Tempo mit <kbd>1</kbd>–<kbd>4</kbd>) und verkauf regelmäßig am Monitor. Ziel: 1.000 $ verdient.';
     }
     if (!t) {
       const ch = CHAPTERS[s.chapter], go = ch && ch.goals.find((x) => !s.goals[x.id] && x.action);

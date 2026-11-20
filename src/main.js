@@ -7,7 +7,7 @@ import { PLACEABLE } from './data/hardware.js';
 import { Audio } from './ui/audio.js';
 import { initTouch } from './ui/touch.js';
 
-const SEC_PER_DAY = [Infinity, 4.0, 1.6, 0.5, 0.12];
+const SEC_PER_DAY = [Infinity, 86400, 1440, 24, 4, 0.5, 0.12]; // 1 = Echtzeit, 2 = 1 Min/s, 3 = 1 Std/s, 4 = 6 Std/s, 5 = 2 Tage/s, 6 = 8 Tage/s
 
 const game = new Game();
 const world = new World(document.getElementById('c'), game);
@@ -104,7 +104,7 @@ function onKey(e) {
   if (world.cine) { e.preventDefault(); return; } // Aufwachen (World.wakeUp): keine Eingabe
   const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
   if (e.code === 'Space') { e.preventDefault(); ui.setSpeed(game.s.speed ? 0 : (ui.lastSpeed || 1)); return; }
-  if (['1', '2', '3', '4'].includes(e.key)) { ui.setSpeed(+e.key); return; }
+  if (['1', '2', '3', '4', '5', '6'].includes(e.key)) { ui.setSpeed(+e.key); return; }
   if (k === 'Escape') {
     if (world.mode === 'map') { ui.toggleMap(); return; }
     if (world.mode === 'ui') { ui.resume(); return; }
@@ -147,7 +147,7 @@ function loop(now) {
     world.controls.target.set(2.35 + Math.sin(t) * 0.4, 1.0 + Math.sin(t * 0.7) * 0.1, 0.4 + Math.cos(t) * 0.25);
     s.frac = 0.83;
   } else if (s.speed && document.getElementById('modal').classList.contains('hidden') && !ui.paused && (s.flags.miningStarted || !s.feat)) { // Zeit steht, bis der erste PC läuft
-    const slow = ui.showRun && performance.now() < (ui.slowUntil || 0); s.frac += dt / (slow ? 60 : SEC_PER_DAY[s.speed]); // Einschalt-Moment kurz in Zeitlupe
+    const slow = ui.showRun && performance.now() < (ui.slowUntil || 0); s.frac += dt / (slow ? Math.max(60, SEC_PER_DAY[s.speed]) : SEC_PER_DAY[s.speed]); // Einschalt-Moment kurz in Zeitlupe
     let n = 0;
     while (s.frac >= 1 && n < 4) { s.frac -= 1; game.advanceDay(); n++; }
     if (s.frac >= 1) s.frac = 0.99;
