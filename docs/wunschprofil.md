@@ -53,10 +53,12 @@ Zitate sind wörtlich (Tippfehler bleiben stehen), damit der Ton erhalten bleibt
 - **Lieblings-Fähigkeiten:** „Löten & Reparieren, Undervolten/Übertakten, Betriebssystem & Firmware, Mehr noch“. Diese Äste bekommen die schönsten Handgriffe; „mehr noch“ heißt: noch mehr Fähigkeiten.
 - **Automatik:** Mini-Spiele übernimmt später ein Roboter (keine Techniker, keine Familie), der sichtbar von seiner Ladestation zum Gerät fährt.
 - **Papa:** „Papa will selbst minen, Ja das ist gut so helfen und Belohnungen und skills kriegen“. Neben-Quest: Papa baut im Laden einen schlechten Miner, man hilft ihm (zu Fuß hin) und lernt bei ihm Elektrik und Fehlersuche. Die übrigen Laden-Ideen sind raus.
+- **Menüs zu voll:** „Menüs unübersichtlich, Die Menüs sind zu voll und unübersichtlich dass soll man alles lernen durch einen Grund“. In jedem Fenster steht nur, was man gerade kann; Noch-nicht-Verfügbares wird ausgeblendet, nicht ausgegraut. Jede neue Funktion kommt mit einem Grund (Nachricht oder Fähigkeit), auch innerhalb der Fenster.
+- **Börse:** „das Menü für die bitcoins ist kacke das sieht nicht gut aus das soll auf dem echten Monitor auch noch sein“. Die Börse braucht ein neues, schönes Design und soll auch auf dem PC-Monitor in der 3D-Welt laufen (Details folgen vom Ideen-Typ).
+- **„Mehr noch“ bei den Fähigkeiten:** „Einfach mehr Fähigkeiten“.
 - **Arbeitsweise:** „der ideen typ soll mit dir quatschen und mit mir in einem andern chat so dass du nicht auf antworten warten musst“. Der Spieler-Vertreter läuft als eigener Chat, fragt den Auftraggeber dort und schickt die Ergebnisse an den Entwicklungs-Chat.
 
 ## Roadmap (später)
 - KI-Rechenzentrum: Mining-Hallen zu KI-Rechenzentren umbauen; dafür braucht man wieder GPUs (passt zu „GPU-Übertakten geht nur für GPUs“).
 
 ## Offene Fragen (für den nächsten Fragebogen)
-- „Mehr noch“ bei den Lieblingen: mehr Fähigkeiten insgesamt oder auch Kühlung? (Der Ideen-Typ fragt nach.)
