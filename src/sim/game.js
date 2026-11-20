@@ -487,7 +487,7 @@ export class Game {
     const st = this.buildStats(cfg, facId, ready); if (ready && !st.ok) return null;
     if (!this.canAfford(st.price)) return null;
     const o = { uid: this.s.nextUid++, type: cfg.type, x, z, rot, coin: 'auto', broken: false, bought: this.s.day, parts: ready ? JSON.parse(JSON.stringify(st.parts)) : { mobo: null, cpu: null, psu: null, gpus: [] } };
-    if (!ready) { const p = st.parts; for (const id of [p.mobo, p.cpu, ...p.gpus]) if (id) this.bagAdd(id, 1); if (p.psu) this.bagAdd(p.psu, st.np); }
+    if (!ready) { const p = st.parts; for (const id of [p.mobo, p.cpu, ...p.gpus]) if (id) { this.bagAdd(id, 1); this.freshAdd(id, 1); } if (p.psu) { this.bagAdd(p.psu, st.np); this.freshAdd(p.psu, st.np); } }
     this.s.cash -= st.price; this.s.stats.spentHW += st.price; if (this.s.skills) this.addXp('hw', 10, true);
     this.s.lastBuild = { type: cfg.type, mobo: cfg.mobo, cpu: cfg.cpu, psu: cfg.psu, gpu: cfg.gpu, n: st.n, ready };
     this.s.fac[facId].objects.push(o); this.dayUpdate(true); this.capWarn(facId); this.emit('objects', facId); if (!ready) this.emit('bag'); return o;
@@ -496,16 +496,18 @@ export class Game {
   bagN(id) { return this.s.bag?.[id] || 0; }
   bagAdd(id, n = 1) { const b = (this.s.bag ||= {}); b[id] = (b[id] || 0) + n; if (b[id] <= 0) delete b[id]; }
   bagList(type = null) { return Object.entries(this.s.bag || {}).filter(([id, n]) => n > 0 && PART[id] && (!type || PART[id].type === type)).map(([id, n]) => ({ id, n, part: PART[id] })).sort((a, b) => b.part.releaseDay - a.part.releaseDay); }
+  // Schrauben-EP gibt es nur für neu gekaufte Teile (sonst ließe sich durch Aus- und Einbauen endlos EP sammeln)
+  freshAdd(id, n) { const f = (this.s.fresh ||= {}); f[id] = Math.max(0, (f[id] || 0) + n); if (!f[id]) delete f[id]; }
   bagCount() { let n = 0; for (const v of Object.values(this.s.bag || {})) n += v; return n; }
   partResale(id) { return Math.round(this.itemPrice(PART[id]) * 0.5); }
   bagValue() { let v = 0; for (const [id, n] of Object.entries(this.s.bag || {})) if (PART[id] && n > 0) v += this.partResale(id) * n; return v; }
   buyPart(id, n = 1) {
     const it = PART[id]; if (!it || !this.available(it)) return 0; const p = this.itemPrice(it); let k = 0;
-    while (k < n && this.canAfford(p)) { this.s.cash -= p; this.s.stats.spentHW += p; this.bagAdd(id, 1); k++; }
+    while (k < n && this.canAfford(p)) { this.s.cash -= p; this.s.stats.spentHW += p; this.bagAdd(id, 1); this.freshAdd(id, 1); k++; }
     if (k) { if (this.s.skills) this.addXp('hw', 3 * k, true); this.emit('bag'); }
     return k;
   }
-  sellPart(id, n = 1) { const k = Math.min(n, this.bagN(id)); if (k <= 0) return 0; const v = this.partResale(id) * k; this.s.cash += v; this.bagAdd(id, -k); this.emit('bag'); return v; }
+  sellPart(id, n = 1) { const k = Math.min(n, this.bagN(id)); if (k <= 0) return 0; const v = this.partResale(id) * k; this.s.cash += v; this.bagAdd(id, -k); if ((this.s.fresh?.[id] || 0) > this.bagN(id)) this.freshAdd(id, this.bagN(id) - this.s.fresh[id]); this.emit('bag'); return v; }
   // Warum passt das Teil nicht? '' = passt
   installWhy(o, id, idx = null) {
     const it = PART[id], p = o?.parts; if (!it || !p) return 'Passt nicht';
@@ -523,9 +525,9 @@ export class Game {
       p[it.type] = id;
       if (it.type === 'mobo') { const cap = this.rigGpuCap(o); while (p.gpus.length > cap) this.bagAdd(p.gpus.pop(), 1); }
     }
-    this.bagAdd(id, -n);
+    this.bagAdd(id, -n); const fresh = (this.s.fresh?.[id] || 0) > 0; if (fresh) this.freshAdd(id, -n);
     if (!this.s.flags.miningStarted && o.type === 'tower' && this.pcReady(o)) this.s.flags.pcBuilt = true;
-    if (this.s.skills) this.addXp('hw', 15);
+    if (this.s.skills && fresh) this.addXp('hw', 15);
     this.dayUpdate(true); if (it.type === 'gpu') this.capWarn(this.facOf(uid)); this.emit('objects', this.facOf(uid)); this.emit('bag'); return true;
   }
   // Ausbauen: Teil zurück ins Lager. Ohne Mainboard kommen auch CPU und Karten raus; ohne Pflichtteil steht das Gerät still
