@@ -36,7 +36,23 @@ Zitate sind wörtlich (Tippfehler bleiben stehen), damit der Ton erhalten bleibt
 - **Wie der Auftraggeber schreibt:** kurz, umgangssprachlich und schnell. Er wechselt oft mitten in der Arbeit das Thema. Neue Wünsche werden sofort aufgenommen, ohne Bisheriges zu verwerfen.
 - **Was er sehen will:** die spielbare Version als Artifact, das nach jeder Runde aktualisiert wird: https://claude.ai/artifact/RLtXTTQaYJExVNeNKcRBGq
 
+## Antworten vom 20.11.2026 (Fragebogen und Nachrichten)
+- **Anlernen statt Menüflut:** „die menüs lernt man nicht das soll doch so angelernt sein … man wacht auf und dann steht da neue nachricht aufs handy und dann steht da drück H für handy“. Eingebaut: Lektionen, Handy auf H, Wärmebild auf I.
+- **Geld im Alltag:** „sowieso muss man miete und strom zahlen das so machen“. Miete und Strom werden monatlich fällig, auch in der Wohnung.
+- **Papas Laden:** „denk dir aber für das andere nochmal was aus“. Die Bankfrist mit 15.000 $ bis Ende 2013 wirkt sinnlos („15000 bis in 2 jahren ist ja garnichts“). Es braucht eine neue Idee.
+- **Tempo:** „anpassbar aber 1x echtzeit“. 1× = echte Zeit, schnellere Stufen zum Vorspulen.
+- **Betriebssystem:** Jeder selbst gebaute PC bzw. Rig braucht eines, bis Automatik. Am Anfang klickt man den Installer selbst durch (Windows-Lizenz oder Linux, wenn gelernt), später geht es per USB-Stick mit einem Klick, im Rechenzentrum automatisch.
+- **Mini-Spiele:** „immer selber aber man kann das verbessern durch so skill points oder ganz weg machen vielleicht oder jemanden einstellen (roboter also zb einen roboter der aus seinem haus fährt und dann einen usb stick einsteckt oder so)“. Am Anfang immer selbst; durch Fähigkeiten besser oder ganz automatisch; Personal bzw. Roboter kann es übernehmen.
+- **Veralten:** „alle fähigkeiten bleiben aber gpu übertakten geht nur für gpus“. Nichts geht verloren, wirkt aber nur auf passende Hardware.
+- **Roadmap später:** „man kann ja maybe auch später zum ai center upgraden … da bräuchte man ja wieder gpus“ (KI-Rechenzentrum mit GPUs).
+- **Technik-Menü (T):** „erklär mir das nochmal genauer“. Offen, muss einfacher erklärt und neu gefragt werden.
+- **Arbeitsweise:** „der ideen typ soll mit dir quatschen und mit mir in einem andern chat so dass du nicht auf antworten warten musst“. Der Spieler-Vertreter läuft als eigener Chat, fragt den Auftraggeber dort und schickt die Ergebnisse an den Entwicklungs-Chat.
+
+## Roadmap (später)
+- KI-Rechenzentrum: Mining-Hallen zu KI-Rechenzentren umbauen; dafür braucht man wieder GPUs (passt zu „GPU-Übertakten geht nur für GPUs“).
+
 ## Offene Fragen (für den nächsten Fragebogen)
-- Wie viele Fähigkeiten sind „so viel wie möglich“? Lieber ein großer Baum oder Kategorien (Hardware, Software, Kühlung, Handel …)?
-- Sollen Fähigkeiten verloren gehen bzw. veralten, z. B. GPU-Wissen in der ASIC-Ära?
-- Wie oft darf ein Mini-Spiel kommen, bevor es nervt? Soll es überspringbar sein?
+- Fähigkeiten: Kategorien (Entwurf in docs/faehigkeiten.md, 40 Stück in 6 Kategorien), muss bestätigt werden.
+- Technik-Menü (T): in Fähigkeiten aufgehen lassen oder als Firmen-Forschung behalten? Einfach erklären, dann neu fragen.
+- Papas Laden: Was ersetzt die Bankfrist? Ideen sammeln und abfragen.
+- Woher kommt am Anfang das Geld für Miete und Strom (Azubi-Gehalt, Nebenjob, Eltern)?
