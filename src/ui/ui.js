@@ -124,13 +124,22 @@ export class UI {
       const m = card.querySelector('.miss'); if (m) { const t = short ? `Dir fehlen ${this.money(p - cash)}` : ''; if (m.textContent !== t) m.textContent = t; }
     }
   }
+  // Offener Katalog: Tagespreise aktualisieren, ohne die Karten neu aufzubauen
+  buildPrices() {
+    if (!document.body.classList.contains('show-build')) return;
+    for (const card of document.querySelectorAll('#build .item[data-id]')) {
+      const it = PLACEABLE[card.dataset.id]; if (!it) continue; const p = this.g.itemPrice(it); if (+card.dataset.price === p) continue;
+      card.dataset.price = p; const pe = card.querySelector('.t .p'); if (pe) pe.textContent = this.money(p); const pb = card.querySelector('.place'); if (pb) pb.textContent = `Platzieren · ${this.money(p)}`;
+    }
+    this.buildAfford();
+  }
   refresh() { this.top(); this.sites(); this.build(true); this.goals(); this.dock(); if (this.inspUid) this.inspect(this.inspUid, true); }
   onDay() {
     if (this.g.s.ev?.open) this.tryEvent();
     this.sites(); this.goals(); this.keysHint();
     for (const t of TECHS) if (!t.hidden && toDay(t.date) === this.g.s.day) { this.toast(`Neue Technologie verfügbar: <b>${esc(t.name)}</b>`, 'good', 7000); this.dock(); }
     if (this.g.s.day % 7 === 0) this.dock();
-    if (this.g.s.day - this.lastBuildDay >= 7) this.build(true);
+    if (this.g.s.day - this.lastBuildDay >= 7) this.build(true); else this.buildPrices();
     if (this.inspUid) this.inspectStats();
     if (this.modalKind === 'market') this.market(true);
     if (this.modalKind === 'ranking') this.ranking();
@@ -144,7 +153,7 @@ export class UI {
     this.setSpeed(this.g.s.speed ?? 0);
   }
   speedOk(v) { const g = this.g; return v <= 1 || (v === 2 && g.has('speed2')) || (v >= 3 && g.has('speed3')); }
-  setSpeed(v) { if (!this.speedOk(v)) { this.toast('Noch nicht freigeschaltet.', 'info', 1800); return; } this.g.s.speed = v; this.g.s.paused = v === 0; [...$('#speed').children].forEach((b, i) => b.classList.toggle('on', SPEEDS[i].v === v)); }
+  setSpeed(v) { if (!this.speedOk(v)) { this.toast('Noch nicht freigeschaltet.', 'info', 1800); return; } this.g.s.speed = v; if (v) this.lastSpeed = v; this.g.s.paused = v === 0; [...$('#speed').children].forEach((b, i) => b.classList.toggle('on', SPEEDS[i].v === v)); }
   top() {
     const g = this.g, s = g.s;
     const vf = this.w.visFrac ?? s.frac, day = vf > 0.27 && vf < 0.79;
@@ -204,7 +213,7 @@ export class UI {
   pendingBtc() {
     const s = this.g.s; if (!s.flags.miningStarted) return 0;
     if (!this.rate || this.rateDay !== s.day) { this.rate = this.btcRate(); this.rateDay = s.day; }
-    const f0 = s.mineDay0 === s.day ? s.mineFrac0 || 0 : 0, fa = s.accr?.day === s.day ? s.accr.f : 0;
+    const f0 = s.mineDay0 === s.day ? s.mineFrac0 || 0 : 0, fa = s.accr?.day === s.day && (s.accr.coin || 'BTC') === 'BTC' ? s.accr.f : 0;
     return (this.rate || 0) * Math.max(0, (s.frac || 0) - Math.max(f0, fa));
   }
   liveWallet() {
@@ -245,8 +254,9 @@ export class UI {
   }
   switchSite(id) {
     this.fade();
-    if (this.w.empire) this.w.hideEmpire();
+    const fromMap = !!this.w.empire; if (fromMap) this.w.hideEmpire(false); // Raum wird gleich ohnehin neu geladen
     this.g.s.current = id; this.w.loadFacility(id);
+    if (fromMap) { this.pause(false); this.w.setMode('play'); }
     if (this.inspUid) { this.inspUid = null; $('#inspector').classList.add('hidden'); }
     this.refresh(); this.toast(`${esc(FACILITY[id].name)} – ${esc(FACILITY[id].place)}`, 'info', 3000);
   }
@@ -274,11 +284,11 @@ export class UI {
       if (it.kind === 'device') { const r = g.revenueFor({ [it.algo]: it.hash }, g.bestCoin({ [it.algo]: it.hash }, it.vram || 99) || 'BTC', it.vram || 99); const cost = it.watt / 1000 * 24 * g.elecPrice(fac); s = `${fmtHash(it.hash, it.algo)} · ${fmtWatt(it.watt)} · ${ALGO_LABEL[it.algo]}<br/>≈ <b class="${r - cost >= 0 ? 'pos' : 'neg'}">${r - cost >= 0 ? '+' : ''}${fmtUSD(r - cost)}/Tag</b> hier${it.hydro ? ' · nur in Rack/Container' : ''}`; }
       if (it.kind === 'cooling') s = `Kühlt ${fmtWatt(it.cool)} · verbraucht ${fmtWatt(it.watt)}`;
       if (it.kind === 'holder') s = esc(it.desc);
-      const card = h(`<div class="item ${price > g.s.cash || it.hydro ? 'dis' : ''}" data-price="${price}" ${it.hydro ? 'data-hydro="1"' : ''}><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${this.money(price)}</span></div><div class="s">${s}</div><div class="miss">${price > g.s.cash ? `Dir fehlen ${this.money(price - g.s.cash)}` : ''}</div><button class="btn small primary place" ${price > g.s.cash || it.hydro ? 'disabled' : ''}>Platzieren · ${this.money(price)}</button></div>`);
+      const card = h(`<div class="item ${price > g.s.cash || it.hydro ? 'dis' : ''}" data-price="${price}" data-id="${it.id}" ${it.hydro ? 'data-hydro="1"' : ''}><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${this.money(price)}</span></div><div class="s">${s}</div><div class="miss">${price > g.s.cash ? `Dir fehlen ${this.money(price - g.s.cash)}` : ''}</div><button class="btn small primary place" ${price > g.s.cash || it.hydro ? 'disabled' : ''}>Platzieren · ${this.money(price)}</button></div>`);
       try { const url = this.w.thumbnail(it.id); if (url) card.prepend(h(`<div class="thumb"><img alt="" src="${url}"/></div>`)); } catch (e) { /* ohne Vorschau weiter */ }
       card.onclick = () => {
         if (it.hydro) { this.toast('Hydro-Miner nur in Rack oder Container.', 'bad'); return; }
-        if (price > g.s.cash) { this.toast('Nicht genug Geld.', 'bad'); return; }
+        if (g.itemPrice(it) > g.s.cash) { this.toast('Nicht genug Geld.', 'bad'); return; } // Preis von heute, nicht vom Öffnen
         this.resume(); this.w.startPlacement(it.id);
       };
       list.append(card);
@@ -311,9 +321,19 @@ export class UI {
     if (this.w.mode === 'ui' || this.w.mode === 'play') this.w.setMode('play');
   }
   pause(on) {
-    this.paused = on;
+    this.paused = on; this.w.paused = on; // Welt: keine Bewegung/Spieltasten in der Pause
     $('#pause').classList.toggle('hidden', !on);
     if (on) { $('#clickhint').classList.add('hidden'); this.prompt(null); }
+  }
+  // Neues Spiel / Laden: UI-Zustand aus der alten Sitzung verwerfen
+  resetSession() {
+    this.marketCoin = 'BTC'; this.trade = null; this.lastSpeed = null; this.evSnooze = null; this.delArmed = null;
+    clearTimeout(this.featT); this.featQ = []; this.msgQ = []; this.xpQ = []; this.lvQ = null; this.lvBusy = false; $('#featcards').innerHTML = '';
+    clearTimeout(this.instT); this.installing = false; this.afterSnap = null; this.showRun = false; this.pickType = null; this.rate = 0; this.rateDay = null;
+    this.visiting = null; document.body.classList.remove('visiting', 'show-build', 'show-goals');
+    if (this.w.heatMode) this.w.toggleHeat(false);
+    if (this.inspUid) { this.inspUid = null; $('#inspector').classList.add('hidden'); this.w.select(null); }
+    this.w.focusObject?.(null); this.w.ghostPart?.(null); this.pause(false);
   }
   openInspector(uid) { this.openedAt = performance.now(); if (!this.g.s.flags.seenPc) { this.g.s.flags.seenPc = true; this.g.checkGoals?.(); } this.w.select(uid); this.openUI(); }
   flashCash(u) { const el = $('#st-cash'); if (!el) return; el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); if (u > 0) { const f = h(`<div class="cashfly">+${fmtUSD(u)}</div>`); document.body.append(f); setTimeout(() => f.remove(), 1400); } }
@@ -366,7 +386,7 @@ export class UI {
       let line = '';
       if (a && a.units.length) { const rev = a.units.reduce((x, u) => x + u.rev, 0) * sm.throttle; const cost = a.watt / 1000 * 24 * sm.elec; line = `${a.units.filter((u) => u.h).map((u) => fmtHash(u.h * sm.throttle, u.algo)).join(' · ') || 'pausiert'} · <span class="${rev - cost >= 0 ? 'pos' : 'neg'}">${rev - cost >= 0 ? '+' : ''}${fmtUSD(rev - cost)}/Tag</span>`; }
       else if (def.kind === 'cooling') line = `kühlt ${fmtWatt(def.cool)}`;
-      const st = { broken: 'Defekt – reparieren', partial: 'Teilweise defekt', psu: 'Netzteil zu schwach', incomplete: 'Teile fehlen – bestücken', empty: '➕ Leer – Geräte einsetzen', idle: 'pausiert (unrentabel)', off: '⏻ aus' }[a?.status];
+      const st = { broken: 'Defekt – reparieren', partial: 'Teilweise defekt', psu: 'Netzteil zu schwach', incomplete: 'Teile fehlen – bestücken', empty: '➕ Leer – Geräte einsetzen', idle: 'pausiert (unrentabel)', full: 'pausiert (Anschluss voll)', off: '⏻ aus' }[a?.status];
       const build = o.type === 'tower' && o.parts && !this.g.s.flags.miningStarted, miss = build ? this.g.pcMissing(o).length : 0;
       html = build ? `<kbd>E</kbd>${miss ? 'Teile einbauen' : 'PC einschalten'}<div class="st">${4 - miss} von 4 Teilen eingebaut</div>` : `<kbd>E</kbd>${esc(o.type === 'tower' ? 'Dein PC' : (def.short || def.name.replace(/[-‑]Gehäuse|\s*\(.*\)/g, '')))}${st ? `<div class="st">${st}</div>` : line ? `<div class="ln">${line}</div>` : ''}`;
     }
@@ -453,8 +473,8 @@ export class UI {
     if (!g.has('build')) { if (row.childElementCount) c.append(row); return; }
     const mv = h('<button class="btn">✥ Verschieben</button>'); mv.onclick = () => { this.resume(); this.w.startPlacement(o.type, uid); }; row.append(mv);
     const rt = h('<button class="btn">⟳ Drehen</button>'); rt.onclick = () => { const r0 = o.rot; o.rot = (o.rot + 1) % 4; if (!this.w.canPlace(def, o.x, o.z, o.rot, uid)) { o.rot = r0; this.toast('Kein Platz zum Drehen.', 'bad'); } this.w.syncObjects(); }; row.append(rt);
-    if (def.kind !== 'decor') { const dp = h(`<button class="btn" title="Gleiches Objekt inkl. Teilen noch mal kaufen">⧉ Duplizieren (${fmtUSD(this.g.cloneCost ? this.g.cloneCost(o) : 0)})</button>`); dp.onclick = () => { this.resume(); this.w.startPlacement(o.type, null, o); }; row.append(dp); }
-    const sell = h(`<button class="btn danger">Verkaufen (+${fmtUSD(g.objectValue(o))})</button>`); sell.onclick = () => { g.removeObject(uid); this.resume(); }; row.append(sell);
+    if (def.kind !== 'decor') { const blk = g.cloneBlocked(o); const dp = h(`<button class="btn" title="${blk ? esc(blk) + ' gibt es nicht mehr zu kaufen' : 'Gleiches Objekt inkl. Teilen noch mal kaufen'}" ${blk ? 'disabled' : ''}>⧉ Duplizieren ${blk ? '· Teile nicht mehr im Handel' : `(${fmtUSD(this.g.cloneCost ? this.g.cloneCost(o) : 0)})`}</button>`); dp.onclick = () => { this.resume(); this.w.startPlacement(o.type, null, o); }; row.append(dp); }
+    const sell = h(`<button class="btn danger">Verkaufen (+${fmtUSD(g.objectValue(o))})</button>`); sell.onclick = () => { if (!g.canSell(o)) { this.toast('Den PC brauchst du noch.', 'info', 2500); return; } g.removeObject(uid); this.resume(); }; row.append(sell);
     c.append(row);
   }
   hashProfile(o) {
@@ -470,7 +490,7 @@ export class UI {
     const g = this.g, def = PLACEABLE[o.type], facId = g.facOf(uid), sm = g.summary[facId]; if (!sm) return;
     const a = sm.per.get(uid) || g.analyze(o);
     const badge = $('#insp-badge');
-    const st = sm.tripped ? ['bad', 'Kein Strom'] : a.status === 'broken' ? ['bad', 'Defekt'] : a.status === 'partial' ? ['warn', 'Teilweise defekt'] : a.status === 'psu' ? ['bad', 'Netzteil zu schwach'] : a.status === 'incomplete' ? ['warn', 'Unvollständig'] : a.status === 'empty' ? ['idle', 'Leer'] : a.status === 'idle' ? ['idle', 'Pausiert (unrentabel)'] : a.status === 'off' ? ['idle', 'Aus'] : def.kind === 'decor' ? ['idle', 'Deko'] : ['ok', sm.throttle < 1 ? 'Läuft (gedrosselt)' : 'Läuft'];
+    const st = sm.tripped ? ['bad', 'Kein Strom'] : a.status === 'broken' ? ['bad', 'Defekt'] : a.status === 'partial' ? ['warn', 'Teilweise defekt'] : a.status === 'psu' ? ['bad', 'Netzteil zu schwach'] : a.status === 'incomplete' ? ['warn', 'Unvollständig'] : a.status === 'empty' ? ['idle', 'Leer'] : a.status === 'idle' ? ['idle', a.limit === 'heat' ? 'Pausiert (zu heiß)' : 'Pausiert (unrentabel)'] : a.status === 'full' ? ['idle', 'Pausiert (Anschluss voll)'] : a.status === 'off' ? ['idle', 'Aus'] : def.kind === 'decor' ? ['idle', 'Deko'] : ['ok', sm.throttle < 1 ? 'Läuft (gedrosselt)' : 'Läuft'];
     if (this.showRun && g.s.flags.miningStarted && o.type === 'tower') { if (badge) badge.innerHTML = `<span class="badge ok"><i></i>Läuft</span>`; const se = $('#insp-stats'); if (se) se.innerHTML = ''; return; }
     if (!g.s.flags.miningStarted && def.kind === 'rig' && o.parts) { const n = 4 - g.pcMissing(o).length; if (badge) badge.innerHTML = `<span class="badge ${n === 4 ? 'ok' : 'idle'}"><i></i>${n} / 4 Teile</span>`; const se = $('#insp-stats'); if (se) se.innerHTML = ''; return; }
     if (badge) badge.innerHTML = `<span class="badge ${st[0]}"><i></i>${st[1]}</span>`;
@@ -624,7 +644,11 @@ export class UI {
         let ps = null, extra = 0;
         if (type === 'gpu' && o.parts.psu) {
           const oldW = cur ? PART[cur].watt || 0 : 0, add = (it.watt || 0) - oldW, n = g.psuCount(o);
-          if (g.rigWatt(o) + add > PART[o.parts.psu].cap * n) { ps = g.fitPsu(o, add); extra = g.itemPrice(ps) * n - Math.round(g.itemPrice(PART[o.parts.psu]) * 0.5 * n); }
+          if (g.rigWatt(o) + add > PART[o.parts.psu].cap * n) {
+            ps = g.fitPsu(o, add);
+            if (!ps || ps.cap * n < g.rigWatt(o) + add) { this.toast(`Dafür reicht kein Netzteil im Handel (${g.rigWatt(o) + add} W nötig${ps ? `, max. ${ps.cap * n} W` : ''}).`, 'bad'); return; }
+            extra = g.itemPrice(ps) * n - Math.round(g.itemPrice(PART[o.parts.psu]) * 0.5 * n);
+          }
         }
         if (g.s.cash < price + extra) { this.toast(ps ? `Dafür brauchst du auch ein stärkeres Netzteil (+${fmtUSD(extra)}).` : 'Nicht genug Geld.', 'bad'); return; }
         if (!g.setPart(o.uid, type, it.id, idx)) { this.toast('Nicht genug Geld.', 'bad'); return; }
@@ -650,6 +674,7 @@ export class UI {
     }
     if (o.items.length < def.slots) {
       const devs = g.shopList('asic', g.facOf(o.uid)).filter((d) => def.id !== 'shelf' || !d.hydro).sort((a, b) => b.releaseDay - a.releaseDay);
+      if (!devs.length) { sec.append(h('<div class="empty">Keine passenden Geräte im Handel.</div>')); return sec; } // ohne Auswahl keine Kauf-Knöpfe
       const sel = h('<select style="margin-top:6px"></select>');
       for (const d of devs) { const p = g.itemPrice(d); const r = g.revenueFor({ [d.algo]: d.hash }, g.bestCoin({ [d.algo]: d.hash }, d.vram || 99) || 'BTC', d.vram || 99) - d.watt / 1000 * 24 * g.elecPrice(g.facOf(o.uid)); sel.append(h(`<option value="${d.id}">${esc(d.name)} – ${fmtUSD(p)} (${r >= 0 ? '+' : ''}${fmtUSD(r)}/Tag)</option>`)); }
       sec.append(sel);
@@ -658,7 +683,6 @@ export class UI {
       if (others.length > 1) { const ab = h(`<button class="btn small good" style="margin-top:6px">Alle ${others.length} ${esc(def.name.split(' (')[0])} hier auffüllen</button>`); ab.onclick = () => { let k = 0; for (const x of others) k += g.holderAdd(x.uid, sel.value, def.slots); this.toast(k ? `${k}× ${esc(PLACEABLE[sel.value].name)} eingesetzt` : 'Nicht genug Geld.', k ? 'good' : 'bad', 3000); this.inspect(o.uid); }; sec.append(ab); }
       for (const n of [1, 5, 25, 'max']) { if (n !== 'max' && n > def.slots) continue; const b = h(`<button class="btn small ${n === 'max' ? 'primary' : ''}">${n === 'max' ? 'Auffüllen' : '+' + n}</button>`); b.onclick = () => { const k = g.holderAdd(o.uid, sel.value, n === 'max' ? def.slots : n); if (!k) this.toast('Nicht genug Geld oder kein Platz.', 'bad'); else this.toast(`${k}× ${PLACEABLE[sel.value].name} eingesetzt`, 'good', 2500); this.inspect(o.uid); }; row.append(b); }
       sec.append(row);
-      if (!devs.length) sec.append(h('<div class="empty">Keine passenden Geräte im Handel.</div>'));
     }
     return sec;
   }
@@ -811,6 +835,9 @@ export class UI {
   market(update = false) {
     const g = this.g, s = g.s;
     if (update && this.modalKind !== 'market') return;
+    // Auswahl aus einem früheren Spiel oder ein noch nicht gestarteter Coin: zurück auf Bitcoin
+    { const mc = COIN[this.marketCoin]; if (!g.has('coins') || !mc || s.day < mc.start) this.marketCoin = 'BTC'; }
+    if (this.trade?.mode === 'buy' && !g.has('buycoins')) this.trade.mode = 'sell';
     const body = h(`<div><h2>Börse</h2><div class="grid2 ${g.has('coins') ? '' : 'single'}"><div class="coins"></div><div class="detail"></div></div></div>`);
     const list = body.querySelector('.coins');
     let total = 0;
@@ -820,7 +847,7 @@ export class UI {
       const started = s.day >= c.start;
       const ch = p30 ? (p / p30 - 1) * 100 : 0;
       const row = h(`<div class="coin ${this.marketCoin === c.id ? 'on' : ''} ${started ? '' : 'inactive'}"><div class="dot" style="background:${c.color}">${c.id}</div><div class="nm">${c.name}<small>${started ? `${fmtCoin(w.ex + w.cold)} ${c.id} · ${fmtUSD(val)}` : `Start ${fmtDate(c.start)}`}</small></div><div class="pr">${started ? fmtUSD(p) : '—'}<small class="${ch >= 0 ? 'pos' : 'neg'}">${started ? `${ch >= 0 ? '+' : ''}${ch.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %` : ''}</small></div></div>`);
-      row.onclick = () => { this.marketCoin = c.id; this.market(); };
+      if (started) row.onclick = () => { this.marketCoin = c.id; this.market(); }; // noch nicht gestartete Coins: kein Kurs, nicht wählbar
       list.append(row);
     }
     if (g.has('coins')) list.append(h(`<div style="padding:8px 10px;color:var(--dim);font-size:13px">Gesamt: <b style="color:#fff">${fmtUSD(total)}</b></div>`));
@@ -853,7 +880,7 @@ export class UI {
     const num = (str) => { str = String(str || '').trim().replace(/\s/g, ''); if (str.includes(',')) str = str.replace(/\./g, '').replace(',', '.'); else if (/^\d{1,3}(\.\d{3})+$/.test(str)) str = str.replace(/\./g, ''); const v = parseFloat(str); return Number.isFinite(v) && v > 0 ? v : 0; };
     const fmtIn = (v, unit) => (v > 0 ? v.toLocaleString('de-DE', { maximumFractionDigits: unit === 'BTC' ? (v < 1 ? 6 : 4) : 2, useGrouping: false }) : '');
     const sym = c.id === 'BTC' ? '₿' : c.id;
-    tk.innerHTML = `<div class="seg tk-tabs"><button class="btn small ${T.mode === 'sell' ? 'on' : ''}" data-m="sell">Verkaufen</button><button class="btn small ${T.mode === 'buy' ? 'on' : ''}" data-m="buy">Kaufen</button></div>
+    tk.innerHTML = `<div class="seg tk-tabs"><button class="btn small ${T.mode === 'sell' ? 'on' : ''}" data-m="sell">Verkaufen</button>${g.has('buycoins') ? `<button class="btn small ${T.mode === 'buy' ? 'on' : ''}" data-m="buy">Kaufen</button>` : ''}</div>
       <div class="tk-bal"><div><span>Du hast</span><b>${fmtCoin(have)} ${c.id}</b><small>≈ ${fmtUSD(have * p)}</small></div><div><span>Kontostand</span><b>${fmtUSD(s.cash)}</b></div></div>
       <label class="tk-amt"><span class="lab">${T.mode === 'sell' ? 'Menge verkaufen' : 'Menge kaufen'}</span><span class="field"><input type="text" inputmode="decimal" autocomplete="off" placeholder="0"/><button class="unit" title="Einheit wechseln">${T.unit === 'BTC' ? c.id : '$'}</button></span></label>
       <div class="tk-chips"><button class="btn small" data-p="0.25">25 %</button><button class="btn small" data-p="0.5">50 %</button><button class="btn small" data-p="1">100 %</button></div>
@@ -1079,7 +1106,8 @@ export class UI {
       ['Nordlicht Hash (IS)', toDay('2014-06-01'), 0.0025], ['Pacific Rigs (CA)', toDay('2017-01-01'), 0.002], ['GPU-Farm „Nachtfalter" (US)', toDay('2010-06-01'), 0.03, toDay('2013-01-01')],
       ['Uni-Cluster Tokio', toDay('2010-09-01'), 0.012, toDay('2014-01-01')], ['Desert Hash (AE)', toDay('2021-06-01'), 0.003], ['Andes Mining (PY)', toDay('2022-01-01'), 0.0018],
     ].filter((e) => day >= e[1] && (!e[3] || day < e[3])).map((e) => ({ name: e[0], h: net * e[2] * (0.85 + 0.3 * Math.abs(Math.sin(e[1] + day / 200))) }));
-    const mono = g.monolithHash(); if (mono) entries.push({ name: 'MONOLITH Hash AG', h: mono, rival: true });
+    const mono = g.monolithHash();
+    if (mono) { const top = Math.max(0, ...entries.map((e) => e.h)); if (top > mono * 0.8) for (const e of entries) e.h *= (mono * 0.8) / top; entries.push({ name: 'MONOLITH Hash AG', h: mono, rival: true }); } // der Rivale ist der Größte der Konkurrenz
     entries.push({ name: 'Hashwerk (Du)', h: mine, me: true });
     entries.sort((a, b) => b.h - a.h);
     const rank = entries.findIndex((e) => e.me) + 1;
@@ -1244,11 +1272,20 @@ export class UI {
       <div class="sec"><h4>Ton</h4><div class="row"><button class="btn small" data-a="mute">${this.audio?.muted ? 'Ton an' : 'Ton aus'}</button></div></div>
       <div class="sec"><div style="font-size:12px;color:var(--dim)">Fan-Projekt · alle Namen fiktiv · keine Anlageberatung<br/>Bitcoin-Kurse und Hashrate: Coin Metrics Community Data (CC BY-NC 4.0)</div></div></div>`);
     body.querySelector('[data-a=save]').onclick = () => { this.toast(g.save() ? 'Gespeichert' : 'Speichern fehlgeschlagen', 'good', 2000); };
-    body.querySelector('[data-a=load]').onclick = () => { if (g.load()) { this.closeModal(); this.switchSite(g.s.current); this.speedBar(); this.toast('Spielstand geladen', 'good'); } else this.toast('Kein Spielstand gefunden', 'bad'); };
+    const lb = body.querySelector('[data-a=load]');
+    lb.onclick = () => {
+      if (!g.hasSave()) { this.toast('Kein Spielstand gefunden', 'bad'); return; }
+      if (!lb.dataset.armed) { lb.dataset.armed = '1'; lb.textContent = 'Sicher? Nochmal klicken = laden'; setTimeout(() => { if (lb.isConnected) { delete lb.dataset.armed; lb.textContent = 'Laden'; } }, 4000); return; }
+      if (!g.load()) { this.toast('Spielstand konnte nicht geladen werden', 'bad'); return; }
+      this.resetSession(); this.closeModal(); this.switchSite(g.s.current); this.w.syncLoose(); this.speedBar(); this.ticker(); this.keysHint(); this.toast('Spielstand geladen', 'good');
+    };
     const nb = body.querySelector('[data-a=new]');
     nb.onclick = () => {
       if (!nb.dataset.armed) { nb.dataset.armed = '1'; nb.textContent = 'Sicher? Nochmal klicken = neu starten'; setTimeout(() => { if (nb.isConnected) { delete nb.dataset.armed; nb.textContent = 'Neues Spiel'; } }, 4000); return; }
-      g.newGame(); this.closeModal(); this.switchSite('kinder'); this.speedBar(); this.ticker();
+      // wie „Neues Spiel“ im Titel: Intro von Deniz, danach läuft die Zeit
+      g.newGame(); this.resetSession(); this.closeModal(); this.w.setMode('ui');
+      this.switchSite('kinder'); this.w.syncLoose(); this.speedBar(); this.ticker();
+      this.introPhone(() => { this.setSpeed(1); this.keysHint(); this.tutorial(); });
     };
     body.querySelector('[data-a=mute]').onclick = () => { this.audio?.setMuted(!this.audio.muted); this.menu(); };
     body.querySelectorAll('[data-q]').forEach((b) => (b.onclick = () => { this.w.setQuality(b.dataset.q); this.menu(); }));
@@ -1277,7 +1314,7 @@ export class UI {
     let line = '';
     if (a && a.units.length) { const rev = a.units.reduce((x, u) => x + u.rev, 0) * sm.throttle; const cost = a.watt / 1000 * 24 * sm.elec; line = `${fmtWatt(a.watt)} · <span class="${rev - cost >= 0 ? 'pos' : 'neg'}">${fmtUSD(rev - cost)}/Tag</span>`; }
     else if (def.kind === 'cooling') line = `kühlt ${fmtWatt(def.cool)}`;
-    if (a?.status && a.status !== 'ok') line += `<br/><span class="neg">${{ broken: 'Defekt', partial: 'Teilweise defekt', psu: 'Netzteil überlastet', incomplete: 'Unvollständig', empty: 'Leer', idle: 'Pausiert (unrentabel)', off: 'Aus' }[a.status] || ''}</span>`;
+    if (a?.status && a.status !== 'ok') line += `<br/><span class="neg">${{ broken: 'Defekt', partial: 'Teilweise defekt', psu: 'Netzteil überlastet', incomplete: 'Unvollständig', empty: 'Leer', idle: 'Pausiert (unrentabel)', full: 'Anschluss voll', off: 'Aus' }[a.status] || ''}</span>`;
     if (o.items) line += `<br/>${o.items.length}/${def.slots} belegt`;
     el.innerHTML = `<b>${esc(def.name)}</b><br/>${line}`;
     el.style.left = pos[0] + 'px'; el.style.top = pos[1] + 'px';

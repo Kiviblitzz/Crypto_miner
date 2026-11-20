@@ -24,7 +24,7 @@ const GradeShader = {
     ' c.rgb *= mix(1.0 - vignette, 1.0, v); gl_FragColor = c; }',
 };
 import { buildRoom, buildOutside, buildDustyClutter } from './rooms.js';
-import { objectModel, rigPartModel, loosePartModel } from './models.js';
+import { objectModel, rigPartModel, loosePartModel, releaseModel } from './models.js';
 import { keepsakeModel } from './models.js';
 import { keepsakesAt } from '../data/story.js';
 import { nightMats, nightGround } from './rooms.js';
@@ -36,6 +36,23 @@ import { fmtHash, fmtUSD, fmtDate, fmtCoin } from '../sim/game.js';
 
 const tmpV = new THREE.Vector3();
 
+// Teilbaum freigeben (GPU-Speicher): Geometrien, Materialien, Texturen – außer geteilten aus Caches (userData.shared);
+// Modell-Vorlagen werden nur abgemeldet (releaseModel)
+const TEX_KEYS = ['map', 'emissiveMap', 'alphaMap', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'bumpMap', 'lightMap', 'displacementMap', 'specularMap'];
+function disposeTree(root) {
+  if (!root) return;
+  root.traverse((o) => {
+    if (o.userData.tkey) releaseModel(o);
+    if (o.geometry && !o.geometry.userData.shared) o.geometry.dispose();
+    for (const m of [].concat(o.material || [])) {
+      if (m.userData.shared) continue;
+      for (const k of TEX_KEYS) if (m[k]?.isTexture && !m[k].userData.shared) m[k].dispose();
+      m.dispose();
+    }
+    if (o.isInstancedMesh || o.isLight) o.dispose();
+  });
+}
+
 // Status-Symbole: gezeichnete Abzeichen (keine Betriebssystem-Emoji)
 function iconTexture(kind, ring) {
   const S = 256, c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d');
@@ -45,7 +62,7 @@ function iconTexture(kind, ring) {
   g.fillStyle = '#fff8ec'; g.strokeStyle = 'rgba(42,22,6,0.85)'; g.lineWidth = 8; g.lineJoin = 'round'; g.textAlign = 'center'; g.textBaseline = 'middle';
   if (kind === 'power') { g.beginPath(); g.moveTo(140, 62); g.lineTo(96, 136); g.lineTo(126, 136); g.lineTo(112, 196); g.lineTo(162, 112); g.lineTo(130, 112); g.closePath(); g.stroke(); g.fill(); }
   else { const txt = { broken: '!', warn: '!', empty: '+', sleep: 'Zz' }[kind] || '?'; g.font = (kind === 'sleep' ? '700 86px' : '700 120px') + ' Fredoka, Nunito, Arial'; g.strokeText(txt, S / 2, S / 2 + 6); g.fillText(txt, S / 2, S / 2 + 6); }
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; t.userData.shared = true; return t;
 }
 
 export class World {
@@ -72,12 +89,15 @@ export class World {
     this.touchMode = window.matchMedia?.('(pointer: coarse)').matches || false;
     document.addEventListener('pointerlockchange', () => {
       const locked = document.pointerLockElement === canvas;
-      this.player.locked = locked; if (locked) this.player.lockAt = performance.now();
+      this.player.locked = locked; if (locked) { this.player.lockAt = performance.now(); this.lockFailed = false; }
       if (!locked && this.mode === 'play' && !this.expectUnlock) { this.cancelPlacement(); this.onPause?.(); }
       this.expectUnlock = false;
+      // Wettlauf: die Maus wurde erst eingefangen, nachdem schon ein Fenster aufging – sofort wieder freigeben
+      if (locked && (this.mode !== 'play' || this.paused)) { this.expectUnlock = true; document.exitPointerLock(); }
       this.onLockChange?.(locked);
     });
-    document.addEventListener('pointerlockerror', () => { this.lockFailed = true; this.onLockChange?.(false); });
+    // Ohne Promise-API (alte Browser) bleibt nur das Ereignis; sonst entscheidet requestLock anhand des Fehlers
+    document.addEventListener('pointerlockerror', () => { if (!this.lockPromise) this.lockFailed = true; this.onLockChange?.(false); });
     this.doorGroup = new THREE.Group(); this.scene.add(this.doorGroup);
     this.scene.add(this.camera); this.vm = new ViewModel(this.camera);
     this.aim = null;
@@ -144,6 +164,7 @@ export class World {
     this.selBox = new THREE.Box3Helper(new THREE.Box3(), 0xffffff); this.selBox.material.transparent = true; this.selBox.material.opacity = 0.18; this.selBox.material.depthWrite = false; this.selBox.visible = false; this.scene.add(this.selBox);
     this.ghostOk = new THREE.MeshStandardMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0.35, emissive: 0x6fb8ff, emissiveIntensity: 0.25, depthWrite: false });
     this.ghostBad = new THREE.MeshStandardMaterial({ color: 0xff7a72, transparent: true, opacity: 0.38, emissive: 0xff4a40, emissiveIntensity: 0.2, depthWrite: false });
+    this.ghostOk.userData.shared = this.ghostBad.userData.shared = true;
     this.footprint = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0.2, depthWrite: false }));
     this.footprint.rotation.x = -Math.PI / 2; this.footprint.visible = false; this.scene.add(this.footprint);
     this.gridHelper = null;
@@ -178,21 +199,21 @@ export class World {
   // ---------- Standort ----------
   loadFacility(id) {
     this.cancelPlacement(); this.select(null); this.onHover?.(null);
-    if (this.room) { this.scene.remove(this.room.root); this.scene.remove(this.outside); for (const l of this.roomLights) this.scene.remove(l); }
-    for (const e of this.entries.values()) this.objGroup.remove(e.group);
+    if (this.room) { this.scene.remove(this.room.root); this.scene.remove(this.outside); for (const l of this.roomLights) this.scene.remove(l); disposeTree(this.room.root); disposeTree(this.outside); this.roomLights.forEach((l) => l.dispose()); }
+    for (const e of this.entries.values()) { this.objGroup.remove(e.group); disposeTree(e.group); }
     this.entries.clear();
     const def = this.def = FACILITY[id]; this.facId = id;
-    if (this.gtao) this.gtao.enabled = def.tier <= 2; // in großen Hallen zu teuer
+    if (this.gtao) this.gtao.enabled = this.quality === 'high' && def.tier <= 2; // in großen Hallen zu teuer; Grafikstufe beachten
     this.room = buildRoom(def); this.scene.add(this.room.root); this.screensDirty = true;
     // Verstaubter Keller, solange er noch nicht ausgebaut ist: Gerümpel, Spinnweben, Staub, schwaches Flackerlicht
     this.dusty = id === 'keller' && this.game.s?.feat && !this.game.s.unlocked.includes('keller');
     this.dustBulb = null;
-    if (this.dusty) { const dc = buildDustyClutter(def); this.room.root.add(dc.group); this.room.blocked.push(...dc.blocked); this.dustPts = dc.group.userData.dust; for (const L of this.room.lights) { L.intensity *= 0.3; L.dist = 3.6; L.color = 0xffc98a; } this.room.lights.splice(1); this.room.lights.push({ pos: [6.4, 2.2, 0.7], color: 0xffd9a8, intensity: 0.35, dist: 3.2 }); const bl = this.room.bulbs || []; if (bl[1]) bl[1].material = mat('bulbDead', { color: 0x4a443c, roughness: 0.3 }); if (bl[0]) { bl[0].material = bl[0].material.clone(); this.dustBulb = bl[0]; } this.room.props = []; } else this.dustPts = null;
+    if (this.dusty) { const dc = buildDustyClutter(def); this.room.root.add(dc.group); this.room.blocked.push(...dc.blocked); this.dustPts = dc.group.userData.dust; for (const L of this.room.lights) { L.intensity *= 0.3; L.dist = 3.6; L.color = 0xffc98a; } this.room.lights.splice(1); this.room.lights.push({ pos: [6.4, 2.2, 0.7], color: 0xffd9a8, intensity: 0.35, dist: 3.2 }); const bl = this.room.bulbs || []; if (bl[1]) bl[1].material = mat('bulbDead', { color: 0x4a443c, roughness: 0.3 }); if (bl[0]) { bl[0].material = bl[0].material.clone(); bl[0].material.userData.shared = false; this.dustBulb = bl[0]; } this.room.props = []; } else this.dustPts = null;
     this.syncLoose();
     this.syncKeep();
     this.outside = buildOutside(this.room.outside, def); this.scene.add(this.outside);
     this.roomLights = this.room.lights.map((L) => { const p = new THREE.PointLight(L.color, L.intensity, L.dist, 1.6); p.position.set(...L.pos); this.scene.add(p); return p; });
-    if (this.gridHelper) this.scene.remove(this.gridHelper);
+    if (this.gridHelper) { this.scene.remove(this.gridHelper); disposeTree(this.gridHelper); }
     const gpts = []; const step = def.w * def.d > 600 ? 1 : def.grid;
     for (let x = 0; x <= def.w + 1e-6; x += step) gpts.push(x, 0, 0, x, 0, def.d);
     for (let z = 0; z <= def.d + 1e-6; z += step) gpts.push(0, 0, z, def.w, 0, z);
@@ -211,7 +232,7 @@ export class World {
     this.controls.target.set(def.w / 2, 0, def.d / 2);
     this.camera.near = 0.05; this.camera.updateProjectionMatrix();
     // Türen als Interaktionsflächen
-    this.doorGroup.clear();
+    disposeTree(this.doorGroup); this.doorGroup.clear();
     for (const d of this.room.doors || []) { const m = new THREE.Mesh(new THREE.BoxGeometry(...d.s), new THREE.MeshBasicMaterial({ visible: false })); m.position.set(...d.c); m.userData.door = d; this.doorGroup.add(m); }
     for (const p of this.room.props || []) { const m = new THREE.Mesh(new THREE.BoxGeometry(...p.s), new THREE.MeshBasicMaterial({ visible: false })); m.position.set(...p.c); m.userData.prop = p; this.doorGroup.add(m); }
     // Freien Platz zum Erscheinen suchen (falls dort inzwischen etwas steht)
@@ -221,9 +242,9 @@ export class World {
     }
     for (const wl of this.room.walls) wl.group.visible = true;
     this.room.ceil.visible = true;
-    if (this.people) { this.scene.remove(this.people); this.people = null; }
+    if (this.people) { this.scene.remove(this.people); disposeTree(this.people); this.people = null; }
     this.popups?.forEach((p) => (p.visible = false));
-    if (this.xmas) { this.scene.remove(this.xmas); this.xmas = null; }
+    if (this.xmas) { this.scene.remove(this.xmas); disposeTree(this.xmas); this.xmas = null; }
     this.buildWeather();
     this.scene.fog = def.style === 'fjord' ? new THREE.Fog(0xb8c8d8, 250, 900) : new THREE.Fog(0x9fb8d0, 60 + span * 3, 260 + span * 6);
     this.syncObjects();
@@ -239,17 +260,18 @@ export class World {
       let e = this.entries.get(o.uid);
       const key = this.objKey(o);
       if (e && e.key === '__anim' && this.install?.uid === o.uid) { e.obj = o; continue; }
-      if (e && e.key !== key) { this.objGroup.remove(e.group); e = null; }
+      let oldSp = null; // Status-Symbol beim Neuaufbau weiterverwenden (kein neues Material pro Umbau)
+      if (e && e.key !== key) { this.objGroup.remove(e.group); oldSp = e.sprite; e.group.remove(oldSp); disposeTree(e.group); e = null; }
       if (!e) {
         const g = objectModel(o); g.traverse((m) => { m.userData.uid = o.uid; });
-        const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.icons.warn, depthTest: false, transparent: true })); sp.visible = false; sp.renderOrder = 10;
+        const sp = oldSp || new THREE.Sprite(new THREE.SpriteMaterial({ map: this.icons.warn, depthTest: false, transparent: true })); sp.visible = false; sp.renderOrder = 10;
         g.add(sp);
         e = { group: g, key, sprite: sp }; this.entries.set(o.uid, e); this.objGroup.add(g);
       }
       e.group.position.set(o.x, 0, o.z); e.group.rotation.y = -o.rot * Math.PI / 2;
       e.obj = o;
     }
-    for (const [uid, e] of this.entries) if (!seen.has(uid)) { this.objGroup.remove(e.group); this.entries.delete(uid); if (this.selected === uid) this.select(null); }
+    for (const [uid, e] of this.entries) if (!seen.has(uid)) { this.objGroup.remove(e.group); disposeTree(e.group); this.entries.delete(uid); if (this.selected === uid) this.select(null); }
     this.updateStatus(); this.syncPeople(); if (this.ghostSpec && !this.ghost?.parent?.parent) this.applyGhost();
   }
   updateStatus() {
@@ -264,7 +286,7 @@ export class World {
       else if (a?.status === 'empty') icon = 'empty';
       else if (e.obj.type === 'tower' && e.obj.parts && !this.game.s.flags.miningStarted) icon = null; // dafür gibt es den Zielhinweis am Objekt
       else if (a?.status === 'off' && e.obj.parts && !this.game.pcReady(e.obj)) icon = 'empty';
-      else if (a?.status === 'idle' || a?.status === 'off') icon = 'sleep';
+      else if (a?.status === 'idle' || a?.status === 'full' || a?.status === 'off') icon = 'sleep';
       e.running = !sm.tripped && a && a.watt > 0;
       if (e.obj.type === 'tower') { if (!e.light) { e.light = new THREE.PointLight(0xffa860, 0, 0.7, 2); e.light.position.set(0, 0.34, 0); e.group.add(e.light); } e.light.intensity = e.running ? 0.35 : 0; }
       e.sprite.visible = !!icon && this.mode !== 'title' && !(this.focus && this.focusUid === uid);
@@ -300,7 +322,7 @@ export class World {
     const base = objectModel({ ...o, parts: without }); base.traverse((m) => { m.userData.uid = uid; });
     const part = rigPartModel(o, type); part.traverse((m) => { m.castShadow = true; m.userData.uid = uid; });
     base.add(part); base.add(e.sprite);
-    this.objGroup.remove(e.group); e.group = base; e.key = '__anim'; this.objGroup.add(base);
+    this.objGroup.remove(e.group); disposeTree(e.group); e.group = base; e.key = '__anim'; this.objGroup.add(base);
     base.position.set(o.x, 0, o.z); base.rotation.y = -o.rot * Math.PI / 2;
     this.install = { uid, part, t: 0 }; this.updateInstall(0);
     if (this.outline && this.selected === uid) this.outline.selectedObjects = [base];
@@ -316,13 +338,13 @@ export class World {
   // Halbtransparente Vorschau: hier kommt das Teil hin
   ghostPart(uid, type, id) { this.ghostSpec = uid && type && id ? { uid, type, id } : null; this.applyGhost(); }
   applyGhost() {
-    if (this.ghost) { this.ghost.parent?.remove(this.ghost); this.ghost = null; }
+    if (this.ghost) { this.ghost.parent?.remove(this.ghost); disposeTree(this.ghost); this.ghost = null; } // Kanten-Geometrien freigeben
     const sp = this.ghostSpec, e = sp && this.entries.get(sp.uid); if (!e?.obj?.parts || e.key === '__anim') return;
     const p = e.obj.parts, parts = { ...p, gpus: [...(p.gpus || [])] };
     if (sp.type === 'gpu') parts.gpus.push(sp.id); else parts[sp.type] = sp.id;
     const g = rigPartModel({ ...e.obj, parts }, sp.type);
-    this.ghostMat ||= new THREE.MeshBasicMaterial({ color: 0x9fe8bd, transparent: true, opacity: 0.14, depthWrite: false });
-    this.ghostLine ||= new THREE.LineBasicMaterial({ color: 0x9fe8bd, transparent: true, opacity: 0.72, depthWrite: false });
+    if (!this.ghostMat) { this.ghostMat = new THREE.MeshBasicMaterial({ color: 0x9fe8bd, transparent: true, opacity: 0.14, depthWrite: false }); this.ghostMat.userData.shared = true; }
+    if (!this.ghostLine) { this.ghostLine = new THREE.LineBasicMaterial({ color: 0x9fe8bd, transparent: true, opacity: 0.72, depthWrite: false }); this.ghostLine.userData.shared = true; }
     const edges = [];
     g.traverse((m) => { if (m.isMesh) { m.material = this.ghostMat; m.castShadow = false; m.raycast = () => {}; if (m.geometry.attributes.position.count < 4000) { const l = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, 80), this.ghostLine); l.raycast = () => {}; edges.push([m, l]); } } });
     for (const [m, l] of edges) m.add(l);
@@ -358,7 +380,7 @@ export class World {
     if (!this.looseGroup) { this.looseGroup = new THREE.Group(); this.scene.add(this.looseGroup); }
     const s = this.game.s, spots = this.room?.looseSpots, want = spots && s?.loose ? Object.keys(s.loose).filter((t) => spots[t]) : [];
     this.looseItems ||= {};
-    for (const [t, g] of Object.entries(this.looseItems)) if (!want.includes(t) && !g.userData.flying) { this.looseGroup.remove(g); if (g.userData.haloMesh) this.looseGroup.remove(g.userData.haloMesh); delete this.looseItems[t]; }
+    for (const [t, g] of Object.entries(this.looseItems)) if (!want.includes(t) && !g.userData.flying) { this.looseGroup.remove(g); if (g.userData.haloMesh) { this.looseGroup.remove(g.userData.haloMesh); disposeTree(g.userData.haloMesh); } disposeTree(g); delete this.looseItems[t]; }
     for (const t of want) {
       if (this.looseItems[t]) continue;
       const [x, y, z, ry] = spots[t], g = loosePartModel(t, s.loose[t]);
@@ -375,7 +397,7 @@ export class World {
   haloTex() {
     if (this._halo) return this._halo; const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
     const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64); gr.addColorStop(0, 'rgba(255,220,150,.9)'); gr.addColorStop(0.35, 'rgba(255,180,70,.35)'); gr.addColorStop(1, 'rgba(255,160,40,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
-    this._halo = new THREE.CanvasTexture(c); this._halo.colorSpace = THREE.SRGBColorSpace; return this._halo;
+    this._halo = new THREE.CanvasTexture(c); this._halo.colorSpace = THREE.SRGBColorSpace; this._halo.userData.shared = true; return this._halo;
   }
   // Aufheben: das Teil fliegt kurz zur Kamera und verschwindet
   pickupFx(t) {
@@ -388,7 +410,7 @@ export class World {
       if (g.userData.flying) {
         const f = (g.userData.flying += dt), k = Math.min(1, f / 0.42), tgt = this.camera.position.clone().addScaledVector(this.camera.getWorldDirection(new THREE.Vector3()), 0.3).add(new THREE.Vector3(0, -0.45, 0));
         g.position.lerp(tgt, k * 0.35); g.scale.setScalar(Math.max(0.001, 1 - 1.6 * k)); g.rotation.y += dt * 6;
-        if (k >= 1) { this.looseGroup.remove(g); if (g.userData.haloMesh) this.looseGroup.remove(g.userData.haloMesh); delete this.looseItems[t]; }
+        if (k >= 1) { this.looseGroup.remove(g); if (g.userData.haloMesh) { this.looseGroup.remove(g.userData.haloMesh); disposeTree(g.userData.haloMesh); } disposeTree(g); delete this.looseItems[t]; }
       }
     }
   }
@@ -498,7 +520,7 @@ export class World {
   }
   cancelPlacement() {
     if (!this.placing) return;
-    this.scene.remove(this.placing.ghost);
+    this.scene.remove(this.placing.ghost); disposeTree(this.placing.ghost);
     if (this.placing.moveUid) { const e = this.entries.get(this.placing.moveUid); if (e) e.group.visible = true; }
     this.placing = null; this.gridHelper.visible = false; this.footprint.visible = false;
     this.onPlacing?.(false);
@@ -557,10 +579,12 @@ export class World {
   }
   requestLock() {
     if (this.touchMode || this.mode !== 'play' || document.pointerLockElement === this.canvas) return;
-    const plain = () => { try { const r = this.canvas.requestPointerLock(); if (r && r.catch) r.catch(() => { this.lockFailed = true; this.onLockChange?.(false); }); } catch (e) { this.lockFailed = true; } };
+    // NotAllowed/Abort (z. B. zu kurz nach dem Verlassen, keine Nutzergeste) ist nur vorübergehend – nächster Klick versucht es erneut
+    const fail = (err) => { if (err?.name !== 'NotAllowedError' && err?.name !== 'AbortError') this.lockFailed = true; this.onLockChange?.(false); };
+    const plain = () => { try { const r = this.canvas.requestPointerLock(); this.lockPromise = !!(r && r.catch); if (this.lockPromise) r.catch(fail); } catch (e) { this.lockFailed = true; } };
     // Rohe Mausbewegung (ohne Beschleunigung) vermeidet Sprünge beim schnellen Drehen; ältere Browser fallen zurück
     if (this.noRawMouse) { plain(); return; }
-    try { const r = this.canvas.requestPointerLock({ unadjustedMovement: true }); if (r && r.catch) r.catch((err) => { if (err?.name === 'NotSupportedError') { this.noRawMouse = true; plain(); } else { this.lockFailed = true; this.onLockChange?.(false); } }); } catch (e) { this.noRawMouse = true; plain(); }
+    try { const r = this.canvas.requestPointerLock({ unadjustedMovement: true }); this.lockPromise = !!(r && r.catch); if (this.lockPromise) r.catch((err) => { if (err?.name === 'NotSupportedError') { this.noRawMouse = true; plain(); } else fail(err); }); } catch (e) { this.noRawMouse = true; plain(); }
   }
   // Kollision des Spielers mit Raum, Möbeln und Objekten
   collides(x, z, r) {
@@ -594,7 +618,7 @@ export class World {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
       const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
       this.player.keys[k] = true;
-      if (this.mode !== 'play') return;
+      if (this.mode !== 'play' || this.paused) return; // im Pausenmenü keine Spieltasten
       if (k === 'r' && this.placing) { this.placing.rot = (this.placing.rot + 1) % 4; this.updatePlacement(); }
       if (k === 'e' && !this.placing) this.primaryAction();
       if ((k === 'x' || k === 'Backspace') && this.placing) this.cancelPlacement();
@@ -703,7 +727,7 @@ export class World {
     cam.position.copy(tgt).addScaledVector(dir, dist); cam.lookAt(tgt); cam.near = dist / 50; cam.far = dist * 4; cam.updateProjectionMatrix();
     const prevT = r.getRenderTarget(); r.setRenderTarget(this.thumbRT); r.setClearColor(0x000000, 0); r.clear(); r.render(this.thumbScene, this.thumbCam);
     const px = new Uint8Array(W * H * 4); r.readRenderTargetPixels(this.thumbRT, 0, 0, W, H, px); r.setRenderTarget(prevT);
-    this.thumbScene.remove(model);
+    this.thumbScene.remove(model); disposeTree(model);
     const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d'), img = g.createImageData(W, H);
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const si = ((H - 1 - y) * W + x) * 4, di = (y * W + x) * 4; for (let k = 0; k < 3; k++) { const v = px[si + k] / 255, t = v / (1 + v * 0.6); img.data[di + k] = Math.min(255, Math.pow(t * 1.15, 1 / 2.2) * 255); } img.data[di + 3] = px[si + 3]; }
     g.putImageData(img, 0, 0);
@@ -744,7 +768,7 @@ export class World {
       const cols = [M.ledRed(), M.ledBlue(), M.ledAmber(), M.ledGreen2()];
       for (let i = 0; i < 18; i++) { const a = i * 2.4, y = 0.35 + (i / 18) * 0.75, r = 0.3 * (1 - (y - 0.3) / 0.95) + 0.03; const b = new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 6), cols[i % 4]); b.position.set(Math.cos(a) * r, y, Math.sin(a) * r); g.add(b); }
       this.scene.add(g);
-    } else if (!want && this.xmas) { this.scene.remove(this.xmas); this.xmas = null; }
+    } else if (!want && this.xmas) { this.scene.remove(this.xmas); disposeTree(this.xmas); this.xmas = null; }
   }
 
   // ---------- Solarfeld neben dem Gebäude ----------
@@ -752,7 +776,7 @@ export class World {
     const kwp = this.game.s.fac[this.facId]?.solar || 0;
     if (this.solarKwp === kwp && this.solarFacId === this.facId) return;
     this.solarKwp = kwp; this.solarFacId = this.facId;
-    if (this.solarMesh) { this.scene.remove(this.solarMesh); this.solarMesh = null; }
+    if (this.solarMesh) { this.scene.remove(this.solarMesh); this.solarMesh.dispose(); this.solarMesh = null; } // Instanz-Puffer freigeben (Geometrie/Material bleiben)
     if (!kwp) return;
     const n = Math.min(600, Math.round(kwp / 0.4));
     if (!this.panelGeo) {
@@ -762,7 +786,7 @@ export class World {
       for (let y = 0; y <= 128; y += 16) { g.beginPath(); g.moveTo(0, y); g.lineTo(64, y); g.stroke(); }
       const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
       this.panelMat = new THREE.MeshStandardMaterial({ map: t, roughness: 0.25, metalness: 0.4 });
-      this.panelGeo = new THREE.BoxGeometry(1.0, 0.04, 1.65);
+      this.panelGeo = new THREE.BoxGeometry(1.0, 0.04, 1.65); this.panelGeo.userData.shared = this.panelMat.userData.shared = true;
     }
     const im = new THREE.InstancedMesh(this.panelGeo, this.panelMat, n); im.castShadow = true;
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.5, 0, 0)), sc = new THREE.Vector3(1, 1, 1);
@@ -773,7 +797,7 @@ export class World {
 
   // ---------- Wetter: Schnee & Polarlicht ----------
   buildWeather() {
-    if (this.weather) { this.scene.remove(this.weather); this.weather = null; }
+    if (this.weather) { this.scene.remove(this.weather); disposeTree(this.weather); this.weather = null; }
     const def = this.def, g = (this.weather = new THREE.Group()); this.scene.add(g);
     const span = Math.max(def.w, def.d) + 40, n = def.style === 'fjord' ? 5000 : 1800;
     const pos = new Float32Array(n * 3);
@@ -837,9 +861,9 @@ export class World {
     if (!this.heatMode || this.empire) return;
     const sm = this.game.summary[this.facId]; if (!sm) return;
     const g = (this.heatGroup = new THREE.Group()); this.scene.add(g);
-    const hot = new THREE.MeshBasicMaterial({ map: this.heatTex(true), transparent: true, depthWrite: false, toneMapped: false });
-    const cold = new THREE.MeshBasicMaterial({ map: this.heatTex(false), transparent: true, depthWrite: false, toneMapped: false, opacity: 0.8 });
-    const geo = new THREE.PlaneGeometry(1, 1); geo.rotateX(-Math.PI / 2);
+    // Material und Geometrie nur einmal anlegen (wird jede Sekunde neu aufgebaut)
+    this.heatRes ||= { hot: new THREE.MeshBasicMaterial({ map: this.heatTex(true), transparent: true, depthWrite: false, toneMapped: false }), cold: new THREE.MeshBasicMaterial({ map: this.heatTex(false), transparent: true, depthWrite: false, toneMapped: false, opacity: 0.8 }), geo: new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2) };
+    const { hot, cold, geo } = this.heatRes;
     for (const [uid, e] of this.entries) {
       const a = sm.per.get(uid); if (!a) continue;
       const def = PLACEABLE[e.obj.type];
@@ -894,13 +918,12 @@ export class World {
     this.transition = { from: start, to: end, t: 0, dur: 4.5 };
     this.onEmpire?.(true);
   }
-  hideEmpire() {
+  hideEmpire(reload = true) {
     if (!this.empire) return;
-    this.scene.remove(this.empire); this.empire = null;
+    this.scene.remove(this.empire); disposeTree(this.empire); this.empire = null;
     this.empireHidden.forEach((o) => (o.visible = true)); this.roomLights.forEach((l) => (l.visible = true));
     this.camera.fov = 60; this.camera.updateProjectionMatrix(); this.doorGroup.visible = true;
-    this.loadFacility(this.facId);
-    const sp = this.savedPose; if (sp) { this.player.setPose(sp.x, sp.z, sp.yaw, sp.pitch); }
+    if (reload) { this.loadFacility(this.facId); const sp = this.savedPose; if (sp) { this.player.setPose(sp.x, sp.z, sp.yaw, sp.pitch); } }
     this.onEmpire?.(false);
   }
 
@@ -908,7 +931,7 @@ export class World {
   // Figur: Kapsel-Gliedmaßen mit Gelenken, Schuhe, Gesicht (Augen, Nase, Ohren), Haare oder Helm
   makePerson(vest = 0xff8a00, hat = true, skin = 0xe0b394, hair = 0x2a1a10) {
     const g = new THREE.Group();
-    const cap = (r, len, seg = 12) => { const k = `cap${r}|${len}`; if (!this._pg) this._pg = new Map(); if (!this._pg.has(k)) { const geo = new THREE.CapsuleGeometry(r, len, 4, seg); geo.translate(0, -len / 2 - r * 0.6, 0); this._pg.set(k, geo); } return this._pg.get(k); };
+    const cap = (r, len, seg = 12) => { const k = `cap${r}|${len}`; if (!this._pg) this._pg = new Map(); if (!this._pg.has(k)) { const geo = new THREE.CapsuleGeometry(r, len, 4, seg); geo.translate(0, -len / 2 - r * 0.6, 0); geo.userData.shared = true; this._pg.set(k, geo); } return this._pg.get(k); };
     const mk = (geo, m, parent, x, y, z, sx = 1, sy = 1, sz = 1) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.scale.set(sx, sy, sz); o.castShadow = true; parent.add(o); return o; };
     const pants = mat('npcPants', { color: 0x2b3446, roughness: 0.9 }), skinM = mat('npcSkin' + skin, { color: skin, roughness: 0.65 }), vestM = mat('npcVest' + vest, { color: vest, roughness: 0.6, emissive: vest, emissiveIntensity: 0.08 });
     const shirt = mat('npcShirt', { color: 0x3c4250, roughness: 0.85 }), shoe = mat('npcShoe', { color: 0x1d1f24, roughness: 0.6 }), dark = mat('npcEye', { color: 0x15171c, roughness: 0.2 });
@@ -964,7 +987,7 @@ export class World {
     }
     want += fam.length;
     if (this.people.userData.me) want += 1;
-    while (this.people.children.length > want) { const ch = this.people.children; let i = ch.length - 1; while (i >= 0 && ch[i].userData.static) i--; if (i < 0) break; this.people.remove(ch[i]); }
+    while (this.people.children.length > want) { const ch = this.people.children; let i = ch.length - 1; while (i >= 0 && ch[i].userData.static) i--; if (i < 0) break; disposeTree(ch[i]); this.people.remove(ch[i]); }
     while (this.people.children.length < want) {
       const first = !this.people.children.some((c) => !c.userData.static);
       const p = first ? this.makePerson(0x2e6fd6, false, 0xc89a72) : this.makePerson(0xff8a00, tier >= 3);
@@ -1037,7 +1060,7 @@ export class World {
     } else if (this.mode === 'title') {
       this.camera.lookAt(this.controls.target);
     } else {
-      if (this.mode === 'play') {
+      if (this.mode === 'play' && !this.paused) {
         const scale = this.def.tier >= 3 ? 1.6 : 1;
         this.player.update(dt, (x, z, r) => this.collides(x, z, r), scale);
         if (this.placing) this.updatePlacement(); else this.updateAim();

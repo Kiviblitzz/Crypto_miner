@@ -69,7 +69,7 @@ export const CHAPTERS = [
     title: 'Kapitel 2 – Der Hobbykeller', unlock: 'werkstatt', minDate: '2012-06-01',
     intro: 'Papa staunt. Der Keller gehört dir – solange die Waschmaschine weiterläuft.',
     goals: [
-      { id: 'openrig', text: 'Bau dein erstes Rig', check: (s, h) => h.countPlaced((o) => ['crate', 'frame6', 'frame8', 'frame12'].includes(o.type)) > 0 },
+      { id: 'openrig', text: 'Bau dein erstes Rig', check: (s, h) => h.countPlaced((o) => ['crate', 'frame6', 'frame8', 'frame12'].includes(o.type) && o.parts?.gpus?.length > 0) > 0 }, // mit mindestens 1 GPU
       { id: 'rev30', text: 'Schaff 30 $ pro Tag', check: (s, h) => h.dailyRev() >= 30, progress: (s, h) => [h.dailyRev(), 30, 'usd'] },
       { id: 'debt', text: 'Rette Papas Laden', action: { label: '15.000 $ überweisen', cost: 15000, flag: 'debt' }, check: (s) => s.flags.debt },
     ],
@@ -103,7 +103,7 @@ export const CHAPTERS = [
     title: 'Kapitel 4 – Die Lagerhalle', unlock: 'rz', minDate: '2017-06-01',
     intro: 'Die Hashwerk GmbH zieht ins Gewerbegebiet Lindental-Nord. Deniz hat sich im Büro-Container schon den Platz am Fenster gesichert.',
     goals: [
-      { id: 'tech', text: 'Stell einen Techniker ein', check: (s) => s.staff.tech > 0 },
+      { id: 'tech', text: 'Stell einen Techniker ein', live: true, eod: true, check: (s) => s.staff.tech > 0 }, // zählt erst am Tagesende
       { id: 'ph1', text: 'Schaff 1 PH/s', check: (s, h) => h.algoHash('sha256') >= 1e15, progress: (s, h) => [h.algoHash('sha256'), 1e15, 'hash'] },
       { id: 'nw1m', text: 'Firmenwert 1 Mio. $ (ohne Coins)', check: (s, h) => h.firmValue() >= 1e6, progress: (s, h) => [h.firmValue(), 1e6, 'usd'] }, // Bargeld + Hardware − Kredit: gehortete Coins zählen nicht
     ],
@@ -137,7 +137,7 @@ export const CHAPTERS = [
     intro: 'Wasserkraft, Fjordluft, 30 Megawatt. Jetzt geht es gegen MONOLITH.',
     goals: [
       { id: 'eh1', text: 'Schaff 1 EH/s', check: (s, h) => h.algoHash('sha256') >= 1e18, progress: (s, h) => [h.algoHash('sha256'), 1e18, 'hash'] },
-      { id: 'mono', text: 'Überhol MONOLITH', check: (s, h) => h.algoHash('sha256') > h.monolithHash(), progress: (s, h) => [h.algoHash('sha256'), h.monolithHash(), 'hash'] },
+      { id: 'mono', text: 'Überhol MONOLITH', live: true, check: (s, h) => h.algoHash('sha256') > h.monolithHash(), progress: (s, h) => [h.algoHash('sha256'), h.monolithHash(), 'hash'] },
     ],
     // Kein Wartedatum mehr: die Bonusziele stehen hier direkt unter dem aktuellen Ziel
     bonus: [
