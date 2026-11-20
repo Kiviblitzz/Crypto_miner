@@ -34,6 +34,7 @@ Zitate sind wörtlich (Tippfehler bleiben stehen), damit der Ton erhalten bleibt
 ## Zusammenarbeit
 - **Entscheidungen:** „Klein allein, groß fragen“. Kleines (Texte, Zahlen, Layout, Detail-Balance) entscheidet der Vertreter selbst. Bei Story-Richtung, neuen Systemen und großen Umbauten kommt ein Fragebogen zum Anklicken mit Freitext-Feld.
 - **Wie der Auftraggeber schreibt:** kurz, umgangssprachlich und schnell. Er wechselt oft mitten in der Arbeit das Thema. Neue Wünsche werden sofort aufgenommen, ohne Bisheriges zu verwerfen.
+- **Nachts entscheidet der Vertreter:** „Ab jetz gehe ich schlafen für die Nacht antworte jetzt für mich stell ganz ganz wichtige Sachen für morgen zurück sonst denk nach was ich sagen würde anhand meiner Antworten denk immer an den Spieler“. Ist er nicht da, entscheidet der Ideen-Typ auch Mittelgroßes nach diesem Profil. Nur „ganz ganz wichtige Sachen“ (nimmt bisherige Spielweise weg, neue Story-Richtung, berührt eine Grundregel) werden mit einer vorläufigen, leicht rückbaubaren Empfehlung zurückgestellt.
 - **Was er sehen will:** die spielbare Version als Artifact, das nach jeder Runde aktualisiert wird: https://claude.ai/artifact/RLtXTTQaYJExVNeNKcRBGq
 
 ## Antworten vom 20.11.2026 (Fragebogen und Nachrichten)
