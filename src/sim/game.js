@@ -461,13 +461,13 @@ export class Game {
   // Warum geht „Noch so einen“ nicht? '' = geht (Geld und Platz prüft der Aufrufer)
   cloneWhy(src, kit = false) {
     const blk = this.cloneBlocked(src); if (blk) return `${blk} gibt es nicht mehr zu kaufen`;
-    const ov = !kit && this.cloneRig(src) && this.rigOverload(src);
+    const ov = this.cloneRig(src) && this.rigOverload(src); // auch als Bausatz nicht: dieselbe Karte liefe dort ebenso nicht
     return ov ? `Netzteil zu schwach (${ov.w} W > ${ov.cap} W) – erst ein stärkeres einbauen, dann nachbauen` : '';
   }
   cloneObject(src, facId, x, z, rot, kit = false) {
     if (this.cloneBlocked(src)) return null;
     const rig = this.cloneRig(src); kit = kit && rig;
-    if (rig && !kit && this.rigOverload(src)) return null; // fertig montiert nur mit passendem Netzteil (als Bausatz: Einbau prüft)
+    if (rig && this.rigOverload(src)) return null; // nur mit passendem Netzteil (fertig montiert und als Bausatz)
     if (rig && !kit && !this.readyOk(src.type)) return null; // fertig montiert erst über einen Kontakt
     const cost = this.cloneCost(src, kit); if (!this.canAfford(cost)) return null;
     if (!this.cloneStockOk(src)) return null; // Kontingent erschöpft

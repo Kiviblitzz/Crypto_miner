@@ -509,13 +509,14 @@ export class UI {
     const ks = def.kind === 'rig' && o.parts ? this.kitSec(o) : null;
     if (g.slotKind(def) && !g.cloneBlocked(o.kit && !g.pcReady(o) ? { ...o, parts: o.kit } : o)) {
       const src = o.kit && !g.pcReady(o) ? { ...o, parts: o.kit } : o; // offener Bausatz: „noch so einen“ = derselbe Bausatz, nicht das leere Gehäuse
-      const fac = g.facOf(uid), full = !g.slotOk(fac, def), rig = g.cloneRig(src), lock = rig && (!g.readyOk(o.type) || src !== o), cc = g.cloneCost(src, lock), ck = rig ? g.cloneCost(src, true) : 0, cid = g.readyBy(o.type), ow = !lock && rig ? g.cloneWhy(src, false) : '';
+      const fac = g.facOf(uid), full = !g.slotOk(fac, def), rig = g.cloneRig(src), lock = rig && (!g.readyOk(o.type) || src !== o), cc = g.cloneCost(src, lock), ck = rig ? g.cloneCost(src, true) : 0, cid = g.readyBy(o.type), ow = rig ? g.cloneWhy(src, lock) : '';
       const kitT = () => ({ type: o.type, rot: o.rot, coin: o.coin, parts: { mobo: null, cpu: null, psu: null, gpus: [] }, kit: true, src }); // Bausatz-Kopie: leeres Gehäuse, Teile ins Lager
       const ag = h(`<button class="btn ${ks ? '' : 'primary'} wide again" ${full || ow || cc > g.s.cash ? 'disabled' : ''} title="${full ? 'Alle Plätze belegt' : ow ? esc(ow) : lock ? 'Gleiches Gehäuse, alle Teile ins Lager – selbst einbauen' : rig && cid ? `Gleicher Rig, fertig montiert von ${esc(CONTACT[cid].name)} (${Math.round(g.buildFee(o.type) * 100)} % Montage)` : 'Gleiches Gerät mit allen Teilen noch mal kaufen und hinstellen'}">${full ? 'Kein Platz mehr hier' : lock ? `Noch so einen als Bausatz · ${this.money(cc)}` : `Noch so einen bauen · ${this.money(cc)}`}</button>`);
       ag.onclick = () => { this.resume(); this.w.startPlacement(o.type, null, lock ? kitT() : o); };
       const as = h('<div class="sec again-sec"></div>'); as.append(ag);
-      if (rig && !full && lock && cid && !g.readyOk(o.type)) { const ll = h(this.lockLine(cid)); this.lockWire(ll); as.append(ll); }
-      else if (rig && !full && !lock) { if (ow) as.append(h(`<div class="again-why">${esc(ow)}.</div>`)); const kb = h(`<button class="btn small again-kit" ${ck > g.s.cash ? 'disabled' : ''} title="Gleiches Gehäuse, alle Teile ins Lager – selbst einbauen (günstiger, Schrauben-EP)">Als Bausatz · ${this.money(ck)}</button>`); kb.onclick = () => { this.resume(); this.w.startPlacement(o.type, null, kitT()); }; as.append(kb); }
+      if (ow) as.append(h(`<div class="again-why">${esc(ow)}.</div>`));
+      else if (rig && !full && lock && cid && !g.readyOk(o.type)) { const ll = h(this.lockLine(cid)); this.lockWire(ll); as.append(ll); }
+      else if (rig && !full && !lock) { const kb = h(`<button class="btn small again-kit" ${ck > g.s.cash ? 'disabled' : ''} title="Gleiches Gehäuse, alle Teile ins Lager – selbst einbauen (günstiger, Schrauben-EP)">Als Bausatz · ${this.money(ck)}</button>`); kb.onclick = () => { this.resume(); this.w.startPlacement(o.type, null, kitT()); }; as.append(kb); }
       c.prepend(as);
     }
     if (ks) c.prepend(ks);
@@ -1627,7 +1628,7 @@ export class UI {
     const g = this.g, fac = g.s.current, st = g.buildStats(cfg, fac, ready), blk = g.buildBlocked(cfg);
     if (blk) { this.toast(`${esc(blk)} gibt es nicht mehr zu kaufen.`, 'bad'); return; }
     if (ready && !g.readyOk(cfg.type)) { this.toast(`${this.lockText(g.readyBy(cfg.type)).short} Als Bausatz geht’s sofort.`, 'info', 5000); return; }
-    if (ready && !st.ok) { this.toast(esc(st.why), 'bad'); return; }
+    if (!st.ok) { this.toast(esc(st.why), 'bad'); return; }
     if (!g.slotOk(fac, PLACEABLE[cfg.type])) { this.toast('Kein Platz mehr – Zeit für einen größeren Standort.', 'bad'); return; }
     if (st.price > g.s.cash) { this.toast(`${this.missText(st.price)}.`, 'bad'); return; }
     this.resume();
@@ -1697,7 +1698,6 @@ export class UI {
       bk.onclick = () => this.startBuild(cfg, false); br.onclick = () => { if (lt?.call) { this.callContact(cid); this.configurator(cfg.type, cfg); return; } this.startBuild(cfg, true); };
       goEl.append(bk, br);
       if (full) goEl.append(h('<div class="cf-why">Kein Platz mehr – Zeit für einen größeren Standort.</div>'));
-      else if (!kit.ok) goEl.append(h(`<div class="cf-why">${esc(kit.why)}${fit && fit.id !== cfg.psu ? ' – „Passendes nehmen“ beim Netzteil' : ''}.</div>`));
       else if (kit.price > g.s.cash) goEl.append(h(`<div class="cf-why">${this.missText(kit.price)}.</div>`));
     };
     render();
