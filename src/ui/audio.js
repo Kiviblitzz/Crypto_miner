@@ -54,5 +54,21 @@ export class Audio {
     const g = ctx.createGain(); g.gain.value = run ? 0.22 : 0.15;
     src.connect(f).connect(g).connect(this.master); src.start(t);
   }
+  // Tür: Klinke + leises Knarzen (auf) bzw. dumpfes Zufallen (zu)
+  door(open) {
+    if (!this.ctx || this.muted) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    if (open) {
+      this.blip(1900, 0.02, 'square', 0.03);
+      const o = ctx.createOscillator(), g = ctx.createGain(), f = ctx.createBiquadFilter(); o.type = 'sawtooth'; o.frequency.setValueAtTime(95, t + 0.05); o.frequency.linearRampToValueAtTime(140, t + 0.4);
+      f.type = 'bandpass'; f.frequency.value = 900; f.Q.value = 6; g.gain.setValueAtTime(0.0001, t + 0.04); g.gain.exponentialRampToValueAtTime(0.025, t + 0.12); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+      o.connect(f).connect(g).connect(this.master); o.start(t + 0.04); o.stop(t + 0.5);
+    } else {
+      const n = Math.floor(ctx.sampleRate * 0.12), b = ctx.createBuffer(1, n, ctx.sampleRate), d = b.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 4);
+      const src = ctx.createBufferSource(); src.buffer = b; const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 260; const g = ctx.createGain(); g.gain.value = 0.35;
+      src.connect(f).connect(g).connect(this.master); src.start(t); setTimeout(() => this.blip(1500, 0.02, 'square', 0.025), 90);
+    }
+  }
   message() { this.blip(1046, 0.06, 'sine', 0.15); setTimeout(() => this.blip(1568, 0.1, 'sine', 0.12), 90); }
 }

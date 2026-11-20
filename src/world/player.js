@@ -47,10 +47,11 @@ export class Player {
     this.yaw -= mx * this.sens; this.pitch -= my * this.sens;
     this.pitch = Math.max(-1.45, Math.min(1.45, this.pitch));
   }
-  setPose(x, z, yaw, pitch = -0.08) { this.pos.set(x, 0, z); this.yaw = yaw; this.pitch = pitch; this.apply(); }
+  setPose(x, z, yaw, pitch = -0.08, y = 0) { this.pos.set(x, y, z); this.yaw = yaw; this.pitch = pitch; this.apply(); }
   lookAtPoint(x, z) { this.yaw = Math.atan2(-(x - this.pos.x), -(z - this.pos.z)); }
   forward(out = new THREE.Vector3()) { return out.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw)); }
-  update(dt, collides, speedScale = 1) {
+  // ground(x, z, y): Bodenhöhe unter dem Spieler (Treppen, Podeste) oder null = flacher Raum
+  update(dt, collides, speedScale = 1, ground = null) {
     const k = this.keys;
     let fx = (k.w || k.ArrowUp ? 1 : 0) - (k.s || k.ArrowDown ? 1 : 0) + -this.touch.y;
     let sx = (k.d || k.ArrowRight ? 1 : 0) - (k.a || k.ArrowLeft ? 1 : 0) + this.touch.x;
@@ -60,17 +61,20 @@ export class Player {
     const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
     const dx = (-sin * fx + cos * sx) * speed * dt, dz = (-cos * fx - sin * sx) * speed * dt;
     this.moving = len > 0.05;
+    this.wish = { x: dt > 0 ? dx / dt : 0, z: dt > 0 ? dz / dt : 0 }; // gewollte Laufrichtung (Türen, Türtrichter)
     if (this.moving) {
+      const x0 = this.pos.x, z0 = this.pos.z;
       const nx = this.pos.x + dx; if (!collides(nx, this.pos.z, this.radius)) this.pos.x = nx;
       const nz = this.pos.z + dz; if (!collides(this.pos.x, nz, this.radius)) this.pos.z = nz;
-      const moved = Math.hypot(dx, dz); this.stepDist += moved; this.bob += moved * 5.2;
+      if (ground) { const gy = ground(this.pos.x, this.pos.z, this.pos.y); if (gy != null) this.pos.y = gy; }
+      const moved = Math.hypot(this.pos.x - x0, this.pos.z - z0); this.stepDist += moved; this.bob += moved * 5.2;
       if (this.stepDist > 0.75) { this.stepDist = 0; this.onStep?.(sprint > 1); }
     } else this.bob *= 0.9;
     this.apply();
   }
   apply() {
     const bobY = this.moving ? Math.sin(this.bob) * 0.035 : 0;
-    this.camera.position.set(this.pos.x, this.eye + bobY, this.pos.z);
+    this.camera.position.set(this.pos.x, this.pos.y + this.eye + bobY, this.pos.z);
     this.euler.set(this.pitch, this.yaw, Math.sin(this.bob * 0.5) * (this.moving ? 0.004 : 0));
     this.camera.quaternion.setFromEuler(this.euler);
   }

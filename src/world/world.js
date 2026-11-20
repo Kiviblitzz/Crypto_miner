@@ -24,6 +24,10 @@ const GradeShader = {
     ' c.rgb *= mix(1.0 - vignette, 1.0, v); gl_FragColor = c; }',
 };
 import { buildRoom, buildOutside, buildDustyClutter } from './rooms.js';
+import { buildHouse, HOUSE_OFF, parcelModel } from './house.js';
+// Raumlicht-Profile je Aufenthaltsort (Himmel, Sonne, Mond, Umgebung); fließend überblendet, unabhängig von der geladenen Szene
+const AMB = { room: { hemi: 1, sun: 1, moon: 1, env: 1 }, dusty: { hemi: 0.22, sun: 0.25, moon: 0.4, env: 0.2 }, hall: { hemi: 0.3, sun: 0.6, moon: 0.3, env: 0.32 } };
+const ROOM_LIGHTS = 3, TOWER_LIGHTS = 4; // feste Lichtzahl in Wohnung und Keller: beim nahtlosen Wechsel werden keine Shader neu übersetzt
 import { objectModel, rigPartModel, loosePartModel, releaseModel } from './models.js';
 import { keepsakeModel } from './models.js';
 import { keepsakesAt } from '../data/story.js';
@@ -156,6 +160,11 @@ export class World {
     this.grade = new ShaderPass(GradeShader); this.composer.addPass(this.grade);
     this.quality = 'high';
 
+    // Feste Lichter: Glimmen in laufenden Tower-PCs (Pool statt Licht pro Gerät) und das Licht der Nahansicht
+    this.towerLights = []; for (let i = 0; i < TOWER_LIGHTS; i++) { const l = new THREE.PointLight(0xffa860, 0, 0.7, 2); this.scene.add(l); this.towerLights.push(l); }
+    this.focusLight = new THREE.PointLight(0xfff2df, 0, 0.75, 1.6); this.scene.add(this.focusLight);
+    this.roomLights = []; this.lightSpecs = []; this.roomCache = new Map();
+    this.amb = { ...AMB.room }; this.lk = { room: 1, hall: 0 };
     this.objGroup = new THREE.Group(); this.scene.add(this.objGroup);
     this.entries = new Map(); // uid -> {group, key, sprite}
     this.icons = { broken: iconTexture('broken', '#ff6b5e'), warn: iconTexture('warn', '#ffb000'), power: iconTexture('power', '#a08a74'), empty: iconTexture('empty', '#ffa867'), sleep: iconTexture('sleep', '#b08a62') };
@@ -198,22 +207,51 @@ export class World {
   }
 
   // ---------- Standort ----------
-  loadFacility(id) {
+  // opt.pose: Spielerpose in Haus-Koordinaten (nahtloser Wechsel Wohnung ↔ Keller), opt.at: 'haustuer' (Ankunft von woanders)
+  loadFacility(id, opt = {}) {
+    const t0 = performance.now();
     this.cancelPlacement(); this.select(null); this.onHover?.(null);
-    if (this.room) { this.scene.remove(this.room.root); this.scene.remove(this.outside); for (const l of this.roomLights) this.scene.remove(l); disposeTree(this.room.root); disposeTree(this.outside); this.roomLights.forEach((l) => l.dispose()); }
+    if (this.room) { this.scene.remove(this.room.root); this.scene.remove(this.outside); if (!this.room.cached) { disposeTree(this.room.root); disposeTree(this.outside); } }
     for (const e of this.entries.values()) { this.objGroup.remove(e.group); disposeTree(e.group); }
     this.entries.clear();
     const def = this.def = FACILITY[id]; this.facId = id;
     if (this.gtao) this.gtao.enabled = this.quality === 'high' && def.tier <= 2; // in großen Hallen zu teuer; Grafikstufe beachten
-    this.room = buildRoom(def); this.scene.add(this.room.root); this.screensDirty = true;
     // Verstaubter Keller, solange er noch nicht ausgebaut ist: Gerümpel, Spinnweben, Staub, schwaches Flackerlicht
-    this.dusty = id === 'keller' && this.game.s?.feat && !this.game.s.unlocked.includes('keller');
-    this.dustBulb = null;
-    if (this.dusty) { const dc = buildDustyClutter(def); this.room.root.add(dc.group); this.room.blocked.push(...dc.blocked); this.dustPts = dc.group.userData.dust; for (const L of this.room.lights) { L.intensity *= 0.3; L.dist = 3.6; L.color = 0xffc98a; } this.room.lights.splice(1); this.room.lights.push({ pos: [6.4, 2.2, 0.7], color: 0xffd9a8, intensity: 0.35, dist: 3.2 }); const bl = this.room.bulbs || []; if (bl[1]) bl[1].material = mat('bulbDead', { color: 0x4a443c, roughness: 0.3 }); if (bl[0]) { bl[0].material = bl[0].material.clone(); bl[0].material.userData.shared = false; this.dustBulb = bl[0]; } this.room.props = []; } else this.dustPts = null;
+    const dusty = (this.dusty = id === 'keller' && !!this.game.s?.feat && !this.game.s.unlocked.includes('keller'));
+    const off = (this.hoff = HOUSE_OFF[id] || null);
+    // Wohnung und Keller bleiben gebaut (Zwischenspeicher): der Wechsel auf der Treppe kostet dann kaum Zeit
+    const ck = off ? id + (dusty ? ':dusty' : '') : null;
+    let built = ck && this.roomCache.get(ck);
+    if (!built) {
+      const room = buildRoom(def);
+      if (dusty) { const dc = buildDustyClutter(def); room.root.add(dc.group); room.blocked.push(...dc.blocked); room.dustPts = dc.group.userData.dust; for (const L of room.lights) { L.intensity *= 0.3; L.dist = 3.6; L.color = 0xffc98a; } room.lights.splice(1); room.lights.push({ pos: [6.45, 1.9, 3.85], color: 0xffd9a8, intensity: 0.35, dist: 3.2 }); const bl = room.bulbs || []; if (bl[1]) bl[1].material = mat('bulbDead', { color: 0x4a443c, roughness: 0.3 }); if (bl[0]) { bl[0].material = bl[0].material.clone(); bl[0].material.userData.shared = false; room.dustBulb = bl[0]; } room.props = []; }
+      built = { room, outside: buildOutside(room.outside, def, off) };
+      if (ck) {
+        room.cached = true; this.roomCache.set(ck, built);
+        const stale = this.roomCache.get(id + (dusty ? '' : ':dusty')); // anderer Zustand desselben Kellers (z. B. nach dem Ausräumen): freigeben
+        if (stale) { disposeTree(stale.room.root); disposeTree(stale.outside); this.roomCache.delete(id + (dusty ? '' : ':dusty')); }
+      }
+    }
+    this.room = built.room; this.outside = built.outside; this.scene.add(this.room.root); this.screensDirty = true;
+    this.dustBulb = dusty ? this.room.dustBulb || null : null; this.dustPts = dusty ? this.room.dustPts || null : null;
     this.syncLoose();
     this.syncKeep();
-    this.outside = buildOutside(this.room.outside, def); this.scene.add(this.outside);
-    this.roomLights = this.room.lights.map((L) => { const p = new THREE.PointLight(L.color, L.intensity, L.dist, 1.6); p.position.set(...L.pos); this.scene.add(p); return p; });
+    this.scene.add(this.outside);
+    // Treppenhaus (bleibt in der Szene, wird nur verschoben)
+    if (off) {
+      const h = this.ensureHouse(); h.root.visible = true; h.root.position.set(-off[0], -off[1], -off[2]);
+      const sh = (r) => ({ ...r, x0: r.x0 - off[0], x1: r.x1 - off[0], z0: r.z0 - off[2], z1: r.z1 - off[2], ...(r.y != null ? { y: r.y - off[1] } : {}), ...(r.y0 != null ? { y0: r.y0 - off[1], y1: r.y1 - off[1] } : {}), ...(r.ramp ? { ramp: [r.ramp[0] - off[2], r.ramp[1] - off[1], r.ramp[2] - off[2], r.ramp[3] - off[1]] } : {}) });
+      this.hwalk = [{ x0: 0, x1: def.w, z0: 0, z1: def.d, y: 0, room: true }, ...h.walk.map(sh)];
+      this.hsolid = h.solid.map(sh);
+    } else { if (this.house) this.house.root.visible = false; this.hwalk = this.hsolid = null; }
+    // Punktlichter: Raum (in Wohnung/Keller auf feste Zahl aufgefüllt) + Treppenhaus; vorhandene Lichtobjekte werden weiterbenutzt
+    const specs = this.room.lights.map((L) => ({ ...L, kind: 'room' }));
+    if (off) { while (specs.length < ROOM_LIGHTS) specs.push({ pos: [def.w / 2, -20, def.d / 2], color: 0xffffff, intensity: 0, dist: 1, kind: 'room' }); for (const L of this.house.lights) specs.push({ ...L, pos: [L.pos[0] - off[0], L.pos[1] - off[1], L.pos[2] - off[2]], kind: 'hall' }); }
+    this.lightSpecs = specs;
+    while (this.roomLights.length > specs.length) { const l = this.roomLights.pop(); this.scene.remove(l); l.dispose(); }
+    while (this.roomLights.length < specs.length) { const l = new THREE.PointLight(0xffffff, 0, 1, 1.6); this.scene.add(l); this.roomLights.push(l); }
+    specs.forEach((L, i) => { const p = this.roomLights[i]; p.color.set(L.color); p.intensity = L.intensity; p.distance = L.dist; p.position.set(...L.pos); p.visible = true; });
+    for (const l of this.towerLights) { l.visible = def.tier <= 2; l.intensity = 0; }
     if (this.gridHelper) { this.scene.remove(this.gridHelper); disposeTree(this.gridHelper); }
     const gpts = []; const step = def.w * def.d > 600 ? 1 : def.grid;
     for (let x = 0; x <= def.w + 1e-6; x += step) gpts.push(x, 0, 0, x, 0, def.d);
@@ -222,22 +260,26 @@ export class World {
     this.gridHelper = new THREE.LineSegments(gg, new THREE.LineBasicMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0.12 }));
     this.gridHelper.position.y = 0.006;
     this.gridHelper.visible = false; this.scene.add(this.gridHelper);
-    // Schatten-Kamera an Raumgröße anpassen
-    const s = Math.max(def.w, def.d) * 0.75 + 2;
+    // Schatten-Kamera an Raumgröße anpassen (mit Treppenhaus: ganzes Haus, sonst fällt Sonne durch die Wände)
+    let s = Math.max(def.w, def.d) * 0.75 + 2;
+    if (off) { s = 0; for (const x of [-3.2, 7.1]) for (const y of [-3.0, 5.9]) for (const z of [-2.5, 7.9]) s = Math.max(s, Math.hypot(x - off[0] - def.w / 2, y - off[1], z - off[2] - def.d / 2)); s += 0.5; }
+    this.shadowSpan = s;
     const sc = this.sun.shadow.camera; sc.left = -s; sc.right = s; sc.top = s; sc.bottom = -s; sc.near = 0.5; sc.far = s * 6; sc.updateProjectionMatrix();
     // Spieler an der Tür absetzen, Blick in den Raum
     const span = Math.max(def.w, def.d);
-    const sp = this.room.spawn || { x: def.w / 2, z: def.d - 1, look: [def.w / 2, def.d / 2] };
-    this.player.setPose(sp.x, sp.z, 0); this.player.lookAtPoint(sp.look[0], sp.look[1]); this.player.apply();
+    let sp = this.room.spawn || { x: def.w / 2, z: def.d - 1, look: [def.w / 2, def.d / 2] };
+    if (opt.pose && off) { const p = opt.pose; this.player.pos.set(p.x - off[0], p.y - off[1], p.z - off[2]); this.player.yaw = p.yaw; this.player.pitch = p.pitch; this.player.apply(); }
+    else if (opt.at === 'haustuer' && off) { const hs = this.house.points.haustuerSpawn; sp = { x: hs.x - off[0], z: hs.z - off[2], look: [hs.look[0] - off[0], hs.look[1] - off[2]] }; this.player.setPose(sp.x, sp.z, 0, -0.08, hs.y - off[1]); this.player.lookAtPoint(sp.look[0], sp.look[1]); this.player.apply(); }
+    else { this.player.setPose(sp.x, sp.z, 0); this.player.lookAtPoint(sp.look[0], sp.look[1]); this.player.apply(); }
     this.transition = null;
     this.controls.target.set(def.w / 2, 0, def.d / 2);
     this.camera.near = 0.05; this.camera.updateProjectionMatrix();
     // Türen als Interaktionsflächen
     disposeTree(this.doorGroup); this.doorGroup.clear();
-    for (const d of this.room.doors || []) { const m = new THREE.Mesh(new THREE.BoxGeometry(...d.s), new THREE.MeshBasicMaterial({ visible: false })); m.position.set(...d.c); m.userData.door = d; this.doorGroup.add(m); }
+    for (const d of this.room.doors || []) { if (d.auto) continue; const m = new THREE.Mesh(new THREE.BoxGeometry(...d.s), new THREE.MeshBasicMaterial({ visible: false })); m.position.set(...d.c); m.userData.door = d; this.doorGroup.add(m); } // auto: Haustüren im Treppenhaus gehen von selbst auf
     for (const p of this.room.props || []) { const m = new THREE.Mesh(new THREE.BoxGeometry(...p.s), new THREE.MeshBasicMaterial({ visible: false })); m.position.set(...p.c); m.userData.prop = p; this.doorGroup.add(m); }
     // Freien Platz zum Erscheinen suchen (falls dort inzwischen etwas steht)
-    if (this.collides(this.player.pos.x, this.player.pos.z, this.player.radius)) {
+    if (!opt.pose && this.collides(this.player.pos.x, this.player.pos.z, this.player.radius)) {
       outer: for (let r = 0.5; r < span; r += 0.5) for (let a = 0; a < 16; a++) { const x = sp.x + Math.cos(a / 16 * Math.PI * 2) * r, z = sp.z + Math.sin(a / 16 * Math.PI * 2) * r; if (!this.collides(x, z, this.player.radius)) { this.player.pos.set(x, 0, z); break outer; } }
       this.player.apply();
     }
@@ -249,6 +291,180 @@ export class World {
     this.buildWeather();
     this.scene.fog = def.style === 'fjord' ? new THREE.Fog(0xb8c8d8, 250, 900) : new THREE.Fog(0x9fb8d0, 60 + span * 3, 260 + span * 6);
     this.syncObjects();
+    this.syncParcels();
+    this.lastLoadMs = performance.now() - t0; // Messung: Szenenwechsel auf der Treppe
+  }
+
+  // ---------- Haus: Treppenhaus zwischen Wohnung und Keller ----------
+  ensureHouse() {
+    if (this.house) return this.house;
+    const h = (this.house = buildHouse()); this.scene.add(h.root);
+    // grobe, unsichtbare Verdecker (Wände) für Zielstrahl und Taschenlampe – statt der Detail-Geometrie
+    const occ = new THREE.Group(), om = new THREE.MeshBasicMaterial({ visible: false });
+    for (const s of h.solid) { const y0 = Math.max(s.y0, -3.2), y1 = Math.min(s.y1, 6); if (y1 <= y0) continue; const m = new THREE.Mesh(new THREE.BoxGeometry(s.x1 - s.x0, y1 - y0, s.z1 - s.z0), om); m.position.set((s.x0 + s.x1) / 2, (y0 + y1) / 2, (s.z0 + s.z1) / 2); m.userData.occ = true; occ.add(m); }
+    h.root.add(occ); h.occ = occ;
+    h.aimables = [occ, h.parcels, ...h.root.children.filter((c) => c.userData.hit), ...Object.values(h.doors).map((d) => d.pivot)];
+    return h;
+  }
+  // Szene neu aufbauen, Spieler bleibt stehen (z. B. Keller gerade freigeschaltet: Gerümpel weg)
+  reloadHere() { if (!this.hoff) { this.loadFacility(this.facId); return; } const [x, y, z] = this.houseXYZ(); this.loadFacility(this.facId, { pose: { x, y, z, yaw: this.player.yaw, pitch: this.player.pitch } }); }
+  // Spielerposition in Haus-Koordinaten
+  houseXYZ() { const P = this.player.pos, o = this.hoff || [0, 0, 0]; return [P.x + o[0], P.y + o[1], P.z + o[2]]; }
+  playerInRoom() { const P = this.player.pos; return P.x > 0 && P.z > 0 && P.x < this.def.w && P.z < this.def.d && Math.abs(P.y) < 0.6; }
+  // Wo im Haus? 'apt' (Wohnung), 'up' (Podest, Halbtreppe, Eingang), 'low' (Kellertreppe, Kellergang), 'kel' (Kellerraum)
+  houseWhere() {
+    if (!this.hoff) return null;
+    if (this.playerInRoom()) return this.facId === 'kinder' ? 'apt' : 'kel';
+    return this.houseXYZ()[1] > -1.0 ? 'up' : 'low';
+  }
+  // Nächster Wegpunkt (Szenen-Koordinaten) zu einem Ziel im Haus: 'keller' | 'kinder' | 'haustuer' | 'parcels'
+  houseRoute(target) {
+    const where = this.houseWhere(); if (!where || !this.house) return null;
+    const P = this.house.points, o = this.hoff, L = (p) => [p[0] - o[0], p[1] - o[1], p[2] - o[2]];
+    const z = this.houseXYZ()[2];
+    if (target === 'keller') return where === 'kel' ? null : where === 'apt' ? L(P.aptDoor) : where === 'up' ? L(P.stairTop) : L(P.kellerDoor);
+    if (target === 'kinder') return where === 'apt' ? null : where === 'kel' ? L(P.kellerDoor) : where === 'low' ? L(z > 2.7 ? P.stairBottom : P.stairTop) : L(P.aptDoor);
+    const dst = target === 'haustuer' ? P.haustuer : [P.parcels[0], P.parcels[1] + 0.45, P.parcels[2]];
+    return where === 'apt' ? L(P.aptDoor) : where === 'kel' ? L(P.kellerDoor) : where === 'low' ? L(z > 2.7 ? P.stairBottom : P.stairTop) : L(dst);
+  }
+  // Teile-Suche am Anfang: Kapitel 0, Teile liegen noch im verstaubten Keller
+  searchActive() { const s = this.game.s; return !!(s?.feat && !s.unlocked.includes('keller') && !s.flags.miningStarted && Object.keys(s.loose || {}).length); }
+  kellerOpenable() { const s = this.game.s; if (!s) return false; return s.unlocked.includes('keller') || this.searchActive() || (this.facId === 'keller' && this.playerInRoom()); }
+  // Begehbarer Boden unter (x,z) nahe der Höhe yRef (null = kein Boden)
+  groundAt(x, z, yRef) {
+    let best = null, bd = 0.6;
+    for (const w of this.hwalk || []) {
+      if (x < w.x0 || x > w.x1 || z < w.z0 || z > w.z1) continue;
+      if (w.door && !(this.house.doors[w.door].t > 0.8)) continue;
+      let y = w.y; if (w.ramp) { const [za, ya, zb, yb] = w.ramp, t = Math.max(0, Math.min(1, (z - za) / (zb - za))); y = ya + (yb - ya) * t; }
+      const d = Math.abs(y - yRef); if (d < bd) { bd = d; best = y; }
+    }
+    return best;
+  }
+  canStand(x, z, r, yRef) {
+    const g = this.groundAt(x, z, yRef); if (g == null) return false;
+    for (let i = 0; i < 8; i++) { const a = (i * Math.PI) / 4, h = this.groundAt(x + Math.cos(a) * r, z + Math.sin(a) * r, g); if (h == null || Math.abs(h - g) > 0.45) return false; }
+    return true;
+  }
+  // Wohnungs- und Kellertür: gehen auf, wenn man darauf zugeht, und hinter einem wieder zu
+  updateHouseDoors(dt) {
+    const h = this.house; if (!h || !this.hoff) return;
+    const [hx, hy, hz] = this.houseXYZ(), wish = this.player.wish || { x: 0, z: 0 }, ws = Math.hypot(wish.x, wish.z);
+    for (const [key, d] of Object.entries(h.doors)) {
+      const dx = d.c[0] - hx, dz = d.c[2] - hz, dist = Math.hypot(dx, dz), level = Math.abs(hy + 1.0 - d.c[1]) < 1.0;
+      const toward = ws > 0.3 && (dx * wish.x + dz * wish.z) / (dist * ws + 1e-6) > 0.55;
+      let want = level && !this.cine && (dist < 1.2 || (dist < 2.4 && toward) || (d.t > 0.05 && dist < 1.9));
+      if (key === 'apt') want = want && this.facId === 'kinder';
+      if (key === 'keller') want = want && this.facId === 'keller' && this.kellerOpenable();
+      const prev = d.t; d.t = Math.max(0, Math.min(1, d.t + (want ? dt / 0.45 : -dt / 0.7)));
+      if (prev === 0 && d.t > 0) this.onDoorSound?.(key, true); else if (prev > 0 && d.t === 0) this.onDoorSound?.(key, false);
+      const k = d.t * d.t * (3 - 2 * d.t); d.pivot.rotation.y = d.open * k;
+    }
+  }
+  // Türtrichter: wer auf eine offene Tür zuläuft, wird sanft zur Mitte gelenkt (Durchgang 0,78 m)
+  doorAssist(dt) {
+    const h = this.house; if (!h || !this.hoff) return;
+    const w = this.player.wish; if (!w || Math.hypot(w.x, w.z) < 0.3) return;
+    const [hx, hy, hz] = this.houseXYZ(), P = this.player.pos;
+    for (const d of Object.values(h.doors)) {
+      if (d.t < 0.6 || Math.abs(hy + 1.0 - d.c[1]) > 0.6) continue;
+      const dx = hx - d.c[0], dz = d.c[2] - hz; if (Math.abs(dx) > 0.95 || Math.abs(dz) > 0.5) continue;
+      if (Math.abs(w.x) < Math.abs(w.z) * 0.7 || Math.sign(w.x) === Math.sign(dx)) continue; // nur beim Durchgehen (quer zur Wand, auf die Tür zu)
+      const nz = P.z + dz * Math.min(1, dt * 7); if (!this.collides(P.x, nz, this.player.radius)) P.z = nz;
+    }
+  }
+  // Wechsel der Szene mitten auf der Kellertreppe: gleiche Haus-Pose, andere Szene (mit Abstand zwischen Hin- und Rückweg)
+  checkHouseSwitch() {
+    const h = this.house; if (!h || !this.hoff || this.cine) return;
+    const hy = this.houseXYZ()[1];
+    const to = this.facId === 'kinder' && hy < h.switchDown ? 'keller' : this.facId === 'keller' && hy > h.switchUp ? 'kinder' : null;
+    if (!to) return;
+    const [x, y, z] = this.houseXYZ(), keep = { bob: this.player.bob, stepDist: this.player.stepDist };
+    this.loadFacility(to, { pose: { x, y, z, yaw: this.player.yaw, pitch: this.player.pitch } });
+    Object.assign(this.player, keep);
+    this.onHouseMove?.(to);
+  }
+  // Licht nach Aufenthaltsort: Raum- und Treppenhauslicht nur, wo man sie sehen kann (Punktlichter haben keine Schatten
+  // und würden durch die Wände scheinen) – an der Wechselstelle auf der Treppe in beiden Szenen gleich
+  updateZone(dt) {
+    const inRoom = !this.hoff || this.playerInRoom(), tgt = this.empire || this.mode === 'title' ? AMB.room : !inRoom ? AMB.hall : this.dusty ? AMB.dusty : AMB.room;
+    const where = this.hoff ? this.houseWhere() : null; if (where !== this._where) { this._where = where; if (where) this.onZone?.(where); }
+    const k = 1 - Math.exp(-dt * 2.2); for (const key in this.amb) this.amb[key] += (tgt[key] - this.amb[key]) * k;
+    if (!this.hoff || !this.house) { this.lk.room = 1; this.lk.hall = 0; return; }
+    const d = this.house.doors[this.facId === 'kinder' ? 'apt' : 'keller'], hy = this.houseXYZ()[1];
+    const roomOn = inRoom || (d.t > 0.02 && (this.facId === 'kinder' ? hy > -0.5 : hy < -2.45)), hallOn = !inRoom || d.t > 0.02;
+    const kk = 1 - Math.exp(-dt * 8); this.lk.room += ((roomOn ? 1 : 0) - this.lk.room) * kk; this.lk.hall += ((hallOn ? 1 : 0) - this.lk.hall) * kk;
+    for (const [m, base] of this.house.lampMats) m.emissiveIntensity = base * (0.06 + 0.94 * this.lk.hall);
+  }
+  // ---------- Pakete vor der Wohnungstür (game.s.parcels: [{id, label, items}]) ----------
+  syncParcels() {
+    const h = this.house; if (!h) return;
+    const list = Array.isArray(this.game.s?.parcels) ? this.game.s.parcels : [];
+    const key = list.map((p) => p.id + ':' + (p.label || '')).join('|'); if (key === this.parcelKey) return; this.parcelKey = key;
+    const want = new Set(list.map((p) => p.id));
+    for (const g of [...h.parcels.children]) { if (want.has(g.userData.pid)) continue; if (g.userData.picked && !g.userData.flying) { g.userData.flying = 0.001; g.traverse((m) => { if (m.isMesh) m.raycast = () => {}; }); continue; } if (!g.userData.flying) { h.parcels.remove(g); disposeTree(g); } }
+    const have = new Map(h.parcels.children.filter((g) => !g.userData.flying).map((g) => [g.userData.pid, g]));
+    const [bx, , bz] = h.points.parcels, slots = [[-0.1, 0.12, 0.08], [0.24, 0.16, -0.2], [-0.06, -0.3, 0.32], [0.27, -0.26, -0.05]];
+    let x0 = 9, x1 = -9, z0 = 9, z1 = -9, top = 0; const heights = [0, 0, 0, 0];
+    list.forEach((p, i) => {
+      let g = have.get(p.id);
+      if (!g) { g = parcelModel(p.label, typeof p.id === 'number' ? p.id : String(p.id).length * 7 + i); g.userData.pid = p.id; g.traverse((m) => { m.userData.parcel = p.id; m.userData.parcelLabel = p.label; }); h.parcels.add(g); }
+      const sI = i % 4, [sx, sz, ry] = slots[sI], [w, hh, d] = g.userData.size;
+      g.position.set(bx + sx, heights[sI], bz + sz); g.rotation.y = ry + (i >= 4 ? 0.25 : 0); heights[sI] += hh;
+      x0 = Math.min(x0, bx + sx - w / 2); x1 = Math.max(x1, bx + sx + w / 2); z0 = Math.min(z0, bz + sz - d / 2); z1 = Math.max(z1, bz + sz + d / 2); top = Math.max(top, heights[sI]);
+    });
+    h.parcelSolid = list.length ? { x0: x0 - 0.04, x1: x1 + 0.04, z0: z0 - 0.04, z1: z1 + 0.04, y0: -0.1, y1: top } : null;
+  }
+  pickParcel(id) {
+    const g = this.house?.parcels.children.find((c) => c.userData.pid === id); if (g) g.userData.picked = true;
+    this.aimLockUntil = this.t + 0.4;
+    this.onParcel?.(id);
+    this.parcelKey = null; this.syncParcels();
+    if (g && !g.userData.flying) g.userData.picked = false; // nicht angenommen: bleibt liegen
+  }
+  updateParcels(dt) {
+    const h = this.house; if (!h) return;
+    for (const g of [...h.parcels.children]) {
+      if (!g.userData.flying) continue;
+      const f = (g.userData.flying += dt), k = Math.min(1, f / 0.45), cam = this.camera, o = this.hoff || [0, 0, 0];
+      const tgt = cam.position.clone().addScaledVector(cam.getWorldDirection(new THREE.Vector3()), 0.35).add(new THREE.Vector3(o[0], o[1] - 0.45, o[2]));
+      g.position.lerp(tgt, k * 0.3); g.scale.setScalar(Math.max(0.001, 1 - 1.5 * k)); g.rotation.y += dt * 4;
+      if (k >= 1) { h.parcels.remove(g); disposeTree(g); }
+    }
+  }
+  parcelsLying() { return (this.house?.parcels.children || []).filter((g) => !g.userData.flying).length; }
+  // ---------- Aufwachen (neues Spiel): auf der Matratze liegen, Augen auf, blinzeln, aufsetzen, aufstehen ----------
+  wakeUp(cb) {
+    const wk = this.room?.wake;
+    if (this.cine || this.facId !== 'kinder' || !wk) { cb?.(); return; }
+    this.visFrac = this.game.s?.frac ?? this.visFrac;
+    let ov = document.getElementById('wake');
+    if (!ov) { ov = document.createElement('div'); ov.id = 'wake'; ov.innerHTML = '<div class="lid top"></div><div class="lid bot"></div>'; document.body.append(ov); }
+    ov.classList.remove('hidden'); document.body.classList.add('cine'); this.player.keys = {}; this.player.touch.x = this.player.touch.y = 0;
+    this.cine = { t: 0, dur: 3.3, wk, cb, ov, euler: new THREE.Euler(0, 0, 0, 'YXZ') };
+    this.aim = null; this.onAim?.(null); this.updateCine(0);
+  }
+  updateCine(dt) {
+    const c = this.cine; c.t += dt; const t = c.t, wk = c.wk;
+    const ss = (a, b, x) => { const k = Math.max(0, Math.min(1, (x - a) / (b - a))); return k * k * (3 - 2 * k); };
+    // Augen: langsam auf, einmal zu (Blinzeln), dann ganz auf
+    const open = Math.max(0, Math.min(1, t < 0.75 ? ss(0.1, 0.75, t) * 0.6 : t < 1.0 ? 0.6 - ss(0.75, 0.88, t) * 0.55 + ss(0.88, 1.0, t) * 0.25 : 0.3 + ss(1.0, 1.4, t) * 0.7));
+    const lidH = (1 - open) * 52; for (const el of c.ov.children) el.style.height = lidH + 'vh';
+    c.ov.style.opacity = t > c.dur - 0.2 ? String(Math.max(0, (c.dur - t) / 0.2)) : '1';
+    this.canvas.style.filter = t < 1.6 ? `blur(${((1 - ss(0.2, 1.6, t)) * 5).toFixed(2)}px)` : '';
+    // Pose: liegen → aufsetzen (Blick zum Fenster) → Beine raus, aufstehen, Blick zum PC
+    const [lx, ly, lz] = wk.lie, [sx, sz] = wk.stand, yawEnd = Math.atan2(-(wk.look[0] - sx), -(wk.look[1] - sz));
+    const sit = ss(1.15, 2.0, t), up = ss(2.0, 3.1, t);
+    const pos = new THREE.Vector3(lx + 0.06 * sit + (sx - lx - 0.06) * up, ly + (0.88 - ly) * sit + (this.player.eye - 0.88) * up, lz - 0.22 * sit + (sz - lz + 0.22) * up);
+    const yaw = 0.0 - 0.55 * up * (1 - up) * 2 + (yawEnd) * up, pitch = 1.32 * (1 - sit) - 0.22 * sit * (1 - up) - 0.08 * up;
+    const roll = 0.12 * (1 - sit) + Math.sin(t * 1.7) * 0.01 * (1 - up);
+    this.camera.position.copy(pos); c.euler.set(pitch, yaw, roll); this.camera.quaternion.setFromEuler(c.euler);
+    if (t >= c.dur) {
+      this.cine = null; c.ov.classList.add('hidden'); document.body.classList.remove('cine'); this.canvas.style.filter = '';
+      this.player.setPose(sx, sz, yawEnd, -0.08); this.player.keys = {};
+      if (this.collides(sx, sz, this.player.radius)) { const sp = this.room.spawn; this.player.setPose(sp.x, sp.z, 0); this.player.lookAtPoint(sp.look[0], sp.look[1]); this.player.apply(); }
+      c.cb?.();
+    }
   }
 
   // ---------- Objekte ----------
@@ -289,14 +505,17 @@ export class World {
       else if (a?.status === 'off' && e.obj.parts && !this.game.pcReady(e.obj)) icon = 'empty';
       else if (a?.status === 'idle' || a?.status === 'full' || a?.status === 'off') icon = 'sleep';
       e.running = !sm.tripped && a && a.watt > 0;
-      if (e.obj.type === 'tower') { if (!e.light) { e.light = new THREE.PointLight(0xffa860, 0, 0.7, 2); e.light.position.set(0, 0.34, 0); e.group.add(e.light); } e.light.intensity = e.running ? 0.35 : 0; }
+
       e.sprite.visible = !!icon && this.mode !== 'title' && !(this.focus && this.focusUid === uid);
       if (icon) { e.sprite.material.map = this.icons[icon]; const bb = e.group.userData.bbox; e.sprite.position.set(0, (bb ? bb.max.y : 1) + (e.obj.type === 'tower' ? 0.1 : 0.22), 0); e.sprite.scale.set(sc, sc, sc); }
     }
+    // Glimmen in laufenden Tower-PCs (fester Pool, keine neuen Lichter pro Gerät)
+    { let i = 0; for (const e of this.entries.values()) { if (i >= this.towerLights.length) break; if (e.obj.type !== 'tower' || !e.running) continue; const l = this.towerLights[i++]; l.position.set(e.group.position.x, 0.34, e.group.position.z); l.intensity = 0.35; } for (; i < this.towerLights.length; i++) this.towerLights[i].intensity = 0; }
     if (this.selected) this.refreshSelBox();
     this.syncPeople();
     if (this.heatMode) this.updateHeat();
     this.updateSolar(); this.updateSeason();
+    this.syncParcels();
   }
 
   // ---------- Auswahl ----------
@@ -363,7 +582,7 @@ export class World {
     if (!this._lampRay) { this._lampRay = new THREE.Raycaster(); this._lampRay.far = 8; this._lampD = 3; this._lampN = 0; }
     if ((this._lampN = (this._lampN + 1) % 5) === 0) {
       this._lampRay.setFromCamera({ x: 0, y: 0 }, this.camera);
-      const hit = this._lampRay.intersectObject(this.room.root, true).find((h) => h.object.visible && !h.object.isPoints);
+      const hit = this._lampRay.intersectObjects(this.hoff && this.house ? [this.room.root, this.house.occ] : [this.room.root], true).sort((a, b) => a.distance - b.distance).find((h) => h.object.visible && !h.object.isPoints && (h.object.material?.visible !== false || h.object.userData.occ));
       this._lampD = hit ? hit.distance : 6;
     }
     this._lampDs = (this._lampDs ?? this._lampD) + (this._lampD - (this._lampDs ?? this._lampD)) * Math.min(1, dt * 6);
@@ -371,8 +590,7 @@ export class World {
   }
   updateDusty(dt) {
     if (!this.dusty) return;
-    // dunkler, staubiger Keller: weniger Umgebungslicht, Sonne kaum durch die verdreckten Fenster
-    this.hemi.intensity *= 0.22; this.sun.intensity *= 0.25; this.moon.intensity *= 0.4; this.scene.environmentIntensity *= 0.2;
+    // dunkler, staubiger Keller: weniger Umgebungslicht (updateZone: AMB.dusty), flackernde Birne
     const L = this.roomLights?.[0]; if (L) { const f = Math.sin(this.t * 23) * Math.sin(this.t * 7.3) > 0.82 ? 0.3 : 1; L.intensity *= f; if (this.dustBulb) this.dustBulb.material.emissiveIntensity = 2.5 * f; }
     if (this.dustPts) { const a = this.dustPts.geometry.attributes.position, h = this.def.h; for (let i = 0; i < a.count; i++) { let y = a.getY(i) + Math.sin(this.t * 0.4 + i) * dt * 0.02 - dt * 0.006; if (y < 0.15) y = h - 0.3; a.setY(i, y); a.setX(i, a.getX(i) + Math.cos(this.t * 0.3 + i * 1.7) * dt * 0.01); } a.needsUpdate = true; }
   }
@@ -538,6 +756,7 @@ export class World {
   rectOf(o) { const def = PLACEABLE[o.type]; const [w, d] = this.footprintOf(def, o.rot); return { x0: o.x - w / 2, x1: o.x + w / 2, z0: o.z - d / 2, z1: o.z + d / 2 }; }
   canPlace(def, x, z, rot, ignoreUid) {
     const [w, d] = this.footprintOf(def, rot); const e = 0.001;
+    if (this.hoff && (!this.playerInRoom() || this.game.s.current !== this.facId)) return false; // im Treppenhaus wird nicht gebaut
     const r = { x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2 };
     if (r.x0 < -e || r.z0 < -e || r.x1 > this.def.w + e || r.z1 > this.def.d + e) return false;
     const hit = (a) => a.x0 < r.x1 - e && a.x1 > r.x0 + e && a.z0 < r.z1 - e && a.z1 > r.z0 + e;
@@ -596,13 +815,21 @@ export class World {
     if (this.noRawMouse) { plain(); return; }
     try { const r = this.canvas.requestPointerLock({ unadjustedMovement: true }); this.lockPromise = !!(r && r.catch); if (this.lockPromise) r.catch((err) => { if (err?.name === 'NotSupportedError') { this.noRawMouse = true; plain(); } else fail(err); }); } catch (e) { this.noRawMouse = true; plain(); }
   }
-  // Kollision des Spielers mit Raum, Möbeln und Objekten
+  // Kollision des Spielers mit Raum, Möbeln und Objekten – im Haus auch Treppenhaus (begehbare Flächen mit Höhe, Wände)
   collides(x, z, r) {
-    const def = this.def;
-    if (x < r || z < r || x > def.w - r || z > def.d - r) return true;
+    const def = this.def, py = this.player.pos.y;
+    const inRoom = x >= r && z >= r && x <= def.w - r && z <= def.d - r && Math.abs(py) < 0.5;
+    if (!inRoom && (!this.hwalk || !this.canStand(x, z, r, py))) return true;
     const hitRect = (a) => { const cx = Math.max(a.x0, Math.min(x, a.x1)), cz = Math.max(a.z0, Math.min(z, a.z1)); return (x - cx) ** 2 + (z - cz) ** 2 < r * r; };
-    if (this.room.blocked.some(hitRect)) return true;
-    for (const o of this.game.facObjects(this.facId)) if (hitRect(this.rectOf(o))) return true;
+    if (Math.abs(py) < 1.2) {
+      if (this.room.blocked.some(hitRect)) return true;
+      for (const o of this.game.facObjects(this.facId)) if (hitRect(this.rectOf(o))) return true;
+    }
+    if (this.hsolid) {
+      const y0 = py + 0.3, y1 = py + 1.75, o = this.hoff;
+      for (const s of this.hsolid) if (s.y1 > y0 && s.y0 < y1 && hitRect(s)) return true;
+      const ps = this.house.parcelSolid; if (ps && ps.y1 - o[1] > y0 && ps.y0 - o[1] < y1 && hitRect({ x0: ps.x0 - o[0], x1: ps.x1 - o[0], z0: ps.z0 - o[2], z1: ps.z1 - o[2] })) return true;
+    }
     return false;
   }
 
@@ -610,6 +837,7 @@ export class World {
   bindInput() {
     const c = this.canvas;
     c.addEventListener('pointerdown', (ev) => {
+      if (this.cine) return; // Aufwachen: keine Eingabe
       if (this.mode === 'ui') { this.onCanvasClickInUI?.(); return; }
       if (this.mode !== 'play') return;
       if (!this.player.locked && !this.touchMode && !this.lockFailed) { this.requestLock(); return; }
@@ -627,6 +855,7 @@ export class World {
     window.addEventListener('keydown', (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
       const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+      if (this.cine) return; // Aufwachen: keine Eingabe
       this.player.keys[k] = true;
       if (this.mode !== 'play' || this.paused) return; // im Pausenmenü keine Spieltasten
       if (k === 'r' && this.placing) { this.placing.rot = (this.placing.rot + 1) % 4; this.updatePlacement(); }
@@ -639,9 +868,11 @@ export class World {
     window.addEventListener('blur', () => { this.player.keys = {}; });
   }
   primaryAction() {
+    if (this.cine) return;
     if (this.placing) { this.confirmPlacement(); return; }
     const a = this.aim; if (!a) { this.onNoAim?.(); return; }
     if (a.keep) { this.onKeep?.(a.keep); return; }
+    if (a.parcel != null) { this.pickParcel(a.parcel); return; }
     if (a.loose) this.onLoose?.(a.loose);
     else if (a.door) this.onDoor?.(a.door);
     else if (a.prop) this.onProp?.(a.prop);
@@ -653,7 +884,7 @@ export class World {
     if (this.placing) { if (this.aim) { this.aim = null; this.onAim?.(null); } this.selBox.visible = false; this.outline.selectedObjects = []; return; }
     this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
     this.raycaster.far = this.reach() + 1.5;
-    const hits = this.raycaster.intersectObjects([...this.objGroup.children, ...this.doorGroup.children, ...(this.looseGroup?.children || []), this.room.root], true);
+    const hits = this.raycaster.intersectObjects([...this.objGroup.children, ...this.doorGroup.children, ...(this.looseGroup?.children || []), this.room.root, ...(this.hoff && this.house ? this.house.aimables : [])], true);
     { const extra = [...(this.keepGroup?.children || []), ...(this.people?.children || []).map((p) => p.userData.hit).filter(Boolean)]; if (extra.length) { hits.push(...this.raycaster.intersectObjects(extra, true)); hits.sort((a, b) => a.distance - b.distance); } } // Fundstücke und ansprechbare Personen
     this.raycaster.far = Infinity;
     let aim = null; const looseHit = hits.some((x) => x.object.userData.loose);
@@ -661,6 +892,8 @@ export class World {
     for (const h of hits) {
       const o = h.object; if (o.isSprite) continue;
       if (o.userData.keep) { aim = { keep: o.userData.keep, dist: h.distance }; break; }
+      if (o.userData.parcel != null) { aim = { parcel: o.userData.parcel, label: o.userData.parcelLabel, dist: h.distance }; break; }
+      if (o.userData.door?.kind === 'kellertuer' && (this.facId !== 'keller' || this.kellerOpenable())) continue; // offen: nur das Türblatt zählt
       if (o.userData.prop && !o.userData.prop.who && keepHit) continue; // Fundstück unterm Bett hat Vorrang vor der Schlafen-Box
       if (o.userData.prop && looseHit) continue; // Teile auf dem Bett haben Vorrang vor der Schlafen-Box
       if (o.userData.prop?.action === 'sleep' && this.game.s.feat && !this.game.s.flags.miningStarted) continue; // vor dem ersten PC gibt es nichts zu verschlafen
@@ -670,11 +903,11 @@ export class World {
       if (o.userData.uid) { aim = { uid: o.userData.uid, dist: h.distance }; break; }
       if (o.isMesh && o.visible) break; // Wand/Möbel verdeckt
     }
-    const akey = (a) => (a ? a.uid || (a.loose && 'loose:' + a.loose) || (a.keep && 'keep:' + a.keep) || (a.door || a.prop)?.label : null), key = akey(aim), prev = akey(this.aim);
+    const akey = (a) => (a ? a.uid || (a.loose && 'loose:' + a.loose) || (a.keep && 'keep:' + a.keep) || (a.parcel != null && 'parcel:' + a.parcel) || (a.door || a.prop)?.label : null), key = akey(aim), prev = akey(this.aim);
     this.aim = aim;
     if (key !== prev) this.onAim?.(aim);
-    const e = aim?.uid && this.entries.get(aim.uid), lp = aim?.loose && this.looseItems?.[aim.loose];
-    this.outline.selectedObjects = e ? [e.group] : lp ? [lp] : [];
+    const e = aim?.uid && this.entries.get(aim.uid), lp = aim?.loose && this.looseItems?.[aim.loose], pp = aim?.parcel != null && this.house?.parcels.children.find((g) => g.userData.pid === aim.parcel);
+    this.outline.selectedObjects = e ? [e.group] : lp ? [lp] : pp ? [pp] : [];
     if (aim?.keep && this.keepItems?.[aim.keep]) this.outline.selectedObjects = [this.keepItems[aim.keep]]; else if (aim?.prop?.npc) this.outline.selectedObjects = [aim.prop.npc];
     if (!this.selected) this.selBox.visible = false;
   }
@@ -810,9 +1043,9 @@ export class World {
     if (this.weather) { this.scene.remove(this.weather); disposeTree(this.weather); this.weather = null; }
     const def = this.def, g = (this.weather = new THREE.Group()); this.scene.add(g);
     const span = Math.max(def.w, def.d) + 40, n = def.style === 'fjord' ? 5000 : 1800;
-    const pos = new Float32Array(n * 3);
+    const pos = new Float32Array(n * 3), o = this.hoff, ex = o ? { x0: -4.2 - o[0], x1: 8.1 - o[0], z0: -3.4 - o[2], z1: 8.8 - o[2] } : { x0: -1, x1: def.w + 1, z0: -1, z1: def.d + 1 }; // nicht im Haus schneien lassen
     for (let i = 0; i < n; i++) {
-      let x, z; do { x = def.w / 2 + (Math.random() - 0.5) * span * 1.6; z = def.d / 2 + (Math.random() - 0.5) * span * 1.6; } while (x > -1 && x < def.w + 1 && z > -1 && z < def.d + 1);
+      let x, z; do { x = def.w / 2 + (Math.random() - 0.5) * span * 1.6; z = def.d / 2 + (Math.random() - 0.5) * span * 1.6; } while (x > Math.min(-1, ex.x0) && x < Math.max(def.w + 1, ex.x1) && z > Math.min(-1, ex.z0) && z < Math.max(def.d + 1, ex.z1));
       pos[i * 3] = x; pos[i * 3 + 1] = Math.random() * 30; pos[i * 3 + 2] = z;
     }
     const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
@@ -890,8 +1123,8 @@ export class World {
     if (this.empire) return;
     this.cancelPlacement(); this.select(null); this.onHover?.(null);
     if (this.heatGroup) { this.scene.remove(this.heatGroup); this.heatGroup = null; }
-    const vis = [this.room.root, this.outside, this.objGroup, this.people, this.solarMesh].filter(Boolean);
-    vis.forEach((o) => (o.visible = false)); this.roomLights.forEach((l) => (l.visible = false));
+    const vis = [this.room.root, this.outside, this.objGroup, this.people, this.solarMesh, this.hoff && this.house?.root].filter(Boolean);
+    vis.forEach((o) => (o.visible = false)); this.roomLights.forEach((l) => (l.visible = false)); this.towerLights.forEach((l) => (l.intensity = 0));
     const g = (this.empire = new THREE.Group()); this.scene.add(g); this.empireHidden = vis;
     let x = 0; const ids = this.game.s.unlocked.slice().sort((a, b) => FACILITY[a].tier - FACILITY[b].tier);
     let maxD = 0;
@@ -916,7 +1149,7 @@ export class World {
     ground.rotation.x = -Math.PI / 2; ground.position.set(total / 2, -0.12, 0); ground.receiveShadow = true; g.add(ground);
     this.empireDef = { w: total, d: maxD, h: 10, tier: 9, grid: 1 };
     const sc2 = this.sun.shadow.camera; const sz = total * 0.6 + 10; sc2.left = -sz; sc2.right = sz; sc2.top = sz; sc2.bottom = -sz; sc2.far = sz * 6; sc2.updateProjectionMatrix();
-    this.savedPose = { x: this.player.pos.x, z: this.player.pos.z, yaw: this.player.yaw, pitch: this.player.pitch };
+    this.savedPose = { x: this.player.pos.x, y: this.player.pos.y, z: this.player.pos.z, yaw: this.player.yaw, pitch: this.player.pitch };
     this.setMode('map'); this.camera.fov = 45; this.camera.updateProjectionMatrix();
     this.room.ceil.visible = false; if (this.weather) this.weather.visible = false; this.doorGroup.visible = false;
     this.def = { ...this.def, w: total, d: maxD, style: 'empire' };
@@ -933,7 +1166,7 @@ export class World {
     this.scene.remove(this.empire); disposeTree(this.empire); this.empire = null;
     this.empireHidden.forEach((o) => (o.visible = true)); this.roomLights.forEach((l) => (l.visible = true));
     this.camera.fov = 60; this.camera.updateProjectionMatrix(); this.doorGroup.visible = true;
-    if (reload) { this.loadFacility(this.facId); const sp = this.savedPose; if (sp) { this.player.setPose(sp.x, sp.z, sp.yaw, sp.pitch); } }
+    if (reload) { this.loadFacility(this.facId); const sp = this.savedPose; if (sp) { this.player.setPose(sp.x, sp.z, sp.yaw, sp.pitch, sp.y || 0); } }
     this.onEmpire?.(false);
   }
 
@@ -1069,10 +1302,13 @@ export class World {
       else this.controls.update();
     } else if (this.mode === 'title') {
       this.camera.lookAt(this.controls.target);
+    } else if (this.cine) {
+      this.updateCine(dt);
     } else {
       if (this.mode === 'play' && !this.paused) {
         const scale = this.def.tier >= 3 ? 1.6 : 1;
-        this.player.update(dt, (x, z, r) => this.collides(x, z, r), scale);
+        this.player.update(dt, (x, z, r) => this.collides(x, z, r), scale, this.hoff ? (x, z, y) => this.groundAt(x, z, y) : null);
+        if (this.hoff) { this.doorAssist(dt); this.player.apply(); this.checkHouseSwitch(); }
         if (this.placing) this.updatePlacement(); else this.updateAim();
       } else this.player.apply();
       // Weiche Fahrt zur Nahansicht und zurück
@@ -1085,7 +1321,8 @@ export class World {
         if (this.outline && !this.outline.pulsePeriod) this.outline.edgeStrength = 1.15 - 0.7 * k;
       } else { this.fc = null; if (this.focusLight) this.focusLight.intensity = 0; if (this.outline) this.outline.edgeStrength = 1.15; }
     }
-    this.vm.update(dt, { moving: this.player.moving && this.mode === 'play', bob: this.player.bob, placing: !!this.placing, visible: this.mode === 'play' || this.mode === 'ui', uiOpen: this.mode === 'ui' });
+    this.vm.update(dt, { moving: this.player.moving && this.mode === 'play', bob: this.player.bob, placing: !!this.placing, visible: (this.mode === 'play' || this.mode === 'ui') && !this.cine, uiOpen: this.mode === 'ui' });
+    this.updateHouseDoors(dt); this.updateZone(dt); this.updateParcels(dt);
     // Tag/Nacht
     // Optik-Uhr: Licht folgt der Spielzeit gedämpft (höchstens ein Tag pro 90 s) – kein Flackern bei hohem Tempo
     if (this.mode === 'title' || this.visFrac == null) this.visFrac = s.frac;
@@ -1115,6 +1352,7 @@ export class World {
     const def = this.def, span = Math.max(def.w, def.d);
     const az = ((hour - 6) / 12) * Math.PI;
     this.sun.position.set(def.w / 2 + Math.cos(az) * span * 1.5, Math.max(0.3, elev) * span * 2 + 2, def.d / 2 - Math.sin(az) * span * 0.8 - span);
+    if (this.hoff) { const v = this.sun.position.clone().sub(new THREE.Vector3(def.w / 2, 0, def.d / 2)), L = v.length(), need = (this.shadowSpan || 8) * 1.6; if (L < need) this.sun.position.set(def.w / 2, 0, def.d / 2).addScaledVector(v, need / L); } // ganzes Haus vor der Schattenkamera
     this.sun.target.position.set(def.w / 2, 0, def.d / 2);
     const sunUp = THREE.MathUtils.smoothstep(elev, -0.05, 0.1);
     this.sun.intensity = sunUp * (0.12 + day * 1.7);
@@ -1139,10 +1377,13 @@ export class World {
       M.window().color.set(0xbfe2ff).lerp(new THREE.Color(0x101a33), nightT); M.window().opacity = 0.35 - 0.22 * nightT;
     }
     this.scene.environmentIntensity = 0.25 + day * 0.2;
+    // Aufenthaltsort (Raum, Treppenhaus, verstaubter Keller)
+    { const a = this.amb; this.hemi.intensity *= a.hemi; this.sun.intensity *= a.sun; this.moon.intensity *= a.moon; this.scene.environmentIntensity *= a.env; }
+    if (this.house) for (const m of this.house.glass) m.emissiveIntensity = 0.06 + day * 0.48;
     const lampK = 0.75 + (1 - day) * 0.6;
     this.renderer.toneMappingExposure = 0.98 + (1 - day) * 0.08;
     if (this.vm?.hemi) { this.vm.hemi.intensity = 0.45 + day * 0.95; this.vm.key.intensity = 0.35 + day * 1.25; this.vm.hemi.color.set(day > 0.2 ? 0xfff6ea : 0xffd8a8); }
-    this.roomLights?.forEach((l, i) => (l.intensity = this.room.lights[i].intensity * lampK));
+    this.roomLights?.forEach((l, i) => { const L = this.lightSpecs[i]; if (L) l.intensity = L.intensity * lampK * (L.kind === 'hall' ? this.lk.hall : this.lk.room); });
   }
 
   // Großer Bildschirm im Rechenzentrum

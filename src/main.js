@@ -93,6 +93,7 @@ document.addEventListener('visibilitychange', () => {
 const HOT = { j: () => ui.skills(), g: () => ui.goalActionKey(), b: () => ui.toggleBuild(), m: () => ui.market(), p: () => ui.phone(), c: () => ui.company(), t: () => ui.techs(), l: () => ui.ranking(), k: () => ui.toggleMap() };
 window.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || !splash.classList.contains('hidden')) return;
+  if (world.cine) { e.preventDefault(); return; } // Aufwachen (World.wakeUp): keine Eingabe
   const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
   if (e.code === 'Space') { e.preventDefault(); ui.setSpeed(game.s.speed ? 0 : (ui.lastSpeed || 1)); return; }
   if (['1', '2', '3', '4'].includes(e.key)) { ui.setSpeed(+e.key); return; }

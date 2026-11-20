@@ -75,8 +75,13 @@ export class UI {
       const lt = Object.keys(g.s.loose || {}).find((k) => t.label === PNAME[k]); if (lt) { world.onLoose(lt); return; }
       const pc = g.facObjects(g.s.current).find((o) => o.type === 'tower'); if (pc && t.label === 'Dein PC') { this.openInspector(pc.uid); return; }
       const pr = world.room?.props?.find((p) => p.action === 'market'); if (pr && (t.label === 'Börse' || t.label === 'Bitcoin verkaufen')) { this.useProp(pr); return; }
-      if ((t.label === 'Keller' || t.label === 'Hoch in dein Zimmer' || / freischalten$/.test(t.label)) && world.room?.doors?.[0]) this.travel(world.room.doors[0]);
+      if (t.label === 'Paket abholen' && t.final) { const p = g.s.parcels?.[0]; if (p) world.pickParcel(p.id); return; }
+      if (/ freischalten$/.test(t.label)) { if (world.hoff) { if (t.final) this.travel(t.door); } else if (world.room?.doors?.[0]) this.travel(world.room.doors[0]); }
     };
+    // Haus (Wohnung ↔ Treppenhaus ↔ Keller): Standortwechsel zu Fuß, Türgeräusch, Hinweis auf die Taschenlampe
+    world.onHouseMove = (id) => this.houseMove(id);
+    world.onDoorSound = (key, open) => this.audio?.door?.(open);
+    world.onZone = (where) => { if (where === 'kel' && world.dusty && !world.vm?.lampOn && !this.lampHinted) { this.lampHinted = true; this.lampHint = this.toast('Ganz schön dunkel hier unten. <kbd>F</kbd> schaltet die Taschenlampe an.', 'info', 4500); } };
     world.onInstalled = (uid) => { this.installing = false; this.flushXp(); if (this.inspUid === uid) this.inspect(uid); if (this.afterSnap) { this.toast(this.afterSnap, 'good', 2600); this.afterSnap = null; } };
     world.onLoose = (t) => { this.w.pickupFx(t); if (!this.g.s.loose?.[t]) return; this.toast(`${PNAME[t]} in der Tasche`, 'good', 2200); if (!this.g.pickUp(t)) return; this.lastPick = { t, at: performance.now() }; setTimeout(() => this.goals(), 1300); this.audio?.install?.(); this.goals(); };
     world.onKeep = (id) => this.pickKeep(id);
@@ -206,22 +211,35 @@ export class UI {
   // Zielhinweis direkt am Objekt: wo der nächste Handgriff wartet
   objMarker() {
     const el = $('#objmark'); if (!el) return;
-    const g = this.g, s = g.s, w = this.w; let pos = null, label = '', aimed = false;
-    const inKeller = w.facId === 'keller' && this.visiting, door = w.room?.doors?.[0];
-    if (s.chapter === 0 && w.mode === 'play' && !this.paused && !s.flags.miningStarted && door && ((w.facId === 'kinder' && Object.keys(s.loose || {}).length) || (inKeller && !Object.keys(s.loose || {}).length))) { pos = inKeller ? [6.4, 0.9, 2.1] : [door.c[0] - 0.1, 1.55, door.c[2]]; label = inKeller ? 'Hoch in dein Zimmer' : 'Keller'; aimed = w.aim?.door === door; }
-    else if (s.chapter === 0 && w.mode === 'play' && !this.paused && (w.facId === 'kinder' || inKeller)) {
-      const pc = w.facId === 'kinder' ? g.facObjects('kinder').find((o) => o.type === 'tower') : { x: 0, z: 0, uid: -1 };
-      const spots = w.room?.looseSpots || {}, lying = Object.keys(s.loose || {}).filter((t) => spots[t]);
-      if (pc && !s.flags.miningStarted && lying.length) { const cp = w.camera.position, d = (t) => Math.hypot(spots[t][0] - cp.x, spots[t][2] - cp.z) + (w.toScreen(spots[t][0], spots[t][1] + 0.1, spots[t][2]).on ? 0 : 100); const keep = lying.includes(this.markLoose) && w.toScreen(spots[this.markLoose][0], spots[this.markLoose][1] + 0.1, spots[this.markLoose][2]).on; const t = keep ? this.markLoose : lying.sort((a, b) => d(a) - d(b))[0]; this.markLoose = w.markLoose = t; pos = [spots[t][0], spots[t][1] + 0.1, spots[t][2]]; label = PNAME[t]; aimed = w.aim?.loose === t; }
-      else if (pc && pc.uid !== -1 && !s.flags.miningStarted) { pos = [pc.x, 0.78, pc.z]; label = 'Dein PC'; aimed = w.aim?.uid === pc.uid; }
-      else if (g.has('market') && !(s.stats.sold > 0)) { const pr = w.room?.props?.find((p) => p.action === 'market'); if (pr) { pos = [pr.c[0], pr.c[1] + 0.16, pr.c[2]]; label = 'Bitcoin verkaufen'; aimed = w.aim?.prop === pr; } }
+    const g = this.g, s = g.s, w = this.w; let pos = null, label = '', aimed = false, final = false, tdoor = null;
+    const play = w.mode === 'play' && !this.paused && !w.cine, where = w.houseWhere?.() || null; // Haus: 'apt' | 'up' | 'low' | 'kel'
+    const route = (t, lab) => { const p = w.houseRoute(t); if (p) { pos = p; label = lab; final = (t === 'haustuer' || t === 'parcels') && where === 'up'; } };
+    const lying = Object.keys(s.loose || {});
+    if (s.chapter === 0 && play && !s.flags.miningStarted && where) { // Anfang: zu Fuß in den Keller, Teile suchen, wieder hoch zum PC
+      if (lying.length && where !== 'kel') route('keller', 'Runter in den Keller');
+      else if (lying.length) {
+        const spots = w.room?.looseSpots || {}, here = lying.filter((t) => spots[t]);
+        if (here.length) { const cp = w.camera.position, d = (t) => Math.hypot(spots[t][0] - cp.x, spots[t][2] - cp.z) + (w.toScreen(spots[t][0], spots[t][1] + 0.1, spots[t][2]).on ? 0 : 100); const keep = here.includes(this.markLoose) && w.toScreen(spots[this.markLoose][0], spots[this.markLoose][1] + 0.1, spots[this.markLoose][2]).on; const t = keep ? this.markLoose : here.sort((a, b) => d(a) - d(b))[0]; this.markLoose = w.markLoose = t; pos = [spots[t][0], spots[t][1] + 0.1, spots[t][2]]; label = PNAME[t]; aimed = w.aim?.loose === t; }
+      } else if (where !== 'apt') route('kinder', 'Hoch in deine Wohnung');
+      else { const pc = g.facObjects('kinder').find((o) => o.type === 'tower'); if (pc) { pos = [pc.x, 0.78, pc.z]; label = 'Dein PC'; aimed = w.aim?.uid === pc.uid; } }
+    } else if (s.chapter === 0 && play && !where && w.facId === 'kinder') { // (ohne Treppenhaus)
+      const pc = g.facObjects('kinder').find((o) => o.type === 'tower'); if (pc && !s.flags.miningStarted) { pos = [pc.x, 0.78, pc.z]; label = 'Dein PC'; aimed = w.aim?.uid === pc.uid; }
     }
-    if (!pos && w.mode === 'play' && !this.paused && !this.visiting && s.flags.miningStarted) { // neuer Standort frei: Marker an der Tür
+    if (!pos && s.chapter === 0 && play && (where === 'apt' || (!where && w.facId === 'kinder')) && s.flags.miningStarted && g.has('market') && !(s.stats.sold > 0)) { const pr = w.room?.props?.find((p) => p.action === 'market'); if (pr) { pos = [pr.c[0], pr.c[1] + 0.16, pr.c[2]]; label = 'Bitcoin verkaufen'; aimed = w.aim?.prop === pr; } }
+    if (!pos && play && !this.visiting && s.flags.miningStarted) { // neuer Standort frei: im Haus an der Haustür (Keller: an der Kellertür), sonst an der Tür
       const fu = FACILITIES.find((f) => g.canUnlock(f.id)), door = w.room?.doors?.[0];
-      if (fu && door) { pos = [door.c[0], Math.min(1.7, door.c[1] + 0.5), door.c[2]]; label = `${fu.short} freischalten`; aimed = w.aim?.door === door; }
+      if (fu && where) { if (fu.id === 'keller') { route('keller', `${fu.short} freischalten`); final = where === 'low'; tdoor = { kind: 'kellertuer', label: 'Kellertür' }; } else { route('haustuer', `${fu.short} freischalten`); tdoor = { kind: 'haustuer', label: 'Haustür' }; } }
+      else if (fu && door && !door.auto) { pos = [door.c[0], Math.min(1.7, door.c[1] + 0.5), door.c[2]]; label = `${fu.short} freischalten`; aimed = w.aim?.door === door; }
+    }
+    if (!pos && play && where && w.parcelsLying?.()) { // Pakete vor der Wohnungstür
+      route('parcels', 'Paket abholen'); if (pos && w.toScreen(...pos).dist < 1.7) pos = null;
+    }
+    if (!pos && play && where && this.walkGoal) { // Klick auf Wohnung/Keller oben: Weg zeigen
+      const done = this.walkGoal.id === 'keller' ? where === 'kel' : where === 'apt';
+      if (done || performance.now() > this.walkGoal.until) this.walkGoal = null; else route(this.walkGoal.id, this.walkGoal.id === 'keller' ? 'Zum Keller' : 'Zur Wohnung');
     }
     const sp = pos && w.toScreen(...pos);
-    this.objTarget = sp && sp.dist < 2.0 ? { label, pos } : null;
+    this.objTarget = sp && sp.dist < 2.0 ? { label, pos, final, door: tdoor } : null;
     if (!sp || aimed || (w.aim && !aimed)) { el.classList.add('hidden'); return; }
     el.classList.toggle('far', sp.dist > 2.2);
     el.classList.remove('hidden'); el.classList.toggle('edge', !sp.on); el.classList.toggle('left', !sp.on && sp.side < 0);
@@ -266,7 +284,7 @@ export class UI {
       const b = h(`<div class="site ${g.s.current === f.id ? 'on' : ''}"><div class="n">${f.short} ${sm.tripped ? '<b class="neg">· Sicherung raus</b>' : ''}${g.s.fac[f.id].mothball ? '<b class="moth">· eingemottet</b>' : ''}</div>
         <div class="m" title="${kw < 10 ? kw.toFixed(2) : kw.toFixed(0)} / ${cap} kW"><span class="${sm.temp > 38 ? 'neg' : ''}">${sm.temp.toFixed(0)} °C</span></div>
         <div class="caps"><span class="cp ${ci.c.used >= ci.c.max ? 'full' : ''}" title="Stellplätze für Rigs, Miner und Regale"><em>Platz</em> ${ci.plc}<i><b style="width:${ci.sp}%"></b></i></span><span class="cp ${ci.pp >= 90 ? 'full' : ''}" title="Last am Stromanschluss"><em>Strom</em> ${ci.pw}<i><b style="width:${ci.pp}%"></b></i></span></div></div>`);
-      b.onclick = () => { if (g.s.current !== f.id) this.switchSite(f.id); };
+      b.onclick = () => { if (g.s.current !== f.id) this.goSite(f.id); };
       el.append(b);
     }
     const hb = h(`<div class="site ${this.w.heatMode ? 'on' : ''}" title="Wärmebild ein/aus (Taste H)"><div class="n">Wärmebild</div><div class="m">Taste H</div></div>`);
@@ -274,10 +292,23 @@ export class UI {
     const br = g.brokenIn(g.s.current);
     if (br.n) { const b = h(`<div class="site fix" title="Alle defekten Geräte hier reparieren"><div class="n">${br.n} defekt</div><div class="m">Alle reparieren: ${fmtUSD(br.c)}</div></div>`); b.onclick = () => { const n = g.repairAll(g.s.current); this.toast(n ? `${n} Gerät(e) repariert` : 'Nicht genug Geld.', n ? 'good' : 'bad'); this.sites(); }; el.append(b); }
   }
-  switchSite(id) {
+  // Standort wählen (Leiste oben, Firma, Haustür): Wohnung ↔ Keller geht man zu Fuß, alles andere per Überblendung
+  goSite(id) {
+    const w = this.w;
+    if ((id === 'kinder' || id === 'keller') && w.hoff && !w.empire) {
+      this.resume(); this.walkGoal = { id, until: performance.now() + 90000 };
+      this.toast(id === 'keller' ? 'Zum Keller gehst du zu Fuß: raus in den Flur und die Kellertreppe runter.' : 'Zur Wohnung: die Kellertreppe hoch, dann die paar Stufen rauf zur Wohnungstür.', 'info', 3800);
+      return;
+    }
+    this.switchSite(id, { arrive: true });
+  }
+  // opt.arrive: Ankunft von einem anderen Standort – zu Hause beginnt man im Hausflur an der Haustür
+  switchSite(id, opt = {}) {
     this.fade();
     const fromMap = !!this.w.empire; if (fromMap) this.w.hideEmpire(false); // Raum wird gleich ohnehin neu geladen
-    this.g.s.current = id; this.w.loadFacility(id);
+    const wasHouse = !!this.w.hoff && !fromMap;
+    this.g.s.current = id; this.visiting = null; document.body.classList.remove('visiting'); this.walkGoal = null;
+    this.w.loadFacility(id, { at: opt.arrive && id === 'kinder' && !wasHouse ? 'haustuer' : null });
     if (fromMap) { this.pause(false); this.w.setMode('play'); }
     if (this.inspUid) { this.inspUid = null; $('#inspector').classList.add('hidden'); }
     this.refresh(); this.toast(`${esc(FACILITY[id].name)} – ${esc(FACILITY[id].place)}`, 'info', 3000);
@@ -364,7 +395,7 @@ export class UI {
     this.marketCoin = 'BTC'; this.trade = null; this.lastSpeed = null; this.evSnooze = null; this.delArmed = null;
     clearTimeout(this.featT); this.featQ = []; this.msgQ = []; this.xpQ = []; this.lvQ = null; this.lvBusy = false; $('#featcards').innerHTML = '';
     clearTimeout(this.instT); this.installing = false; this.afterSnap = null; this.showRun = false; this.pickType = null; this.rate = 0; this.rateDay = null;
-    this.visiting = null; document.body.classList.remove('visiting', 'show-build', 'show-goals');
+    this.visiting = null; this.walkGoal = null; this.lampHinted = false; document.body.classList.remove('visiting', 'show-build', 'show-goals');
     if (this.w.heatMode) this.w.toggleHeat(false);
     if (this.inspUid) { this.inspUid = null; $('#inspector').classList.add('hidden'); this.w.select(null); }
     this.w.focusObject?.(null); this.w.ghostPart?.(null); this.pause(false);
@@ -409,9 +440,11 @@ export class UI {
     let html = '';
     if (aim.loose) {
       html = `<kbd>E</kbd>${PNAME[aim.loose]} aufheben`;
+    } else if (aim.parcel != null) {
+      html = `<kbd>E</kbd>Paket aufheben${aim.label ? `<span> · ${esc(aim.label)}</span>` : ''}`;
     } else if (aim.door) {
-      const g0 = this.g, search = g0.s.feat && !g0.s.unlocked.includes('keller') && !g0.s.flags.miningStarted;
-      html = `<kbd>E</kbd>${search && this.w.facId === 'keller' ? 'Hoch in dein Zimmer' : search && Object.keys(g0.s.loose || {}).length ? 'Runter in den Keller' : esc(aim.door.label)}`;
+      const k = aim.door.kind;
+      html = k === 'kellertuer' ? (this.g.canUnlock('keller') ? `<kbd>E</kbd>${esc(FACILITY.keller.short)} freischalten` : '<kbd>E</kbd>Kellertür<span> · abgeschlossen</span>') : k === 'haustuer' ? '<kbd>E</kbd>Haustür<span> · raus in die Stadt</span>' : `<kbd>E</kbd>${esc(aim.door.label)}`;
     } else if (aim.prop) {
       html = aim.prop.action === 'market' && !this.g.has('market') ? `Monitor · ${this.g.s.flags.miningStarted ? 'Miner läuft' : 'aus'}` : `<kbd>E</kbd>${esc(aim.prop.hint)}`;
     } else {
@@ -441,31 +474,38 @@ export class UI {
       this.toast('Guten Morgen!', 'good', 2500);
     }
   }
-  // Am Anfang: runter in den verstaubten Keller zum Suchen und wieder hoch
+  // Am Anfang in den verstaubten Keller: früher per Überblendung, jetzt zu Fuß (der Marker zeigt den Weg)
   searchTrip(down) {
-    this.fade(); this.resume();
-    setTimeout(() => {
-      this.w.loadFacility(down ? 'keller' : this.g.s.current); this.visiting = down ? 'keller' : null;
-      document.body.classList.toggle('visiting', !!down); this.w.setMode('play'); this.goals(); this.sites(); this.keysHint();
-      if (down) this.lampHint = this.toast(this.w.vm?.lampOn ? 'Ganz schön staubig hier unten …' : 'Ganz schön dunkel hier unten. <kbd>F</kbd> schaltet die Taschenlampe an.', 'info', 4500);
-    }, 160);
+    this.resume();
+    if (down && this.w.facId !== 'keller' && this.w.hoff) this.toast('Raus in den Flur und die Kellertreppe runter – der Pfeil zeigt dir den Weg.', 'info', 4200);
+  }
+  // Wechsel der Szene auf der Kellertreppe (World.checkHouseSwitch): Standort still umstellen, ohne Überblendung
+  houseMove(id) {
+    const s = this.g.s, cur = id === 'keller' && s.unlocked.includes('keller') ? 'keller' : 'kinder', prev = s.current;
+    this.visiting = id === 'keller' && cur !== 'keller' ? 'keller' : null; // Keller noch nicht frei (Teile-Suche): nur zu Besuch
+    document.body.classList.toggle('visiting', !!this.visiting);
+    if (cur !== prev) { s.current = cur; this.toast(esc(FACILITY[cur].name), 'info', 1600); }
+    this.top(); this.sites(); this.goals(); this.keysHint(); this.dock();
+    if (document.body.classList.contains('show-build')) this.build(true);
   }
   travel(door) {
     const g = this.g;
-    if (g.s.feat && !g.s.unlocked.includes('keller') && !g.s.flags.miningStarted) {
-      if (this.w.facId === 'keller') { this.searchTrip(false); return; }
-      if (Object.keys(g.s.loose || {}).length) { this.searchTrip(true); return; }
+    if (door?.kind === 'kellertuer') { // abgeschlossene Kellertür: Hinweis – oder jetzt freischalten
+      if (g.canUnlock('keller')) { this.unlock('keller'); return; }
+      this.audio?.click?.(); this.toast(esc(CHAPTERS[g.s.chapter]?.waitText || 'Abgeschlossen – das Kellerabteil ist noch voll mit Gerümpel vom Vormieter.'), 'info', 5000); return;
     }
-    if (!FACILITIES.some((f) => f.id !== g.s.current && (g.s.unlocked.includes(f.id) || g.canUnlock(f.id)))) { this.toast('Die Tür bleibt erst mal zu.', 'info', 2200); return; }
+    const home = door?.kind === 'haustuer'; // aus dem Haus: Wohnung und Keller erreicht man zu Fuß
+    const dests = FACILITIES.filter((f) => !(home && (f.id === 'kinder' || f.id === 'keller')));
+    if (!dests.some((f) => f.id !== g.s.current && (g.s.unlocked.includes(f.id) || g.canUnlock(f.id)))) { this.toast(home ? 'Draußen wartet noch nichts auf dich – erst mal hier Geld verdienen.' : 'Die Tür bleibt erst mal zu.', 'info', 2600); return; }
     const body = h(`<div><h2>${esc(door.label)}</h2><p style="color:var(--dim);margin-top:-6px">Wohin willst du?</p><div class="cards"></div></div>`);
     const cards = body.querySelector('.cards');
-    for (const f of FACILITIES) {
+    for (const f of dests) {
       const un = g.s.unlocked.includes(f.id), here = g.s.current === f.id, can = g.canUnlock(f.id);
       if (!un && !can) continue;
       const sm = g.summary[f.id];
       const c = h(`<div class="card"><h3>${here ? '' : ''}${esc(f.name)}</h3><div class="sub">${esc(f.place)}</div>${un && sm ? `<div style="font-size:12px;color:var(--dim)">${fmtWatt(sm.watt)} · ${fmtNum(sm.temp, 1)} °C · Platz ${g.slotsUsed(f.id)}/${g.slotsMax(f.id)}</div>` : `<div style="font-size:12px;color:var(--dim)">${f.slots} Stellplätze · ${fmtNum(f.power[0].kw, 1)} kW</div>`}</div>`);
       const b = h(`<button class="btn small ${here ? '' : 'primary'}" style="margin-top:6px">${here ? 'Hierbleiben' : un ? 'Hingehen' : f.cost ? `Übernehmen (${fmtUSD(f.cost)})` : 'Einziehen'}</button>`);
-      b.onclick = () => { this.closeModal(); if (here) return; if (!un) { this.unlock(f.id); return; } this.switchSite(f.id); };
+      b.onclick = () => { this.closeModal(); if (here) return; if (!un) { this.unlock(f.id); return; } this.switchSite(f.id, { arrive: true }); };
       c.append(b); cards.append(c);
     }
     this.openModal(body, 'narrow', 'travel');
@@ -796,7 +836,7 @@ export class UI {
       const rest = ch && ch.goals.filter((x) => !s.goals[x.id] && !x.action).length;
       if (go && !rest) t = s.cash >= go.action.cost ? `Drück <b>G</b>: ${esc(go.action.label)}.` : `Spare für „${esc(go.action.label)}“ – ${fmtUSD(s.cash)} / ${fmtUSD(go.action.cost)}.`;
     }
-    if (!t && FACILITIES.some((f) => g.canUnlock(f.id))) t = 'Ein neuer Standort ist frei: Geh zur <b>Tür</b>, schau sie an und drück <b>E</b>.';
+    if (!t && FACILITIES.some((f) => g.canUnlock(f.id))) t = `Ein neuer Standort ist frei: Geh zur <b>${this.w.hoff ? 'Haustür' : 'Tür'}</b>, schau sie an und drück <b>E</b>.`;
     if (!t && s.chapter === 0 && s.goals.gpu && !s.goals.rig2) t = g.readyOk('tower') ? 'Drück <b>B</b> → Rigs → Tower: <b>Fertig bestückt</b> kaufen und hinstellen – oder als Bausatz selbst bauen.' : 'Drück <b>B</b> → Rigs → Tower: <b>Als Bausatz</b> kaufen und hinstellen. Dann anschauen, <b>E</b> und die Teile aus dem Lager einbauen.';
     if (!t && s.chapter === 1 && !s.goals.openrig) t = 'Drück <b>B</b> → Rigs: Stell eine <b>Milchkiste</b> auf. Dann anschauen, <b>E</b> und bestücken (Mainboard, CPU, Netzteil, GPUs).';
     if (!t) { const ch = CHAPTERS[s.chapter], go = ch && ch.goals.find((x) => !s.goals[x.id]); if (go) t = `Nächstes Ziel: ${esc(go.text)}`; }
@@ -805,7 +845,10 @@ export class UI {
   unlock(id) {
     const f = FACILITY[id];
     if (!this.g.unlockFacility(id)) { this.toast(`Du brauchst ${fmtUSD(f.cost)}.`, 'bad'); return; }
-    this.switchSite(id);
+    if ((id === 'keller' || id === 'kinder') && this.w.hoff && !this.w.empire) { // im Haus: kein Teleport, die Kellertür ist jetzt offen
+      if (this.w.facId === 'keller') this.w.reloadHere(); // verstaubten Keller gegen den freien tauschen
+      this.houseMove(this.w.facId); if (this.w.facId !== id) this.walkGoal = { id, until: performance.now() + 90000 };
+    } else this.switchSite(id);
     const ci = CHAPTERS.findIndex((c) => c.unlock === id);
     const next = CHAPTERS[ci + 1];
     this.story(next?.title || f.name, `${(this.g.s.flags.shopLost && next?.introLost) || next?.intro || ''}<br/><br/><b>${esc(f.name)}</b> – ${esc(f.place)}<br/>${f.w} × ${f.d} m · ${f.power[0].kw.toLocaleString('de-DE')} kW Anschluss${f.rent ? ` · Miete ${fmtUSD(f.rent)}/Monat ab dem ersten Gerät` : ''}<br/><i>${esc(f.desc)}</i><br/><br/><b>${f.slots}</b> Stellplätze statt ${FACILITY[FACILITIES[Math.max(0, f.tier - 1)].id].slots} · <b>${Math.round((f.w * f.d) / 14).toLocaleString('de-DE')}×</b> so groß wie dein Kinderzimmer · <b>${Math.round(f.power[0].kw / 1.8).toLocaleString('de-DE')}×</b> so viel Strom.`);
@@ -846,7 +889,7 @@ export class UI {
         <div class="row ip-act"><button class="btn primary big">Ab in den Keller</button></div>
       </div></div>`);
     if (m0) m0.read = true;
-    body.querySelector('button').onclick = () => { this.closeModal(); if (s.feat && Object.keys(s.loose || {}).length && this.w.facId !== 'keller') this.searchTrip(true); };
+    body.querySelector('button').onclick = () => { this.closeModal(); if (s.feat && Object.keys(s.loose || {}).length && this.w.facId !== 'keller') this.searchTrip(true); }; // zu Fuß: Marker „Runter in den Keller“
     this.onModalClose = onClose;
     this.openModal(body, 'narrow', 'intro');
     requestAnimationFrame(() => this.chart(body.querySelector('canvas.spark'), 'BTC', 120, true));
@@ -1109,7 +1152,7 @@ export class UI {
         else c.append(h('<div style="font-size:12px;color:var(--dim)">Maximaler Anschluss erreicht.</div>'));
         const step = g.solarStep(f.id);
         if (step) { const cost = step * g.solarPricePerKwp(); const sb = h(`<button class="btn small">+${step} kWp Solar (${fmtUSD(cost)})</button>`); sb.disabled = s.cash < cost; sb.onclick = () => { if (g.buildSolar(f.id)) { this.toast(`Solaranlage erweitert (${f.short})`, 'good'); this.company(); } }; c.append(sb); }
-        if (s.current !== f.id) { const go = h('<button class="btn small" style="margin-left:6px">Hingehen</button>'); go.onclick = () => { this.closeModal(); this.switchSite(f.id); }; c.append(go); }
+        if (s.current !== f.id) { const go = h('<button class="btn small" style="margin-left:6px">Hingehen</button>'); go.onclick = () => { this.closeModal(); this.goSite(f.id); }; c.append(go); }
         c.append(this.facExtras(f.id)); // Ausbauten, Einmotten
       } else if (can) { const b = h(`<button class="btn primary small">Übernehmen (${fmtUSD(f.cost)})</button>`); b.onclick = () => { this.closeModal(); this.unlock(f.id); }; c.append(b); }
       else { const ci = CHAPTERS.findIndex((ch) => ch.unlock === f.id); c.append(h(`<div style="font-size:12px;color:var(--dim)">Ab ${(CHAPTERS[ci]?.minDate || '').slice(0, 4)}</div>`)); }
