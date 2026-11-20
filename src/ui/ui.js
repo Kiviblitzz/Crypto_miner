@@ -1479,9 +1479,7 @@ export class UI {
   rigCard(it, fac) {
     const g = this.g, r = g.readyRig(it.id, fac), cp = g.itemPrice(it), full = !g.slotOk(fac, it), isNew = g.s.day - it.releaseDay < 120, price = r ? r.price : cp;
     const spec = r ? `Fertig: ${r.n}× ${esc(PART[r.gpu].name)} · ${fmtWatt(r.watt)}<br/>≈ <b class="${r.net >= 0 ? 'pos' : 'neg'}">${r.net >= 0 ? '+' : ''}${fmtUSD(r.net)}/Tag</b> hier · ${this.roiText(r.roi)}` : esc(it.desc || '');
-    const fd = full ? 'data-full="1"' : '', sm = g.summary?.[fac];
-    // Passt noch einer rein, ohne dass es zu heiß wird oder der Anschluss nicht reicht?
-    const warn = r && sm && !sm.tripped && !full ? (sm.watt + r.watt > sm.capKw * 1000 ? 'Anschluss reicht nicht – erst Strom ausbauen' : sm.temp + (12 * r.watt) / Math.max(1, sm.cool) > 38 ? 'Wird hier zu heiß – erst Kühlung aufstellen' : '') : '';
+    const fd = full ? 'data-full="1"' : '', warn = r && !full ? this.rigWarn(fac, r.watt) : '';
     const card = h(`<div class="item rigc ${full || price > g.s.cash ? 'dis' : ''}" data-rig="1" data-price="${price}" data-id="${it.id}" ${fd}><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${this.money(price)}</span></div><div class="s">${spec}<br/><span class="rc-dim">bis ${it.maxGpu} Grafikkarten${full ? '' : ` · Platz ${g.slotsUsed(fac)}/${g.slotsMax(fac)}`}</span>${warn ? `<br/><b class="rc-warn">${warn}</b>` : ''}</div><div class="miss">${full ? 'Kein Platz mehr – Zeit für einen größeren Standort' : price > g.s.cash ? `Dir fehlen ${this.money(price - g.s.cash)}` : ''}</div>${r ? `<button class="btn small primary wide rc-ready" data-p="${r.price}" ${fd} ${full || r.price > g.s.cash ? 'disabled' : ''}>Fertig bestückt · ${this.money(r.price)}</button>` : ''}<div class="rc-row"><button class="btn small rc-cfg" data-p="0" ${fd} ${full ? 'disabled' : ''} title="Teile selbst wählen: als Bausatz oder fertig montiert">Selbst bauen</button><button class="btn small rc-case" data-p="${cp}" ${fd} ${full || cp > g.s.cash ? 'disabled' : ''} title="Leeres Gehäuse – Teile einzeln einbauen">Gehäuse · ${this.money(cp)}</button></div></div>`);
     try { const url = this.w.thumbnail(it.id); if (url) card.prepend(h(`<div class="thumb"><img alt="" src="${url}"/></div>`)); } catch (e) { /* ohne Vorschau weiter */ }
     const go = (fn) => (e) => { e?.stopPropagation(); if (!g.slotOk(fac, it)) { this.toast('Kein Platz mehr – Zeit für einen größeren Standort.', 'bad'); return; } fn(); };
@@ -1493,10 +1491,15 @@ export class UI {
     card.onclick = r ? ready : caseOnly;
     return card;
   }
+  // Passt noch einer rein, ohne dass es zu heiß wird oder der Anschluss nicht reicht?
+  rigWarn(fac, watt) {
+    const sm = this.g.summary?.[fac]; if (!sm || sm.tripped || !watt) return '';
+    return sm.watt + watt > sm.capKw * 1000 ? 'Anschluss reicht nicht – erst Strom ausbauen' : sm.temp + (12 * watt) / Math.max(1, sm.cool) > 38 ? 'Wird hier zu heiß – erst Kühlung aufstellen' : '';
+  }
   lastBuildCard(fac) {
     const g = this.g, lb = g.s.lastBuild; if (!lb || g.buildBlocked(lb) || !g.placeableAllowed(PLACEABLE[lb.type], fac)) return null;
     const st = g.buildStats(lb, fac, lb.ready), full = !g.slotOk(fac, PLACEABLE[lb.type]), fd = full ? 'data-full="1"' : '';
-    const card = h(`<div class="item rigc lastb ${full || st.price > g.s.cash ? 'dis' : ''}" data-rig="1" data-price="${st.price}" ${fd}><div class="t"><span>Wie zuletzt</span><span class="p">${this.money(st.price)}</span></div><div class="s">${esc(PLACEABLE[lb.type].name)} · ${st.n}× ${esc(PART[lb.gpu]?.name || 'ohne Grafikkarte')}<br/>${lb.ready ? 'fertig montiert' : 'als Bausatz zum Selbsteinbauen'}<br/>≈ <b class="${st.net >= 0 ? 'pos' : 'neg'}">${st.net >= 0 ? '+' : ''}${fmtUSD(st.net)}/Tag</b> · ${this.roiText(st.roi)}</div><div class="miss">${full ? 'Kein Platz mehr – Zeit für einen größeren Standort' : ''}</div><button class="btn small primary wide" data-p="${st.price}" ${fd} ${full || st.price > g.s.cash ? 'disabled' : ''}>Nochmal bauen · ${this.money(st.price)}</button><div class="rc-row"><button class="btn small" data-p="0" ${fd}>Ändern</button></div></div>`);
+    const card = h(`<div class="item rigc lastb ${full || st.price > g.s.cash ? 'dis' : ''}" data-rig="1" data-price="${st.price}" ${fd}><div class="t"><span>Wie zuletzt</span><span class="p">${this.money(st.price)}</span></div><div class="s">${esc(PLACEABLE[lb.type].name)} · ${st.n}× ${esc(PART[lb.gpu]?.name || 'ohne Grafikkarte')}<br/>${lb.ready ? 'fertig montiert' : 'als Bausatz zum Selbsteinbauen'}<br/>≈ <b class="${st.net >= 0 ? 'pos' : 'neg'}">${st.net >= 0 ? '+' : ''}${fmtUSD(st.net)}/Tag</b> · ${this.roiText(st.roi)}${!full && st.ok ? ((w) => (w ? `<br/><b class="rc-warn">${w}</b>` : ''))(this.rigWarn(fac, st.watt)) : ''}</div><div class="miss">${full ? 'Kein Platz mehr – Zeit für einen größeren Standort' : ''}</div><button class="btn small primary wide" data-p="${st.price}" ${fd} ${full || st.price > g.s.cash ? 'disabled' : ''}>Nochmal bauen · ${this.money(st.price)}</button><div class="rc-row"><button class="btn small" data-p="0" ${fd}>Ändern</button></div></div>`);
     const [again, edit] = card.querySelectorAll('button');
     again.onclick = (e) => { e.stopPropagation(); this.startBuild(lb, lb.ready); };
     edit.onclick = (e) => { e.stopPropagation(); this.configurator(lb.type, lb); };
@@ -1520,8 +1523,9 @@ export class UI {
     if (!heat && !full) { this.pauseKey = null; return; }
     const key = `${fac}:${heat}:${full}`; if (this.pauseKey === key) return; this.pauseKey = key;
     const n = (k) => `${k} ${k === 1 ? 'Gerät pausiert' : 'Geräte pausieren'}`;
-    if (full) this.toast(`Anschluss voll: ${n(full)}. Mehr Strom: <kbd>B</kbd> Bauen → oben „Strom ausbauen“.`, 'info', 7000);
-    else { const fan = g.shopList('cool', fac).sort((x, y) => g.itemPrice(x) - g.itemPrice(y))[0]; this.toast(`Zu heiß hier: ${n(heat)}. Stell Kühlung auf: <kbd>B</kbd> Bauen → Kühlung${fan ? ` (${esc(fan.name)} ab ${this.money(g.itemPrice(fan))})` : ''}.`, 'info', 7000); }
+    this.pauseToast?.remove();
+    if (full) this.pauseToast = this.toast(`Anschluss voll: ${n(full)}. Mehr Strom: <kbd>B</kbd> Bauen → oben „Strom ausbauen“.`, 'info', 7000);
+    else { const fan = g.shopList('cool', fac).sort((x, y) => g.itemPrice(x) - g.itemPrice(y))[0]; this.pauseToast = this.toast(`Zu heiß hier: ${n(heat)}. Stell Kühlung auf: <kbd>B</kbd> Bauen → Kühlung${fan ? ` (${esc(fan.name)} ab ${this.money(g.itemPrice(fan))})` : ''}.`, 'info', 7000); }
   }
   // Nach dem Setzen: gleich noch einen? (Rigs, Miner, Regale – solange Geld, Platz und Kontingent reichen)
   placedAgain(o, p) {
