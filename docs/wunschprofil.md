@@ -49,11 +49,14 @@ Zitate sind wörtlich (Tippfehler bleiben stehen), damit der Ton erhalten bleibt
 - **Technik-Menü (T), entschieden:** „So skills nicht also nicht einfach son skill 15% weniger Strom soll es nicht geben. Das soll alles in T aufgehen eine große skill Seite“. T wird die eine Fähigkeiten-Seite, die TECHS gehen darin auf, es gibt keine Klick-Boni mehr.
 - **Papas Laden, entschieden:** „Erstmal weglassen alles mit Papa aber im Hinterkopf Ideen oder stell mir nochmal andere Ideen vor“. Bankfrist und Schulden-Drama fallen weg; die Werkstatt bleibt (Papa vermietet sie). Neue Laden-Ideen kommen später; die ersten vier Vorschläge (Laden wächst mit, Bitcoin-Dilemma, Übergabe, Kreditrate) hat er nicht genommen.
 - **Startgeld, entschieden:** „Man muss wirklich erstmal damit verdienen aber man kann vielleicht bei Papa zurück zahlen oder so also so papa leiht einem Geld für den Auszug dass das so anfängt und dann macht man aber nichts und dann kommt die Nachricht vom Kumpel“. Papas Umzugsdarlehen ohne Frist und Zinsen; Miete und Strom bezahlt man nur aus dem Mining. Man wacht ohne Plan auf, erst Deniz' Nachricht bringt die Bitcoin-Idee.
+- **Fähigkeiten-Seite T:** „Ein großer Baum“. Ein zusammenhängender Baum mit Linien wie in Strategiespielen, zeitlich von links nach rechts, verschiebbar und zoombar; Kategorien nur als Äste bzw. Farben.
+- **Lieblings-Fähigkeiten:** „Löten & Reparieren, Undervolten/Übertakten, Betriebssystem & Firmware, Mehr noch“. Diese Äste bekommen die schönsten Handgriffe; „mehr noch“ heißt: noch mehr Fähigkeiten.
+- **Automatik:** Mini-Spiele übernimmt später ein Roboter (keine Techniker, keine Familie), der sichtbar von seiner Ladestation zum Gerät fährt.
+- **Papa:** „Papa will selbst minen, Ja das ist gut so helfen und Belohnungen und skills kriegen“. Neben-Quest: Papa baut im Laden einen schlechten Miner, man hilft ihm (zu Fuß hin) und lernt bei ihm Elektrik und Fehlersuche. Die übrigen Laden-Ideen sind raus.
 - **Arbeitsweise:** „der ideen typ soll mit dir quatschen und mit mir in einem andern chat so dass du nicht auf antworten warten musst“. Der Spieler-Vertreter läuft als eigener Chat, fragt den Auftraggeber dort und schickt die Ergebnisse an den Entwicklungs-Chat.
 
 ## Roadmap (später)
 - KI-Rechenzentrum: Mining-Hallen zu KI-Rechenzentren umbauen; dafür braucht man wieder GPUs (passt zu „GPU-Übertakten geht nur für GPUs“).
 
 ## Offene Fragen (für den nächsten Fragebogen)
-- Fähigkeiten: Kategorien (Entwurf in docs/faehigkeiten.md, 40 Stück in 6 Kategorien), muss bestätigt werden.
-- Papas Laden: neue Ideen sammeln (die ersten vier hat er abgelehnt).
+- „Mehr noch“ bei den Lieblingen: mehr Fähigkeiten insgesamt oder auch Kühlung? (Der Ideen-Typ fragt nach.)
