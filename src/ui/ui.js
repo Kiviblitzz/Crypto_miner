@@ -1196,6 +1196,8 @@ export class UI {
     if (tab === 'contacts') { this.phoneContacts(ph); this.openModal(body, 'narrow', 'phone'); this.dock(); return; }
     if (tab === 'konto') { g.learned?.('konto'); this.phoneKonto(ph); this.openModal(body, 'narrow', 'phone'); this.dock(); return; }
     const oe = g.s.ev?.open && EVENT[g.s.ev.open.id];
+    const ob = g.s.bills?.open; // offene Rechnung: immer oben, auch wenn gerade eine andere Entscheidung offen ist (die Mahnung kommt dann danach)
+    if (ob && oe?.id !== 'mahnung') { const card = h(`<div class="msg decide bill"><div class="fr">${esc((ob.who || [])[0] || 'Rechnung')}<span>${esc(BILL_STAGE[Math.min(3, ob.stage)])} · ${ob.stage >= 3 ? 'Strom abgestellt' : `Frist bis ${fmtDate(ob.due)}`}</span></div><b>${fmtUSD(g.owed())} offen</b><div class="row" style="margin-top:8px"><button class="btn small primary">Zum Konto</button></div></div>`); card.querySelector('button').onclick = () => this.phone('konto'); ph.append(card); }
     if (oe) { const card = h(`<div class="msg decide"><div class="fr">${esc(oe.from || '')}<span>Entscheidung offen · noch ${Math.max(0, g.s.ev.open.until - g.s.day)} Tage</span></div><b>${esc(g.evText(oe, 'title'))}</b><div class="row" style="margin-top:8px"><button class="btn small primary">Jetzt entscheiden</button></div></div>`); card.querySelector('button').onclick = () => { this.evSnooze = null; this.closeModal(); this.eventCard(); }; ph.append(card); }
     if (!msgs.length) ph.append(h('<div class="empty">Keine Nachrichten.</div>'));
     for (const m of msgs) { if (m.old) continue; const tip = MESSAGES.find((x) => x.id === m.id)?.tip; ph.append(h(`<div class="msg f-${m.from.split(' ')[0]} ${m.read ? '' : 'unread'} ${tip ? 'tip' : ''}"><div class="fr">${esc(m.from)}${tip ? '<em class="tip-tag">Tipp</em>' : ''}<span>${fmtDate(m.day)}</span></div>${esc(m.text)}</div>`)); }
@@ -1330,7 +1332,7 @@ export class UI {
     const box = $('#featcards'); if (!box) return; box.querySelector('.featcard.ring2')?.remove();
     const el = h(`<div class="featcard ring ring2"><div class="fc-t">${PHONE_SVG}Bzzz … bzzz …</div><div class="fc-h"><kbd class="fc-k">H</kbd>${esc(from)} schreibt dir</div><div class="fc-b">Neue Nachricht! Drück <kbd>H</kbd> für dein Handy.</div></div>`);
     box.prepend(el); this.audio?.message?.(); this.keysHint(); this.dock();
-    let gone = false; const off = () => { if (gone) return; gone = true; el.classList.add('out'); setTimeout(() => el.remove(), 600); }; this.ringOff = off; setTimeout(off, 15000);
+    let gone = false; const off = () => { if (gone) return; gone = true; el.classList.add('out'); setTimeout(() => el.remove(), 600); }; this.ringOff = off; setTimeout(off, 45000); // bleibt, bis das Handy aufgeht (spätestens 45 Sekunden)
   }
   // Firma → Monatskosten: Miete und Strom je Standort (bei heutiger Last), Sonstiges, nächste Abrechnung, Offenes, Papas Darlehen
   costsSec() {
