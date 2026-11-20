@@ -35,7 +35,7 @@ export const FACILITIES = [
   {
     id: 'fjord', tier: 5, name: 'Fjordhalle', short: 'Fjord', place: 'Sogn, Norwegen (Wasserkraft)', w: 64, d: 40, h: 12,
     power: [{ kw: 30000, label: '30 MW Wasserkraft' }, { kw: 60000, cost: 8000000, label: '60 MW' }, { kw: 120000, cost: 20000000, label: '120 MW' }],
-    elec: 'fixed', elecFixed: 0.035, rent: 80000, cost: 5000000, baseCool: 3000000, ambient: -12, grid: 0.5,
+    elec: 'fixed', elecFixed: 0.035, rent: 80000, cost: 3000000, baseCool: 3000000, ambient: -12, grid: 0.5,
     style: 'fjord', desc: 'Grüner Strom aus dem Wasserkraftwerk, eiskalte Luft vom Fjord. Das Endspiel.',
   },
 ];
@@ -122,7 +122,7 @@ export const CHAPTERS = [
     intro: 'Ein echtes Rechenzentrum in Frankfurt. In der Branche spricht sich herum, dass es Hashwerk gibt – sogar bei MONOLITH in Zug.',
     goals: [
       { id: 'ph20', text: 'Schaff 20 PH/s', check: (s, h) => h.algoHash('sha256') >= 2e16, progress: (s, h) => [h.algoHash('sha256'), 2e16, 'hash'] },
-      { id: 'nw10m', text: 'Firmenwert 10 Mio. $ (ohne Coins)', check: (s, h) => h.firmValue() >= 1e7, progress: (s, h) => [h.firmValue(), 1e7, 'usd'] },
+      { id: 'nw10m', text: 'Firmenwert 4 Mio. $ (ohne Coins)', check: (s, h) => h.firmValue() >= 4e6, progress: (s, h) => [h.firmValue(), 4e6, 'usd'] }, // id bleibt (alte Spielstände); 2018–2020 ist Krypto-Winter, mehr schafft ein normaler Spieler im RZ nicht
     ],
     waitText: 'Das Wasserkraftwerk in Sogn liefert erst ab Juni 2020 Strom für die Fjordhalle.',
     bonus: [
@@ -213,6 +213,7 @@ export const MESSAGES = [
   { id: 't_hot', tip: true, cond: (s, h) => s.chapter >= 1 && h.maxTemp() > 34, from: 'Deniz', text: 'Über 34 Grad bei dir! Ab 38 drosseln die Karten, und heiße Hardware geht schneller kaputt. Im Katalog (B) gibt es Lüfter.' },
   { id: 't_trip', tip: true, cond: (s) => s.chapter >= 1 && !!s.flags.everTripped, from: 'Deniz', text: 'Im Firmenfenster (C) siehst du, wie viel dein Anschluss schafft. Erst den Strom ausbauen, dann neue Geräte hinstellen.' },
   { id: 't_halv12', tip: true, date: '2012-10-29', from: 'Deniz', text: 'In einem Monat ist Halving: nur noch halb so viele Bitcoin pro Block. Alte, stromhungrige Karten rechnen sich danach kaum noch.' },
+  { id: 't_net14', tip: true, date: '2014-06-10', from: 'Deniz', text: 'Die Netz-Hashrate verdoppelt sich gerade alle zwei Monate. Ein Miner, der sich heute rechnerisch in 90 Tagen bezahlt, schafft das so nie. Lieber weniger kaufen – und nur die sparsamsten.' },
   { id: 't_halv16', tip: true, date: '2016-06-09', from: 'Deniz', text: 'Noch 30 Tage bis zum zweiten Halving. Verkauf ineffiziente Miner jetzt, solange sie noch Geld bringen.' },
   { id: 't_halv20', tip: true, date: '2020-04-11', from: 'Deniz', text: 'In 30 Tagen halbiert sich die Belohnung wieder. Rechne nach, welche Miner das überleben – nur die sparsamen.' },
   { id: 't_halv24', tip: true, date: '2024-03-21', from: 'Deniz', text: 'Viertes Halving in 30 Tagen. Danach zählt jedes Joule pro Terahash.' },
