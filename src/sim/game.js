@@ -60,9 +60,11 @@ export class Game {
     this.s = s;
     this.cache = {};
     this.initEcon(diff);
-    // Start: leeres Gehäuse – den ersten Mining-PC baut der Spieler selbst zusammen
-    // Alte Teile liegen im Zimmer herum – einsammeln und einbauen
-    s.loose = { mobo: 'h55', cpu: 'cel33', gpu: 'rhd4850', psu: 'psu400' }; s.inv = [];
+    // Start: leeres Gehäuse – den ersten Mining-PC baut der Spieler selbst zusammen.
+    // Im Keller liegen nur die billigsten Teile (ohne Grafikkarte): erst CPU-Mining, die erste Grafikkarte bestellt man im Shop
+    s.loose = { mobo: 'h55', cpu: 'cel33', psu: 'psu400' }; s.looseN = 3; s.inv = [];
+    s.flags.cpuStart = 1; s.flags.parcels = 1; // Paket-Modus: Bestelltes kommt am nächsten Morgen vor die Wohnungstür (bis zur Werkstatt)
+    s.orders = []; s.parcels = []; s.unpacked = []; s.nextParcel = 0;
     s.skills = { hw: 0, mining: 0, trade: 0 };
     s.keep = {}; s.talk = { last: {}, week: {}, joy: {}, got: {}, seen: {}, line: {} }; // Fundstücke, Gespräche (src/data/story.js)
     const pc = this.addObject('kinder', 'tower', 1.75, 0.75, 0, { mobo: null, cpu: null, psu: null, gpus: [] }, true);
@@ -118,6 +120,7 @@ export class Game {
       if (s.goals.rigs8 && s.goals.night === undefined) s.goals.night = 'date'; // alte Stände: früheres Kapitel-2-Ziel „8 Rigs“ zählt für den Nachtstromzähler
       const oldFull = !s.full; s.full ||= {};
       s.bag ||= {}; for (const id of Object.keys(s.bag)) if (!PART[id] || !(s.bag[id] > 0)) delete s.bag[id]; if (s.lastBuild && !PLACEABLE[s.lastBuild.type]) s.lastBuild = null;
+      this.migrateParcels(s); // Bestellungen, Pakete, Bestand „zum Aufstellen“ (alte Stände: leer, Paket-Modus aus)
       s.since ||= {}; const oldContacts = !s.contacts || typeof s.contacts !== 'object'; if (oldContacts) s.contacts = {};
       for (const id of Object.keys(s.contacts)) { const c = s.contacts[id]; if (!CONTACT[id] || !c || typeof c !== 'object') delete s.contacts[id]; else { c.met = +c.met || 0; c.on = +c.on || 0; c.n = Math.max(0, +c.n || 0); } }
       if (oldContacts) this.migrateContacts(s); // alte Stände: Kontakte, die man nach dem Spielstand schon hätte, still freischalten
