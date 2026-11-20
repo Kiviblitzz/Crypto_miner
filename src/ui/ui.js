@@ -128,12 +128,14 @@ export class UI {
 
   // Geldbeträge im Katalog: ab 10 $ ganze Dollar, darunter mit Cent – überall gleich
   money(v) { return v >= 10 ? Math.ceil(v - 1e-9).toLocaleString('de-DE') + ' $' : fmtUSD(v); }
+  // „Dir fehlen …“ – und wenn Coins auf der Börse liegen, die das decken: verkaufen (M)
+  missText(p, ex = null) { const g = this.g, gap = p - g.s.cash; if (!(gap > 0)) return ''; ex ??= g.has('market') ? g.exchangeValue() : 0; return `Dir fehlen ${this.money(gap)}${ex >= gap ? ' – verkauf Bitcoin an der Börse (M)' : ''}`; }
   buildAfford() {
     if (!document.body.classList.contains('show-build')) return;
-    const cash = this.g.s.cash;
+    const cash = this.g.s.cash, ex = this.g.has('market') ? this.g.exchangeValue() : 0;
     for (const card of document.querySelectorAll('#build .item[data-price]')) {
       const p = +card.dataset.price, short = p > cash; const off = !!(card.dataset.hydro || card.dataset.sold || card.dataset.full); card.classList.toggle('dis', short || off); const pb = card.querySelector('.place'); if (pb) pb.disabled = short || off;
-      const m = card.querySelector('.miss'); if (m) { const t = card.dataset.full ? 'Kein Platz mehr – Zeit für einen größeren Standort' : short ? `Dir fehlen ${this.money(p - cash)}` : ''; if (m.textContent !== t) m.textContent = t; }
+      const m = card.querySelector('.miss'); if (m) { const t = card.dataset.full ? 'Kein Platz mehr – Zeit für einen größeren Standort' : short ? this.missText(p, ex) : ''; if (m.textContent !== t) m.textContent = t; }
     }
     for (const b of document.querySelectorAll('#build button[data-p]')) b.disabled = +b.dataset.p > cash || b.dataset.full === '1';
   }
@@ -295,6 +297,7 @@ export class UI {
     const list = h('<div class="items"></div>');
     if (this.cat === 'parts') { el.style.setProperty('--cols', 3); this.partsView(list); el.append(list); return; }
     const items = g.shopList(this.cat, fac).sort((a, b) => b.releaseDay - a.releaseDay);
+    if (this.cat === 'rigs') { const kb = this.kitsBar(fac); if (kb) list.append(kb); }
     if (this.cat === 'rigs' && g.s.lastBuild) { const lb = this.lastBuildCard(fac); if (lb) list.append(lb); }
     el.style.setProperty('--cols', Math.max(1, Math.min(3, items.length)));
     if (!items.length) list.append(h('<div class="empty">Noch nichts da.</div>'));
@@ -308,7 +311,7 @@ export class UI {
       if (it.kind === 'device' && g.facTier(fac) >= 1 && !it.hydro) s += `<br/><span class="rc-dim">Tipp: im Regal teilen sich 8 Miner einen Stellplatz</span>`;
       const left = g.stockLeft(it), sold = left === 0; if (left !== Infinity) s += `<br/><span class="stock ${sold ? 'neg' : ''}">${sold ? 'Kontingent: ' + esc(g.stockText(it)) : `Kontingent: noch ${left} Stück diesen Monat`}</span>`;
       const noSlot = !g.slotOk(fac, it); if (noSlot) s += `<br/><span class="stock neg">Alle ${g.slotsMax(fac)} Plätze belegt</span>`;
-      const card = h(`<div class="item ${price > g.s.cash || it.hydro || noSlot ? 'dis' : ''}" data-price="${price}" data-id="${it.id}" ${it.hydro ? 'data-hydro="1"' : ''} ${noSlot ? 'data-full="1"' : ''}><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${this.money(price)}</span></div><div class="s">${s}</div><div class="miss">${price > g.s.cash ? `Dir fehlen ${this.money(price - g.s.cash)}` : ''}</div><button class="btn small primary place" ${price > g.s.cash || it.hydro ? 'disabled' : ''}>Platzieren · ${this.money(price)}</button></div>`);
+      const card = h(`<div class="item ${price > g.s.cash || it.hydro || noSlot ? 'dis' : ''}" data-price="${price}" data-id="${it.id}" ${it.hydro ? 'data-hydro="1"' : ''} ${noSlot ? 'data-full="1"' : ''}><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${this.money(price)}</span></div><div class="s">${s}</div><div class="miss">${this.missText(price)}</div><button class="btn small primary place" ${price > g.s.cash || it.hydro ? 'disabled' : ''}>Platzieren · ${this.money(price)}</button></div>`);
       try { const url = this.w.thumbnail(it.id); if (url) card.prepend(h(`<div class="thumb"><img alt="" src="${url}"/></div>`)); } catch (e) { /* ohne Vorschau weiter */ }
       if (sold) { card.dataset.sold = '1'; card.classList.add('dis'); card.querySelector('.place').disabled = true; card.addEventListener('click', (e) => { e.stopImmediatePropagation(); this.toast(`${it.name}: ${g.stockText(it)}`, 'bad'); }); }
       card.onclick = () => {
@@ -746,7 +749,8 @@ export class UI {
       const gk = s.chapter + ':' + go.id, enter = gk !== this.goalKey; this.goalKey = gk;
       const bag = s.loose && !s.flags.miningStarted && go.id === 'collect' ? `<span class="bag">${['mobo', 'cpu', 'gpu', 'psu'].map((t) => `<i class="${s.loose[t] ? 'miss' : 'got'}" title="${PNAME[t]}${s.loose[t] ? ' – noch nicht gefunden' : ' – eingesammelt'}">${partSvg(t, 16)}${s.loose[t] ? '' : '<b class="tk"></b>'}<em>${{ mobo: 'Board', cpu: 'CPU', gpu: 'GPU', psu: 'Netzteil' }[t]}</em></i>`).join('')}</span>` : '';
       const gtext = (go.id === 'sell' && !g.has('market') ? 'Lass deinen PC ein paar Tage schürfen' : go.id === 'pcbuild' && this.w.facId === 'keller' ? 'Alle 4 Teile gefunden · zurück ins Zimmer' : go.text) + (go.orDate ? ` – sonst ab ${this.monthYear(g.orDate(ch, go))}` : '');
-      const row = h(`<div class="goal ${done ? 'done' : ''} ${enter ? 'enter' : ''}"><div class="ck">${done ? '✓' : ''}</div><div>${bag ? `<div class="goal-line">${esc(gtext)}${prog}</div>${bag}` : `${esc(gtext)}${prog}`}</div></div>`);
+      const gh = this.goalHint(go);
+      const row = h(`<div class="goal ${done ? 'done' : ''} ${enter ? 'enter' : ''}"><div class="ck">${done ? '✓' : ''}</div><div>${bag ? `<div class="goal-line">${esc(gtext)}${prog}</div>${bag}` : `${esc(gtext)}${prog}`}${gh ? `<div class="goal-hint">${gh}</div>` : ''}</div></div>`);
       if (!done && go.action) { const b = h(`<button class="btn small primary"><kbd>G</kbd>${esc(go.action.label)}</button>`); b.disabled = !g.canPayGoal(go); b.onclick = () => { if (g.goalAction(go)) { this.toast('✔ Erledigt!', 'good'); this.goals(); } }; row.lastElementChild.append(h('<br/>'), b); }
       el.append(row);
       const od = ch.goals.find((x) => x.skip && !s.goals[x.id] && x !== go); // „voll → schneller weiter“ immer sichtbar
@@ -754,6 +758,13 @@ export class UI {
     }
     const allDone = ch.goals.every((go) => s.goals[go.id]);
     this.goalsBonus(el, ch, allDone && s.day < toDay(ch.minDate), !allDone && g.saving(ch));
+  }
+  // Wie geht das Ziel? Kurzer Hinweis unter „zweiter PC“ / „erstes Rig im Keller“ (Bausatz zuerst, fertig bestückt über Kontakte)
+  goalHint(go) {
+    const g = this.g, site = { rig2: 'kinder', openrig: 'keller' }[go.id]; if (!site || !g.has('rigs') || !g.s.unlocked.includes(site)) return '';
+    if (g.kitsOpen(site).length) return g.s.current === site ? 'Bausatz steht – anschauen, <kbd>E</kbd> und die Teile aus dem Lager einbauen.' : `Dein Bausatz wartet ${site === 'kinder' ? 'im Zimmer' : 'im Keller'} aufs Einbauen.`;
+    const t = go.id === 'rig2' ? 'tower' : 'crate', nm = t === 'tower' ? 'Tower' : 'Milchkiste';
+    return g.readyOk(t) ? `<kbd>B</kbd> → Rigs → ${nm}: „Fertig bestückt“ oder als Bausatz.` : `<kbd>B</kbd> → Rigs → ${nm}: „Als Bausatz“ kaufen, hinstellen, selbst einbauen.`;
   }
   // Taste G: nächste Ziel-Aktion (z. B. Papa die Stromrechnung geben) – in der Ego-Steuerung ohne Mausklick
   goalActionKey() {
@@ -1521,24 +1532,43 @@ export class UI {
     return el;
   }
   // Rig-Karte: fertig bestückt (Hauptaktion), selbst zusammenstellen, nur Gehäuse
+  // Die Karte zeigt immer den VOLL bestückten Rig (bester Ertrag pro Stellplatz) und merkt sich genau diese Zusammenstellung:
+  // Klick kauft, was angezeigt wird (Preis/Verfügbarkeit werden geprüft); zu teuer → „Klein anfangen“ mit 1 Karte, später auffüllen
   rigCard(it, fac) {
-    const g = this.g, lock = !g.readyOk(it.id), r = g.readyRig(it.id, fac, g.s.cash, !lock), cp = g.itemPrice(it), full = !g.slotOk(fac, it), isNew = g.s.day - it.releaseDay < 120, price = r ? r.price : cp;
-    const spec = r ? `${lock ? 'Bausatz' : 'Fertig'}: ${r.n}× ${esc(PART[r.gpu].name)} · ${fmtWatt(r.watt)}<br/>≈ <b class="${r.net >= 0 ? 'pos' : 'neg'}">${r.net >= 0 ? '+' : ''}${fmtUSD(r.net)}/Tag</b> hier · ${this.roiText(r.roi)}` : esc(it.desc || '');
+    const g = this.g, lock = !g.readyOk(it.id), rd = !lock, r = g.readyRig(it.id, fac, Infinity, rd), cp = g.itemPrice(it), full = !g.slotOk(fac, it), isNew = g.s.day - it.releaseDay < 120, price = r ? r.price : cp;
+    const cfg = r ? { type: r.type, mobo: r.mobo, cpu: r.cpu, psu: r.psu, gpu: r.gpu, n: r.n } : null;
+    const sm = cfg && cfg.n > 1 && r.price > g.s.cash ? g.buildStats({ ...cfg, n: 1 }, fac, rd) : null; // gleiches Netzteil: reicht später für alle Karten
+    const per = (x) => `<b class="${x.net >= 0 ? 'pos' : 'neg'}">${x.net >= 0 ? '+' : ''}${fmtUSD(x.net)}/Tag</b>`;
+    const spec = r ? `${lock ? 'Bausatz' : 'Fertig'}: ${r.n}× ${esc(PART[r.gpu].name)} · ${fmtWatt(r.watt)}<br/>≈ ${per(r)} pro Stellplatz · ${this.roiText(r.roi)}` : esc(it.desc || '');
     const fd = full ? 'data-full="1"' : '', warn = r && !full ? this.rigWarn(fac, r.watt) : '', cid = g.readyBy(it.id);
     const main = !r ? '' : lock ? `<button class="btn small primary wide rc-kit" data-p="${r.price}" ${fd} ${full || r.price > g.s.cash ? 'disabled' : ''} title="Gehäuse wird aufgestellt, die Teile liegen im Lager – selbst einbauen (Schrauben-EP)">Als Bausatz · ${this.money(r.price)}</button>` : `<button class="btn small primary wide rc-ready" data-p="${r.price}" ${fd} ${full || r.price > g.s.cash ? 'disabled' : ''} title="${cid ? `Fertig montiert von ${esc(CONTACT[cid].name)} · ${Math.round(g.buildFee(it.id) * 100)} % Montage` : 'Fertig montiert'}">Fertig bestückt · ${this.money(r.price)}</button>`;
-    const card = h(`<div class="item rigc ${full || price > g.s.cash ? 'dis' : ''}" data-rig="1" data-price="${price}" data-id="${it.id}" ${fd}><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${this.money(price)}</span></div><div class="s">${spec}<br/><span class="rc-dim">bis ${it.maxGpu} Grafikkarten${full ? '' : ` · Platz ${g.slotsUsed(fac)}/${g.slotsMax(fac)}`}</span>${warn ? `<br/><b class="rc-warn">${warn}</b>` : ''}</div>${lock && cid ? this.lockLine(cid) : ''}<div class="miss">${full ? 'Kein Platz mehr – Zeit für einen größeren Standort' : price > g.s.cash ? `Dir fehlen ${this.money(price - g.s.cash)}` : ''}</div>${main}<div class="rc-row"><button class="btn small rc-cfg" data-p="0" ${fd} ${full ? 'disabled' : ''} title="Teile selbst wählen${lock ? '' : ': als Bausatz oder fertig montiert'}">Selbst bauen</button><button class="btn small rc-case" data-p="${cp}" ${fd} ${full || cp > g.s.cash ? 'disabled' : ''} title="Leeres Gehäuse – Teile einzeln einbauen">Gehäuse · ${this.money(cp)}</button></div></div>`);
+    const small = sm && !full ? `<button class="btn small wide rc-small" data-p="${sm.price}" ${sm.price > g.s.cash ? 'disabled' : ''} title="1 Karte jetzt, die anderen ${cfg.n - 1} später einbauen – das Netzteil reicht für alle ${cfg.n} · ≈ ${fmtUSD(sm.net)}/Tag pro Stellplatz">Klein anfangen: 1 Karte · ${this.money(sm.price)} – später auffüllen</button>` : '';
+    const card = h(`<div class="item rigc ${full || price > g.s.cash ? 'dis' : ''}" data-rig="1" data-price="${price}" data-id="${it.id}" ${fd}><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${this.money(price)}</span></div><div class="s">${spec}<br/><span class="rc-dim">bis ${it.maxGpu} Grafikkarten${full ? '' : ` · Platz ${g.slotsUsed(fac)}/${g.slotsMax(fac)}`}</span>${warn ? `<br/><b class="rc-warn">${warn}</b>` : ''}</div>${lock && cid ? this.lockLine(cid) : ''}<div class="miss">${full ? 'Kein Platz mehr – Zeit für einen größeren Standort' : this.missText(price)}</div>${main}${small}<div class="rc-row"><button class="btn small rc-cfg" data-p="0" ${fd} ${full ? 'disabled' : ''} title="Teile selbst wählen${lock ? '' : ': als Bausatz oder fertig montiert'}">Selbst bauen</button><button class="btn small rc-case" data-p="${cp}" ${fd} ${full || cp > g.s.cash ? 'disabled' : ''} title="Leeres Gehäuse – Teile einzeln einbauen">Gehäuse · ${this.money(cp)}</button></div></div>`);
     try { const url = this.w.thumbnail(it.id); if (url) card.prepend(h(`<div class="thumb"><img alt="" src="${url}"/></div>`)); } catch (e) { /* ohne Vorschau weiter */ }
     const go = (fn) => (e) => { e?.stopPropagation(); if (!g.slotOk(fac, it)) { this.toast('Kein Platz mehr – Zeit für einen größeren Standort.', 'bad'); return; } fn(); };
-    const ready = go(() => { const r2 = g.readyRig(it.id, fac); if (!r2) return; this.startBuild(r2, true); });
-    const kit = go(() => { const r2 = g.readyRig(it.id, fac, g.s.cash, false); if (!r2) return; this.startBuild(r2, false); });
+    // gekauft wird genau die gezeigte Zusammenstellung; hat sich der Preis spürbar geändert oder ist ein Teil ausgelaufen: Katalog neu
+    const buy = (c, ready, shown) => go(() => {
+      const blk = g.buildBlocked(c), now = blk ? 0 : g.buildStats(c, fac, ready).price;
+      if (blk || Math.abs(now - shown) > Math.max(2, shown * 0.02)) { this.toast(blk ? `${esc(blk)} gibt es nicht mehr zu kaufen – Katalog aktualisiert.` : `Neuer Preis: ${this.money(now)} statt ${this.money(shown)}. Katalog aktualisiert.`, 'info', 4500); this.build(true); return; }
+      this.startBuild(c, ready);
+    });
+    const ready = cfg ? buy(cfg, true, r.price) : null, kit = cfg ? buy(cfg, false, r.price) : null;
     const caseOnly = go(() => { if (g.itemPrice(it) > g.s.cash) { this.toast('Nicht genug Geld.', 'bad'); return; } this.resume(); this.w.startPlacement(it.id); });
     card.querySelector('.rc-ready')?.addEventListener('click', ready);
     card.querySelector('.rc-kit')?.addEventListener('click', kit);
+    card.querySelector('.rc-small')?.addEventListener('click', buy({ ...cfg, n: 1 }, rd, sm?.price || 0));
     card.querySelector('.rc-case').onclick = caseOnly;
     card.querySelector('.rc-cfg').onclick = go(() => this.configurator(it.id));
     this.lockWire(card);
     card.onclick = r ? (lock ? kit : ready) : caseOnly;
     return card;
+  }
+  // Katalog: offene Bausätze am Standort in einem Rutsch fertig schrauben
+  kitsBar(fac) {
+    const g = this.g, k = g.kitsOpen(fac); if (!k.length) return null; const n = k.reduce((a, o) => a + g.kitPlan(o).length, 0);
+    const el = h(`<div class="kitbar"><span>${partSvg('mobo', 18)}<b>${k.length} ${k.length === 1 ? 'Bausatz wartet' : 'Bausätze warten'}</b> aufs Einbauen · ${n} Teile im Lager</span><button class="btn small primary">${k.length === 1 ? 'Fertig schrauben' : 'Alle fertig schrauben'}</button></div>`);
+    el.querySelector('button').onclick = (e) => { e.stopPropagation(); this.assembleAllUI(fac); };
+    return el;
   }
   // Gesperrt: wer liefert fertig montiert, und wie lernt man ihn kennen? (abgelehnt: gleich anrufen)
   lockText(cid) {
@@ -1551,6 +1581,12 @@ export class UI {
     return `<div class="rc-lock" title="${esc(t.long)}">${LOCK_SVG}<span>${t.short}</span>${t.call ? `<button class="btn small rc-call" data-c="${cid}">${esc(CONTACT[cid].name)} anrufen</button>` : ''}</div>`;
   }
   lockWire(el) { el.querySelectorAll('.rc-call').forEach((b) => { b.onclick = (e) => { e.stopPropagation(); this.callContact(b.dataset.c); }; }); }
+  // Alle offenen Bausätze am Standort einbauen (Inspektor, Katalog)
+  assembleAllUI(fac = this.g.s.current, uid = null) {
+    const r = this.g.assembleAll(fac); if (!r.parts) { this.toast('Für die Bausätze liegen keine passenden Teile im Lager.', 'info', 3500); return; }
+    this.audio?.install?.(); this.toast(`${r.kits} ${r.kits === 1 ? 'Bausatz' : 'Bausätze'} fertig geschraubt · ${r.parts} Teile eingebaut`, 'good', 4000);
+    if (uid && this.inspUid === uid) this.inspect(uid); this.build(true); this.pauseHint(fac);
+  }
   callContact(id) { if (!this.g.callContact(id)) return; this.audio?.message?.(); this.toast(`<b>${esc(CONTACT[id].name)}:</b> ${esc(CONTACT[id].lines.call)}`, 'msg', 6000); this.refresh(); }
   // Passt noch einer rein, ohne dass es zu heiß wird oder der Anschluss nicht reicht?
   rigWarn(fac, watt) {
@@ -1576,7 +1612,7 @@ export class UI {
     if (ready && !g.readyOk(cfg.type)) { this.toast(`${this.lockText(g.readyBy(cfg.type)).short} Als Bausatz geht’s sofort.`, 'info', 5000); return; }
     if (ready && !st.ok) { this.toast(esc(st.why), 'bad'); return; }
     if (!g.slotOk(fac, PLACEABLE[cfg.type])) { this.toast('Kein Platz mehr – Zeit für einen größeren Standort.', 'bad'); return; }
-    if (st.price > g.s.cash) { this.toast(`Dir fehlen ${this.money(st.price - g.s.cash)}.`, 'bad'); return; }
+    if (st.price > g.s.cash) { this.toast(`${this.missText(st.price)}.`, 'bad'); return; }
     this.resume();
     this.w.startPlacement(cfg.type, null, { type: cfg.type, rot: 0, coin: 'auto', parts: ready ? st.parts : { mobo: null, cpu: null, psu: null, gpus: [] }, build: { type: cfg.type, mobo: cfg.mobo, cpu: cfg.cpu, psu: cfg.psu, gpu: cfg.gpu, n: st.n }, ready });
   }
@@ -1595,7 +1631,7 @@ export class UI {
   placedAgain(o, p) {
     const g = this.g, d = PLACEABLE[o.type], fac = g.facOf(o.uid) || g.s.current, t = p?.template, n = (this.placedRun = (this.placedRun || 0) + 1);
     const empty = (d.kind === 'rig' && !g.pcReady(o)) || (d.kind === 'holder' && !o.items?.length), src = t?.kit ? t.src : t;
-    const tipE = () => { if (empty) this.toast((t?.build && !t.ready) || t?.kit ? 'Bausatz steht. Teile liegen im Lager – anschauen und <kbd>E</kbd>: einbauen' : 'Anschauen und <kbd>E</kbd>: bestücken', 'good', 5000); };
+    const tipE = () => { if (empty) this.toast((t?.build && !t.ready) || t?.kit ? `Bausatz steht. Teile liegen im Lager – anschauen und <kbd>E</kbd>: einbauen${n > 1 ? ' (oder <kbd>B</kbd> → „Alle fertig schrauben“)' : ''}` : 'Anschauen und <kbd>E</kbd>: bestücken', 'good', 5000); };
     if (!g.slotKind(d)) { tipE(); return false; }
     const cost = t?.build ? g.buildStats(t.build, fac, t.ready).price : src ? g.cloneCost(src, !!t.kit) : g.itemPrice(d);
     const why = !g.slotOk(fac, d) ? 'full' : !g.canAfford(cost) ? 'money' : (t?.build ? g.buildBlocked(t.build) : src ? g.cloneBlocked(src) || !g.cloneStockOk(src) : g.stockLeft(d) < 1) ? 'stock' : '';
@@ -1641,7 +1677,7 @@ export class UI {
       goEl.append(bk, br);
       if (lock && cid) { const ll = h(this.lockLine(cid)); ll.classList.add('cf-lock'); this.lockWire(ll); goEl.append(ll); }
       if (full) goEl.append(h('<div class="cf-why">Kein Platz mehr – Zeit für einen größeren Standort.</div>'));
-      else if (kit.price > g.s.cash) goEl.append(h(`<div class="cf-why">Dir fehlen ${this.money(kit.price - g.s.cash)}.</div>`));
+      else if (kit.price > g.s.cash) goEl.append(h(`<div class="cf-why">${this.missText(kit.price)}.</div>`));
     };
     render();
     document.body.classList.remove('show-build'); // Katalog zu, sonst liegt er über dem Fenster
@@ -1657,7 +1693,7 @@ export class UI {
     const bag = g.bagList(), bc = g.bagCount(), bx = h(`<div class="pv-bag"><div class="pv-h">Dein Lager${bag.length ? ` · ${bc} ${bc === 1 ? 'Teil' : 'Teile'} · Restwert ${this.money(g.bagValue())}` : ''}</div></div>`);
     if (!bag.length) bx.append(h('<div class="pv-e">Leer. Gekaufte und ausgebaute Teile landen hier. Einbauen: PC anschauen und <kbd>E</kbd>.</div>'));
     for (const b of bag) { const c = h(`<span class="pv-chip">${partSvg(b.part.type, 14)}<b>${b.n}×</b> ${esc(b.part.name)}<button class="btn small" title="Ein Stück verkaufen">+${this.money(g.partResale(b.id))}</button></span>`); c.querySelector('button').onclick = (e) => { e.stopPropagation(); g.sellPart(b.id, 1); this.audio?.cash?.(); }; bx.append(c); }
-    list.append(bx);
+    list.append(bx); const kb = this.kitsBar(fac); if (kb) list.append(kb);
     const val = (it) => { const c = g.bestCoin(it.hash, it.vram); const r = c ? g.revenueFor(it.hash, c, it.vram) : 0; return { c, r, net: r - (it.watt / 1000) * 24 * el }; };
     let parts = g.partList(T); if (T === 'gpu') parts = [...parts].sort((a, b) => val(b).net / g.itemPrice(b) - val(a).net / g.itemPrice(a)); if (T === 'psu') parts = [...parts].sort((a, b) => a.cap - b.cap);
     const bestId = T === 'gpu' ? parts[0]?.id : null;
@@ -1733,9 +1769,11 @@ export class UI {
     }
     if (p.psu) { const watt = g.rigWatt(o), capW = PART[p.psu].cap * np; sec.append(h(`<div class="pcb-load"><span>Netzteil-Last</span><div class="bar"><div style="width:${Math.min(100, (watt / capW) * 100)}%;background:${watt > capW ? '#ff8f84' : 'var(--acc)'}"></div></div><span>${watt} / ${capW} W</span></div>`)); }
     // Abkürzungen: Bausatz aus dem Lager komplett einbauen, Basis-Teile kaufen, freie Plätze füllen
-    const fromBag = () => { const out = []; const need = (tt) => (tt === 'psu' ? np : 1); const pickT = (tt) => g.bagList(tt).find((b2) => b2.n >= need(tt)); if (!p.mobo && pickT('mobo')) out.push(pickT('mobo').id); if (!p.cpu && pickT('cpu')) out.push(pickT('cpu').id); if (!p.psu && pickT('psu')) out.push(pickT('psu').id); const gp = g.bagList('gpu'); let free = (p.mobo ? cap : out.some((x) => PART[x].type === 'mobo') ? Math.min(PLACEABLE[o.type].maxGpu, PART[out.find((x) => PART[x].type === 'mobo')].slots) : 0) - p.gpus.length; for (const b2 of gp) for (let k = 0; k < b2.n && free > 0; k++, free--) out.push(b2.id); return out; };
-    const fb = fromBag(), qr = h('<div class="row rb-quick"></div>');
-    if (fb.length >= 2) { const b = h(`<button class="btn small primary">Alles aus dem Lager einbauen (${fb.length} Teile)</button>`); b.onclick = () => { let last = null; for (const id of fb) if (g.installPart(uid, id)) last = PART[id].type; this.rbOpen = null; this.inspect(uid); if (last) { this.w.animateInstall?.(uid, last); this.audio?.install?.(); this.toast(`${fb.length} Teile eingebaut`, 'good', 3000); } }; qr.append(b); }
+    // Serien-Einbau: dieser Bausatz komplett aus dem Lager, alle Bausätze am Standort, oder weiter zum nächsten
+    const fac = g.facOf(uid), fb = g.kitPlan(o), kits = g.kitsOpen(fac), others = kits.filter((x) => x.uid !== uid), qr = h('<div class="row rb-quick"></div>');
+    if (fb.length >= 2 || (o.kit && fb.length)) { const b = h(`<button class="btn small primary">Alles aus dem Lager einbauen (${fb.length} ${fb.length === 1 ? 'Teil' : 'Teile'})</button>`); b.onclick = () => { const last = PART[fb[fb.length - 1]]?.type; const n = g.assembleKit(uid); this.rbOpen = null; this.inspect(uid); if (n) { this.w.animateInstall?.(uid, last); this.audio?.install?.(); this.toast(`${n} ${n === 1 ? 'Teil' : 'Teile'} eingebaut${others.length ? ` · noch ${others.length} ${others.length === 1 ? 'Bausatz' : 'Bausätze'} hier` : ''}`, 'good', 3000); } }; qr.append(b); }
+    if (kits.length >= 2) { const b = h(`<button class="btn small" title="Jeder Bausatz bekommt seine eigenen Teile aus dem Lager">Alle Bausätze hier fertig schrauben (${kits.length})</button>`); b.onclick = () => this.assembleAllUI(fac, uid); qr.append(b); }
+    if (!fb.length && others.length) { const nx = others[0], b = h(`<button class="btn small primary">Nächster Bausatz (${others.length} offen) →</button>`); b.onclick = () => { this.rbOpen = null; this.openInspector(nx.uid); }; qr.append(b); }
     if (!p.mobo || !p.cpu || !p.psu) { const b = h('<button class="btn small">Basis-Teile kaufen & einbauen</button>'); b.onclick = () => { const r = g.quickBase(uid); if (!r) this.toast('Nicht genug Geld.', 'bad'); this.inspect(uid); }; qr.append(b); }
     else if (p.gpus.length < cap) { const bg = this.bestGpu(); if (bg) { const k = cap - p.gpus.length, pr = g.itemPrice(bg) * k; const b = h(`<button class="btn small">Freie Plätze füllen · ${k}× ${esc(bg.name)} · ${this.money(pr)}</button>`); b.onclick = () => { const n = g.fillGpus(uid, bg.id); if (!n) this.toast('Nicht genug Geld.', 'bad'); else { this.w.animateInstall?.(uid, 'gpu'); this.audio?.install?.(); } this.inspect(uid); }; qr.append(b); } }
     if (qr.childElementCount) sec.append(qr);

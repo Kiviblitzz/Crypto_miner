@@ -416,7 +416,7 @@ export class Game {
     if (!this.slotOk(facId, def)) return null; // alle Stellplätze belegt
     const o = { uid: this.s.nextUid++, type: src.type, x, z, rot, coin: src.coin, broken: false, bought: this.s.day };
     if (src.parts) o.parts = kit ? { mobo: null, cpu: null, psu: null, gpus: [] } : JSON.parse(JSON.stringify(src.parts));
-    if (kit) { const np = this.psuCount(src); for (const id of this.partIds(src)) { const n = id === src.parts.psu ? np : 1; this.bagAdd(id, n); this.freshAdd(id, n); } }
+    if (kit) { const np = this.psuCount(src); for (const id of this.partIds(src)) { const n = id === src.parts.psu ? np : 1; this.bagAdd(id, n); this.freshAdd(id, n); } o.kit = JSON.parse(JSON.stringify(src.parts)); }
     if (src.items) o.items = src.items.map((i) => ({ id: i.id, b: 0 }));
     this.s.cash -= cost; this.s.stats.spentHW += cost; this.cloneStockOk(src, true);
     if (def.kind === 'device' && def.look !== 'fpga' && def.look !== 'usb') this.s.flags.boughtAsic = true;
@@ -499,7 +499,7 @@ export class Game {
     const st = this.buildStats(cfg, facId, ready); if (ready && !st.ok) return null;
     if (!this.canAfford(st.price)) return null;
     const o = { uid: this.s.nextUid++, type: cfg.type, x, z, rot, coin: 'auto', broken: false, bought: this.s.day, parts: ready ? JSON.parse(JSON.stringify(st.parts)) : { mobo: null, cpu: null, psu: null, gpus: [] } };
-    if (!ready) { const p = st.parts; for (const id of [p.mobo, p.cpu, ...p.gpus]) if (id) { this.bagAdd(id, 1); this.freshAdd(id, 1); } if (p.psu) { this.bagAdd(p.psu, st.np); this.freshAdd(p.psu, st.np); } }
+    if (!ready) { const p = st.parts; for (const id of [p.mobo, p.cpu, ...p.gpus]) if (id) { this.bagAdd(id, 1); this.freshAdd(id, 1); } if (p.psu) { this.bagAdd(p.psu, st.np); this.freshAdd(p.psu, st.np); } o.kit = JSON.parse(JSON.stringify(p)); } // kit: welche Teile zu diesem Bausatz gehören (Serien-Einbau)
     this.s.cash -= st.price; this.s.stats.spentHW += st.price; if (this.s.skills) this.addXp('hw', 10, true);
     this.s.lastBuild = { type: cfg.type, mobo: cfg.mobo, cpu: cfg.cpu, psu: cfg.psu, gpu: cfg.gpu, n: st.n, ready };
     this.s.fac[facId].objects.push(o); if (ready) this.contactOrder(cfg.type); this.dayUpdate(true); this.capWarn(facId); this.emit('objects', facId); if (!ready) this.emit('bag'); return o;
@@ -580,6 +580,32 @@ export class Game {
     if (this.s.skills && fresh) this.addXp('hw', 15);
     this.dayUpdate(true); if (it.type === 'gpu') this.capWarn(this.facOf(uid)); this.emit('objects', this.facOf(uid)); this.emit('bag'); return true;
   }
+  // ---------- Bausätze in Serie einbauen ----------
+  // Einbauplan aus dem Lager: zuerst die Teile, die zu diesem Bausatz gehören (o.kit), sonst passende Teile aus dem Lager.
+  // bag: geteiltes Lager-Abbild, wenn mehrere Bausätze nacheinander geplant werden
+  kitPlan(o, bag = { ...(this.s.bag || {}) }) {
+    const p = o?.parts; if (!p) return [];
+    const def = PLACEABLE[o.type], np = this.psuCount(o), out = [], take = (id, n = 1) => { if (!id || !PART[id] || (bag[id] || 0) < n) return false; bag[id] -= n; out.push(id); return true; };
+    const k = o.kit, pick = (t) => this.bagList(t).find((b) => (bag[b.id] || 0) >= (t === 'psu' ? np : 1))?.id;
+    let mobo = p.mobo;
+    if (!mobo) { const id = k?.mobo && (bag[k.mobo] || 0) >= 1 ? k.mobo : k ? null : pick('mobo'); if (take(id)) mobo = id; }
+    if (!mobo) return out; // ohne Mainboard passen weder CPU noch Karten
+    if (!p.cpu) take(k?.cpu && (bag[k.cpu] || 0) >= 1 ? k.cpu : k ? null : pick('cpu'));
+    if (!p.psu) take(k?.psu && (bag[k.psu] || 0) >= np ? k.psu : k ? null : pick('psu'), np); // Netzteil: np Stück, im Plan einmal (installPart nimmt alle)
+    let free = Math.min(def.maxGpu, PART[mobo].slots) - p.gpus.length;
+    if (k) { const have = [...p.gpus]; for (const id of k.gpus || []) { if (free <= 0) break; const i = have.indexOf(id); if (i >= 0) { have.splice(i, 1); continue; } if (take(id)) free--; } }
+    else for (const b of this.bagList('gpu')) while (free > 0 && take(b.id)) free--;
+    return out;
+  }
+  // Offene Bausätze am Standort: Rigs, die noch nicht laufen und für die Teile im Lager liegen
+  kitsOpen(facId = this.s.current) { const bag = { ...(this.s.bag || {}) }; return (this.s.fac[facId]?.objects || []).filter((o) => o.parts && PLACEABLE[o.type].kind === 'rig' && (!this.pcReady(o) || o.kit) && this.kitPlan(o, bag).length > 0); }
+  assembleKit(uid) {
+    const o = this.findObj(uid); if (!o?.parts) return 0; let n = 0;
+    for (const id of this.kitPlan(o)) if (this.installPart(uid, id)) n++;
+    if (o.kit && this.pcReady(o) && !this.kitPlan(o).length) delete o.kit; // fertig geschraubt (oder Rest nicht mehr im Lager)
+    return n;
+  }
+  assembleAll(facId = this.s.current) { let kits = 0, parts = 0; for (const o of this.kitsOpen(facId)) { const n = this.assembleKit(o.uid); if (n) { kits++; parts += n; } } return { kits, parts }; }
   // Ausbauen: Teil zurück ins Lager. Ohne Mainboard kommen auch CPU und Karten raus; ohne Pflichtteil steht das Gerät still
   removePart(uid, slot, idx = 0) {
     const o = this.findObj(uid), p = o?.parts; if (!p) return false;

@@ -1886,3 +1886,11 @@ body:has(.story.event) #xpbox { display: none; }
 .ph-contacts .ct-rel em { font-style: normal; font-size: 12px; }
 .ph-contacts .ct-perk { margin-top: 2px; color: #9fe8bd; font-size: 12.5px; }
 .ph-contacts .ct-how2 { margin-top: 2px; color: var(--dim); font-size: 12px; }
+/* Katalog: offene Bausätze in einem Rutsch einbauen */
+#build .kitbar { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 9px 12px; border-radius: 14px; background: rgba(127,209,168,.08); box-shadow: inset 0 0 0 1.5px rgba(127,209,168,.35); font: 500 13px var(--font); color: var(--text2, var(--text)); }
+#build .kitbar > span { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+#build .kitbar svg { color: #9fe8bd; flex: none; }
+#build .kitbar b { color: var(--text); font-weight: 700; }
+#build .item .btn.rc-small { margin-top: 6px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#goals .goal .goal-hint { margin-top: 3px; font: 500 12.5px/1.4 var(--font) !important; color: var(--text2, var(--dim)) !important; }
+#goals .goal .goal-hint kbd { font-size: 11px; }
