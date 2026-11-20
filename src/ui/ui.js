@@ -410,7 +410,7 @@ export class UI {
       else if (def.kind === 'cooling') line = `kühlt ${fmtWatt(def.cool)}`;
       const st = { broken: 'Defekt – reparieren', partial: 'Teilweise defekt', psu: 'Netzteil zu schwach', incomplete: 'Teile fehlen – bestücken', empty: '➕ Leer – Geräte einsetzen', idle: 'pausiert (unrentabel)', full: 'pausiert (Anschluss voll)', off: '⏻ aus' }[a?.status];
       const build = o.type === 'tower' && o.parts && !this.g.s.flags.miningStarted, miss = build ? this.g.pcMissing(o).length : 0;
-      html = build ? `<kbd>E</kbd>${miss ? 'Teile einbauen' : 'PC einschalten'}<div class="st">${4 - miss} von 4 Teilen eingebaut</div>` : `<kbd>E</kbd>${esc(o.type === 'tower' ? 'Dein PC' : (def.short || def.name.replace(/[-‑]Gehäuse|\s*\(.*\)/g, '')))}${st ? `<div class="st">${st}</div>` : line ? `<div class="ln">${line}</div>` : ''}`;
+      html = build ? `<kbd>E</kbd>${miss ? 'Teile einbauen' : 'PC einschalten'}<div class="st">${4 - miss} von 4 Teilen eingebaut</div>` : `<kbd>E</kbd>${esc(o.type === 'tower' ? (this.g.facObjects('kinder').find((x) => x.type === 'tower')?.uid === o.uid ? 'Dein PC' : 'Mining-PC') : (def.short || def.name.replace(/[-‑]Gehäuse|\s*\(.*\)/g, '')))}${st ? `<div class="st">${st}</div>` : line ? `<div class="ln">${line}</div>` : ''}`;
     }
     el.innerHTML = html; el.classList.remove('hidden');
   }
@@ -469,7 +469,8 @@ export class UI {
     el.classList.remove('hidden');
     const def = PLACEABLE[o.type], g = this.g;
     this.w.focusObject?.(o.type === 'tower' && o.parts && g.s.chapter === 0 ? uid : null);
-    el.innerHTML = `<div class="insp-h"><h3>${esc(o.type === 'tower' ? 'Dein PC' : (def.short || def.name.replace(/[-‑]Gehäuse|\s*\(.*\)/g, '')))}</h3><span id="insp-badge"></span><button class="modal-x insp-x" title="Schließen (E/ESC)">✕</button></div><div id="insp-stats"></div><div id="insp-ctrl"></div>`;
+    const firstPc = o.type === 'tower' && g.facObjects('kinder').find((x) => x.type === 'tower')?.uid === uid; // nur der allererste PC heißt „Dein PC“
+    el.innerHTML = `<div class="insp-h"><h3>${esc(firstPc ? 'Dein PC' : o.type === 'tower' ? 'Mining-PC' : (def.short || def.name.replace(/[-‑]Gehäuse|\s*\(.*\)/g, '')))}</h3><span id="insp-badge"></span><button class="modal-x insp-x" title="Schließen (E/ESC)">✕</button></div><div id="insp-stats"></div><div id="insp-ctrl"></div>`;
     el.querySelector('.insp-x').onclick = () => this.resume();
     this.inspectStats();
     const c = $('#insp-ctrl');
@@ -1469,7 +1470,8 @@ export class UI {
   // Kopfzeile im Katalog: Plätze und Strom am Standort
   capStrip(fac) {
     const g = this.g, f = FACILITY[fac], ci = this.capInfo(fac), nx = f.power[g.s.fac[fac].power + 1];
-    const el = h(`<div class="bcap"><span class="bc-n">${esc(f.short)}</span><span class="bc-i ${ci.c.used >= ci.c.max ? 'full' : ''}" title="Stellplätze für Rigs, Miner und Regale – Kühlung und Deko brauchen keinen"><em>Platz</em> ${ci.plc}<i><b style="width:${ci.sp}%"></b></i></span><span class="bc-i ${ci.pp >= 90 ? 'full' : ''}" title="Last am Stromanschluss"><em>Strom</em> ${ci.pw}<i><b style="width:${ci.pp}%"></b></i></span>${nx && g.has('company') && ci.pp >= 60 ? '<button class="btn small bc-up">Strom ausbauen</button>' : ''}</div>`);
+    const tmp = g.summary[fac]?.temp ?? 21;
+    const el = h(`<div class="bcap"><span class="bc-n">${esc(f.short)}</span><span class="bc-i ${tmp > 35 ? 'full' : ''}" title="${tmp > 35 ? 'Zu warm: Kühlung (Katalog → Kühlung) hält die Geräte auf Tempo' : 'Raumtemperatur'}">${Math.round(tmp)} °C</span><span class="bc-i ${ci.c.used >= ci.c.max ? 'full' : ''}" title="Stellplätze für Rigs, Miner und Regale – Kühlung und Deko brauchen keinen"><em>Platz</em> ${ci.plc}<i><b style="width:${ci.sp}%"></b></i></span><span class="bc-i ${ci.pp >= 90 ? 'full' : ''}" title="Last am Stromanschluss"><em>Strom</em> ${ci.pw}<i><b style="width:${ci.pp}%"></b></i></span>${nx && g.has('company') && ci.pp >= 60 ? '<button class="btn small bc-up">Strom ausbauen</button>' : ''}</div>`);
     const b = el.querySelector('.bc-up'); if (b) b.onclick = () => { this.resume(); this.company(); };
     return el;
   }
@@ -1478,7 +1480,7 @@ export class UI {
     const g = this.g, r = g.readyRig(it.id, fac), cp = g.itemPrice(it), full = !g.slotOk(fac, it), isNew = g.s.day - it.releaseDay < 120, price = r ? r.price : cp;
     const spec = r ? `Fertig: ${r.n}× ${esc(PART[r.gpu].name)} · ${fmtWatt(r.watt)}<br/>≈ <b class="${r.net >= 0 ? 'pos' : 'neg'}">${r.net >= 0 ? '+' : ''}${fmtUSD(r.net)}/Tag</b> hier · ${this.roiText(r.roi)}` : esc(it.desc || '');
     const fd = full ? 'data-full="1"' : '';
-    const card = h(`<div class="item rigc ${full || price > g.s.cash ? 'dis' : ''}" data-rig="1" data-price="${price}" data-id="${it.id}" ${fd}><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${this.money(price)}</span></div><div class="s">${spec}<br/><span class="rc-dim">bis ${it.maxGpu} Grafikkarten${full ? '' : ` · Platz ${g.slotsUsed(fac)}/${g.slotsMax(fac)}`}</span></div><div class="miss">${full ? 'Kein Platz mehr – Zeit für einen größeren Standort' : price > g.s.cash ? `Dir fehlen ${this.money(price - g.s.cash)}` : ''}</div>${r ? `<button class="btn small primary wide rc-ready" data-p="${r.price}" ${fd} ${full || r.price > g.s.cash ? 'disabled' : ''}>Fertig bestückt · ${this.money(r.price)}</button>` : ''}<div class="rc-row"><button class="btn small rc-cfg" data-p="0" ${fd} ${full ? 'disabled' : ''}>Selbst zusammenstellen</button><button class="btn small rc-case" data-p="${cp}" ${fd} ${full || cp > g.s.cash ? 'disabled' : ''}>Nur Gehäuse · ${this.money(cp)}</button></div></div>`);
+    const card = h(`<div class="item rigc ${full || price > g.s.cash ? 'dis' : ''}" data-rig="1" data-price="${price}" data-id="${it.id}" ${fd}><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${this.money(price)}</span></div><div class="s">${spec}<br/><span class="rc-dim">bis ${it.maxGpu} Grafikkarten${full ? '' : ` · Platz ${g.slotsUsed(fac)}/${g.slotsMax(fac)}`}</span></div><div class="miss">${full ? 'Kein Platz mehr – Zeit für einen größeren Standort' : price > g.s.cash ? `Dir fehlen ${this.money(price - g.s.cash)}` : ''}</div>${r ? `<button class="btn small primary wide rc-ready" data-p="${r.price}" ${fd} ${full || r.price > g.s.cash ? 'disabled' : ''}>Fertig bestückt · ${this.money(r.price)}</button>` : ''}<div class="rc-row"><button class="btn small rc-cfg" data-p="0" ${fd} ${full ? 'disabled' : ''} title="Teile selbst wählen: als Bausatz oder fertig montiert">Selbst bauen</button><button class="btn small rc-case" data-p="${cp}" ${fd} ${full || cp > g.s.cash ? 'disabled' : ''} title="Leeres Gehäuse – Teile einzeln einbauen">Gehäuse · ${this.money(cp)}</button></div></div>`);
     try { const url = this.w.thumbnail(it.id); if (url) card.prepend(h(`<div class="thumb"><img alt="" src="${url}"/></div>`)); } catch (e) { /* ohne Vorschau weiter */ }
     const go = (fn) => (e) => { e?.stopPropagation(); if (!g.slotOk(fac, it)) { this.toast('Kein Platz mehr – Zeit für einen größeren Standort.', 'bad'); return; } fn(); };
     const ready = go(() => { const r2 = g.readyRig(it.id, fac); if (!r2) return; this.startBuild(r2, true); });
@@ -1552,13 +1554,14 @@ export class UI {
       const kit = g.buildStats(cfg, fac, false), rd = g.buildStats(cfg, fac, true), algo = kit.coin ? g.coinAlgo(kit.coin) : null;
       sum.innerHTML = `<div class="kv"><div class="k">Rechenleistung</div><div class="v">${algo ? `${fmtHash(kit.hash[algo] || 0, algo)} → ${COIN[kit.coin].name}` : '–'}</div><div class="k">Verbrauch</div><div class="v ${kit.cap && kit.watt > kit.cap ? 'neg' : ''}">${fmtWatt(kit.watt)} von ${fmtWatt(kit.cap)}</div><div class="k">Ertrag / Tag</div><div class="v pos">${fmtUSD(kit.rev)}</div><div class="k">Strom / Tag</div><div class="v neg">−${fmtUSD(kit.rev - kit.net)}</div><div class="k">Gewinn / Tag</div><div class="v"><b class="${kit.net >= 0 ? 'pos' : 'neg'}">${fmtUSD(kit.net)}</b></div><div class="k">Amortisation</div><div class="v">${Number.isFinite(rd.roi) ? `${Math.round(kit.roi)} Tage (Bausatz) · ${Math.round(rd.roi)} Tage (montiert)` : 'lohnt sich hier nicht'}</div></div>${kit.why ? `<div class="cf-why">${esc(kit.why)}</div>` : ''}`;
       const full = !g.slotOk(fac, PLACEABLE[cfg.type]);
-      const bk = h(`<button class="btn big" ${full || kit.price > g.s.cash ? 'disabled' : ''}>Als Bausatz kaufen · ${this.money(kit.price)}</button>`), br = h(`<button class="btn big primary" ${full || !rd.ok || rd.price > g.s.cash ? 'disabled' : ''}>Fertig montiert · ${this.money(rd.price)}</button>`);
+      const bk = h(`<button class="btn big" ${full || kit.price > g.s.cash ? 'disabled' : ''} title="Gehäuse wird aufgestellt, die Teile liegen im Lager – selbst einbauen">Bausatz · ${this.money(kit.price)}</button>`), br = h(`<button class="btn big primary" ${full || !rd.ok || rd.price > g.s.cash ? 'disabled' : ''} title="Läuft sofort">Fertig montiert · ${this.money(rd.price)}</button>`);
       bk.onclick = () => this.startBuild(cfg, false); br.onclick = () => this.startBuild(cfg, true);
       goEl.append(bk, br);
       if (full) goEl.append(h('<div class="cf-why">Kein Platz mehr – Zeit für einen größeren Standort.</div>'));
       else if (kit.price > g.s.cash) goEl.append(h(`<div class="cf-why">Dir fehlen ${this.money(kit.price - g.s.cash)}.</div>`));
     };
     render();
+    document.body.classList.remove('show-build'); // Katalog zu, sonst liegt er über dem Fenster
     this.openModal(body, 'narrow cfg', 'config');
   }
   // Katalog „Teile“: Lager + Handel (Grafikkarten, Prozessoren, Mainboards, Netzteile)
@@ -1568,7 +1571,7 @@ export class UI {
     const tabs = h(`<div class="pv-tabs">${['gpu', 'cpu', 'mobo', 'psu'].map((t) => `<button class="btn small ${t === T ? 'on' : ''}" data-t="${t}">${partSvg(t, 16)}${NAMES[t]}</button>`).join('')}</div>`);
     tabs.querySelectorAll('button').forEach((b) => { b.onclick = () => { this.partTab = b.dataset.t; this.build(true); }; });
     list.append(tabs);
-    const bag = g.bagList(), bx = h(`<div class="pv-bag"><div class="pv-h">Dein Lager${bag.length ? ` · ${g.bagCount()} Teile · Restwert ${fmtUSD(g.bagValue())}` : ''}</div></div>`);
+    const bag = g.bagList(), bc = g.bagCount(), bx = h(`<div class="pv-bag"><div class="pv-h">Dein Lager${bag.length ? ` · ${bc} ${bc === 1 ? 'Teil' : 'Teile'} · Restwert ${this.money(g.bagValue())}` : ''}</div></div>`);
     if (!bag.length) bx.append(h('<div class="pv-e">Leer. Gekaufte und ausgebaute Teile landen hier. Einbauen: PC anschauen und <kbd>E</kbd>.</div>'));
     for (const b of bag) { const c = h(`<span class="pv-chip">${partSvg(b.part.type, 14)}<b>${b.n}×</b> ${esc(b.part.name)}<button class="btn small" title="Ein Stück verkaufen">+${this.money(g.partResale(b.id))}</button></span>`); c.querySelector('button').onclick = (e) => { e.stopPropagation(); g.sellPart(b.id, 1); this.audio?.cash?.(); }; bx.append(c); }
     list.append(bx);
@@ -1582,7 +1585,7 @@ export class UI {
       if (T === 'cpu') spec = `${it.watt} W · reicht als Steuerzentrale${it.hash.sha256 ? ` · schürft mit (${fmtHash(it.hash.sha256, 'sha256')})` : ''}`;
       if (T === 'mobo') spec = `${it.slots} Grafikkarten-Plätze · ${it.watt} W`;
       if (T === 'psu') spec = `${it.cap} W Leistung${it.cap >= 1600 ? ' · für große Rahmen (8er/12er brauchen zwei)' : ''}`;
-      const card = h(`<div class="item part" data-price="${price}"><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}${it.id === bestId ? '<span class="new">BESTER WERT</span>' : ''}</span><span class="p">${this.money(price)}</span></div><div class="s">${spec}${n ? `<br/><b class="pv-n">Im Lager: ${n}</b>` : ''}</div><div class="miss"></div><div class="rc-row"><button class="btn small primary place" data-p="${price}">Kaufen · ${this.money(price)}</button>${T === 'gpu' || T === 'psu' ? `<button class="btn small" data-p="${price * 2}">2×</button>` : ''}</div></div>`);
+      const card = h(`<div class="item part" data-price="${price}"><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${this.money(price)}</span></div><div class="s">${it.id === bestId ? '<b class="pv-best">Bester Wert für dein Geld</b><br/>' : ''}${spec}${n ? `<br/><b class="pv-n">Im Lager: ${n}</b>` : ''}</div><div class="miss"></div><div class="rc-row"><button class="btn small primary place" data-p="${price}">Kaufen · ${this.money(price)}</button>${T === 'gpu' || T === 'psu' ? `<button class="btn small" data-p="${price * 2}">2×</button>` : ''}</div></div>`);
       const [b1, b2] = card.querySelectorAll('button');
       const buy = (k) => (e) => { e.stopPropagation(); const got = g.buyPart(it.id, k); if (!got) { this.toast('Nicht genug Geld.', 'bad'); return; } this.audio?.buy?.(); this.toast(`${got}× ${esc(it.name)} im Lager – einbauen: PC anschauen und <kbd>E</kbd>`, 'good', 3500); };
       b1.onclick = buy(1); if (b2) b2.onclick = buy(2); card.onclick = buy(1);
@@ -1592,7 +1595,7 @@ export class UI {
   // Inspektor: Einbau wie beim ersten PC – Steckplätze, Lager, Ghost-Vorschau, Einrast-Animation
   rigBuild(o) {
     const g = this.g, p = o.parts, cap = g.rigGpuCap(o), np = g.psuCount(o), uid = o.uid, open = this.rbOpen?.uid === uid ? this.rbOpen.key : null;
-    const sec = h(`<div class="sec pcb rb"><h4>Einbau <span class="rb-bag">${g.bagCount() ? `Lager: ${g.bagCount()} Teile` : 'Lager leer'}</span></h4></div>`);
+    const bc = g.bagCount(), sec = h(`<div class="sec pcb rb"><h4>Einbau <span class="rb-bag">${bc ? `Lager: ${bc} ${bc === 1 ? 'Teil' : 'Teile'}` : 'Lager leer'}</span></h4></div>`);
     const rows = [['mobo', 'Mainboard', p.mobo, null], ['cpu', 'Prozessor', p.cpu, null]];
     for (let i = 0; i < Math.max(cap, p.gpus.length); i++) rows.push(['gpu', `Grafikkarte ${i + 1}`, p.gpus[i] || null, i]);
     if (!p.mobo) rows.push(['gpu', 'Grafikkarten', null, -1]);
@@ -1628,7 +1631,7 @@ export class UI {
       const own = g.bagList(t).filter((b2) => b2.n >= (t === 'psu' ? np : 1) && b2.id !== id);
       if (own.length) pick.append(h('<div class="rb-h">Aus dem Lager</div>'));
       for (const b2 of own) {
-        const c = h(`<div class="rb-opt"><span><b>${esc(b2.part.name)}</b> <em>${b2.n}× im Lager</em></span><button class="btn small primary">Einbauen</button></div>`);
+        const c = h(`<div class="rb-opt"><span><b>${esc(b2.part.name)}</b> <em>${b2.n}×</em></span><button class="btn small primary">Einbauen</button></div>`);
         c.onmouseenter = () => this.w.ghostPart?.(uid, t, b2.id); c.onmouseleave = () => this.w.ghostPart?.(null);
         c.querySelector('button').onclick = () => install(b2.id, t === 'gpu' && id ? idx : null);
         pick.append(c);
@@ -1637,7 +1640,7 @@ export class UI {
       if (shop.length) pick.append(h('<div class="rb-h">Neu kaufen</div>'));
       for (const x of shop) {
         const price = g.itemPrice(x) * (t === 'psu' ? np : 1);
-        const c = h(`<div class="rb-opt"><span><b>${esc(x.name)}</b> <em>${t === 'gpu' ? `${x.watt} W` : t === 'psu' ? `${x.cap} W` : t === 'mobo' ? `${x.slots} Plätze` : `${x.watt} W`}</em></span><button class="btn small" ${price > g.s.cash ? 'disabled' : ''}>Kaufen & einbauen · ${this.money(price)}</button></div>`);
+        const c = h(`<div class="rb-opt"><span><b>${esc(x.name)}</b> <em>${t === 'gpu' ? `${x.watt} W` : t === 'psu' ? `${x.cap} W` : t === 'mobo' ? `${x.slots} Plätze` : `${x.watt} W`}</em></span><button class="btn small" ${price > g.s.cash ? 'disabled' : ''} title="Kaufen und gleich einbauen">Kaufen · ${this.money(price)}</button></div>`);
         c.onmouseenter = () => this.w.ghostPart?.(uid, t, x.id); c.onmouseleave = () => this.w.ghostPart?.(null);
         c.querySelector('button').onclick = () => { const k = g.buyPart(x.id, t === 'psu' ? np : 1); if (k < (t === 'psu' ? np : 1)) { this.toast('Nicht genug Geld – das Teil liegt im Lager.', 'bad'); this.inspect(uid); return; } install(x.id, t === 'gpu' && id ? idx : null); };
         pick.append(c);

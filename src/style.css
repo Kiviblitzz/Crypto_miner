@@ -1833,3 +1833,7 @@ body:has(.story.event) #xpbox { display: none; }
 #goals .goal .gfill { min-width: 0 !important; }
 #goals .goal.sub { display: flex !important; width: fit-content; max-width: 420px; }
 #goals .goal.sub > div:last-child { flex-wrap: wrap; }
+#build .item .pv-best { color: var(--acc); font-size: 12px; }
+.cfgr .cf-go .btn { white-space: normal; }
+/* Niedrige Fenster: Katalog unter die Datumsbox schieben, damit das Schließen-Kreuz frei bleibt */
+@media (min-width: 721px) and (max-height: 760px) { body.show-build #build { top: calc(50% + 34px) !important; max-height: calc(100vh - 170px) !important; } }
