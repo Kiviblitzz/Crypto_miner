@@ -72,6 +72,10 @@ Zitate sind wörtlich (Tippfehler bleiben stehen), damit der Ton erhalten bleibt
   - Kein AI-Ton: nichts übererklären, keine Schachtelsätze. So schreiben, wie ein Kumpel kurz Bescheid sagt.
   - Negative Beträge sind rot, positive grün.
 - **Erste Grafikkarte (21.11.2026):** „und vielleicht am anfang so machen, dass man nur eine schelchet gpu hat und nicht alle shcoin dass das passieren kann“. Am Anfang gibt es im Shop nur eine Einsteigerkarte (RHD 5770, läuft mit dem Startnetzteil). Drei Tage nach dem Einbau meldet sich Deniz, dann kommt die volle Auswahl. Die Daten der Karten bleiben echt; begrenzt wird nur das Angebot.
+- **Tempo, Esc, Schlafen (21.11.2026):** „esc in menüs schließt das menü nicht sondern pausiert. und mach es so, dass man nach und nach mit space die geschwindigkeit freischalten kann … und schlafen soll besser sein dass man auch sieht man hat geschlafen oder nur nachts oder so“.
+  - Die Leertaste schaltet das Tempo weiter. Die Stufen kommen nach und nach: erst 1×, mit der ersten Bestellung 60× und 1 h/s, mit der ersten Karte 6 h/s, später Tage pro Sekunde.
+  - Schlafen geht nur ab 20 Uhr, mit Schlafszene (Blende, Uhr, Morgenlicht, Wecker, kurze Morgen-Zeile).
+  - Esc schließt in jedem Fenster zuerst das Fenster; das ist automatisch getestet.
 - **Arbeitsweise:** „der ideen typ soll mit dir quatschen und mit mir in einem andern chat so dass du nicht auf antworten warten musst“. Der Spieler-Vertreter läuft als eigener Chat, fragt den Auftraggeber dort und schickt die Ergebnisse an den Entwicklungs-Chat.
 
 ## Roadmap (später)
