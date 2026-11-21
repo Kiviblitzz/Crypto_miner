@@ -104,5 +104,6 @@ export function drawPcScreen(world, sc) {
   const r = coinRate(game, 'BTC'), on = r.perDay > 0, tripped = sm?.tripped;
   g.fillStyle = on ? '#73d99f' : tripped ? '#ff8a80' : '#f0b54a'; g.beginPath(); g.arc(L + 20, 438, on && Math.floor(world.t) % 2 ? 15 : 13, 0, 7); g.fill();
   g.font = `700 82px ${FUN}`; g.fillText(on ? `schürft ${fmtCoin(r.perDay)} BTC/Tag` : tripped ? 'Sicherung raus!' : 'Miner pausiert', L + 56, 466, R - L - 56);
-  const wl = s.wallet.BTC; g.fillStyle = '#b4aa9d'; g.font = `700 50px ${TXT}`; g.fillText(`Du hast ${fmtCoin(wl.ex + wl.cold)} BTC`, L, 548, R - L);
+  const wl = s.wallet.BTC, have = world.liveBtc?.() ?? wl.ex + wl.cold; // wie im HUD: mit dem heute schon Geschürften (Market setzt liveBtc)
+  g.fillStyle = '#b4aa9d'; g.font = `700 50px ${TXT}`; g.fillText(`Du hast ${fmtCoin(have)} BTC`, L, 548, R - L);
 }

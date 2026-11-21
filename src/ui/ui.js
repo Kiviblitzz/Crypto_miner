@@ -60,6 +60,7 @@ function faceSvg(who) {
 export class UI {
   constructor(game, world) {
     this.g = game; this.w = world; this.cat = 'rigs'; this.marketCoin = 'BTC'; this.lastBuildDay = -1;
+    this.mk = new Market(this); // Browser „Shop | Börse“ (market.js): Fenster und PC-Monitor
     this.dock(); this.speedBar();
     world.onSelect = (uid) => this.inspect(uid);
     world.onHeat = () => this.sites();

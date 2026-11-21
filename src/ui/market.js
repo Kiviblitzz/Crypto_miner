@@ -53,6 +53,7 @@ export class Market {
     this.el = null; this.pg = null; // Browser bzw. Börsen-Seite darin
     this.k = { sell: 1, buy: 0.25, limit: 1 }; this.up = 0.1; this.hov = null;
     window.addEventListener('resize', () => { if (this.where === 'pc') this.relayout(); else if (this.where === 'win') this.place(); });
+    this.w.liveBtc = () => this.hold('BTC').total; // Mini-Ansicht auf dem Monitor zeigt denselben Bestand wie HUD und Börse
   }
   get atMonitor() { return this.where === 'pc'; }
   get open() { return !!this.where && this.tab === 'market'; } // Börsen-Reiter ist zu sehen
