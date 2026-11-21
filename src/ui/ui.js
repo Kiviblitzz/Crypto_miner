@@ -16,6 +16,7 @@ import { BILL_STAGE, billText, monthName, PAPA_HELP, siteIn } from '../data/bill
 import { Market } from './market.js';
 import { ChatView, unreadChats } from './chat.js';
 import { LETTERS } from '../data/world.js';
+import { papaRig, papaTalk, moveScene, papaPrompt } from './papa.js'; // Papas Miner, Umzug ins Zimmer über dem Laden
 
 const $ = (s) => document.querySelector(s);
 const h = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
@@ -80,7 +81,10 @@ export class UI {
       const lt = t.kind?.startsWith('loose:') ? t.kind.slice(6) : null; if (lt && g.s.loose?.[lt]) { world.onLoose(lt); return; }
       if (t.kind === 'letter') { this.letterCard('deniz'); return; } // Start ohne Handy: Deniz' Brief
       const pc = g.facObjects(g.s.current).find((o) => o.type === 'tower'); if (pc && t.kind === 'pc') { this.openInspector(pc.uid); return; }
-      const pr = world.room?.props?.find((p) => p.action === 'market'); if (pr && t.kind === 'monitor') { this.useProp(pr); return; } // an den Monitor (Browser „Shop | Börse“)
+      const pr = world.room?.props?.find((p) => p.label === 'PC-Monitor') || world.room?.props?.find((p) => p.action === 'market'); if (pr && t.kind === 'monitor') { this.useProp(pr); return; } // an den Monitor (Browser „Shop | Börse“)
+      if (t.kind?.startsWith('crate:')) { this.placeFromStock(t.kind.slice(6)); return; } // Umzugskiste
+      if (t.kind === 'papaRig') { papaRig(this); return; }
+      if (t.kind === 'papaTalk') { this.talk('papa'); return; }
       if (t.kind === 'parcel' && t.final) { const p = g.s.parcels?.[0]; if (p) world.pickParcel(p.id); return; }
       if (t.kind === 'unlock') { if (world.hoff) { if (t.final) this.travel(t.door); } else if (world.room?.doors?.[0]) this.travel(world.room.doors[0]); }
     };
@@ -92,6 +96,10 @@ export class UI {
     world.onLoose = (t) => { this.w.pickupFx(t); if (!this.g.s.loose?.[t]) return; this.toast(`${PNAME[t]} in der Tasche`, 'good', 2200); if (!this.g.pickUp(t)) return; this.lastPick = { t, at: performance.now() }; setTimeout(() => this.goals(), 1300); this.audio?.install?.(); this.goals(); };
     world.onKeep = (id) => this.pickKeep(id);
     world.onLetter = (who) => this.letterCard(who); // Start ohne Handy: Brief bzw. Umschlag auf dem Schreibtisch
+    world.onPapaBeep = () => this.audio?.papaBeep?.(); // Papas Miner piept (Netzteil zu schwach)
+    world.onAptLocked = () => this.toast('Hier wohnt jetzt jemand anders.', 'info', 2600); // gekündigte Wohnung
+    game.on('home', (k, info) => { if (k === 'moved') setTimeout(() => moveScene(this, info), 60); this.sites(); this.goals(); }); // Umzug: Lieferwagen, Feldbett
+    game.on('papa', () => { this.goals(); this.dock(); if (this.w.aim) this.prompt(this.w.aim); }); // Papas Miner: nächster Schritt
     game.on('xp', (k, n, lv) => this.xpPop(k, n, lv));
     game.on('skill', (id) => { if (!this.g.has('skills')) return; if (this.w.focus || this.installing) { this.lvQ = ['sk', id]; return; } setTimeout(() => skillCard(this, id), 700); this.dock(); }); // „Gelernt …“ (erst, wenn es den Fähigkeiten-Baum gibt)
     game.on('skillopen', (ids) => { if (!this.g.has('skills')) return; this.toast(`<b>Neu lernbar:</b> ${ids.slice(0, 3).map((id) => esc(SKILL[id]?.name || id)).join(', ')}${ids.length > 3 ? ' …' : ''} – <kbd>T</kbd>`, 'good', 6000); this.dock(); });
@@ -260,6 +268,14 @@ export class UI {
     } else if (s.chapter === 0 && play && !where && w.facId === 'kinder') { // (ohne Treppenhaus)
       const pc = g.facObjects('kinder').find((o) => o.type === 'tower'); if (pc && !s.flags.miningStarted) { pos = [pc.x, 0.78, pc.z]; label = 'Dein PC'; kind = 'pc'; aimed = w.aim?.uid === pc.uid; }
     }
+    if (!pos && play && !where && w.facId === 'werkstatt') { // Werkstatt: Umzugskisten, Papas Miner, Papa selbst (Quest), ohne Handy der PC in Papas Ecke
+      const fitsHere = (sid) => { const e = g.stockFind(sid), d = e && PLACEABLE[e.type]; return !!d && g.placeableAllowed(d, 'werkstatt') && g.slotOk('werkstatt', d); }; // volle Werkstatt: kein Dauer-Marker auf Kisten
+      const cr = Object.entries(w.papaCrates || {}).filter(([sid]) => fitsHere(sid)), cp = w.camera.position, st = g.papaSt();
+      if (cr.length) { const [sid, c] = cr.sort((a, b) => Math.hypot(a[1].position.x - cp.x, a[1].position.z - cp.z) - Math.hypot(b[1].position.x - cp.x, b[1].position.z - cp.z))[0]; pos = [c.position.x, 0.62, c.position.z]; label = 'Kisten'; kind = 'crate:' + sid; aimed = w.aim?.prop?.key === sid; }
+      else if ((st === 'psu' || st === 'heat') && w.papaEntry) { const A = w.papaEntry.obj; pos = [A.x, A.y + 0.62, A.z]; label = 'Papas Miner'; kind = 'papaRig'; aimed = w.aim?.prop?.action === 'papaRig'; }
+      else if ((st === 'panic' || st === 'proud') && w.people?.userData?.papa) { const pp = w.people.userData.papa.position; pos = [pp.x, 1.95, pp.z]; label = 'Papa'; kind = 'papaTalk'; aimed = w.aim?.prop?.who === 'papa'; }
+      else if (g.homeOut() && !g.has('phone') && unreadChats(s) > 0) { const pr = w.room?.props?.find((p) => p.label === 'PC-Monitor'); if (pr) { pos = [pr.c[0], pr.c[1], pr.c[2]]; label = 'Nachricht'; kind = 'monitor'; aimed = w.aim?.prop === pr; } }
+    }
     if (!pos && play && (where === 'apt' || (!where && w.facId === 'kinder')) && s.flags.miningStarted && !g.has('phone') && unreadChats(s) > 0) { const pr = w.room?.props?.find((p) => p.action === 'market'); if (pr) { pos = [pr.c[0], pr.c[1], pr.c[2]]; label = 'Nachricht'; kind = 'monitor'; aimed = w.aim?.prop === pr; } } // ohne Handy: Ungelesenes wartet im Messenger am PC
     if (!pos && s.chapter === 0 && play && (where === 'apt' || (!where && w.facId === 'kinder')) && s.flags.miningStarted && s.flags.cpuStart && g.has('build') && !s.flags.gpuOrdered && !s.flags.boughtGpu) { const pr = w.room?.props?.find((p) => p.action === 'market'); if (pr) { pos = [pr.c[0], pr.c[1], pr.c[2]]; label = 'Shop'; kind = 'monitor'; aimed = w.aim?.prop === pr; } } // erstes Ziel nach dem Einschalten: der Shop am Monitor
     const parcelFirst = !!(where && w.parcelsLying?.()); // ein Paket vor der Tür geht vor (Börse/Freischalten können warten)
@@ -315,6 +331,7 @@ export class UI {
     const g = this.g;
     for (const f of FACILITIES) {
       const un = g.s.unlocked.includes(f.id);
+      if (g.siteGone(f.id)) continue; // gekündigte Wohnung
       const sm = g.summary[f.id] || (un ? g.facSummary(f.id) : null);
       if (!un) {
         if (g.canUnlock(f.id)) { const b = h(`<div class="site" title="Freischalten"><div class="n">${f.short}</div><div class="m">${fmtUSD(f.cost)} · freischalten</div></div>`); b.onclick = () => this.company(); el.append(b); }
@@ -349,10 +366,10 @@ export class UI {
     const fromMap = !!this.w.empire; if (fromMap) this.w.hideEmpire(false); // Raum wird gleich ohnehin neu geladen
     const wasHouse = !!this.w.hoff && !fromMap;
     this.g.s.current = id; this.visiting = null; document.body.classList.remove('visiting'); this.walkGoal = null;
-    this.w.loadFacility(id, { at: opt.arrive && id === 'kinder' && !wasHouse ? 'haustuer' : null });
+    this.w.loadFacility(id, { at: opt.bed ? 'bed' : opt.arrive && id === 'kinder' && !wasHouse ? 'haustuer' : null }); // bed: am Feldbett aufwachen (nach dem Umzug)
     if (fromMap) { this.pause(false); this.w.setMode('play'); }
     if (this.inspUid) { this.inspUid = null; $('#inspector').classList.add('hidden'); }
-    this.refresh(); this.toast(`${esc(FACILITY[id].name)} – ${esc(FACILITY[id].place)}`, 'info', 3000);
+    this.refresh(); if (!opt.quiet) this.toast(`${esc(FACILITY[id].name)} – ${esc(FACILITY[id].place)}`, 'info', 3000);
   }
   fade() { const f = $('#fade'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); }
 
@@ -427,7 +444,7 @@ export class UI {
     for (const gr of groups) {
       const e = gr.e, def = PLACEABLE[e.type], ok = g.placeableAllowed(def, fac), full = !g.slotOk(fac, def);
       const w = def.kind === 'rig' ? (e.parts && g.partIds({ type: e.type, parts: e.parts }).length ? g.rigWatt({ type: e.type, parts: e.parts }) : 0) : def.watt || 0, warn = ok && !full ? this.rigWarn(fac, w) : '';
-      const sub = !ok ? `Passt nicht in ${esc(FACILITY[fac].short)}` : full ? 'Hier ist kein Platz mehr' : e.kit ? 'Bausatz – Teile liegen im Lager' : e.ready ? `Fertig bestückt · ${e.parts?.gpus?.length || 0}× ${esc(PART[e.parts?.gpus?.[0]]?.name || 'ohne Karte')}` : def.kind === 'rig' ? 'Leeres Gehäuse' : def.kind === 'cooling' ? `Kühlt ${fmtWatt(def.cool)}` : def.kind === 'holder' ? `${e.items?.length || 0} / ${def.slots} Geräte` : def.kind === 'device' ? fmtHash(def.hash, def.algo) : 'Deko';
+      const sub = !ok ? `Passt nicht in ${esc(FACILITY[fac].short)}` : full ? 'Hier ist kein Platz mehr' : e.moved ? 'Umzugskiste aus der Wohnung' : e.kit ? 'Bausatz – Teile liegen im Lager' : e.ready ? `Fertig bestückt · ${e.parts?.gpus?.length || 0}× ${esc(PART[e.parts?.gpus?.[0]]?.name || 'ohne Karte')}` : def.kind === 'rig' ? 'Leeres Gehäuse' : def.kind === 'cooling' ? `Kühlt ${fmtWatt(def.cool)}` : def.kind === 'holder' ? `${e.items?.length || 0} / ${def.slots} Geräte` : def.kind === 'device' ? fmtHash(def.hash, def.algo) : 'Deko';
       const c = h(`<div class="up-card ${ok && !full ? '' : 'dis'}"><div class="up-th"></div><div class="up-t"><b>${esc(g.stockName(e))}${gr.n > 1 ? ` <em>×${gr.n}</em>` : ''}</b><span>${sub}</span>${warn ? `<span class="rc-warn">${esc(warn)}</span>` : ''}</div><button class="btn small primary" ${ok && !full ? '' : 'disabled'}>Aufstellen</button></div>`);
       try { const url = this.w.thumbnail(e.type); if (url) c.querySelector('.up-th').append(h(`<img alt="" src="${url}"/>`)); } catch (err) { /* ohne Vorschau */ }
       c.querySelector('button').onclick = (ev) => { ev.stopPropagation(); this.placeFromStock(gr.key); };
@@ -572,6 +589,8 @@ export class UI {
     } else if (aim.door) {
       const k = aim.door.kind;
       html = k === 'kellertuer' ? (this.g.canUnlock('keller') ? `<kbd>E</kbd>${esc(FACILITY.keller.short)} freischalten` : '<kbd>E</kbd>Kellertür<span> · abgeschlossen</span>') : k === 'haustuer' ? '<kbd>E</kbd>Haustür<span> · raus in die Stadt</span>' : `<kbd>E</kbd>${esc(aim.door.label)}`;
+    } else if (aim.prop && (aim.prop.action === 'papaRig' || aim.prop.action === 'crate')) {
+      html = papaPrompt(this, aim.prop);
     } else if (aim.prop) {
       const mon = this.monitorUse(aim.prop), un = mon && aim.prop.label === 'PC-Monitor' ? unreadChats(this.g.s) : 0; // PC-Monitor: Shop, Börse, Nachrichten
       html = un ? `<kbd>E</kbd>An den PC<span> · ${un === 1 ? 'eine neue Nachricht' : `${un} neue Nachrichten`}</span>` : mon === 'msgs' ? '<kbd>E</kbd>Nachrichten' : mon ? `<kbd>E</kbd>${mon === 'both' ? 'Shop · Börse' : mon === 'shop' ? 'Online-Shop' : esc(aim.prop.hint)}` : aim.prop.action === 'market' ? `Monitor · ${this.g.s.flags.miningStarted ? 'Miner läuft' : 'aus'}` : `<kbd>E</kbd>${esc(aim.prop.hint)}`;
@@ -589,6 +608,8 @@ export class UI {
   }
   useProp(p) {
     if (p.action === 'talk') { this.talk(p.who); return; }
+    if (p.action === 'papaRig') { papaRig(this); return; } // Papas Miner auf der Werkbank
+    if (p.action === 'crate') { this.placeFromStock(p.key); return; } // Umzugskiste auspacken
     if (p.action === 'shop') { if (this.g.has('build')) this.openShop(); else this.toast('Bau erst deinen PC zusammen.', 'info', 3000); return; }
     if (p.action === 'market') { const mon = this.monitorUse(p); if (!mon) { this.toast(this.g.s.flags.miningStarted ? 'Noch nichts zu verkaufen.' : 'Erst den PC bauen.', 'info', 3000); return; } (this.mk ||= new Market(this)).atPc(p, mon); } // Browser „Shop | Börse“ auf dem Bildschirm
     else if (p.action === 'company') this.company();
@@ -622,7 +643,7 @@ export class UI {
   // Was kann man am Monitor? 'both' (Shop und Börse), 'shop', 'market' oder '' – der Shop nur am PC-Monitor in der Wohnung
   monitorUse(p) {
     if (p?.action !== 'market') return ''; const g = this.g, shop = g.has('build') && (p.label === 'PC-Monitor' || this.w.facId === 'kinder'), mk = g.has('market');
-    const msgs = p.label === 'PC-Monitor' && this.w.facId === 'kinder' && (g.s.flags.miningStarted || !g.s.feat) && (g.s.messages || []).length > 0; // Messenger am PC
+    const msgs = p.label === 'PC-Monitor' && (this.w.facId === 'kinder' || p.home) && (g.s.flags.miningStarted || !g.s.feat) && (g.s.messages || []).length > 0; // Messenger am PC (nach dem Umzug: am Schreibtisch in der Werkstatt)
     return shop && mk ? 'both' : shop ? 'shop' : mk ? 'market' : msgs ? 'msgs' : '';
   }
   // Am Anfang in den verstaubten Keller: früher per Überblendung, jetzt zu Fuß (der Marker zeigt den Weg)
@@ -634,9 +655,9 @@ export class UI {
   houseMove(id) {
     const s = this.g.s, cur = id === 'keller' && s.unlocked.includes('keller') ? 'keller' : 'kinder', prev = s.current;
     if (id === 'keller') this.g.learned?.('cellar'); // Anlernen: „Runter in den Keller“
-    this.visiting = id === 'keller' && cur !== 'keller' ? 'keller' : null; // Keller noch nicht frei (Teile-Suche): nur zu Besuch
+    this.visiting = id === 'keller' && cur !== 'keller' ? 'keller' : this.g.siteGone(cur) ? 'kinder' : null; // Keller noch nicht frei (Teile-Suche): nur zu Besuch; nach dem Umzug oben nur noch Treppenhaus
     document.body.classList.toggle('visiting', !!this.visiting);
-    if (cur !== prev) { s.current = cur; this.toast(esc(FACILITY[cur].name), 'info', 1600); }
+    if (cur !== prev) { s.current = cur; this.toast(this.g.siteGone(cur) ? 'Treppenhaus' : esc(FACILITY[cur].name), 'info', 1600); }
     this.top(); this.sites(); this.goals(); this.keysHint(); this.dock();
     if (document.body.classList.contains('show-build')) this.build(true);
   }
@@ -647,7 +668,7 @@ export class UI {
       this.audio?.click?.(); this.toast(esc(CHAPTERS[g.s.chapter]?.waitText || 'Abgeschlossen – das Kellerabteil ist noch voll mit Gerümpel vom Vormieter.'), 'info', 5000); return;
     }
     const home = door?.kind === 'haustuer'; // aus dem Haus: Wohnung und Keller erreicht man zu Fuß
-    const dests = FACILITIES.filter((f) => !(home && (f.id === 'kinder' || f.id === 'keller')));
+    const dests = FACILITIES.filter((f) => !(home && (f.id === 'kinder' || f.id === 'keller')) && !g.siteGone(f.id));
     if (!dests.some((f) => f.id !== g.s.current && (g.s.unlocked.includes(f.id) || g.canUnlock(f.id)))) { this.toast(home ? 'Draußen wartet noch nichts.' : 'Die Tür bleibt zu.', 'info', 2600); return; }
     const body = h(`<div><h2>${esc(door.label)}</h2><p style="color:var(--dim);margin-top:-6px">Wohin willst du?</p><div class="cards"></div></div>`);
     const cards = body.querySelector('.cards');
@@ -734,7 +755,7 @@ export class UI {
   moveButton(o) {
     const g = this.g, def = PLACEABLE[o.type]; if (!g.slotKind(def) && def.kind !== 'cooling') return null;
     if (g.isFirstPc(o)) return null; // der erste PC bleibt in der Wohnung
-    const from = g.facOf(o.uid), tg = g.s.unlocked.filter((id) => id !== from); if (!tg.length) return null;
+    const from = g.facOf(o.uid), tg = g.liveSites().filter((id) => id !== from); if (!tg.length) return null;
     if (tg.length === 1) {
       const to = tg[0], why = g.moveWhy(o, to), fee = g.moveFee(o, to);
       const b = h(`<button class="btn" ${why ? 'disabled' : ''} title="${esc(why || `Mit allen Teilen nach ${FACILITY[to].name}${fee ? ` · Umzug ${fmtUSD(fee)}` : ''}`)}">${esc(MOVE_TO[to] || `Nach ${FACILITY[to].short}`)}${fee ? ` · ${this.money(fee)}` : ''}</button>`);
@@ -745,7 +766,7 @@ export class UI {
   movePicker(o) {
     const g = this.g, from = g.facOf(o.uid), def = PLACEABLE[o.type];
     const body = h(`<div><h2>Wohin damit?</h2><p style="color:var(--dim);margin-top:-6px">${esc(def.name)} – mit allen Teilen${o.items?.length ? ` und ${o.items.length} Geräten` : ''}</p><div class="cards"></div></div>`), cards = body.querySelector('.cards');
-    for (const to of g.s.unlocked) {
+    for (const to of g.liveSites()) {
       if (to === from) continue; const f = FACILITY[to], why = g.moveWhy(o, to), fee = g.moveFee(o, to);
       const c = h(`<div class="card"><h3>${esc(f.name)}</h3><div class="sub">${esc(f.place)}</div><div style="font-size:12px;color:var(--dim)">Platz ${g.slotsUsed(to)}/${g.slotsMax(to)} · Strom ${fmtNum(g.elecPrice(to, g.s.day, true) * 100, 1)} ct/kWh${f.rent && g.rentStart(to) > 0 ? ` · startet die Miete (−${fmtUSD(g.rentStart(to))}/Tag)` : ''}</div>${why ? `<div style="font-size:12px;color:#ff8f84">${esc(why)}</div>` : ''}</div>`);
       const b = h(`<button class="btn small ${why ? '' : 'primary'}" style="margin-top:6px" ${why ? 'disabled' : ''}>${fee ? `Hinbringen · ${this.money(fee)}` : 'Hinbringen'}</button>`); b.onclick = () => { this.closeModal(); this.doMove(o.uid, to); };
@@ -946,6 +967,7 @@ export class UI {
     // Freischaltbarer Standort: eine Zeile
     const fu = FACILITIES.find((f) => g.canUnlock(f.id));
     if (fu) { const b = h(`<div class="goal next"><div class="ck"></div><div>${esc(fu.short)} ist frei · geh durch die Tür</div></div>`); el.append(b); fin(); return; }
+    const mc = g.moveCrates().filter((e) => g.liveSites().some((id) => g.placeableAllowed(PLACEABLE[e.type], id) && g.slotOk(id, PLACEABLE[e.type]))).length; if (mc) { el.append(h(`<div class="goal next"><div class="ck"></div><div>Umzugskisten auspacken <span class="cnt">${mc}</span></div></div>`)); fin(); return; } // nach dem Umzug: erst die Kisten
     if (!ch) { endlessGoals(this, el); fin(); return; }
     const first = ch.goals.find((x) => !s.goals[x.id]);
     let go = null; for (const x of ch.goals) { if (s.goals[x.id]) continue; if (this.goalVisible(x)) { go = x; break; } if (!x.skip) break; } // der Reihe nach; nur „Fülle …“ unter 70 % wird übersprungen
@@ -1090,6 +1112,7 @@ export class UI {
     return `<kbd>E</kbd>Mit ${esc(p.as)} reden<div class="st">${esc(p.role(s))}${today ? ' · heute schon gesprochen' : ''}</div>`;
   }
   talk(who0) {
+    if (who0 === 'papa' && papaTalk(this)) return; // Papas Miner: Kurssturz (halten oder verkaufen), Abschluss
     const r = talkTo(this.g, who0, this.w.facId); if (!r) return;
     const heart = '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.7c0 5.6-7.5 10.2-7.5 10.2z"/></svg>';
     const pips = `<i class="tk-pips" title="Einmal pro Woche zählt ein Gespräch für eure Beziehung">${Array.from({ length: TALK_REL.quarters }, (_, i) => `<b class="${i < r.quarters ? 'on' : ''}"></b>`).join('')}</i>`;
@@ -1232,6 +1255,7 @@ export class UI {
     const g = this.g, s = g.s, B = s.bills || { hist: [] }, o = B.open, L = s.papaLoan, nb = g.nextBillDay();
     ph.classList.add('ph-contacts', 'ph-konto');
     ph.append(h(`<div class="kt-head"><div><span>Kontostand</span><b class="${s.cash < 0 ? 'neg' : ''}">${fmtUSD(s.cash)}</b></div><div><span>Nächste Abrechnung</span><b>${fmtDate(nb)}</b><small>etwa ${fmtUSD(g.billEstimate())} · bisher ${fmtUSD(g.billAccrued())}</small></div></div>`));
+    if (L?.left > 0) ph.append(h(`<div class="kt-papa">Papa: <b>${fmtUSD(L.left)}</b> offen</div>`)); // Papas Umzugsdarlehen, damit man es nicht vergisst
     if (o) {
       const box = h(`<div class="kt-open st${o.stage}"><div class="kt-oh"><b>${esc(BILL_STAGE[Math.min(3, o.stage)])}</b><span>${fmtUSD(g.owed())} offen</span></div><div class="kt-ot">${billText(s, g)}</div><div class="ct-act"></div></div>`);
       const act = box.querySelector('.ct-act');
@@ -1244,6 +1268,7 @@ export class UI {
     const mc = g.monthlyCosts(), OTHER = { staff: 'Gehälter', ups: 'Ausbauten (laufend)', deals: 'Laufende Verträge', income: 'Einnahmen aus Verträgen' };
     const rows = mc.rows.filter((r) => r.rent >= 0.5 || r.elec >= 0.5 || r.pausch).map((r) => [`${esc(FACILITY[r.fac].short)}${r.cut ? ' <em class="neg">gesperrt</em>' : ''}`, [r.rent >= 0.5 ? `Miete ${fmtUSD(r.rent)}` : '', r.pausch ? 'Strom in der Warmmiete' : r.elec >= 0.5 ? `Strom ~${fmtUSD(r.elec)}` : ''].filter(Boolean).join(' · ')]);
     for (const [k, v] of Object.entries(mc.other)) if (Math.abs(v) >= 0.5) rows.push([OTHER[k], v < 0 ? `<span class="pos">+${fmtUSD(-v)}</span>` : fmtUSD(v)]);
+    { const hr = this.homeRow(); if (hr) rows.push(hr); } // Wohnung gekündigt
     ph.append(h('<div class="ct-sec">Monatskosten bei heutiger Last</div>'));
     ph.append(h(`<div class="kt-card"><div class="kv">${rows.map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join('') || '<div class="k">Noch keine laufenden Kosten</div><div class="v">–</div>'}<div class="k"><b>Pro Monat</b></div><div class="v"><b>${fmtUSD(mc.total)}</b></div></div></div>`));
     ph.append(h('<div class="ct-sec">Monatsabrechnungen</div>'));
@@ -1299,7 +1324,8 @@ export class UI {
     if (!b || b.st === 'open') return; // offen: chargeBill meldet sich selbst, die Mahnung kommt als Ereignis
     const s = this.g.s, first = (s.stats.bills || 0) <= 2;
     if (!first && (s.speed || 0) >= 5 && b.st !== 'dispo') return;
-    this.toast(`<b>Abrechnung ${esc(monthName(b.m))}:</b> ${b.total < 0 ? `<span class="pos">+${fmtUSD(-b.total)}</span>` : `<span class="neg">−${fmtUSD(b.total)}</span>`}${b.st === 'dispo' ? ' – Konto im Minus' : ''}`, b.st === 'dispo' ? 'bad' : 'info', first ? 6000 : 4000); // Details im Handy → Konto
+    const papa = (s.stats.bills || 0) === 1 && this.g.papaLeft() > 0 ? ` · Papa: ${fmtUSD(this.g.papaLeft())} offen` : ''; // erste Abrechnung: Papas Darlehen nicht vergessen
+    this.toast(`<b>Abrechnung ${esc(monthName(b.m))}:</b> ${b.total < 0 ? `<span class="pos">+${fmtUSD(-b.total)}</span>` : `<span class="neg">−${fmtUSD(b.total)}</span>`}${b.st === 'dispo' ? ' – Konto im Minus' : ''}${papa}`, b.st === 'dispo' ? 'bad' : 'info', first ? 6000 : 4000); // Details im Handy → Konto
   }
   // Anlernen: nach Papas Nachricht schreibt Deniz – nach ein paar Schritten oder spätestens 40 Sekunden (liest man das Handy nicht: nach 90 Sekunden)
   ideaTick() {
@@ -1325,6 +1351,7 @@ export class UI {
     const OTHER = { staff: 'Gehälter', ups: 'Ausbauten (laufend)', deals: 'Laufende Verträge', income: 'Einnahmen aus Verträgen' }, rows = [];
     for (const r of mc.rows) { if (!(r.rent >= 0.5 || r.elec >= 0.5 || r.pausch)) continue; rows.push([`${esc(FACILITY[r.fac].name)}${r.cut ? ' <em class="neg">· Strom gesperrt</em>' : ''}`, [r.rent >= 0.5 ? `Miete ${fmtUSD(r.rent)}` : '', r.pausch ? 'Strom in der Warmmiete' : r.elec >= 0.5 ? `Strom ~${fmtUSD(r.elec)}` : ''].filter(Boolean).join(' · ')]); }
     for (const [k, v] of Object.entries(mc.other)) if (Math.abs(v) >= 0.5) rows.push([OTHER[k], v < 0 ? `<span class="pos">+${fmtUSD(-v)}</span>` : fmtUSD(v)]);
+    { const hr = this.homeRow(); if (hr) rows.push(hr); } // Wohnung gekündigt
     rows.push(['<b>Pro Monat</b>', `<b>${fmtUSD(mc.total)}</b>`], ['Nächste Abrechnung', `${fmtDate(nb)} · etwa ${fmtUSD(g.billEstimate())}`]);
     if (o) rows.push([`Offen · ${esc(BILL_STAGE[Math.min(3, o.stage)])}`, `<span class="neg">${fmtUSD(g.owed())}</span>`]);
     if (L?.left > 0) rows.push(['Papas Umzugsdarlehen', `${fmtUSD(L.left)} · ohne Zinsen`]);
@@ -1332,6 +1359,12 @@ export class UI {
     if (o && g.billCoinOk()) { const b = h('<button class="btn small primary">Coins verkaufen und bezahlen</button>'); b.onclick = () => { if (g.payBills(true)) this.audio?.cash?.(); this.reCompany(); }; r.append(b); }
     if (this.kontoOk() && g.has('phone')) { const b = h('<button class="btn small">Abrechnungen im Handy</button>'); b.onclick = () => { this.closeModal(); this.phone('konto'); }; r.append(b); } // ohne Handy: am PC unter „Bank“
     return sec;
+  }
+  // Wohnung gekündigt (Umzug ins Zimmer über dem Laden): bis Monatsende läuft die Miete, danach steht hier ein paar Monate „keine Miete mehr“
+  homeRow() {
+    const g = this.g, H = g.s.home; if (!H?.out || !H.rentEnd) return null;
+    if (!g.homeRentOff()) return ['Wohnung · gekündigt', `Miete bis ${fmtDate(H.rentEnd - 1)}`];
+    return g.s.day - H.rentEnd < 120 ? ['Wohnung · gekündigt', `<span class="pos">keine Miete mehr · spart ${fmtUSD(FACILITY.kinder.rent)} im Monat</span>`] : null;
   }
   rentLabel(f, un) {
     const g = this.g; if (!f.rent) return 'keine';
@@ -1348,6 +1381,7 @@ export class UI {
     for (const f of FACILITIES) {
       const un = s.unlocked.includes(f.id), can = g.canUnlock(f.id);
       if (!un && !can) continue; // gesperrte Standorte nicht ankündigen
+      if (g.siteGone(f.id)) continue; // gekündigte Wohnung
       const fs = s.fac[f.id], sm = g.summary[f.id];
       const c = h(`<div class="card ${!un && !can ? 'lock' : ''}"><h3>${un ? '' : can ? '' : ''}${esc(f.name)}</h3><div class="sub">${esc(f.place)} · ${fmtNum(f.w, 1)}×${fmtNum(f.d, 1)} m</div>
         <div class="kv" style="margin:4px 0"><div class="k">Anschluss</div><div class="v">${fmtNum(f.power[fs.power].kw, 1)} kW</div>
@@ -1656,7 +1690,7 @@ export class UI {
     if (!this.g.has('skills')) return; // vor dem Fähigkeiten-Baum still mitzählen – keine „+25 EP“, die man noch nicht versteht
     if (this.installing && k === 'w') { (this.xpQ ||= []).push([k, n, lv]); return; }
     const box = $('#xpbox') || (() => { const b = h('<div id="xpbox"></div>'); document.body.append(b); return b; })();
-    const el = h(`<div class="xp"><span class="xi">${potSvg(k, 16)}</span>+${n} ${POTS[k]?.long || 'Erfahrung'}</div>`); box.append(el); setTimeout(() => el.remove(), 2400);
+    if (n > 0) { const el = h(`<div class="xp"><span class="xi">${potSvg(k, 16)}</span>+${n} ${POTS[k]?.long || 'Erfahrung'}</div>`); box.append(el); setTimeout(() => el.remove(), 2400); } // Game.givePoints meldet n = 0: nur die Punkt-Karte
     if (lv) { if (this.w.focus) this.lvQ = ['pt', k]; else setTimeout(() => this.levelUp('pt', k), 900); }
     this.dock();
   }

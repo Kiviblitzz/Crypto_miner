@@ -70,7 +70,7 @@ function shell(def, { floorMat, wallMatA, wallMatB, thick = 0.15, holes = {}, ba
 
 const blk = (x0, z0, x1, z1) => ({ x0, z0, x1, z1 });
 
-export function buildRoom(def) {
+export function buildRoom(def, opt = {}) { // opt.home: Werkstatt nach dem Umzug (Papas Ecke mit Feldbett und Schreibtisch)
   const B = { blocked: [], lights: [], screens: [], spins: [] };
   let S;
   const { w, d, h } = def;
@@ -310,6 +310,22 @@ export function buildRoom(def) {
     B.doors = [{ c: [8.5, 1.05, 0.06], s: [1.0, 2.1, 0.16], label: 'Tür zum Laden' }, { c: [9.95, 1.5, 4.25], s: [0.16, 3.0, 3.5], label: 'Rolltor' }];
     B.spawn = { x: 8.5, z: 1.4, look: [4.5, 5.0] };
     B.props = [{ c: [1.6, 1.0, 0.4], s: [2.6, 0.3, 0.8], label: 'Werkbank', hint: 'Technik', action: 'techs' }, { c: [0.9, 1.1, 0.35], s: [0.45, 0.35, 0.35], label: 'Alter Fernseher', hint: 'Börse', action: 'market' }];
+    if (opt.home) { // Nach dem Umzug: Papas Ecke hinten links – Feldbett an der Wand, dein Schreibtisch aus der Wohnung mit Monitor (Bereiche: HOME_RECTS in data/papa.js)
+      const put = (type, x, z, ry = 0, parent = g) => { const f = instance('furn:' + type, () => furniture(type), { lod: false }); f.position.set(x, 0, z); f.rotation.y = ry; parent.add(f); return f; };
+      put('cot', 0.47, 5.95);
+      const dk = new THREE.Group(); dk.position.set(2.15, 0, 7.75); dk.rotation.y = Math.PI; g.add(dk); // Schreibtisch mit dem Rücken zur Wand
+      put('desk', 0, 0, 0, dk).traverse((m) => { if (m.isMesh && m.material?.name === 'darkMetal') m.userData.focusHide = true; });
+      put('monitor', -0.15, -0.11, 0, dk).position.y = 0.74;
+      const scrC = document.createElement('canvas'); scrC.width = 1024; scrC.height = 576; const scr = new THREE.CanvasTexture(scrC); scr.colorSpace = THREE.SRGBColorSpace; scr.anisotropy = 8;
+      const sm = new THREE.Mesh(new THREE.PlaneGeometry(0.49, 0.285), new THREE.MeshStandardMaterial({ map: scr, emissive: 0xffffff, emissiveMap: scr, emissiveIntensity: 0.9, roughness: 0.95 })); sm.position.set(-0.15, 0.74 + 0.32, -0.098); dk.add(sm);
+      B.screens.push({ canvas: scrC, tex: scr, kind: 'pc', mesh: sm, seat: { eye: 1.18, d: 0.72, dx: 0.06 } });
+      put('chair', 0.35, 0.75, 0.5, dk);
+      put('desklamp', 0.55, -0.12, 0, dk).position.y = 0.74;
+      B.blocked.push(blk(0, 4.9, 0.95, 7.0), blk(1.3, 6.7, 3.0, 8.0));
+      B.props.push({ c: [0.47, 0.25, 5.95], s: [0.8, 0.5, 1.95], label: 'Feldbett', hint: 'Schlafen', action: 'sleep' }, { c: [2.3, 1.08, 7.85], s: [0.55, 0.4, 0.12], label: 'PC-Monitor', hint: 'Börse', action: 'market', home: true });
+      B.lights.push({ pos: [2.2, 1.0, 7.6], color: 0xffb46b, intensity: 0.5, dist: 1.8 }); // Schreibtischlampe
+      B.bedSpawn = { x: 1.25, z: 5.9, look: [5, 4] }; // Aufwachen am Feldbett
+    }
   } else if (def.style === 'warehouse') {
     S = shell(def, {
       floorMat: mat('floorEpoxy', { map: TEX.epoxy([8, 6]), roughness: 0.35, metalness: 0.1 }),

@@ -32,6 +32,7 @@ import { objectModel, rigPartModel, loosePartModel, releaseModel, buildRobiBot }
 import { keepsakeModel } from './models.js';
 import { keepsakesAt } from '../data/story.js';
 import { syncLetters } from './letters.js';
+import { syncPapa, updatePapa, papaInstall } from './papa.js'; // Papas Miner, Umzugskisten (Werkstatt)
 import { nightMats, nightGround } from './rooms.js';
 const NIGHT_GRASS = new THREE.Color(0x1d2a1f), NIGHT_FACADE = new THREE.Color(0x4a5068);
 import { M, mat } from './materials.js';
@@ -189,6 +190,7 @@ export class World {
     game.on('robo', (fac, bot, target) => this.roboJob(fac, bot, target)); // Robi fährt zum Gerät (Fähigkeiten: Roboter)
     game.on('keep', () => this.syncKeep()); game.on('objects', () => this.syncKeep());
     game.on('letters', () => syncLetters(this)); // Briefe auf dem Schreibtisch (Start ohne Handy)
+    for (const ev of ['papa', 'unpacked', 'home']) game.on(ev, () => syncPapa(this)); // Papas Miner, Umzugskisten
     game.on('update', () => this.spawnIncome());
   }
 
@@ -269,7 +271,7 @@ export class World {
     this.room = built.room; this.outside = built.outside; this.scene.add(this.room.root); this.screensDirty = true;
     this.dustBulb = dusty ? this.room.dustBulb || null : null; this.dustPts = dusty ? this.room.dustPts || null : null;
     this.syncLoose();
-    this.syncKeep(); syncLetters(this);
+    this.syncKeep(); syncLetters(this); this._layouts = {}; this.papaKey = null; this.papaAnim = null; syncPapa(this); // Raster neu (Umzug: Papas Ecke)
     this.scene.add(this.outside);
     // Treppenhaus (bleibt in der Szene, wird nur verschoben)
     if (off) {
@@ -303,6 +305,7 @@ export class World {
     const span = Math.max(def.w, def.d);
     let sp = this.room.spawn || { x: def.w / 2, z: def.d - 1, look: [def.w / 2, def.d / 2] };
     if (opt.pose && off) { const p = opt.pose; this.player.pos.set(p.x - off[0], p.y - off[1], p.z - off[2]); this.player.yaw = p.yaw; this.player.pitch = p.pitch; this.player.apply(); }
+    else if (opt.at === 'bed' && this.room.bedSpawn) { const b = this.room.bedSpawn; this.player.setPose(b.x, b.z, 0); this.player.lookAtPoint(b.look[0], b.look[1]); this.player.apply(); } // Aufwachen am Feldbett (Werkstatt nach dem Umzug)
     else if (opt.at === 'haustuer' && off) { const hs = this.house.points.haustuerSpawn; sp = { x: hs.x - off[0], z: hs.z - off[2], look: [hs.look[0] - off[0], hs.look[1] - off[2]] }; this.player.setPose(sp.x, sp.z, 0, -0.08, hs.y - off[1]); this.player.lookAtPoint(sp.look[0], sp.look[1]); this.player.apply(); }
     else { this.player.setPose(sp.x, sp.z, 0); this.player.lookAtPoint(sp.look[0], sp.look[1]); this.player.apply(); }
     this.transition = null;
@@ -334,7 +337,7 @@ export class World {
     const def = FACILITY[id], off = HOUSE_OFF[id] || null, ck = off ? id + (dusty ? ':dusty' : '') : null;
     let built = ck && this.roomCache.get(ck);
     if (built) return built;
-    const room = buildRoom(def);
+    const room = buildRoom(def, this.roomOpt(id));
     if (dusty) { const dc = buildDustyClutter(def); room.root.add(dc.group); room.blocked.push(...dc.blocked); room.dustPts = dc.group.userData.dust; for (const L of room.lights) { L.intensity *= 0.3; L.dist = 3.6; L.color = 0xffc98a; } room.lights.splice(1); room.lights.push({ pos: [6.45, 1.9, 3.85], color: 0xffd9a8, intensity: 0.35, dist: 3.2 }); const bl = room.bulbs || []; if (bl[1]) bl[1].material = mat('bulbDead', { color: 0x4a443c, roughness: 0.3 }); if (bl[0]) { bl[0].material = bl[0].material.clone(); bl[0].material.userData.shared = false; room.dustBulb = bl[0]; } room.props = []; }
     built = { room, outside: buildOutside(room.outside, def, off) };
     if (ck) {
@@ -438,7 +441,7 @@ export class World {
       const dx = d.c[0] - hx, dz = d.c[2] - hz, dist = Math.hypot(dx, dz), level = Math.abs(hy + 1.0 - d.c[1]) < 1.0;
       const toward = ws > 0.3 && (dx * wish.x + dz * wish.z) / (dist * ws + 1e-6) > 0.55;
       let want = level && !this.cine && (dist < 1.2 || (dist < 2.4 && toward) || (d.t > 0.05 && dist < 1.9));
-      if (key === 'apt') want = want && this.facId === 'kinder';
+      if (key === 'apt') { want = want && this.facId === 'kinder' && !this.game.siteGone?.('kinder'); if (level && dist < 1.1 && toward && this.game.siteGone?.('kinder') && this.t - (this.aptNoteT || -99) > 20) { this.aptNoteT = this.t; this.onAptLocked?.(); } } // gekündigt: da wohnt jetzt jemand anders
       if (key === 'keller') { // abgeschlossen, außer Keller frei / Teile-Suche – wer drin war, kommt aber auch wieder raus
         const ok = this.facId === 'keller' && this.kellerOpenable(); if (ok) d.hold = true; else if (dist >= 1.7) d.hold = false;
         want = want && this.facId === 'keller' && (ok || (d.hold && d.t > 0));
@@ -606,11 +609,11 @@ export class World {
   // ---------- Auswahl ----------
   // Nahansicht beim PC-Zusammenbau: Kamera fährt an die Glasseite des Gehäuses
   focusObject(uid) {
-    const e = uid && this.entries.get(uid);
+    const e = uid && (uid === 'papa' ? this.papaEntry : this.entries.get(uid)); // 'papa': Papas Miner auf der Werkbank (world/papa.js)
     this.focusUid = e ? uid : null;
     this.room?.root.traverse((m) => { if (m.userData.focusHide) m.visible = !e; });
     if (!e) { this.focus = null; this.updateStatus(); return; }
-    const o = e.obj, rot = -(o.rot || 0) * Math.PI / 2, rotV = (x, y, z) => new THREE.Vector3(x, y, z).applyAxisAngle(new THREE.Vector3(0, 1, 0), rot).add(new THREE.Vector3(o.x, 0, o.z));
+    const o = e.obj, rot = -(o.rot || 0) * Math.PI / 2, rotV = (x, y, z) => new THREE.Vector3(x, y, z).applyAxisAngle(new THREE.Vector3(0, 1, 0), rot).add(new THREE.Vector3(o.x, o.y || 0, o.z));
     const pos = rotV(0.62, 0.6, 0.45), look = rotV(0, 0.26, 0);
     const right = new THREE.Vector3().subVectors(look, pos).cross(new THREE.Vector3(0, 1, 0)).normalize();
     look.addScaledVector(right, 0.12);
@@ -641,6 +644,7 @@ export class World {
     if (a.t > 0.76) { this.install = null; const e = this.entries.get(a.uid); if (e) e.key = null; this.syncObjects(); if (this.selected === a.uid) this.refreshSelBox(); this.onInstalled?.(a.uid); }
   }
   // Halbtransparente Vorschau: hier kommt das Teil hin
+  papaInstall(type) { papaInstall(this, type); } // Netzteil gleitet in Papas Miner
   ghostPart(uid, type, id) { this.ghostSpec = uid && type && id ? { uid, type, id } : null; this.applyGhost(); }
   applyGhost() {
     if (this.ghost) { this.ghost.parent?.remove(this.ghost); disposeTree(this.ghost); this.ghost = null; } // Kanten-Geometrien freigeben
@@ -818,10 +822,11 @@ export class World {
   }
 
   // Raum-Hindernisse eines Standorts (auch nicht geladener): einmal bauen, merken, Meshes wieder freigeben
+  roomOpt(id) { return { home: id === 'werkstatt' && !!this.game.homeOut?.() }; } // Werkstatt nach dem Umzug: Feldbett und Schreibtisch
   roomLayout(id) {
     const c = (this._layouts ||= {}); if (c[id]) return c[id];
     if (id === this.facId && this.room && !this.dusty) return (c[id] = { blocked: [...this.room.blocked], doors: this.room.doors || [], spawn: this.room.spawn });
-    const room = buildRoom(FACILITY[id]); const L = { blocked: [...room.blocked], doors: room.doors || [], spawn: room.spawn }; disposeTree(room.root);
+    const room = buildRoom(FACILITY[id], this.roomOpt(id)); const L = { blocked: [...room.blocked], doors: room.doors || [], spawn: room.spawn }; disposeTree(room.root);
     return (c[id] = L);
   }
 
@@ -855,6 +860,7 @@ export class World {
     if (r.x0 < -e || r.z0 < -e || r.x1 > this.def.w + e || r.z1 > this.def.d + e) return false;
     const hit = (a) => a.x0 < r.x1 - e && a.x1 > r.x0 + e && a.z0 < r.z1 - e && a.z1 > r.z0 + e;
     if (this.room.blocked.some(hit)) return false;
+    if (!this.placing?.template?.stock && this.game.crateRects?.(this.facId).some(hit)) return false; // Umzugskisten stehen im Weg (beim Auspacken nicht)
     for (const o of this.game.facObjects(this.facId)) if (o.uid !== ignoreUid && hit(this.rectOf(o))) return false;
     return true;
   }
@@ -980,10 +986,10 @@ export class World {
     this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
     this.raycaster.far = this.reach() + 1.5;
     const hits = this.raycaster.intersectObjects([...this.objGroup.children, ...this.doorGroup.children, ...(this.looseGroup?.children || []), this.room.root, ...(this.hoff && this.house ? this.house.aimables : [])], true);
-    { const extra = [...(this.keepGroup?.children || []), ...(this.letterGroup?.children || []), ...(this.people?.children || []).map((p) => p.userData.hit).filter(Boolean)]; if (extra.length) { hits.push(...this.raycaster.intersectObjects(extra, true)); hits.sort((a, b) => a.distance - b.distance); } } // Fundstücke und ansprechbare Personen
+    { const extra = [...(this.keepGroup?.children || []), ...(this.letterGroup?.children || []), ...(this.papaGroup?.children || []), ...(this.people?.children || []).map((p) => p.userData.hit).filter(Boolean)]; if (extra.length) { hits.push(...this.raycaster.intersectObjects(extra, true)); hits.sort((a, b) => a.distance - b.distance); } } // Fundstücke und ansprechbare Personen
     this.raycaster.far = Infinity;
     let aim = null; const looseHit = hits.some((x) => x.object.userData.loose);
-    const keepHit = hits.some((x) => x.object.userData.keep);
+    const keepHit = hits.some((x) => x.object.userData.keep), papaHit = hits.some((x) => x.object.userData.prop?.papa);
     for (const h of hits) {
       const o = h.object; if (o.isSprite) continue;
       if (o.userData.keep) { aim = { keep: o.userData.keep, dist: h.distance }; break; }
@@ -992,6 +998,7 @@ export class World {
       if (o.userData.door?.kind === 'kellertuer' && (this.facId !== 'keller' || this.kellerOpenable())) continue; // offen: nur das Türblatt zählt
       if (o.userData.prop && !o.userData.prop.who && keepHit) continue; // Fundstück unterm Bett hat Vorrang vor der Schlafen-Box
       if (o.userData.prop && looseHit) continue; // Teile auf dem Bett haben Vorrang vor der Schlafen-Box
+      if (o.userData.prop?.action === 'techs' && papaHit) continue; // Papas Miner steht auf der Werkbank: er geht vor
       if (o.userData.prop?.action === 'sleep' && this.game.s.feat && !this.game.s.flags.miningStarted) continue; // vor dem ersten PC gibt es nichts zu verschlafen
       if (o.userData.loose) { aim = { loose: o.userData.loose, dist: h.distance }; break; }
       if (o.userData.door) { aim = { door: o.userData.door, dist: h.distance }; break; }
@@ -1222,10 +1229,10 @@ export class World {
     const vis = [this.room.root, this.outside, this.objGroup, this.people, this.solarMesh, this.hoff && this.house?.root].filter(Boolean);
     vis.forEach((o) => (o.visible = false)); this.roomLights.forEach((l) => (l.visible = false)); this.towerLights.forEach((l) => (l.intensity = 0));
     const g = (this.empire = new THREE.Group()); this.scene.add(g); this.empireHidden = vis;
-    let x = 0; const ids = this.game.s.unlocked.slice().sort((a, b) => FACILITY[a].tier - FACILITY[b].tier);
+    let x = 0; const ids = this.game.liveSites().sort((a, b) => FACILITY[a].tier - FACILITY[b].tier); // die gekündigte Wohnung nicht mehr
     let maxD = 0;
     for (const id of ids) {
-      const def = FACILITY[id]; const room = buildRoom(def);
+      const def = FACILITY[id]; const room = buildRoom(def, this.roomOpt(id));
       for (const wl of room.walls) wl.group.visible = wl.name === 'back' || wl.name === 'left';
       room.root.position.set(x, 0, -def.d / 2); g.add(room.root);
       for (const o of this.game.facObjects(id)) { const m = objectModel(o); m.position.set(x + o.x, 0, -def.d / 2 + o.z); m.rotation.y = -o.rot * Math.PI / 2; g.add(m); }
@@ -1450,7 +1457,7 @@ export class World {
     else { const df = (s.frac - this.visFrac + 1) % 1; this.visFrac = (this.visFrac + Math.min(df, dt / 90)) % 1; }
     this.updateDaylight(this.visFrac);
     this.updatePeople(dt); this.updateSmoke(dt); this.updateWeather(dt); this.updatePopups(dt); this.updateInstall(dt); this.updateLoose(dt); this.updateDusty(dt); this.updateLamp(dt); if (this.ghostMat) { this.ghostMat.opacity = 0.1; this.ghostLine.opacity = 0.52 + 0.04 * Math.sin(this.t * 4); }
-    this.updateKeep(dt);
+    this.updateKeep(dt); updatePapa(this, dt);
     // Lüfter & LEDs
     const fanSpeed = 28 * dt;
     for (const e of this.entries.values()) {

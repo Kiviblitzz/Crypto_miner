@@ -3,12 +3,13 @@
 //   stecken – Fehlersuche durch Stecken: Rig startet nicht → Karten/Riser einzeln abziehen, Test-Boot, das kaputte Teil tauschen, neu einstecken
 //   chips   – Chip-Kette (Hashboard): Signal von Chip zu Chip messen, der erste ohne Signal ist hin → mit Heißluft tauschen
 //   psu     – Netzteil-Mod: Ausgangsspannung am Poti einstellen, dann den Shunt brücken (Lötstellen)
+//   luefter – Papas Miner (Neben-Quest): Staub aus dem Kühler pusten, neuen Lüfter festschrauben
 // playMinigame(ui, { kind, easy, title, n }) → Promise<{ ok, clean, skipped }>. n = Zahl der Karten (Stecken).
 // Esc oder „Abbrechen“ bricht nur das Mini-Spiel ab (skipped). Während des Spiels steht die Zeit (main.js prüft ui.mg),
 // der Inspektor ist ausgeblendet und kommt danach wieder. ui.mg.st ist für Tests lesbar.
 const h = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
 const W = 560, H = 300;
-const TITLE = { loeten: 'Löten', stecken: 'Fehlersuche', chips: 'Chip-Kette', psu: 'Netzteil-Mod' };
+const TITLE = { loeten: 'Löten', stecken: 'Fehlersuche', chips: 'Chip-Kette', psu: 'Netzteil-Mod', luefter: 'Lüfter tauschen' };
 
 export function playMinigame(ui, opt = {}) {
   return new Promise((resolve) => {
@@ -16,7 +17,7 @@ export function playMinigame(ui, opt = {}) {
     const st = { kind, phase: '', msg: '', msgT: 0, miss: 0, hold: false, heat: 0, joint: 0, t0: performance.now(), end: null };
     const inspHidden = !document.getElementById('inspector')?.classList.contains('hidden');
     document.getElementById('inspector')?.classList.add('hidden');
-    const el = h(`<div id="mg" role="dialog" aria-label="Mini-Spiel"><div class="mg-card"><div class="mg-h"><span class="mg-k">${kind === 'psu' ? 'Umlöten' : 'Selbst reparieren'}</span><b>${opt.title || TITLE[kind]}</b><span class="mg-p"></span></div><div class="mg-i"></div><canvas class="mg-c"></canvas><div class="mg-f"><span class="mg-s"></span><button class="btn small mg-x">Abbrechen <kbd>Esc</kbd></button></div></div></div>`);
+    const el = h(`<div id="mg" role="dialog" aria-label="Mini-Spiel"><div class="mg-card"><div class="mg-h"><span class="mg-k">${kind === 'psu' ? 'Umlöten' : kind === 'luefter' ? 'Papas Miner' : 'Selbst reparieren'}</span><b>${opt.title || TITLE[kind]}</b><span class="mg-p"></span></div><div class="mg-i"></div><canvas class="mg-c"></canvas><div class="mg-f"><span class="mg-s"></span><button class="btn small mg-x">Abbrechen <kbd>Esc</kbd></button></div></div></div>`);
     document.body.append(el);
     const cv = el.querySelector('canvas'), ctx = cv.getContext('2d'), infoEl = el.querySelector('.mg-i'), progEl = el.querySelector('.mg-p'), statEl = el.querySelector('.mg-s');
     const dpr = Math.min(2, window.devicePixelRatio || 1); cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -264,6 +265,59 @@ const GAMES = {
         ctx.fillStyle = '#5a5f68'; ctx.beginPath(); ctx.arc(400, 170, 26, 0, 7); ctx.fill(); ctx.strokeStyle = '#e8edf4'; ctx.lineWidth = 4; const a = -2.2 + Math.min(1, st.heat) * 4.4; ctx.beginPath(); ctx.moveTo(400, 170); ctx.lineTo(400 + Math.sin(a) * 20, 170 - Math.cos(a) * 20); ctx.stroke(); txt(ctx, 'Poti VR1', 400, 220, '#cfd6e0', '600 12px system-ui');
         V.bar(ctx, 470, 40, 220, 'Spannung');
         return { info: 'Poti drehen: <b>gedrückt halten</b> (Maus, Finger oder <kbd>Leertaste</kbd>), die Spannung steigt – im <b style="color:#3ddc84">grünen Bereich</b> loslassen.', prog: 'Schritt 1 von 2 · Spannung einstellen', stat: missTxt(st, cfg.maxMiss, easy, 'Tipp: Die Fähigkeit „Löten“ macht das Löten leichter') };
+      },
+    };
+  },
+
+  // Lüfter tauschen (Papas Miner): Staub aus dem Kühler pusten, dann den neuen Lüfter mit vier Schrauben festziehen (nicht zu locker, nicht überdreht)
+  luefter(A) {
+    const { st, ctx, easy } = A, maxMiss = easy ? 4 : 3;
+    const dust = [[160, 112], [238, 92], [318, 132], [196, 196], [286, 212]].map(([x, y]) => ({ x, y, v: 1 }));
+    const screws = [[184, 82], [336, 82], [336, 238], [184, 238]];
+    Object.assign(st, { phase: 'dust', sel: 0, screw: 0, blow: false });
+    const S = holdZone(A, { zone: easy ? [0.48, 0.86] : [0.56, 0.8], heatT: 1.4, maxMiss, cold: 'Zu locker – der klappert. Noch mal.', hot: 'Überdreht! Vorsichtiger.', onHit: () => { st.screw++; A.say(st.screw >= 4 ? '' : 'Fest!'); if (st.screw >= 4) A.win('Läuft kühl!'); } });
+    const live = () => dust.map((d, i) => (d.v > 0 ? i : -1)).filter((i) => i >= 0);
+    const near = (p) => dust.findIndex((d) => d.v > 0 && Math.hypot(p.x - d.x, p.y - d.y) < 44);
+    const pick = (dir) => { const l = live(); if (!l.length) return; const k = l.indexOf(st.sel); st.sel = l[(Math.max(0, k) + dir + l.length) % l.length]; };
+    return {
+      down(p) { if (st.phase === 'dust') { const i = near(p); if (i >= 0) { st.sel = i; st.blow = true; } } else if (st.phase === 'screw') S.press(); },
+      up() { st.blow = false; if (st.phase === 'screw') S.release(); },
+      key(e) {
+        if (st.phase === 'dust') { if (e.key === 'ArrowLeft') pick(-1); else if (e.key === 'ArrowRight') pick(1); else if (hold(e)) st.blow = true; else return false; return; }
+        if (st.phase === 'screw' && hold(e)) S.press(); else return false;
+      },
+      keyUp(e) { if (e.key === ' ' || e.key === 'Enter') { st.blow = false; if (st.phase === 'screw') S.release(); } },
+      draw(now, dt) {
+        if (st.phase === 'dust' && st.blow && dust[st.sel]?.v > 0) {
+          const d = dust[st.sel]; d.v -= dt / (easy ? 0.4 : 0.55);
+          if (d.v <= 0) { d.v = 0; st.blow = false; A.sfx('tick'); const l = live(); if (l.length) st.sel = l[0]; else { st.phase = 'found'; A.say('Sauber! Jetzt der neue Lüfter.'); setTimeout(() => { if (!st.end) { st.phase = 'screw'; A.say(''); } }, 900); } }
+        } else if (st.phase === 'screw') S.tick(dt);
+        pcb(ctx, '#1d2229');
+        // Kühler mit Lamellen
+        box(ctx, 120, 60, 260, 200, '#7d858f', '#4c535c'); ctx.strokeStyle = '#5c646e'; ctx.lineWidth = 3; for (let x = 132; x < 380; x += 16) { ctx.beginPath(); ctx.moveTo(x, 66); ctx.lineTo(x, 254); ctx.stroke(); }
+        if (st.phase === 'dust' || st.phase === 'found') {
+          dust.forEach((d, i) => {
+            if (d.v <= 0) return; ctx.globalAlpha = 0.35 + 0.65 * d.v; ctx.fillStyle = '#8d7f69';
+            for (let k = 0; k < 7; k++) { ctx.beginPath(); ctx.arc(d.x + Math.cos(k * 2.3) * 14 * d.v, d.y + Math.sin(k * 1.7) * 10 * d.v, (10 + (k % 3) * 4) * (0.5 + 0.5 * d.v), 0, 7); ctx.fill(); }
+            ctx.globalAlpha = 1; if (i === st.sel) { ctx.strokeStyle = '#ffb000'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(d.x, d.y, 34, 0, 7); ctx.stroke(); }
+          });
+          const d = dust[st.sel] || dust[0]; // Druckluft-Dose zeigt auf den gewählten Klumpen
+          const ay = Math.max(72, d.y - 64); ctx.save(); ctx.translate(d.x + 70, ay); ctx.rotate(0.65); box(ctx, -12, -40, 24, 64, '#2f6fb0', '#1d4a7a'); box(ctx, -5, -52, 10, 12, '#d0d4da'); ctx.restore();
+          if (st.blow) for (let k = 0; k < 6; k++) { const t = ((now / 90 + k * 17) % 30) / 30; ctx.fillStyle = `rgba(230,236,240,${0.5 * (1 - t)})`; ctx.beginPath(); ctx.arc(d.x + 50 - t * 50 + Math.sin(k) * 6, ay + 20 + t * (d.y - ay - 20), 3 + t * 6, 0, 7); ctx.fill(); }
+          st.left = live().length; // für Tests lesbar
+          return { info: 'Staub raus: Klumpen <b>antippen und halten</b> (oder <kbd>Leertaste</kbd>, wählen mit <kbd>←</kbd><kbd>→</kbd>).', prog: `Schritt 1 von 2 · noch ${st.left} Staub`, stat: easy ? 'Mit Lüfterkurve: geht schneller' : 'Tipp: Druckluft, nicht pusten' };
+        }
+        // Neuer Lüfter mit vier Schrauben
+        ctx.fillStyle = '#20242b'; ctx.beginPath(); ctx.arc(260, 160, 84, 0, 7); ctx.fill(); ctx.strokeStyle = '#3a4048'; ctx.lineWidth = 4; ctx.stroke();
+        ctx.fillStyle = '#4a525c'; const rot = st.phase === 'win' ? now / 60 : 0.3; for (let k = 0; k < 7; k++) { ctx.save(); ctx.translate(260, 160); ctx.rotate(rot + (k * Math.PI * 2) / 7); ctx.beginPath(); ctx.ellipse(44, 0, 38, 13, 0.4, 0, 7); ctx.fill(); ctx.restore(); }
+        ctx.fillStyle = '#d9a43a'; ctx.beginPath(); ctx.arc(260, 160, 20, 0, 7); ctx.fill();
+        screws.forEach(([x, y], i) => {
+          const done = i < st.screw, cur = i === st.screw && st.phase === 'screw';
+          ctx.fillStyle = done ? '#cfd6e0' : '#8a929c'; ctx.beginPath(); ctx.arc(x, y, 11, 0, 7); ctx.fill(); ctx.strokeStyle = '#2a2f36'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(x - 6, y); ctx.lineTo(x + 6, y); ctx.moveTo(x, y - 6); ctx.lineTo(x, y + 6); ctx.stroke();
+          if (cur) { ctx.strokeStyle = '#ffb000'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(x, y, 20, 0, 7); ctx.stroke(); ctx.save(); ctx.translate(x, y); ctx.rotate((y < 160 ? Math.PI + 0.6 : -0.6) + (st.hold ? st.heat * 2.5 : 0)); box(ctx, -4, -70, 8, 58, '#3a3f46'); box(ctx, -9, -110, 18, 42, '#d94b3a'); ctx.restore(); } // Schraubendreher zeigt von der Mitte weg ins Bild
+        });
+        S.bar(ctx, 470, 40, 220, 'Anzug');
+        return { info: 'Schraube anziehen: <b>gedrückt halten</b> (Maus, Finger oder <kbd>Leertaste</kbd>) und im <b style="color:#3ddc84">grünen Bereich</b> loslassen.', prog: `Schritt 2 von 2 · Schraube ${Math.min(4, st.screw + 1)} von 4`, stat: missTxt(st, maxMiss, easy, 'Nicht überdrehen – das Gewinde ist aus Plastik', 'Mit Lüfterkurve: breiter grüner Bereich') };
       },
     };
   },

@@ -141,6 +141,16 @@ export function furniture(type) {
     const d2 = soft(g, 0.62, 0.13, 0.55, duv, 0.12, 0.2, 0.32, 0.06); d2.rotation.set(-0.12, -0.35, 0.08);
     const d3 = soft(g, 0.4, 0.09, 0.42, mat('duvetIn', { color: 0xd9dfe4, roughness: 0.95 }), -0.24, 0.19, 0.18, 0.04); d3.rotation.set(0.1, 0.6, 0.05);
     const p = soft(g, 0.56, 0.1, 0.36, mat('pillowOld', { color: 0xf0ece2, roughness: 0.95 }), -0.05, 0.17, 0.74, 0.05); p.rotation.set(0.12, 0.08, 0.05);
+  } else if (type === 'cot') {
+    // Feldbett (Kopfende bei +Z): Alu-Rahmen mit X-Beinen, grüne Bespannung, Schlafsack, Kissen – Papas Ecke in der Werkstatt
+    const alu = X.chrome(), cloth = mat('cotCloth', { color: 0x58663f, roughness: 0.9 });
+    for (const s of [-1, 1]) cyl(g, 0.014, 0.014, 1.9, alu, s * 0.33, 0.4, 0, 10, 'z');
+    for (const z of [-0.88, -0.3, 0.3, 0.88]) for (const s of [-1, 1]) { const l = cyl(g, 0.011, 0.011, 0.5, alu, s * 0.33, 0.2, z, 8); l.rotation.x = s * 0.5; }
+    for (const z of [-0.95, 0.95]) cyl(g, 0.012, 0.012, 0.68, alu, 0, 0.4, z, 8, 'x');
+    soft(g, 0.66, 0.03, 1.86, cloth, 0, 0.385, 0, 0.012);
+    soft(g, 0.6, 0.09, 1.3, mat('sleepBag', { color: 0x2f5d8a, roughness: 0.85 }), 0.01, 0.41, -0.22, 0.04);
+    soft(g, 0.6, 0.07, 0.22, mat('sleepBagIn', { color: 0xd0a24a, roughness: 0.9 }), 0.01, 0.47, 0.4, 0.03);
+    const p = soft(g, 0.5, 0.09, 0.3, mat('pillowOld', { color: 0xf0ece2, roughness: 0.95 }), -0.02, 0.43, 0.74, 0.04); p.rotation.set(0.08, 0.06, 0);
   } else if (type === 'clothesrail') {
     // Kleiderstange auf Rollen mit ein paar Hemden und Hoodies (entlang Z)
     const ch = X.chrome();

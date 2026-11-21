@@ -44,6 +44,7 @@ export class Audio {
   tick() { if (!this.ctx || this.muted) return; const now = performance.now(); if (this.lastTick && now - this.lastTick < 900) return; this.lastTick = now; this.blip(2400 * (0.95 + Math.random() * 0.1), 0.025, 'sine', 0.03); }
   clockTick() { this.blip(2300, 0.012, 'sine', 0.035); }
   alarm() { [0, 150, 300, 640, 790, 940].forEach((d) => setTimeout(() => this.blip(1760, 0.07, 'square', 0.06), d)); }
+  papaBeep() { [0, 170, 340].forEach((d) => setTimeout(() => this.blip(2350, 0.07, 'square', 0.045), d)); } // Papas Miner: Netzteil-Alarm
   cash() { [1320, 1760, 2640].forEach((f, i) => setTimeout(() => this.blip(f, 0.12, 'triangle', 0.12), i * 70)); }
   bad() { this.blip(180, 0.25, 'sawtooth', 0.12); }
   fanfare() { [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => this.blip(f, i === 3 ? 0.5 : 0.15, 'triangle', 0.16), i * 130)); }

@@ -24,6 +24,7 @@ if (world.touchMode) initTouch(world, ui);
 world.onPlace = (type, x, z, rot, template) => {
   const fac = game.s.current;
   const def = PLACEABLE[type];
+  if (game.siteGone(fac)) { ui.toast('Hier wohnst du nicht mehr.', 'info'); world.cancelPlacement(); return null; } // gekündigte Wohnung (Treppenhaus)
   if (!game.placeableAllowed(def, fac)) { ui.toast('Das passt hier nicht hin.', 'bad'); return null; }
   if (!game.slotOk(fac, def)) { ui.toast(template?.stock ? 'Hier ist kein Platz mehr – stell es an einem anderen Standort auf.' : 'Kein Platz mehr – Zeit für einen größeren Standort.', 'bad'); world.cancelPlacement(); return null; }
   if (template?.stock) { // Ausgepacktes aus dem Bestand aufstellen: kostet nichts mehr
@@ -84,7 +85,7 @@ btnNew.onclick = () => {
   });
 };
 document.getElementById('btn-continue').onclick = () => {
-  if (game.load()) { ui.resetSession(); splash.classList.add('hidden'); splashOrbit = false; ui.switchSite(game.s.current); ui.speedBar(); ui.ticker(); ui.keysHint(); world.setMode('play'); ui.toast('Willkommen zurück!', 'good'); }
+  if (game.load()) { ui.resetSession(); splash.classList.add('hidden'); splashOrbit = false; ui.switchSite(game.s.current, { bed: game.homeOut() && game.s.current === 'werkstatt' }); ui.speedBar(); ui.ticker(); ui.keysHint(); world.setMode('play'); ui.toast('Willkommen zurück!', 'good'); } // nach dem Umzug: am Feldbett
   else ui.toast('Spielstand konnte nicht geladen werden', 'bad');
 };
 

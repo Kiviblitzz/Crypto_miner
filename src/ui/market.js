@@ -100,7 +100,7 @@ export class Market {
     this.prop = prop; // Shop-Reiter nur am PC-Monitor in der Wohnung (UI.monitorUse), auch wenn er erst während des Besuchs freigeschaltet wird
     const s = this.g.s, les = this.g.lesson?.(); // erster Reiter: Ungelesenes, sonst was gerade dran ist (Anlernen), sonst der zuletzt benutzte
     const first = mon === 'msgs' || unreadChats(s) ? 'msgs' : les === 'market' ? 'market' : les === 'build' || (s.flags.cpuStart && !s.flags.gpuOrdered && !s.flags.boughtGpu) ? 'shop' : this.pcTab || 'market';
-    const P = this.canZoom() ? this.w.focusMonitor?.({ page: true, top: this.topEdge() }) : null;
+    const P = this.canZoom() && prop?.label === 'PC-Monitor' ? this.w.focusMonitor?.({ page: true, top: this.topEdge() }) : null; // nur der PC-Monitor hat einen Bildschirm zum Heranfahren (der alte Fernseher nicht)
     if (!P) { if (this.where) return; this.pcWin = true; this.openWindow(first); return; } // kleiner Bildschirm: als Fenster, aber mit Nachrichten und Bank
     this.ui.openUI();
     this.where = 'pc'; this.openedAt = performance.now();
