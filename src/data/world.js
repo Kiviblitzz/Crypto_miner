@@ -73,7 +73,7 @@ export const CHAPTERS = [
     title: 'Kapitel 2 – Der Hobbykeller', unlock: 'werkstatt', minDate: '2012-06-01', site: 'keller', // voller Keller: die Werkstatt sofort (Papa redet mit Herrn Öztürk), sonst ab Juni 2012
     intro: 'Das Gerümpel vom Vormieter ist raus, Papa hat den Sperrmüll gefahren. Herr Krause überlässt dir den alten Hobbyraum im Keller – für 50 $ im Monat und einen Kasten Bier zu Weihnachten. Und solange die Waschküche nebenan weiterläuft.',
     goals: [
-      { id: 'openrig', text: 'Bau dein erstes Rig im Keller', check: (s, h) => h.rigsAt('keller') > 0 }, // mit mindestens 1 GPU
+      { id: 'openrig', text: 'Bau dein erstes Rig im Keller', orDate: '2013-03-01', check: (s, h, g) => h.rigsAt('keller') > 0 || (s.unlocked.includes('keller') && (s.fac.keller?.objects || []).some((o) => !o.parts && g.slotLive(o))) }, // Rig mit mindestens 1 GPU – oder ein Miner (FPGA, ASIC) im Keller; spätestens im März 2013 auch so (früher half dort die Bankfrist: nicht für immer im Keller festhängen)
       // Ausbauten kennenlernen: Opas Nachtstromzähler (UPGRADES.keller nightmeter, −30 % Strom im Keller) – Knopf im Ziel oder Firma (C) → Ausbauten
       { id: 'night', text: 'Lass Opa den alten Nachtstromzähler anklemmen (Firma → Ausbauten, 400 $)', orDate: '2011-10-01', open: 'company', doneText: 'Nachtstrom! Im Keller kostet der Strom jetzt 30 % weniger. In der Firma (C) gibt es weitere Ausbauten.', check: (s) => !!s.fac.keller?.up?.nightmeter }, // open: Knopf im Ziel-Panel öffnet die Firma; orDate: kein Muss (sonst ab Oktober 2011)
       // Abschlussziel: Papa vermietet dir die Werkstatt (450 $ im Monat), wenn sich das trägt – 30 $ Gewinn am Tag nach Strom und Miete (Tagesabschluss); spätestens ab März 2013 auch so
