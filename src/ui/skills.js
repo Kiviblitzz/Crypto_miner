@@ -1,8 +1,11 @@
-// Fähigkeiten-Seite (Taste T, J geht auch): EIN großer Baum – Knoten mit Verbindungslinien, zeitlich von links (2010) nach rechts,
-// Äste je Kategorie als Farbe, ziehen = verschieben, Rad/Pinch = zoomen, Klick auf einen Knoten öffnet rechts die Details.
+// Fähigkeiten-Seite (Taste T, J geht auch): EIN Stern-Baum, aufgebaut wie die Upgrade-Bäume von Moon Sweepers und Find the Needle.
+// Start in der Mitte, sechs Äste wachsen sternförmig nach außen (je eine Farbe und Richtung); je weiter außen, desto später (Jahresringe).
+// Nebel: sichtbar sind gelernte Knoten und ihre direkten Nachbarn (dunkler Umriss mit Symbol, weit Entferntes als „?“) – wer lernt, deckt auf.
+// Knoten: runde Symbole ohne Textkasten. Hover, Fokus oder erstes Tippen zeigt einen Tooltip mit Name, einem Satz, den Lernwegen und „Zeig mir wo“;
+// ein größeres Panel gibt es nur für Lernwege mit mehreren Schritten (Buch als Paket). Robi (USB-Stick → Greifarm → Lötkopf) ist ein Knoten mit Stufen 1/3–3/3.
 // Im Baum stehen nur gebaute Fähigkeiten (TREE); was noch kommt, bleibt unsichtbar, auch als Voraussetzung (needsOf).
 // Dazu die Handgriffe im Inspektor (Betriebssystem-Installer, BIOS-Profile, Leistungsziel, Firmware, BIOS-Mod, Netzteil-Mod, Wartung, Wasserkühlung, Bitstream, Robi)
-// und die Reparatur-Knöpfe je Defekt (selbst = Mini-Spiel Löten / Fehlersuche / Chip-Kette, Routine, reparieren lassen). Esc: erst Details/Installer zu, dann der Baum, dann Pause.
+// und die Reparatur-Knöpfe je Defekt (selbst = Mini-Spiel Löten / Fehlersuche / Chip-Kette, Routine, reparieren lassen). Esc: erst Tooltip/Installer zu, dann der Baum, dann Pause.
 import { TREE, needsOf, SKILL, SKILL_CAT, POTS, PROFILES, OS, TEACHERS, REPAIR, PLIMIT, PSUMOD } from '../data/skills.js';
 import { PLACEABLE } from '../data/hardware.js';
 import { FACILITY } from '../data/world.js';
@@ -14,155 +17,229 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 const money = (v) => `${Math.round(v).toLocaleString('de-DE')} $`;
 const NS = 'http://www.w3.org/2000/svg';
 const sv = (tag, a = {}) => { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(a)) e.setAttribute(k, v); return e; };
-// Äste: Reihenfolge von oben nach unten (Lieblinge oben: OS & Firmware, Tuning, Löten & Reparatur) und Farbe
-const LANES = [['sof', '#38c8ff'], ['tun', '#ff8a3d'], ['rep', '#ffb000'], ['sch', '#8fd16b'], ['kst', '#4fd6c8'], ['ges', '#c58cff']];
-const CAT_COLOR = Object.fromEntries(LANES);
-const AT = { grosshandel: '2014-03-01', einarbeiten: '2014-03-01', robo_usb: '2015-09-01', robo_steck: '2016-06-01', robo_loet: '2017-03-01', windows: '2010-11-01', wartung: '2010-10-20', loeten: '2010-11-15', serie: '2012-06-01', lager: '2011-06-01', elektrik: '2011-03-01', stecken: '2011-03-01', abluft: '2010-11-20', gpuminer: '2010-10-25', boerse: '2010-11-01' }; // Platz im Zeitstrahl für Knoten ohne Datum
-const NW = 150, NH = 46, ROWH = 58, PADL = 96, PADT = 46;
-// Zeitachse: die ersten Jahre breiter (dort liegen die meisten Fähigkeiten), später enger
-const SEG = [[2010.6, 2013, 250], [2013, 2017, 150], [2017, 2031, 105]];
-const xs = (t) => { let x = 0; for (const [a, b, w] of SEG) { if (t <= a) break; x += (Math.min(t, b) - a) * w; } return PADL + x; };
-const yearOf = (iso) => { const d = new Date(iso + (iso.length <= 7 ? '-01' : '')); return d.getUTCFullYear() + d.getUTCMonth() / 12 + (d.getUTCDate() - 1) / 365; };
-const dayYear = (day) => { const d = new Date(day * 864e5); return d.getUTCFullYear() + d.getUTCMonth() / 12 + (d.getUTCDate() - 1) / 365; };
-const lines2 = (t) => { const M = 17; if (t.length <= M) return [t]; const w = t.split(' '); let a = ''; while (w.length && (a + ' ' + w[0]).trim().length <= M) a = (a + ' ' + w.shift()).trim(); let b = w.join(' '); if (b.length > M + 1) b = b.slice(0, M) + '…'; return a ? [a, b] : [t.slice(0, M), t.slice(M, 2 * M)]; }; // Platz fürs Symbol rechts
+// Äste: Richtung in Grad (0 = rechts, im Uhrzeigersinn) und Farbe. Software und Reparatur liegen nebeneinander, dazwischen Robi.
+const BRANCH = { sof: { a: -90, c: '#38c8ff' }, tun: { a: -30, c: '#ff8a3d' }, kst: { a: 30, c: '#4fd6c8' }, sch: { a: 90, c: '#8fd16b' }, ges: { a: 150, c: '#c58cff' }, rep: { a: 210, c: '#ffb000' } };
+const CAT_COLOR = Object.fromEntries(Object.entries(BRANCH).map(([k, v]) => [k, v.c]));
+// Knoten mit Stufen: ein Symbol, unten „1/3“; liegt zwischen zwei Ästen (Winkel a)
+const GROUPS = { robo: { ids: ['robo_usb', 'robo_steck', 'robo_loet'], name: 'Robi', cat: 'rep', a: -120, tier: ['USB-Stick', 'Greifarm', 'Lötkopf'] } };
+const GROUP_OF = Object.fromEntries(Object.entries(GROUPS).flatMap(([g, G]) => G.ids.map((id) => [id, g])));
+const SYM = { start: '⭐', bauen: '🔧', riser: '🔌', cpustart: '🖥️', gpuminer: '🎮', windows: '🪟', linux: '🐧', image: '💾', fpga: '🧩', asic: '⛏️', firmware: '📟', fernwartung: '📡', skript: '📜', takt: '⏱️', biosmod: '🧬', autotuning: '🎛️', luefter: '🌀', asictakt: '⚙️', wasser: '💧', immersion: '🛢️', lastman: '⚡', abwaerme: '♨️', wartung: '🧹', loeten: '🔥', stecken: '🔍', hashboard: '💠', psumod: '🔋', boerse: '💱', limit: '📈', cold: '🧊', grosshandel: '📦', robo: '🤖' };
+const AT = { grosshandel: '2014-03-01', robo_usb: '2015-09-01', robo_steck: '2016-06-01', robo_loet: '2017-03-01', windows: '2010-11-01', wartung: '2010-10-20', loeten: '2010-11-15', stecken: '2011-03-01', gpuminer: '2010-10-25', boerse: '2010-11-01' }; // Platz im Jahresring für Knoten ohne Datum
 const ICON = {
   check: '<path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>',
   lock: '<rect x="6" y="11" width="12" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8.5 11V8.5a3.5 3.5 0 0 1 7 0V11" fill="none" stroke="currentColor" stroke-width="2"/>',
-  phone: '<rect x="8" y="3.5" width="8" height="17" rx="2" fill="none" stroke="currentColor" stroke-width="2"/>',
-  wip: '<path d="M4 20l6-6M14 4l6 6-8 8-6-6z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
 };
+const yearOf = (iso) => { const d = new Date(iso + (iso.length <= 7 ? '-01' : '')); return d.getUTCFullYear() + d.getUTCMonth() / 12 + (d.getUTCDate() - 1) / 365; };
+const dayYear = (day) => { const d = new Date(day * 864e5); return d.getUTCFullYear() + d.getUTCMonth() / 12 + (d.getUTCDate() - 1) / 365; };
+// Radius nach Zeit: je weiter außen, desto später. Gestaucht nach der Verteilung der Knoten (dichte Jahre bekommen Platz, leere fallen zusammen)
+const R0 = 96, NR = 24, RSPAN = 560, T0 = 2010.6, T1 = 2026;
+let rOf = (t) => R0 + ((t - T0) / (T1 - T0)) * RSPAN;
+const mkROf = (ts) => { const a = [...ts].sort((x, y) => x - y), n = a.length; const F = (t) => { if (t <= a[0]) return 0; if (t >= a[n - 1]) return 1; let i = 0; while (a[i + 1] < t) i++; const f = a[i + 1] > a[i] ? (t - a[i]) / (a[i + 1] - a[i]) : 0; return (i + f) / (n - 1); }; return (t) => R0 + RSPAN * (0.72 * F(Math.max(T0, t)) + 0.28 * Math.min(1, Math.max(0, (t - T0) / (T1 - T0)))); };
+const RAD = Math.PI / 180;
+const firstSentence = (t) => { const s = (String(t).match(/^.*?[.!?](?=\s|$)/) || [String(t)])[0]; return s.length > 170 ? s.slice(0, 165).replace(/\s+\S*$/, '') + ' …' : s; };
 
-// ---------- Layout: x nach Zeit, y nach Ast (mehrere Reihen je Ast, ohne Überlappung) ----------
+// ---------- Graph und Layout: Knoten (gebaute Fähigkeiten, Stufen-Gruppen, Start), Eltern = Voraussetzungen; ohne Voraussetzung hängt ein Knoten am Vorgänger seines Astes ----------
 function layout() {
-  const pos = {}, X = {};
-  const base = (k) => yearOf(k.from || AT[k.id] || '2010-10-15');
-  const order = [...TREE].sort((a, b) => base(a) - base(b));
-  const xOf = (k) => { if (X[k.id] != null) return X[k.id]; let x = xs(base(k)); for (const n of needsOf(k)) x = Math.max(x, xOf(SKILL[n]) + NW + 26); return (X[k.id] = x); }; // rechts von allen Voraussetzungen
-  const lanes = []; let y = PADT;
-  for (const [cat, color] of LANES) {
-    const rows = []; const list = order.filter((k) => k.cat === cat).map((k) => ({ k, x: xOf(k) })).sort((a, b) => a.x - b.x);
-    for (const it of list) { let r = rows.findIndex((last) => last + NW + 18 <= it.x); if (r < 0) { rows.push(0); r = rows.length - 1; } rows[r] = it.x; pos[it.k.id] = { x: it.x, y: y + r * ROWH, cat }; }
-    const hgt = Math.max(1, rows.length) * ROWH + 18; lanes.push({ cat, color, y, h: hgt }); y += hgt;
+  const N = {}, nodeOf = (id) => GROUP_OF[id] || id;
+  N.start = { id: 'start', cat: null, ids: [], par: [], kids: [], t: 2010.6, x: 0, y: 0, r: 0, a: 0 };
+  for (const k of TREE) {
+    const id = nodeOf(k.id), G = GROUPS[id]; N[id] ||= { id, cat: G?.cat || k.cat, ids: G?.ids || [k.id], par: [], kids: [], t: Infinity, group: !!G };
+    const n = N[id]; n.t = Math.min(n.t, yearOf(k.from || AT[k.id] || '2010-10-15'));
+    for (const p of needsOf(k)) { const pid = nodeOf(p); if (pid !== id && !n.par.includes(pid)) n.par.push(pid); }
   }
-  const maxX = Math.max(...Object.values(pos).map((p) => p.x)) + NW + 60;
-  return { pos, lanes, W: maxX, H: y + 10 };
+  // ohne Voraussetzung: am Vorgänger im eigenen Ast (der erste am Start, ein später erster am letzten früheren Knoten des Astes)
+  for (const cat of Object.keys(BRANCH)) { let prev = null; const br = Object.values(N).filter((x) => x.cat === cat && !x.group); for (const n of br.filter((x) => !x.par.length).sort((a, b) => a.t - b.t)) { const up = (x, seen = new Set()) => !seen.has(x.id) && (seen.add(x.id), x.par.some((p) => p === n.id || (N[p] && up(N[p], seen)))), before = br.filter((x) => x !== n && x.par.length && x.t < n.t && !up(x)).sort((a, b) => b.t - a.t)[0]; /* ohne Kreis */ n.par = [prev || (before ? before.id : 'start')]; n.trunk = true; prev = n.id; } }
+  rOf = mkROf(Object.values(N).filter((n) => n.id !== 'start').map((n) => n.t));
+  for (const n of Object.values(N)) for (const p of n.par) N[p].kids.push(n.id);
+  // Platzieren: Radius nach Zeit (mindestens eine Stufe weiter außen als die Eltern), Winkel nahe den Eltern im eigenen Ast, ohne Überlappung
+  const placed = [N.start], done = new Set(['start']), todo = Object.values(N).filter((n) => n.id !== 'start').sort((a, b) => a.t - b.t);
+  while (todo.length) {
+    const i = todo.findIndex((n) => n.par.every((p) => done.has(p))); const n = todo.splice(i < 0 ? 0 : i, 1)[0];
+    const B = n.group ? { a: GROUPS[n.id].a, w: 12 } : { a: BRANCH[n.cat].a, w: 26 }, ps = n.par.map((p) => N[p]).filter((p) => p.id !== 'start'), own = ps.filter((p) => p.cat === n.cat || n.group), rel = (a) => ((a - B.a + 540) % 360) - 180;
+    let pref = B.a + (own.length ? own : ps).reduce((s, p) => s + rel(p.a), 0) / Math.max(1, (own.length ? own : ps).length); pref = ps.length ? Math.max(B.a - B.w, Math.min(B.a + B.w, pref)) : B.a; // Eltern in anderen Ästen: an den Rand zu ihnen hin
+    let r = Math.max(rOf(n.t), ...n.par.map((p) => (N[p].r || 0) + 60)), ok = false;
+    for (let tries = 0; tries < 30 && !ok; tries++, r += 24) {
+      const cands = [0]; for (let d = 5; d <= 2 * B.w; d += 5) cands.push(d, -d);
+      for (const d of cands) { const a = pref + d; if (a < B.a - B.w || a > B.a + B.w) continue; const x = Math.cos(a * RAD) * r, y = Math.sin(a * RAD) * r; if (placed.every((p) => Math.hypot(p.x - x, p.y - y) >= (p.id === 'start' ? 84 : 2 * NR + 18))) { Object.assign(n, { x, y, r, a }); ok = true; break; } }
+    }
+    if (!ok) Object.assign(n, { r, a: pref, x: Math.cos(pref * RAD) * r, y: Math.sin(pref * RAD) * r });
+    placed.push(n); done.add(n.id);
+  }
+  const all = Object.values(N), rMax = Math.max(...all.map((n) => n.r)) + 70;
+  const tip = {}; for (const cat of Object.keys(BRANCH)) tip[cat] = Math.max(R0, ...all.filter((n) => n.cat === cat && !n.group).map((n) => n.r)) + 52;
+  return { N, rMax, tip, minX: Math.min(...all.map((n) => n.x)) - 120, maxX: Math.max(...all.map((n) => n.x)) + 120, minY: Math.min(...all.map((n) => n.y)) - 120, maxY: Math.max(...all.map((n) => n.y)) + 120 };
 }
 let LAYOUT = null;
 export const skLayout = () => (LAYOUT ||= layout()); // für Tests
 
+// Zustand eines Knotens: Einzel-Fähigkeit wie skillState; Stufen-Gruppe nach der nächsten offenen Stufe (n = gelernte Stufen)
+function nodeState(g, n) {
+  if (n.id === 'start') return { st: 'known', n: 0, of: 0, cur: null };
+  const kn = n.ids.filter((id) => g.knows(id)).length, cur = n.ids.find((id) => !g.knows(id)) || n.ids[n.ids.length - 1], s0 = g.skillState(cur);
+  if (!n.group) return { ...s0, n: kn, of: 1, cur };
+  return { st: kn === n.ids.length ? 'known' : kn && !['open', 'learning'].includes(s0.st) ? 'known' : s0.st, why: s0.why, n: kn, of: n.ids.length, cur, part: kn > 0 && kn < n.ids.length };
+}
+// Nebel: gelernte Knoten, ihre direkten Nachbarn, alles Lernbare und der gerade gezeigte Knoten
+function fog(g, L, v) {
+  const S = {}, known = new Set(['start']), vis = new Set(['start']);
+  for (const n of Object.values(L.N)) { S[n.id] = nodeState(g, n); if (n.id !== 'start' && (S[n.id].st === 'known' || S[n.id].n > 0)) known.add(n.id); }
+  for (const n of Object.values(L.N)) if (known.has(n.id) || n.par.some((p) => known.has(p)) || n.kids.some((c) => known.has(c)) || ['open', 'learning'].includes(S[n.id].st) || v.reveal === n.id) vis.add(n.id);
+  return { S, known, vis };
+}
+const pctOf = (s, L0) => (L0 ? Math.round(Math.min(1, (s.day - L0.d0) / Math.max(1, L0.until - L0.d0)) * 100) : 0);
+
 export function skillsMenu(ui, sel = undefined) {
   const g = ui.g; g.learned?.('skills');
-  LAYOUT ||= layout();
-  const v = (ui.skView ||= { k: 1, tx: null, ty: 0, sel: null });
-  if (sel !== undefined) v.sel = sel;
-  const body = h(`<div class="skt"><div class="skt-head"></div><div class="skt-body"><div class="skt-view" tabindex="0"></div><div class="skt-det hidden"></div></div><div class="skt-foot">Ziehen = verschieben · Mausrad oder zwei Finger = zoomen · Knoten antippen = Details</div></div>`);
+  const L = (LAYOUT ||= layout());
+  const v = (ui.skView ||= { k: 1, tx: null, ty: 0, tip: null, pin: false });
+  v.tip = null; v.pin = false; v.panel = null; v.reveal = sel ? GROUP_OF[sel] || sel : null; v.seen = null;
+  const body = h(`<div class="skt"><div class="skt-head"></div><div class="skt-view" tabindex="0"><div class="skt-tip hidden" role="dialog"></div><div class="skt-panel hidden"></div><div class="skt-foot">Ziehen = verschieben · Rad oder zwei Finger = zoomen · Symbol antippen = Details</div></div></div>`);
   ui.openModal(body, 'skt-card', 'skills');
-  renderHead(ui, body.querySelector('.skt-head'));
   const view = body.querySelector('.skt-view');
-  const svg = sv('svg', { class: 'skt-svg', width: '100%', height: '100%' }), root = sv('g'); svg.append(root); view.append(svg);
-  drawTree(ui, root);
+  const svg = sv('svg', { class: 'skt-svg', width: '100%', height: '100%' }), root = sv('g'); svg.append(root); view.prepend(svg);
   const vw = () => view.clientWidth || 900, vh = () => view.clientHeight || 500;
-  if (v.tx == null) { const tx0 = xs(dayYear(g.s.day)); v.k = 0.82; v.tx = Math.min(0, vw() * 0.22 - tx0 * v.k); v.ty = 0; } // lesbar starten, „Heute“ links; herauszoomen geht mit Rad/Pinch
-  const clamp = () => { const k = v.k; v.tx = Math.min(80, Math.max(vw() - LAYOUT.W * k - 80, v.tx)); v.ty = Math.min(60, Math.max(Math.min(0, vh() - LAYOUT.H * k - 60), v.ty)); };
-  const apply = () => { clamp(); root.setAttribute('transform', `translate(${v.tx.toFixed(1)},${v.ty.toFixed(1)}) scale(${v.k.toFixed(3)})`); };
-  const zoomAt = (px, py, f) => { const k1 = Math.max(0.35, Math.min(1.8, v.k * f)); v.tx = px - ((px - v.tx) * k1) / v.k; v.ty = py - ((py - v.ty) * k1) / v.k; v.k = k1; apply(); };
-  apply();
-  // Ziehen, Pinch, Rad, Tippen (Maus, Touch, Stift)
+  const clamp = () => { const k = v.k; v.tx = Math.min(vw() / 2 - L.minX * k, Math.max(vw() / 2 - L.maxX * k, v.tx)); v.ty = Math.min(vh() / 2 - L.minY * k, Math.max(vh() / 2 - L.maxY * k, v.ty)); };
+  const apply = () => { clamp(); root.setAttribute('transform', `translate(${v.tx.toFixed(1)},${v.ty.toFixed(1)}) scale(${v.k.toFixed(3)})`); placeTip(ui); };
+  const zoomAt = (px, py, f) => { const k1 = Math.max(0.35, Math.min(2.2, v.k * f)); v.tx = px - ((px - v.tx) * k1) / v.k; v.ty = py - ((py - v.ty) * k1) / v.k; v.k = k1; apply(); };
+  ui.skTree = { body, root, view, apply, L };
+  renderHead(ui); drawTree(ui);
+  // Beim Öffnen: auf den gezeigten, sonst einen lernbaren Knoten, sonst den zuletzt gelernten zentrieren
+  const F = fog(g, L, v), known = g.s.sk?.known || {};
+  const last = Object.keys(known).filter((id) => L.N[GROUP_OF[id] || id]).sort((a, b) => known[b] - known[a])[0], lastN = last ? GROUP_OF[last] || last : 'start';
+  const open = Object.values(L.N).filter((n) => F.S[n.id].st === 'open' && g.skillWays(F.S[n.id].cur).some((w) => w.ok)).sort((a, b) => Math.hypot(a.x - L.N[lastN].x, a.y - L.N[lastN].y) - Math.hypot(b.x - L.N[lastN].x, b.y - L.N[lastN].y))[0];
+  const tgt = L.N[v.reveal] || (last && g.s.day - known[last] <= 3 ? L.N[lastN] : open || L.N[lastN]);
+  const ext = Math.max(...[...F.vis].map((id) => L.N[id].r)) + 80; v.k = Math.max(vw() < 600 ? 0.62 : 0.74, Math.min(1.05, Math.min(vw(), vh()) / (2 * ext))); // aufgedeckten Teil zeigen, Symbole lesbar
+  v.tx = vw() / 2 - tgt.x * v.k; v.ty = vh() / 2 - tgt.y * v.k; apply();
+  if (L.N[v.reveal]) showTip(ui, v.reveal, true);
+  // Ziehen, Pinch, Rad, Tippen (Maus, Touch, Stift); Hover zeigt den Tooltip nur mit der Maus
   const pts = new Map(); let moved = 0, pinch = null;
-  view.addEventListener('pointerdown', (e) => { view.setPointerCapture?.(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); moved = 0; if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), k: v.k }; } });
+  view.addEventListener('pointerdown', (e) => { if (e.target.closest('.skt-tip, .skt-panel')) return; view.setPointerCapture?.(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); moved = 0; if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), k: v.k }; } });
   view.addEventListener('pointermove', (e) => {
     const p = pts.get(e.pointerId); if (!p) return; const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY; moved += Math.abs(dx) + Math.abs(dy);
     if (pts.size === 1) { v.tx += dx; v.ty += dy; apply(); }
     else if (pts.size === 2 && pinch) { const [a, b] = [...pts.values()], r = view.getBoundingClientRect(), d = Math.hypot(a.x - b.x, a.y - b.y); zoomAt((a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top, (pinch.k * (d / pinch.d)) / v.k); }
   });
   const up = (e) => {
-    const wasTap = pts.size === 1 && moved < 8; pts.delete(e.pointerId); if (pts.size < 2) pinch = null;
-    if (!wasTap) return; const el = document.elementFromPoint(e.clientX, e.clientY)?.closest?.('[data-sk]'); if (el) select(ui, el.dataset.sk); else if (v.sel) select(ui, null);
+    if (!pts.has(e.pointerId)) return; const wasTap = pts.size === 1 && moved < 8; pts.delete(e.pointerId); if (pts.size < 2) pinch = null; if (!wasTap) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY)?.closest?.('[data-sk]'); if (el) { showTip(ui, el.dataset.sk, true); ui.audio?.click?.(); } else hideTip(ui, true);
   };
   view.addEventListener('pointerup', up); view.addEventListener('pointercancel', (e) => { pts.delete(e.pointerId); pinch = null; });
-  view.addEventListener('wheel', (e) => { e.preventDefault(); const r = view.getBoundingClientRect(); zoomAt(e.clientX - r.left, e.clientY - r.top, e.deltaY < 0 ? 1.12 : 1 / 1.12); }, { passive: false });
-  view.addEventListener('keydown', (e) => { const st = { ArrowLeft: [60, 0], ArrowRight: [-60, 0], ArrowUp: [0, 60], ArrowDown: [0, -60] }[e.key]; if (st) { v.tx += st[0]; v.ty += st[1]; apply(); e.preventDefault(); } if (e.key === '+' || e.key === '-') zoomAt(vw() / 2, vh() / 2, e.key === '+' ? 1.15 : 1 / 1.15); });
-  ui.skTree = { body, root, apply };
-  if (v.sel) showDetail(ui, v.sel); else ui.skTree.body.querySelector('.skt-det').classList.add('hidden');
+  view.addEventListener('wheel', (e) => { if (e.target.closest('.skt-tip, .skt-panel')) return; e.preventDefault(); const r = view.getBoundingClientRect(); zoomAt(e.clientX - r.left, e.clientY - r.top, e.deltaY < 0 ? 1.12 : 1 / 1.12); }, { passive: false });
+  view.addEventListener('keydown', (e) => { if (e.target.closest?.('.skt-tip, .skt-panel')) return; const st = { ArrowLeft: [60, 0], ArrowRight: [-60, 0], ArrowUp: [0, 60], ArrowDown: [0, -60] }[e.key]; if (st) { v.tx += st[0]; v.ty += st[1]; apply(); e.preventDefault(); } if (e.key === '+' || e.key === '-') zoomAt(vw() / 2, vh() / 2, e.key === '+' ? 1.15 : 1 / 1.15); const n = e.target.closest?.('[data-sk]'); if (n && (e.key === 'Enter' || e.key === ' ')) { showTip(ui, n.dataset.sk, true); e.preventDefault(); } });
+  const tipEl = view.querySelector('.skt-tip'); tipEl.addEventListener('pointerenter', () => clearTimeout(v.hideT)); tipEl.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') hideTip(ui); });
 }
-// Details auf/zu (Esc schließt zuerst die Details – main.js über ui.escLocal)
-function select(ui, id) { ui.skView.sel = id; if (!ui.skTree) return; for (const n of ui.skTree.root.querySelectorAll('.skn')) n.classList.toggle('sel', n.dataset.sk === id); if (id) showDetail(ui, id); else ui.skTree.body.querySelector('.skt-det').classList.add('hidden'); }
-export function skCloseDetail(ui) { if (ui.modalKind !== 'skills' || !ui.skView?.sel) return false; select(ui, null); return true; }
-export function skRefresh(ui) { if (ui.modalKind !== 'skills' || !ui.skTree) return; renderHead(ui, ui.skTree.body.querySelector('.skt-head')); ui.skTree.root.innerHTML = ''; drawTree(ui, ui.skTree.root); ui.skTree.apply(); if (ui.skView.sel) showDetail(ui, ui.skView.sel); }
+// Tooltip und Panel: Esc schließt zuerst sie (main.js über ui.escLocal)
+export function skCloseDetail(ui) { if (ui.modalKind !== 'skills' || !ui.skTree) return false; const v = ui.skView; if (v?.panel) { closePanel(ui); return true; } if (v?.tip) { hideTip(ui, true); return true; } return false; }
+export function skRefresh(ui) { if (ui.modalKind !== 'skills' || !ui.skTree) return; renderHead(ui); drawTree(ui); if (ui.skView.tip) showTip(ui, ui.skView.tip, ui.skView.pin); }
 
-function renderHead(ui, el) {
-  const g = ui.g, s = g.s, L = s.sk?.learning, T = s.sk?.teach;
-  const pot = (p) => { const e = g.epProgress(p), free = g.fpFree(p); return `<div class="skh-pot ${free ? 'has' : ''}"><div class="skh-pn"><b>${POTS[p].name}</b><span>${free ? `${free} ${free === 1 ? 'Punkt' : 'Punkte'} frei` : 'kein Punkt frei'}</span></div><div class="skh-bar"><i style="width:${e.pc}%"></i></div><div class="skh-ep">${e.cur.toLocaleString('de-DE')} / ${e.need.toLocaleString('de-DE')} Erfahrung bis zum nächsten Punkt</div></div>`; };
-  const now = L ? (() => { const k = SKILL[L.id], tot = Math.max(1, L.until - L.d0), pc = Math.round(Math.min(1, (s.day - L.d0) / tot) * 100), left = Math.max(0, L.until - s.day); return `<div class="skh-now"><span class="skh-k">${{ forum: 'Im Forum', book: 'Buch', course: 'Kurs' }[L.via] || 'Gerade'}</span><b>${esc(k?.name || L.id)}</b><div class="skh-bar"><i style="width:${pc}%"></i></div><span class="skh-left">noch ${left} ${left === 1 ? 'Tag' : 'Tage'}${s.sk.queue.length ? ` · danach: ${esc(s.sk.queue.map((q) => SKILL[q.id]?.name || q.id).join(', '))}` : ''}</span><button class="btn small skh-stop">Abbrechen</button></div>`; })() : `<div class="skh-now idle"><span class="skh-k">Gerade</span><b>Nichts in Arbeit</b><span class="skh-left">Wähl unten einen leuchtenden Knoten und fang an.</span></div>`;
-  const teach = T ? `<div class="skh-teach">${esc(TEACHERS[T.who]?.name || T.who)} bringt dir „${esc(SKILL[T.id]?.name || T.id)}“ bei – morgen kannst du es.</div>` : '';
-  el.innerHTML = `<div class="skh-t"><h2>Fähigkeiten</h2><span class="skh-sub">Was du kannst, schaltet Handgriffe frei – nichts wirkt von allein.</span><button class="modal-x skh-x" title="Schließen (T oder Esc)">✕</button></div><div class="skh-row">${['w', 'r', 'g'].map(pot).join('')}${now}</div>${teach}`;
+// Leiste oben (schmal): drei Erfahrungstöpfe mit freien Punkten, was gerade gelernt wird, Geld
+function renderHead(ui) {
+  const g = ui.g, s = g.s, el = ui.skTree.body.querySelector('.skt-head'), L0 = s.sk?.learning, T = s.sk?.teach;
+  const pot = (p) => { const e = g.epProgress(p), free = g.fpFree(p); return `<div class="skh-pot ${free ? 'has' : ''}" title="${esc(`${POTS[p].name}: ${e.cur.toLocaleString('de-DE')} / ${e.need.toLocaleString('de-DE')} Erfahrung bis zum nächsten Punkt`)}"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">${POT_SVG[p]}</svg><b>${POTS[p].name}</b><span class="skh-bar"><i style="width:${e.pc}%"></i></span><em>${free ? `${free} frei` : `${e.pc} %`}</em></div>`; };
+  const k = L0 && SKILL[L0.id], left = L0 ? Math.max(0, L0.until - s.day) : 0;
+  const now = L0 ? `<div class="skh-now"><span>${{ forum: 'Forum', book: 'Buch', course: 'Kurs' }[L0.via] || 'Lernt'}</span><b>${esc(k?.name || L0.id)}</b><span class="skh-bar"><i style="width:${pctOf(s, L0)}%"></i></span><em>noch ${left} ${left === 1 ? 'Tag' : 'Tage'}${s.sk.queue.length ? ` · +${s.sk.queue.length}` : ''}</em><button class="btn small skh-stop" title="Abbrechen">✕</button></div>` : T ? `<div class="skh-now"><span>Lehrstunde</span><b>${esc(SKILL[T.id]?.name || T.id)}</b><em>${esc(TEACHERS[T.who]?.name || T.who)} · morgen</em></div>` : '<div class="skh-now idle"><span>Gerade</span><b>nichts in Arbeit</b></div>';
+  el.innerHTML = `<h2>Fähigkeiten</h2>${['w', 'r', 'g'].map(pot).join('')}${now}<div class="skh-cash">${fmtUSD(s.cash)}</div><button class="modal-x skh-x" title="Schließen (T oder Esc)">✕</button>`;
   el.querySelector('.skh-x').onclick = () => ui.resume();
   const st = el.querySelector('.skh-stop'); if (st) st.onclick = () => { g.stopLearn(); ui.toast('Abgebrochen. Ein Buch bleibt, im Forum fängst du neu an.', 'info', 3500); skRefresh(ui); };
 }
 
-function drawTree(ui, root) {
-  const g = ui.g, { pos, lanes, W, H } = LAYOUT, defs = sv('defs');
-  defs.innerHTML = '<filter id="skglow" x="-20%" y="-40%" width="140%" height="180%"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>';
-  root.append(defs);
-  // Äste als Bänder, Jahre als Raster, „Heute“
-  for (const l of lanes) { root.append(sv('rect', { x: 0, y: l.y - 8, width: W, height: l.h - 6, rx: 14, fill: l.color, 'fill-opacity': 0.045 })); const t = sv('text', { x: 14, y: l.y + 12, class: 'skt-lane', fill: l.color }); t.textContent = SKILL_CAT[l.cat].name; root.append(t); }
-  for (let y = 2011; y <= 2026; y++) { const x = xs(y); if (x > W) break; root.append(sv('line', { x1: x, y1: 24, x2: x, y2: H, class: 'skt-yl' })); const t = sv('text', { x: x + 4, y: 18, class: 'skt-year' }); t.textContent = y; root.append(t); }
-  const tx = xs(dayYear(g.s.day)); root.append(sv('line', { x1: tx, y1: 22, x2: tx, y2: H, class: 'skt-now' })); const nt = sv('text', { x: tx + 5, y: 34, class: 'skt-nowt' }); nt.textContent = 'Heute'; root.append(nt);
-  // Kanten (Voraussetzungen, auch quer zwischen den Ästen)
-  const st = {}; for (const k of TREE) st[k.id] = g.skillState(k.id).st;
+function drawTree(ui) {
+  const g = ui.g, s = g.s, { root, L } = ui.skTree, v = ui.skView, { N } = L, F = fog(g, L, v);
+  const seen = v.seen || { known: new Set(F.known), vis: new Set(F.vis) }, newK = [...F.known].filter((id) => !seen.known.has(id)), newV = [...F.vis].filter((id) => !seen.vis.has(id));
+  v.seen = { known: new Set(F.known), vis: new Set(F.vis) }; v.fog = F;
+  root.innerHTML = '';
+  const defs = sv('defs'); defs.innerHTML = '<filter id="skglow" filterUnits="userSpaceOnUse" x="-3000" y="-3000" width="6000" height="6000"><feGaussianBlur stdDeviation="3.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter><radialGradient id="skstart"><stop offset="0" stop-color="#ffe9a8"/><stop offset="1" stop-color="#b87a12"/></radialGradient>'; root.append(defs);
+  // Äste als schwache Sektoren, Jahresringe, „Heute“
+  const vr = {}; for (const cat of Object.keys(BRANCH)) vr[cat] = Math.max(R0 - 10, ...Object.values(N).filter((n) => n.cat === cat && !n.group && F.vis.has(n.id)).map((n) => n.r)) + 46; // Ast so weit, wie er aufgedeckt ist
+  for (const [cat, B] of Object.entries(BRANCH)) { const r = vr[cat] + 40, a0 = (B.a - 30) * RAD, a1 = (B.a + 30) * RAD; root.append(sv('path', { d: `M0,0 L${Math.cos(a0) * r},${Math.sin(a0) * r} A${r},${r} 0 0 1 ${Math.cos(a1) * r},${Math.sin(a1) * r} Z`, fill: B.c, 'fill-opacity': 0.035, class: 'skt-sec' })); }
+  for (const y of [2011, 2012, 2013, 2015, 2017, 2019, 2021, 2023, 2025]) { const r = rOf(y); if (r > L.rMax) break; root.append(sv('circle', { cx: 0, cy: 0, r, class: 'skt-ring' })); const t = sv('text', { x: Math.cos(60 * RAD) * r + 4, y: Math.sin(60 * RAD) * r, class: 'skt-year' }); t.textContent = y; root.append(t); }
+  const rn = rOf(dayYear(s.day)); root.append(sv('circle', { cx: 0, cy: 0, r: rn, class: 'skt-now' })); const nt = sv('text', { x: Math.cos(120 * RAD) * rn - 6, y: Math.sin(120 * RAD) * rn + 14, class: 'skt-nowt', 'text-anchor': 'end' }); nt.textContent = 'Heute'; root.append(nt);
+  for (const [cat, B] of Object.entries(BRANCH)) { const r = vr[cat] + 18, cx = Math.cos(B.a * RAD), t = sv('text', { x: cx * r, y: Math.sin(B.a * RAD) * r + 4, class: 'skt-lane', fill: B.c, 'text-anchor': cx > 0.3 ? 'start' : cx < -0.3 ? 'end' : 'middle' }); /* Text zeigt vom Start weg */ t.textContent = SKILL_CAT[cat].name; root.append(t); }
+  // Linien: leuchten in der Astfarbe, wenn der Weg frei ist (gelernt → gelernt/lernbar), sonst gedimmt und gestrichelt
   const eg = sv('g', { class: 'skt-edges' }); root.append(eg);
-  for (const k of TREE) for (const n of needsOf(k)) {
-    const a = pos[n], b = pos[k.id]; if (!a || !b) continue;
-    const x1 = a.x + NW, y1 = a.y + NH / 2, x2 = b.x, y2 = b.y + NH / 2, dx = Math.max(30, (x2 - x1) * 0.5);
-    const on = st[n] === 'known', both = on && st[k.id] === 'known';
-    eg.append(sv('path', { d: `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`, class: `skt-e ${both ? 'on' : on ? 'half' : ''}`, stroke: both || on ? CAT_COLOR[k.cat] : '#3a414e' }));
+  for (const n of Object.values(N)) for (const p of n.par) {
+    if (!F.vis.has(n.id) || !F.vis.has(p)) continue; const a = N[p], st = F.S[n.id].st, free = F.known.has(p) && (F.known.has(n.id) || st === 'open' || st === 'learning'), col = CAT_COLOR[n.cat] || '#ffd25c';
+    const e = sv('line', { x1: a.x, y1: a.y, x2: n.x, y2: n.y, class: `skt-e ${free ? (F.known.has(n.id) ? 'on' : 'free') : 'lock'}`, stroke: free ? col : '#3a414e' });
+    if (newK.includes(n.id) || (newV.includes(n.id) && F.known.has(p))) { e.classList.add('draw'); e.setAttribute('pathLength', 1); } // Linie zeichnet sich zum neuen Nachbarn
+    eg.append(e);
   }
-  // Knoten
-  const L = g.s.sk?.learning;
-  for (const k of TREE) {
-    const p = pos[k.id], s0 = st[k.id], col = CAT_COLOR[k.cat], later = s0 === 'later', grp = sv('g', { class: `skn st-${s0} ${ui.skView?.sel === k.id ? 'sel' : ''}`, 'data-sk': k.id, transform: `translate(${p.x},${p.y})` });
-    const fill = s0 === 'known' ? col : '#151922', fo = s0 === 'known' ? 0.22 : 1;
-    if (s0 === 'open') grp.append(sv('rect', { x: -3, y: -3, width: NW + 6, height: NH + 6, rx: 14, fill: 'none', stroke: col, 'stroke-opacity': 0.55, filter: 'url(#skglow)', class: 'skn-glow' }));
-    grp.append(sv('rect', { width: NW, height: NH, rx: 11, fill, 'fill-opacity': fo, stroke: s0 === 'known' || s0 === 'open' || s0 === 'learning' ? col : '#3b4252', 'stroke-width': s0 === 'open' ? 2 : 1.4, 'stroke-dasharray': s0 === 'wip' ? '5 4' : s0 === 'learning' ? '7 3' : 'none', class: 'skn-box' }));
-    if (s0 === 'learning' && L?.id === k.id) { const pc = Math.min(1, (g.s.day - L.d0) / Math.max(1, L.until - L.d0)); grp.append(sv('rect', { x: 8, y: NH - 6, width: (NW - 16) * pc, height: 3, rx: 1.5, fill: col })); }
-    const name = later ? ['???'] : lines2(k.name);
-    name.forEach((ln, i) => { const t = sv('text', { x: 12, y: name.length === 1 ? 28 : 19 + i * 15, class: 'skn-t' }); t.textContent = ln; grp.append(t); });
-    if (later) { const t = sv('text', { x: 12, y: 40, class: 'skn-d' }); t.textContent = k.from ? 'ab ' + k.from.slice(0, 4) : 'später'; grp.append(t); }
-    const ic = { known: 'check', soon: 'lock', later: 'lock', wip: 'wip', auto: 'phone' }[s0];
-    if (ic) { const gi = sv('g', { transform: `translate(${NW - 21},${NH / 2 - 8}) scale(0.66)`, class: 'skn-i', color: s0 === 'known' ? col : '#6c7586' }); gi.innerHTML = ICON[ic]; grp.append(gi); }
-    else if (s0 === 'open') grp.append(sv('circle', { cx: NW - 15, cy: NH / 2, r: 5, fill: col, class: 'skn-dot' }));
+  // Knoten: großes Symbol, Farbe/Rahmen nach Zustand; Stufen unten „1/3“
+  const L0 = s.sk?.learning;
+  for (const n of Object.values(N)) {
+    if (!F.vis.has(n.id)) continue;
+    const S = F.S[n.id], st = n.id === 'start' ? 'start' : S.st, col = CAT_COLOR[n.cat] || '#ffd25c', far = st === 'later', R = n.id === 'start' ? 30 : NR;
+    const grp = sv('g', { class: `skn st-${st}${S.part ? ' part' : ''}${v.tip === n.id ? ' sel' : ''}`, 'data-sk': n.id, transform: `translate(${n.x.toFixed(1)},${n.y.toFixed(1)})`, tabindex: 0, role: 'button', 'aria-label': n.id === 'start' ? 'Start' : n.group ? `${GROUPS[n.id].name} ${S.n}/${S.of}` : SKILL[n.id]?.name || n.id });
+    const inner = sv('g', { class: 'skn-in' }); grp.append(inner);
+    if (st === 'open') inner.append(sv('circle', { r: R + 6, fill: 'none', stroke: col, 'stroke-width': 2, class: 'skn-pulse' }));
+    inner.append(sv('circle', { r: R, class: 'skn-c', fill: n.id === 'start' ? 'url(#skstart)' : st === 'known' ? col : '#121722', 'fill-opacity': st === 'known' ? 0.3 : 1, stroke: st === 'known' || st === 'open' || st === 'learning' ? col : '#353c49', 'stroke-width': st === 'open' ? 2.6 : 2 }));
+    if (st === 'learning') { const pc = L0 && n.ids.includes(L0.id) ? pctOf(s, L0) : s.sk?.teach && n.ids.includes(s.sk.teach.id) ? 50 : 8; inner.append(sv('circle', { r: R + 5, fill: 'none', stroke: col, 'stroke-width': 3.5, pathLength: 100, 'stroke-dasharray': `${pc} 100`, transform: 'rotate(-90)', class: 'skn-ring' })); }
+    const t = sv('text', { class: `skn-sym${far ? ' far' : ''}`, 'text-anchor': 'middle', 'dominant-baseline': 'central', y: 1, 'font-size': n.id === 'start' ? 26 : 22 }); t.textContent = far ? '?' : SYM[n.id] || '•'; inner.append(t);
+    if (n.group) { const tt = sv('text', { class: 'skn-stage', 'text-anchor': 'middle', y: R + 15 }); tt.textContent = `${S.n}/${S.of}`; inner.append(tt); }
+    if (n.id === 'start') { const tt = sv('text', { class: 'skn-stage', 'text-anchor': 'middle', y: R + 16 }); tt.textContent = 'Start'; inner.append(tt); }
+    if (newK.includes(n.id)) { grp.classList.add('pop'); grp.append(sv('circle', { r: R, fill: 'none', stroke: col, 'stroke-width': 3, class: 'skn-burst' })); }
+    else if (newV.includes(n.id)) grp.classList.add('reveal');
+    grp.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse' && !v.pin) { clearTimeout(v.hideT); v.showT = setTimeout(() => showTip(ui, n.id, false), 110); } });
+    grp.addEventListener('pointerleave', (e) => { clearTimeout(v.showT); if (e.pointerType === 'mouse') hideTip(ui); });
+    grp.addEventListener('focus', () => { if (!v.pin) showTip(ui, n.id, false); });
     root.append(grp);
   }
+  if (newK.length) ui.audio?.fanfare?.(); else if (newV.length) ui.audio?.install?.();
+  setTimeout(() => root.querySelectorAll('.draw, .pop, .reveal').forEach((x) => { x.classList.remove('draw', 'pop', 'reveal'); x.removeAttribute('pathLength'); }), 1600);
 }
 
-const STATE_TXT = { known: ['Gelernt', 'ok'], open: ['Jetzt lernbar', 'warn'], learning: ['Wird gelernt', 'warn'], soon: ['Bald', 'idle'], later: ['Später', 'idle'], wip: ['Bald im Spiel', 'idle'], auto: ['Kommt per Handy', 'idle'] };
-function showDetail(ui, id) {
-  const g = ui.g, s = g.s, k = SKILL[id], el = ui.skTree?.body.querySelector('.skt-det'); if (!k || !el) return;
-  const st = g.skillState(id), [stl, stc] = STATE_TXT[st.st] || ['', 'idle'], col = CAT_COLOR[k.cat], later = st.st === 'later';
-  const needs = needsOf(k).map((n) => `<span class="skd-need ${g.knows(n) ? 'ok' : ''}" data-go="${n}">${esc(SKILL[n]?.name || n)}</span>`).join('');
-  el.innerHTML = `<div class="skd-h"><span class="skd-cat" style="--c:${col}">${esc(SKILL_CAT[k.cat].name)} · ${esc(k.feel)}</span><button class="modal-x skd-x" title="Details schließen (Esc)">✕</button></div>
-    <h3>${later ? '???' : esc(k.name)}</h3><span class="badge ${stc}"><i></i>${stl}${st.why ? ' · ' + esc(st.why) : ''}</span>
-    ${later ? `<p class="skd-p">Noch zu weit weg${k.from ? ` – frühestens ${k.from.slice(0, 4)}` : ''}. Je weiter du kommst, desto mehr siehst du.</p>` : `<p class="skd-p">${esc(k.desc)}</p>${k.use ? `<div class="skd-kv"><span>Wo</span><b>${esc(k.use)}</b></div>` : ''}${k.hint ? `<div class="skd-kv"><span>Lohnt sich</span><b>${esc(k.hint)}</b></div>` : ''}`}
-    ${needs ? `<div class="skd-needs"><span>Braucht</span>${needs}</div>` : ''}
-    ${k.soon && !later ? `<div class="skd-soon">${esc(k.soon)} – kommt mit einem späteren Update. Lernen kannst du es dann.</div>` : ''}
-    <div class="skd-ways"></div>`;
-  el.classList.remove('hidden');
-  el.querySelector('.skd-x').onclick = () => select(ui, null);
-  el.querySelectorAll('[data-go]').forEach((n) => (n.onclick = () => select(ui, n.dataset.go)));
-  const ways = el.querySelector('.skd-ways');
-  if (st.st === 'known') { const how = s.sk.src[id] || ''; ways.append(h(`<div class="skd-done">Gelernt am ${fmtDate(s.sk.known[id])}${how ? ` · ${esc({ pts: 'mit Punkten', forum: 'im Forum', book: 'aus dem Buch', course: 'im Kurs', msg: 'per Handy', migr: 'schon früher' }[how] || (how.startsWith('person:') ? 'bei ' + (TEACHERS[how.slice(7)]?.name || how.slice(7)) : ''))}` : ''}</div>`)); if (k.where) { const b = h('<button class="btn primary wide">Zeig mir wo</button>'); b.onclick = () => showWhere(ui, k); ways.append(b); } return; }
-  if (later || st.st === 'auto') return;
-  const L = s.sk.learning;
-  if (st.st === 'learning' && L?.id === id) { const left = Math.max(0, L.until - s.day); ways.append(h(`<div class="skd-done">${{ forum: 'Du liest im Forum mit', book: 'Du liest das Buch', course: 'Du bist im Kurs' }[L.via] || 'Wird gelernt'} – noch ${left} ${left === 1 ? 'Tag' : 'Tage'}.</div>`)); return; }
-  if (st.st === 'learning') { ways.append(h(`<div class="skd-done">${s.sk.teach?.id === id ? 'Die Lehrstunde ist morgen fertig.' : 'Steht in der Warteschlange.'}</div>`)); return; }
-  ways.append(h('<div class="skd-wh">So lernst du es</div>'));
-  for (const w of g.skillWays(id)) {
-    const b = h(`<button class="skd-way ${w.ok ? '' : 'no'}" ${w.ok ? '' : 'disabled'}><span class="skd-wi">${WAY_IC[w.via] || ''}</span><span class="skd-wt"><b>${esc(w.label)}</b><small>${esc(w.ok || st.st !== 'open' ? w.sub : w.why)}</small></span></button>`);
-    b.onclick = () => { const r = g.startLearn(id, w.i); if (r) { ui.toast(esc(r), 'bad', 3000); return; } ui.audio?.click?.(); const via = w.via; ui.toast(via === 'pts' ? `<b>Gelernt:</b> ${esc(k.name)}` : via === 'book' && g.parcelMode() && !s.sk.books[k.learn[w.i].id] ? `<b>Bestellt:</b> Buch „${esc(k.learn[w.i].title)}“ – kommt morgen früh als Paket. Aufheben, dann liest du es.` : via === 'person' ? `${esc(w.label.replace(' fragen', ''))} nimmt sich morgen Zeit für dich.` : `Los geht’s: ${esc(k.name)}`, 'good', 4500); skRefresh(ui); ui.dock(); };
-    ways.append(b);
-  }
-}
+const STATE_TXT = { known: ['Gelernt', 'ok'], open: ['Jetzt lernbar', 'warn'], learning: ['Wird gelernt', 'warn'], soon: ['Gesperrt', 'idle'], later: ['Noch weit weg', 'idle'], wip: ['Bald im Spiel', 'idle'], auto: ['Kommt per Handy', 'idle'] };
 const WAY_IC = { pts: '★', forum: '#', book: '▤', course: '✎', person: '☺' };
+function showTip(ui, id, pin = false) {
+  const g = ui.g, s = g.s, v = ui.skView, T = ui.skTree, n = T?.L.N[id]; if (!n) return;
+  const el = T.view.querySelector('.skt-tip'); clearTimeout(v.hideT); v.tip = id; v.pin = pin || (v.pin && v.tip === id);
+  for (const x of T.root.querySelectorAll('.skn')) x.classList.toggle('sel', x.dataset.sk === id);
+  if (id === 'start') { el.innerHTML = '<div class="tp-h"><span class="tp-sym">⭐</span><div><b>Start</b><small>Dein erster PC in der Einzimmerwohnung</small></div></div><p>Von hier wachsen die Äste nach außen – je weiter draußen, desto später. Was du lernst, deckt den Baum auf.</p>'; el.classList.remove('hidden'); placeTip(ui); return; }
+  const S = v.fog?.S[id] || nodeState(g, n), k = SKILL[S.cur], col = CAT_COLOR[n.cat], far = S.st === 'later', [stl, stc] = STATE_TXT[S.st] || ['', 'idle'];
+  const G = n.group ? GROUPS[id] : null, name = far ? '???' : G ? `${G.name} · Stufe ${Math.min(S.n + 1, S.of)}/${S.of}` : k.name;
+  const tiers = G ? `<div class="tp-tiers">${G.ids.map((t, i) => `<span class="${g.knows(t) ? 'ok' : t === S.cur ? 'cur' : ''}">${i + 1} ${esc(G.tier[i])}${g.knows(t) ? ' ✓' : ''}</span>`).join('')}</div>` : '';
+  const line = far ? `Noch zu weit weg${k.from ? ` – frühestens ${k.from.slice(0, 4)}` : ''}.` : G && S.st === 'known' && !S.part ? 'Alle Stufen: USB-Stick, Teile tauschen, löten – zum Materialpreis.' : firstSentence(k.desc);
+  el.innerHTML = `<div class="tp-h" style="--c:${col}"><span class="tp-sym">${far ? '?' : SYM[id] || '•'}</span><div><b>${esc(name)}</b><small>${esc(SKILL_CAT[n.cat].name)} · ${esc(k.feel)}</small></div><button class="tp-x" title="Schließen (Esc)">✕</button></div><span class="badge ${stc}"><i></i>${stl}${S.why && S.st !== 'known' ? ' · ' + esc(S.why) : ''}</span>${tiers}<p>${esc(line)}</p>${!far && k.use && S.st === 'known' ? `<div class="tp-use"><span>Wo</span>${esc(k.use)}</div>` : ''}<div class="tp-ways"></div>`;
+  el.querySelector('.tp-x').onclick = () => hideTip(ui, true);
+  const ways = el.querySelector('.tp-ways'), L0 = s.sk.learning;
+  if (S.st === 'known' && !S.part) { const how = s.sk.src[S.cur] || ''; ways.append(h(`<div class="tp-done">Gelernt am ${fmtDate(s.sk.known[S.cur])}${how ? ` · ${esc({ pts: 'mit Punkten', forum: 'im Forum', book: 'aus dem Buch', course: 'im Kurs', msg: 'per Handy', migr: 'schon früher' }[how] || (how.startsWith('person:') ? 'bei ' + (TEACHERS[how.slice(7)]?.name || how.slice(7)) : ''))}` : ''}</div>`)); }
+  else if (S.st === 'learning') { const left = L0 && L0.id === S.cur ? Math.max(0, L0.until - s.day) : null; ways.append(h(`<div class="tp-done">${left != null ? `${{ forum: 'Im Forum', book: 'Im Buch', course: 'Im Kurs' }[L0.via] || 'Wird gelernt'} – noch ${left} ${left === 1 ? 'Tag' : 'Tage'}` : s.sk.teach?.id === S.cur ? 'Die Lehrstunde ist morgen fertig' : 'Steht in der Warteschlange'}.</div>`)); }
+  else if (!far && S.st !== 'auto') for (const w of g.skillWays(S.cur)) {
+    const b = h(`<button class="tp-way ${w.ok ? '' : 'no'}" ${w.ok ? '' : 'disabled'} title="${esc(w.ok ? w.sub : w.why || w.sub)}"><i>${WAY_IC[w.via] || ''}</i><span><b>${esc(w.label)}</b><small>${esc(w.ok || S.st !== 'open' ? w.sub : w.why)}</small></span></button>`);
+    b.onclick = (e) => { e.stopPropagation(); learnVia(ui, S.cur, w); }; ways.append(b);
+  }
+  if (!far && k.where && (S.st === 'known' || S.part)) { const b = h('<button class="btn small primary tp-where">Zeig mir wo</button>'); b.onclick = () => showWhere(ui, k); ways.append(b); }
+  el.classList.remove('hidden'); placeTip(ui);
+}
+function hideTip(ui, now = false) {
+  const v = ui.skView, T = ui.skTree; if (!T || !v) return; clearTimeout(v.hideT);
+  const go = () => { if (!ui.skTree) return; v.tip = null; v.pin = false; T.view.querySelector('.skt-tip')?.classList.add('hidden'); T.root.querySelectorAll('.skn.sel').forEach((x) => x.classList.remove('sel')); };
+  if (now) go(); else if (!v.pin) v.hideT = setTimeout(go, 260);
+}
+// Tooltip neben den Knoten (rechts, sonst links), in der Ansicht gehalten; schmal (Handy): unten angedockt
+function placeTip(ui) {
+  const v = ui.skView, T = ui.skTree; if (!v?.tip || !T) return; const el = T.view.querySelector('.skt-tip'), n = T.L.N[v.tip]; if (!n || el.classList.contains('hidden')) return;
+  const W = T.view.clientWidth, H = T.view.clientHeight; if (W < 600) { el.style.left = el.style.top = ''; el.classList.add('dock'); return; } el.classList.remove('dock');
+  const x = v.tx + n.x * v.k, y = v.ty + n.y * v.k, w = el.offsetWidth || 300, hh = el.offsetHeight || 200, off = (NR + 14) * v.k;
+  const left = x + off + w < W - 8 ? x + off : Math.max(8, x - off - w), top = Math.max(8, Math.min(H - hh - 8, y - hh / 2));
+  el.style.left = `${Math.round(left)}px`; el.style.top = `${Math.round(top)}px`;
+}
+// Lernweg auslösen; Buch als Paket = mehrere Schritte → Panel
+function learnVia(ui, id, w) {
+  const g = ui.g, s = g.s, k = SKILL[id], bw = k.learn[w.i];
+  if (w.via === 'book' && g.parcelMode() && !s.sk.books[bw.id]) { openPanel(ui, id, w); return; }
+  const r = g.startLearn(id, w.i); if (r) { ui.toast(esc(r), 'bad', 3000); return; }
+  ui.audio?.click?.();
+  ui.toast(w.via === 'pts' ? `<b>Gelernt:</b> ${esc(k.name)}` : w.via === 'person' ? `${esc(w.label.replace(' fragen', ''))} nimmt sich morgen Zeit für dich.` : `Los geht’s: ${esc(k.name)}`, 'good', 3500);
+  skRefresh(ui); ui.dock();
+}
+function openPanel(ui, id, w) {
+  const g = ui.g, v = ui.skView, k = SKILL[id], bw = k.learn[w.i], el = ui.skTree.view.querySelector('.skt-panel'); v.panel = id;
+  el.innerHTML = `<div class="pn-card"><h3>Buch „${esc(bw.title)}“</h3><p>Für <b>${esc(k.name)}</b> – so geht’s:</p><ol><li><b>Bestellen</b> · ${money(bw.price)}, kommt morgen früh als Paket vor deine Wohnungstür</li><li><b>Paket aufheben</b> · hingehen und aufheben (E)</li><li><b>Lesen</b> · ${bw.days} ${bw.days === 1 ? 'Tag' : 'Tage'}, dann kannst du es</li></ol><div class="row"><button class="btn primary pn-go">Bestellen · ${money(bw.price)}</button><button class="btn pn-x">Abbrechen</button></div></div>`;
+  el.classList.remove('hidden');
+  el.querySelector('.pn-x').onclick = () => closePanel(ui);
+  el.querySelector('.pn-go').onclick = () => { const r = g.startLearn(id, w.i); closePanel(ui); if (r) { ui.toast(esc(r), 'bad', 3000); return; } ui.audio?.cash?.(); ui.toast(`<b>Bestellt:</b> Buch „${esc(bw.title)}“ – kommt morgen früh als Paket. Aufheben, dann liest du es.`, 'good', 4500); skRefresh(ui); ui.dock(); };
+}
+function closePanel(ui) { const v = ui.skView; v.panel = null; ui.skTree?.view.querySelector('.skt-panel')?.classList.add('hidden'); }
 
 // „Zeig mir wo“: Baum zu, dann das passende Fenster (nie zwei übereinander)
 function showWhere(ui, k) {
