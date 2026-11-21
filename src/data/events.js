@@ -337,7 +337,7 @@ export const EVENTS = [
     text: '„Deine Kisten im Keller stehen still, weil der Strom zu teuer ist? Im Heizungskeller von deinem Haus hängt noch der alte Zähler von der Nachtspeicherheizung – den hab ich 1979 selbst gesetzt. Den klemm ich dir um – Nachtstrom kostet fast ein Drittel weniger. Material 400 $, die Arbeit mach ich.“',
     choices: [
       { label: 'Opa machen lassen', cost: 400, hint: 'Dauerhaft −30 % Strom im Keller · Opa +1', fx: (g, s) => ({ do: () => { (s.fac.keller.up ||= {}).nightmeter ||= s.day || 1; }, rel: { opa: 1 }, xp: { hw: 40 }, log: 'Januar 2012: Opa klemmt die Rigs auf den Nachtstrom' }), reply: '<b>Opa:</b> So. Jetzt laufen deine Kisten zum Heizungstarif. Und keiner muss frieren.' },
-      { label: 'Später', hint: 'Geht auch später im Firmenfenster (C) unter „Ausbauten“', fx: {}, reply: '<b>Opa:</b> Der Zähler läuft nicht weg. Der hängt da seit 1979.' },
+      { label: 'Später', hint: 'Geht auch später unter C bei „Ausbauten“', fx: {}, reply: '<b>Opa:</b> Der Zähler läuft nicht weg. Der hängt da seit 1979.' },
     ],
     fallback: 1,
   },

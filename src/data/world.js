@@ -75,7 +75,7 @@ export const CHAPTERS = [
     goals: [
       { id: 'openrig', text: 'Bau dein erstes Rig im Keller', orDate: '2013-03-01', check: (s, h, g) => h.rigsAt('keller') > 0 || (s.unlocked.includes('keller') && (s.fac.keller?.objects || []).some((o) => !o.parts && g.slotLive(o))) }, // Rig mit mindestens 1 GPU – oder ein Miner (FPGA, ASIC) im Keller; spätestens im März 2013 auch so (früher half dort die Bankfrist: nicht für immer im Keller festhängen)
       // Ausbauten kennenlernen: Opas Nachtstromzähler (UPGRADES.keller nightmeter, −30 % Strom im Keller) – Knopf im Ziel oder Firma (C) → Ausbauten
-      { id: 'night', text: 'Lass Opa den alten Nachtstromzähler anklemmen (Firma → Ausbauten, 400 $)', orDate: '2011-10-01', open: 'company', doneText: 'Nachtstrom! Im Keller kostet der Strom jetzt 30 % weniger. In der Firma (C) gibt es weitere Ausbauten.', check: (s) => !!s.fac.keller?.up?.nightmeter }, // open: Knopf im Ziel-Panel öffnet die Firma; orDate: kein Muss (sonst ab Oktober 2011)
+      { id: 'night', text: 'Lass Opa den alten Nachtstromzähler anklemmen (C → Ausbauten, 400 $)', orDate: '2011-10-01', open: 'company', doneText: 'Nachtstrom! Im Keller kostet der Strom jetzt 30 % weniger. Unter C gibt es weitere Ausbauten.', check: (s) => !!s.fac.keller?.up?.nightmeter }, // open: Knopf im Ziel-Panel öffnet die Firma; orDate: kein Muss (sonst ab Oktober 2011)
       // Abschlussziel: Papa vermietet dir die Werkstatt (450 $ im Monat), wenn sich das trägt – 30 $ Gewinn am Tag nach Strom und Miete (Tagesabschluss); spätestens ab März 2013 auch so
       { id: 'earn2', text: 'Mach 30 $ Gewinn am Tag – dann vermietet dir Papa die Werkstatt', orDate: '2013-03-01', eod: true, doneText: 'Läuft! 30 $ Gewinn am Tag – Papa hält dir die Werkstatt frei.', check: (s, h, g) => g.dailyProfit().net >= 30, progress: (s, h, g) => [g.dailyProfit().net, 30, 'usd'] },
       { id: 'fill2', text: 'Fülle den Keller', orDate: true, skip: true, doneText: 'Der Keller ist voll!', check: (s) => !!s.full?.keller, progress: (s, h) => [h.fill('keller'), 1, 'fill', 'keller'] }, // orDate: ab minDate auch ohne vollen Keller erledigt
@@ -193,6 +193,10 @@ export const MESSAGES = [
   { id: 'm2', date: '2010-10-09', from: 'Deniz', text: 'Tipp: Crimson-Karten minen viel schneller als Verdant. Die RHD 5870 ist gerade der Hit.' },
   { id: 'm3', cond: (s, h) => h.maxTemp() > 32, from: 'Mama', text: 'Ich hab dir vorhin die Wäsche vor die Tür gestellt. Warum ist es bei dir so warm? Und was brummt da?' },
   { id: 'm4', date: '2010-11-06', from: 'Deniz', text: '0,39 $ pro Bitcoin!! Ich glaub, ich spinne.' },
+  // Grund fürs Ziel „Strom-Nachzahlung“ (papa1): Herr Krause merkt, dass zwei Rechner rund um die Uhr laufen
+  { id: 'mKrause', cond: (s) => s.chapter === 0 && !!s.goals.rig2 && !s.flags.papa1, from: 'Herr Krause', text: 'Bei Ihnen brummt’s ja Tag und Nacht. Die Strompauschale in der Warmmiete war für einen Kühlschrank gedacht, nicht für zwei Rechner. Ich rechne mit 2.000 $ Nachzahlung. Überweisen Sie das, dann reden wir über den alten Hobbyraum im Keller.' },
+  // Grund für die Deko im Shop: Mama findet die Bude ungemütlich
+  { id: 'mDeko', cond: (s) => s.chapter <= 1 && (!!s.goals.rig2 || s.chapter === 1), from: 'Mama', text: 'Ich war vorhin kurz bei dir. Zwei Computer, aber kein einziges Bild an der Wand! Mach’s dir mal ein bisschen gemütlich – in deinem Online-Shop gibt’s doch bestimmt auch Pflanzen und Lampen.' },
   { id: 'm5', cond: (s) => s.flags.papa1, from: 'Herr Krause', text: 'Die Nachzahlung ist da. Respekt. Den alten Hobbyraum im Keller können Sie haben – 50 $ im Monat, und zu Weihnachten einen Kasten Bier. Das Gerümpel vom Vormieter räumen wir zusammen raus. Strom zahlen Sie ab jetzt nach Zähler, das steht dann auf Ihrer Monatsabrechnung.' },
   { id: 'm6', date: '2011-04-10', from: 'Deniz', text: 'Die Leute bauen jetzt Rigs in Milchkisten. Sieht wild aus, läuft aber.' },
   { id: 'm8', date: '2011-06-20', from: 'Deniz', text: 'GoxBank wurde gehackt! Lass nicht alles auf der Börse liegen.' },
@@ -233,7 +237,7 @@ export const MESSAGES = [
   { id: 't_gpuwait', tip: true, cond: (s) => s.chapter === 1 && s.day < toDay('2013-01-20') && (s.stats.pauseRun || 0) >= 30, from: 'Deniz', text: 'GPUs lohnen gerade nicht – Bitcoin halten, 2013 kommen ASICs. Spul ruhig vor (Tempo 4).' }, // ≥ 75 % der Rigs seit 30 Tagen unrentabel pausiert (Game.progressDay)
   { id: 't_idle', tip: true, cond: (s) => s.chapter >= 1 && s.stats.idle > 0, from: 'Deniz', text: 'Eins deiner Geräte pausiert – der Strom kostet mehr, als es schürft. Stell es auf einen anderen Coin oder verkauf es, solange es noch was wert ist.' },
   { id: 't_hot', tip: true, cond: (s, h) => s.chapter >= 1 && h.maxTemp() > 34, from: 'Deniz', text: 'Über 34 Grad bei dir! Ab 38 drosseln die Karten, und heiße Hardware geht schneller kaputt. Im Katalog (B) gibt es Lüfter.' },
-  { id: 't_trip', tip: true, cond: (s) => s.chapter >= 1 && !!s.flags.everTripped, from: 'Deniz', text: 'Im Firmenfenster (C) siehst du, wie viel dein Anschluss schafft. Erst den Strom ausbauen, dann neue Geräte hinstellen.' },
+  { id: 't_trip', tip: true, cond: (s) => s.chapter >= 1 && !!s.flags.everTripped, from: 'Deniz', text: 'Unter C siehst du, wie viel dein Anschluss schafft. Erst den Strom ausbauen, dann neue Geräte hinstellen.' },
   { id: 't_halv12', tip: true, date: '2012-10-29', from: 'Deniz', text: 'In einem Monat ist Halving: nur noch halb so viele Bitcoin pro Block. Alte, stromhungrige Karten rechnen sich danach kaum noch.' },
   { id: 't_net14', tip: true, date: '2014-06-10', from: 'Deniz', text: 'Die Netz-Hashrate verdoppelt sich gerade alle zwei Monate. Ein Miner, der sich heute rechnerisch in 90 Tagen bezahlt, schafft das so nie. Lieber weniger kaufen – und nur die sparsamsten.' },
   { id: 't_halv16', tip: true, date: '2016-06-09', from: 'Deniz', text: 'Noch 30 Tage bis zum zweiten Halving. Verkauf ineffiziente Miner jetzt, solange sie noch Geld bringen.' },
@@ -256,7 +260,7 @@ export const NEWS = [
   ['2011-06-08', 'Bitcoin bei 30 $! Medien berichten weltweit'],
   ['2011-06-19', 'GoxBank gehackt – Kurs kurzzeitig auf 1 Cent'],
   ['2011-07-01', 'FPGA-Miner kommen auf den Markt'],
-  ['2011-10-07', 'Litecoin (Scrypt) startet – „Silber zum Bitcoin-Gold"'],
+  ['2011-10-07', 'Litecoin (Scrypt) startet – „Silber zum Bitcoin-Gold“'],
   ['2012-11-28', 'Erstes Halving: Blockbelohnung sinkt auf 25 BTC'],
   ['2013-02-01', 'Erste ASIC-Miner ausgeliefert: Glacier A1 mit 66 GH/s'],
   ['2013-04-10', 'Bitcoin-Blase platzt: von 230 $ auf 70 $'],
@@ -296,7 +300,7 @@ export const NEWS = [
   ['2022-07-17', 'Hitzewelle und Energiekrise: Strom so teuer wie nie'],
   ['2022-09-15', 'The Merge: Ethereum wechselt zu Proof-of-Stake – GPU-Mining endet'],
   ['2022-11-11', 'Börse FXT bricht zusammen – Milliarden Kundengelder weg', { exchangeLoss: 0.85 }],
-  ['2022-12-21', 'Großer Miner „CoreHash" insolvent – zu viele Kredite, zu wenig Hashprice'],
+  ['2022-12-21', 'Großer Miner „CoreHash“ insolvent – zu viele Kredite, zu wenig Hashprice'],
   ['2023-08-15', 'Kaspa-ASICs ausgeliefert – GPUs verlieren'],
   ['2024-01-11', 'US-Behörde genehmigt Spot-Bitcoin-ETFs'],
   ['2024-03-14', 'Bitcoin erreicht 73.000 $'],
@@ -336,7 +340,7 @@ export const FEATURES = {
   pcbuild: { title: 'PC zusammenbauen', key: 'E', pseudo: true, text: 'Alle Teile in der Tasche! Zurück in die Wohnung: PC anschauen, <kbd>E</kbd> – Teile einbauen und einschalten.', stale: (s) => !!s.flags.miningStarted },
   market: { title: 'Börse', key: 'M', by: 'market', text: 'Am <b>Monitor</b> (<kbd>E</kbd>) oder mit <kbd>M</kbd>: Was sind deine Bitcoin wert? Hier verkaufst du sie auch.', from: 'Deniz', msg: 'Dein PC schürft! Am Monitor siehst du an der Börse, was deine Bitcoin wert sind. Oder drück einfach M.' },
   build: { title: 'Shop', key: 'B', text: 'Am <b>Monitor</b> oder mit <kbd>B</kbd> öffnest du den Online-Shop. Was du bestellst, liegt am nächsten Morgen vor deiner Wohnungstür.', from: 'Deniz', msg: (s, g) => `Dein Prozessor schafft am Tag gerade mal ${centsDay(s, g)}. Mit einer Grafikkarte wär’s locker vierzigmal so viel! Bestell dir eine im Online-Shop – am Monitor oder mit B.` },
-  sleep: { title: 'Schlafen', key: 'E', pseudo: true, text: 'Morgen früh kommt das Paket. Leg dich ins <b>Bett</b> (<kbd>E</kbd>) und schlaf bis morgen – oder lass die Zeit laufen.', from: 'Deniz', msg: 'Bestellt? Sehr gut. Jetzt heißt es warten – leg dich hin, morgen früh steht das Paket vor deiner Tür.', stale: (s) => !s.orders?.length || !!s.flags.boughtGpu },
+  sleep: { title: 'Schlafen', key: 'E', pseudo: true, text: 'Morgen früh kommt das Paket. Leg dich ins <b>Bett</b> (<kbd>E</kbd>) und schlaf bis morgen.', from: 'Deniz', msg: 'Bestellt? Sehr gut. Jetzt heißt es warten – leg dich hin, morgen früh steht das Paket vor deiner Tür.', stale: (s) => !s.orders?.length || !!s.flags.boughtGpu },
   parcel: { title: 'Paket abholen', key: 'E', pseudo: true, text: 'Vor deiner <b>Wohnungstür</b> liegt ein Paket. Hingehen und <kbd>E</kbd>.', stale: (s) => !s.parcels?.length },
   install: { title: 'Lager & Einbau', key: 'E', pseudo: true, text: 'Ausgepackte Teile liegen im <b>Lager</b>. PC anschauen, <kbd>E</kbd> → Grafikkarte einbauen.', from: 'Deniz', msg: 'Die Karte ist da? Dann rein damit: PC anschauen, E drücken, Grafikkarte einbauen. Und nicht an die goldenen Kontakte fassen!', stale: (s) => !!s.flags.boughtGpu },
   skills: { title: 'Fähigkeiten', key: 'T', by: 'skills', text: '<kbd>T</kbd> zeigt deinen Fähigkeiten-Baum: was du kannst, was du als Nächstes lernst – durch Tun, aus Büchern, im Forum oder bei Leuten.', from: 'Opa Heinz', msg: 'Selbst eingebaut? Sauber, Junge. Wer schraubt, lernt was. Drück mal T: Da siehst du, was du schon kannst und was du als Nächstes lernen kannst – aus Büchern, im Forum oder bei mir.' },
@@ -345,12 +349,12 @@ export const FEATURES = {
   rigs: { title: 'Mehr PCs', key: 'B', by: 'build', text: 'Shop (<kbd>B</kbd>) → Rigs: als Bausatz bestellen und selbst einbauen. Teile gibt es auch einzeln. Fertig bestückt liefern dir später Kontakte.', from: 'Deniz', msg: 'Ein PC ist gut, zwei sind besser. Im Shop unter „Rigs“ gibt’s Gehäuse als Bausatz – Teile rein, fertig.' },
   autosell: { title: 'Auto-Verkauf', key: 'M', by: 'market', text: 'Neue Coins werden automatisch verkauft – wie viel, stellst du an der Börse (<kbd>M</kbd>) ein.', from: 'Deniz', msg: 'Keine Lust, jeden Tag selbst zu verkaufen? An der Börse kannst du jetzt den Auto-Verkauf einstellen.' },
   speed3: { title: 'Schneller vorspulen', key: '5', by: 'speed3', text: '<kbd>5</kbd> <kbd>6</kbd> spulen Tage pro Sekunde vor.', from: 'Deniz', msg: 'Du wartest eh nur noch? Mit 5 und 6 rauschen die Tage nur so vorbei.' },
-  company: { title: 'Firma', key: 'C', by: 'company', text: '<kbd>C</kbd>: Strom ausbauen, Kosten sehen.', from: 'Opa Heinz', msg: 'Noch ein paar Rechner mehr, und dir fliegt die Sicherung um die Ohren. Mit C siehst du deinen Anschluss – und ich leg dir gern einen eigenen Stromkreis.' },
+  company: { title: 'Meine Bude', key: 'C', by: 'company', text: '<kbd>C</kbd>: Strom ausbauen, Kosten sehen.', from: 'Opa Heinz', msg: 'Noch ein paar Rechner mehr, und dir fliegt die Sicherung um die Ohren. Mit C siehst du deinen Anschluss – und ich leg dir gern einen eigenen Stromkreis.' },
   coins: { title: 'Mehr Coins', key: 'E', by: 'inspect', text: 'Schau ein Gerät an (<kbd>E</kbd>): Dort wählst du, was es schürft.', from: 'Deniz', msg: 'Es gibt jetzt mehr als Bitcoin! Schau dir deine Rechner an (E) – dort stellst du ein, welchen Coin sie schürfen.' },
   cold: { title: 'Cold-Wallet', key: 'M', by: 'market', text: 'Sicher vor Börsenpleiten. Findest du in der Börse (<kbd>M</kbd>).', from: 'Deniz', msg: 'Lass nicht alles auf der Börse liegen! In der Börse kannst du deine Coins jetzt in eine Cold-Wallet legen – da kommt kein Hacker ran.' },
   map: { title: 'Karte', key: 'K', by: 'map', text: '<kbd>K</kbd> zeigt alle Standorte.', from: 'Papa', msg: 'Der Hobbyraum im Keller ist frei! Auf der Karte (K) siehst du alle deine Standorte auf einen Blick.' },
   ranking: { title: 'Logbuch', key: 'L', by: 'ranking', text: '<kbd>L</kbd>: Rangliste, Erfolge und Chronik.', from: 'Deniz', msg: 'Ich hab dir ein Logbuch angelegt: Rangliste, Erfolge, Chronik. Drück L.' },
-  loan: { title: 'Bankkredit', key: 'C', by: 'company', text: 'Die Bank leiht dir Geld. Mit Zinsen. Steht in der Firma (<kbd>C</kbd>).', from: 'Papa', msg: 'Mein Bankberater sagt, dir würden sie jetzt Geld leihen. Mit Zinsen, natürlich. Steht in der Firmenübersicht (C).' },
+  loan: { title: 'Bankkredit', key: 'C', by: 'company', text: 'Die Bank leiht dir Geld. Mit Zinsen. Steht unter <kbd>C</kbd>.', from: 'Papa', msg: 'Mein Bankberater sagt, dir würden sie jetzt Geld leihen. Mit Zinsen, natürlich. Steht unter C.' },
   buycoins: { title: 'Coins kaufen', key: 'M', by: 'market', text: 'In der Börse (<kbd>M</kbd>) kannst du jetzt auch kaufen.', from: 'Deniz', msg: 'An der Börse kannst du jetzt auch kaufen. Günstig rein, teuer raus – theoretisch.' },
 };
 

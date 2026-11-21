@@ -69,7 +69,7 @@ export const BILL_EVENTS = [
       {
         label: 'Mit der Bank reden',
         hint: 'Herr Albers sucht mit dir einen Weg: Notverkauf, Umschuldung, Sparprogramm …',
-        need: (s, h, g) => g.has('loan') && s.chapter >= 2, needText: 'Einem 19-Jährigen ohne Firma leiht die Bank noch nichts',
+        show: (s, h, g) => g.has('loan') && s.chapter >= 2, need: (s, h, g) => g.has('loan') && s.chapter >= 2, // erst ab Kapitel 3 (Werkstatt, Bankkredit) – vorher gar nicht angeboten
         fx: (g) => ({ do: () => g.bankTalk(), log: 'Wegen offener Rechnungen bei der Bank' }),
       },
       {

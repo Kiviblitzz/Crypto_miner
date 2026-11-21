@@ -23,7 +23,7 @@ export const COINS = [
       ['2016-01-15', 1.5e12], ['2017-01-15', 3e12], ['2018-01-15', 3e13], ['2019-01-15', 2.5e14], ['2021-01-15', 2.5e14], ['2022-01-15', 3.5e14],
       ['2023-01-15', 6e14], ['2024-06-15', 1.3e15], ['2024-12-15', 1.9e15], ['2025-12-06', 3.8e15], ['2026-11-15', 2.8e15]]),
     emission: ((st) => (d) => 576 * st(d))(steps([['2011-10-07', 50], ['2015-08-25', 25], ['2019-08-05', 12.5], ['2023-08-02', 6.25], ['2027-07-15', 3.125]])), // Stufen einmal bauen, nicht pro Aufruf
-    desc: 'Das „Silber zum Gold". Scrypt – erst GPUs, ab 2014/17 ASICs.',
+    desc: 'Das „Silber zum Gold“. Scrypt – erst GPUs, ab 2014/17 ASICs.',
   },
   {
     id: 'DOGE', name: 'Dogecoin', color: '#c2a633', algo: () => 'scrypt', start: toDay('2013-12-06'),

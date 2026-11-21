@@ -2065,3 +2065,68 @@ body.cine #hud > :not(#toasts) { opacity: 0; transition: opacity .6s; }
 .mg-c { width: 100%; aspect-ratio: 560 / 300; display: block; border-radius: var(--r-md); touch-action: none; cursor: pointer; }
 .mg-f { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 12px; color: var(--dim); }
 body[data-modal="skills"] :is(#st-cash, #st-profit, #st-wallet) { visibility: hidden; } /* Fähigkeiten-Baum: groß, das HUD würde den Titel verdecken */
+
+/* ===== Entschlacken (21.11.2026): eine Zielzeile, Chats im Handy, Mahnung, nichts abgeschnitten ===== */
+#goals.empty { display: none !important; }
+#goals { max-width: min(760px, calc(100vw - 56px)) !important; }
+#goals .goal.wait { border-radius: 999px !important; }
+/* Kontostand: „/ Tag“ nur bei echtem Geldfluss – und dann rot, wenn es weniger wird */
+#st-profit .v.neg { color: var(--bad) !important; }
+/* Bitcoin-Bestand: Ertrag als Coins */
+#st-wallet .l { white-space: nowrap; }
+/* Handy: Chat-Liste */
+.ch-list { display: grid; gap: 4px; }
+.ch-row { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 10px 12px; border-radius: 16px; background: rgba(255,236,210,.05); border: 0; color: var(--text); cursor: pointer; font: inherit; }
+.ch-row:hover { background: rgba(255,236,210,.1); }
+.ch-av { width: 42px; height: 42px; flex: none; border-radius: 50%; overflow: hidden; display: grid; place-items: center; }
+.ch-av svg { width: 42px; height: 42px; display: block; }
+.ch-ini { width: 100%; height: 100%; border-radius: 50%; display: grid; place-items: center; background: #6a5240; color: #fff8ec; font: 700 18px var(--font-fun); }
+.ch-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ch-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.ch-top b { font: 700 15px var(--font-fun); }
+.ch-top em { font: 600 12px var(--font); font-style: normal; color: var(--dim); flex: none; }
+.ch-last { font: 500 13px var(--font); color: var(--text2, var(--dim)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ch-row.unread { background: rgba(255,176,0,.08); }
+.ch-row.unread .ch-last { color: var(--text); }
+.ch-row.unread .ch-top em { color: var(--acc); }
+.ch-n { flex: none; min-width: 22px; height: 22px; padding: 0 6px; box-sizing: border-box; border-radius: 999px; background: var(--acc); color: #2a1a08; font: 700 12px/22px var(--font); text-align: center; }
+.ch-row.svc { padding: 6px 12px; opacity: .7; }
+.ch-row.svc .ch-av { width: 28px; height: 28px; } .ch-row.svc .ch-av svg { width: 28px; height: 28px; } .ch-row.svc .ch-ini { font-size: 13px; }
+/* Handy: ein Chat, neueste Nachricht unten */
+.ch-head { display: flex; align-items: center; gap: 10px; margin: 0 0 6px; }
+.ch-head .ch-av { width: 34px; height: 34px; } .ch-head .ch-av svg { width: 34px; height: 34px; }
+.ch-head b { font: 700 16px var(--font-fun); }
+.ch-head .ch-back { flex: none; }
+.ch-day { text-align: center; font: 600 11.5px var(--font); color: var(--dim); margin: 14px 0 2px; }
+.ph-chat .msg { max-width: 86%; }
+.ph-chat .msg.unread::after { right: -14px; }
+.msg.done { padding: 7px 12px !important; background: transparent !important; box-shadow: inset 0 0 0 1px rgba(255,236,210,.1); }
+.msg.done summary { cursor: pointer; font: 600 12.5px var(--font); color: var(--dim); list-style: none; }
+.msg.done summary::-webkit-details-marker { display: none; }
+.msg.done summary span { color: var(--good); margin-left: 6px; }
+.msg.done[open] summary { margin-bottom: 6px; }
+.msg.done > div { font-size: 13px; color: var(--text2, var(--dim)); }
+/* Mahnung: wie viel, bis wann, was sonst passiert – und die Knöpfe */
+.msg.bill { max-width: none; }
+.msg.bill .bl-amt { font: 500 15px var(--font); margin-top: 2px; }
+.msg.bill .bl-amt b { font-weight: 800; }
+.msg.bill .bl-next { font: 500 13px var(--font); color: var(--text2, var(--dim)); margin-top: 4px; }
+.msg.bill .row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.phone .msg.bill.st2, .phone .msg.bill.st3 { border-color: rgba(255,107,90,.6); background: rgba(255,107,90,.09) !important; }
+/* Inspektor: nichts abschneiden */
+#inspector .pcb-step .tx span { white-space: normal; overflow: visible; text-overflow: clip; }
+#inspector .rb-pick .rb-opt span { white-space: normal; overflow: visible; }
+#inspector .rb-quick .btn, #inspector .again-sec .btn { white-space: normal; height: auto; min-height: 32px; line-height: 1.3; text-align: center; max-width: 100%; box-sizing: border-box; }
+/* Shop: „Spar noch X $“ statt eines leeren Kastens */
+#build .item .miss.rc-save { color: var(--acc); font-weight: 700; }
+/* Konfigurator: Text statt Auswahl bei nur einer Möglichkeit, Knöpfe brechen um statt abzuschneiden */
+.cfgr .cf-r.one b { font: 600 13.5px var(--font); color: var(--text); grid-column: 2 / -1; }
+.cfgr .cf-go .btn { white-space: normal !important; min-width: 0 !important; flex: 1 1 200px; height: auto; min-height: 44px; line-height: 1.25; }
+/* Pause: Grafik als drei Schalter */
+.pause-set .ps-q { display: flex; align-items: center; gap: 6px; min-height: 40px; padding: 4px 6px 4px 12px; border-radius: 12px; background: rgba(255,236,210,.07); box-sizing: border-box; font: 600 14px var(--font-fun); color: var(--text2, var(--dim)); }
+.pause-set .ps-q span { flex: 1; }
+.pause-set .ps-qb { border: 0; cursor: pointer; padding: 6px 10px; border-radius: 9px; background: transparent; color: var(--text2, var(--dim)); font: 600 13px var(--font-fun); }
+.pause-set .ps-qb.on { background: var(--acc); color: #3a2300; }
+.pause-note small { display: block; margin-top: 6px; font: 500 10.5px var(--font); opacity: .75; }
+.ch-list { grid-template-columns: minmax(0, 1fr); }
+.ch-row { min-width: 0; box-sizing: border-box; overflow: hidden; }

@@ -309,7 +309,7 @@ export class Game {
       if (F?.stale?.(s, this)) continue; // z. B. „Paket abholen“, obwohl es schon aufgehoben ist
       L.cur = f; L.day = s.day; this.introduce(f);
       const txt = typeof F?.msg === 'function' ? F.msg(s, this) : F?.msg;
-      if (txt) this.pushMsg({ from: F.from || 'Deniz', text: txt });
+      if (txt) this.pushMsg({ from: F.from || 'Deniz', text: txt, lesson: f }); // lesson: im Handy eingeklappt, sobald die Lektion erledigt ist
       this.emit('lesson', f); return;
     }
   }
@@ -1284,7 +1284,7 @@ export class Game {
       const wasTripped = f.tripped;
       f.tripped = sm.tripped; f.temp = sm.temp;
       if (sm.tripped && !wasTripped) { this.toast(`Sicherung raus! ${(sm.watt / 1000).toFixed(1)} von ${sm.capKw} kW`, 'bad', 9000); s.flags.everTripped = true; }
-      if (!sm.tripped && wasTripped) this.toast(`Strom in „${FACILITY[id].name}" wieder da`, 'good');
+      if (!sm.tripped && wasTripped) this.toast(`Strom in „${FACILITY[id].name}“ wieder da`, 'good');
       if (sm.tripped) continue;
       const kwh = Math.max(0, (sm.watt / 1000) * 24 - this.solarKwh(id, day)), ec = kwh * sm.elec; elecCost += ec; elecBy[id] = [ec, kwh, sm.elec];
       for (const o of f.objects) {
@@ -1510,7 +1510,7 @@ export class Game {
     if (nh > e.hrec * 1.15) { e.hrec = nh; this.news(`Rekord: Die Netz-Hashrate steigt auf ${fmtHash(nh, 'sha256')}`); }
     if (day >= e.next) { let pool = ENDLESS_NEWS.map((_, i) => i).filter((i) => !e.used.includes(i)); if (!pool.length) { e.used = []; pool = ENDLESS_NEWS.map((_, i) => i); } const i = pool[Math.floor(Math.random() * pool.length)]; e.used.push(i); e.next = day + 40 + Math.floor(Math.random() * 40); this.news(ENDLESS_NEWS[i]); }
   }
-  pushMsg(m) { const s = this.s, x = { id: 'eg' + s.day + Math.random().toString(36).slice(2, 6), day: s.day, from: m.from, text: m.text, read: false }; s.messages.push(x); this.emit('message', x); }
+  pushMsg(m) { const s = this.s, x = { id: 'eg' + s.day + Math.random().toString(36).slice(2, 6), day: s.day, from: m.from, text: m.text, read: false }; if (m.lesson) x.lesson = m.lesson; s.messages.push(x); this.emit('message', x); }
 
   // ---------- Endlosziele (nach dem Sieg über MONOLITH) ----------
   endlessDay() {
@@ -1586,7 +1586,8 @@ export class Game {
   }
   // ---------- Ereignisse mit Entscheidungen ----------
   evText(e, k = 'text') { const v = e[k]; return typeof v === 'function' ? v(this.s, this.helpers(), this) : v || ''; }
-  evChoices(e) { const s = this.s, h = this.helpers(); return (e.choices || []).map((c, i) => { const cost = typeof c.cost === 'function' ? c.cost(this) : c.cost || 0; const needOk = !c.need || c.need(s, h, this), ok = (!cost || this.canAfford(cost)) && needOk; return { needFail: !needOk, needText: typeof c.needText === 'function' ? c.needText(this) : c.needText, i, label: typeof c.label === 'function' ? c.label(this) : c.label, hint: typeof c.hint === 'function' ? c.hint(this) : c.hint || '', cost, ok }; }); }
+  // hide: Antwort gibt es erst mit einer späteren Funktion (show) – die Oberfläche blendet sie aus statt sie auszugrauen
+  evChoices(e) { const s = this.s, h = this.helpers(); return (e.choices || []).map((c, i) => { const cost = typeof c.cost === 'function' ? c.cost(this) : c.cost || 0; const needOk = !c.need || c.need(s, h, this), ok = (!cost || this.canAfford(cost)) && needOk; return { hide: !!c.show && !c.show(s, h, this), needFail: !needOk, needText: typeof c.needText === 'function' ? c.needText(this) : c.needText, i, label: typeof c.label === 'function' ? c.label(this) : c.label, hint: typeof c.hint === 'function' ? c.hint(this) : c.hint || '', cost, ok }; }); }
   evDue(e, day) {
     const w = e.when || {}, s = this.s;
     if (w.date) { const d = toDay(w.date); if (day < d) return null; if (day > d + (w.window ?? 14)) return 'skip'; return e.id; }

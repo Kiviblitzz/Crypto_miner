@@ -17,9 +17,9 @@ export const TRAITS = {
 
 // Kurze Sätze aus dem Bewerbungsgespräch (je Eigenschaft)
 export const QUOTES = {
-  flink: ['„Ich bin schneller am Rack, als die Sicherung fliegt."', '„Zwei Lüfter tauschen, bevor der Kaffee kalt ist? Gern."'],
-  gruendlich: ['„Ich schraube lieber einmal richtig als dreimal schnell."', '„Staub ist mein persönlicher Feind."'],
-  sparfuchs: ['„Ersatzteile? Hab ich noch welche im Kofferraum."', '„Warum neu kaufen, wenn man löten kann?"'],
+  flink: ['„Ich bin schneller am Rack, als die Sicherung fliegt.“', '„Zwei Lüfter tauschen, bevor der Kaffee kalt ist? Gern.“'],
+  gruendlich: ['„Ich schraube lieber einmal richtig als dreimal schnell.“', '„Staub ist mein persönlicher Feind.“'],
+  sparfuchs: ['„Ersatzteile? Hab ich noch welche im Kofferraum.“', '„Warum neu kaufen, wenn man löten kann?“'],
 };
 
 // Vornamen mit Geschlecht (für die Rollenbezeichnung) und Nachnamen – bunt gemischt aus Lindental, Frankfurt und Sogn

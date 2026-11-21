@@ -104,7 +104,7 @@ function onKey(e) {
   if (world.cine) { e.preventDefault(); return; } // Aufwachen (World.wakeUp): keine Eingabe
   if (ui.mg) { e.preventDefault(); return; } // Mini-Spiel hat eigene Tasten (Esc bricht nur es ab)
   const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-  if (e.code === 'Space') { e.preventDefault(); ui.setSpeed(game.s.speed ? 0 : (ui.lastSpeed || 1)); return; }
+  if (e.code === 'Space') { e.preventDefault(); if (ui.speedShown()) ui.setSpeed(game.s.speed ? 0 : (ui.lastSpeed || 1)); return; } // Pause per Leertaste erst, wenn es die Tempo-Knöpfe gibt
   if (['1', '2', '3', '4', '5', '6'].includes(e.key)) { ui.setSpeed(+e.key); return; }
   if (k === 'Escape') {
     if (ui.escLocal()) return; // erst das Offene: Mini-Spiel, Installer, Details im Fähigkeiten-Baum – dann Fenster, dann Pause
@@ -122,12 +122,12 @@ function onKey(e) {
     if (k !== 'b' && k !== 'k' && ui.modalKind && ui.modalKind === { m: 'market', p: 'phone', h: 'phone', c: 'company', t: 'skills', l: 'ranking', j: 'skills' }[k]) { ui.resume(); return; }
     if (ui.stickyModal()) return; // Story/Finale/Rückblick nicht wegklicken
     const NEED = { b: 'build', m: 'market', p: 'phone', h: 'phone', i: 'heat', c: 'company', t: 'skills', l: 'ranking', k: 'map', j: 'skills' };
-    if (NEED[k] && !game.has(NEED[k])) { ui.toast('Noch nicht freigeschaltet.', 'info', 1800); return; }
+    if (NEED[k] && !game.has(NEED[k])) return; // Tasten ohne Funktion tun nichts (kein Hinweis auf noch Unbekanntes)
     HOT[k](); return;
   }
   if (e.key === 'Delete' && world.selected) {
     const o = game.findObj(world.selected); if (!o) return;
-    if (!game.canSell(o)) { ui.toast('Den PC brauchst du noch.', 'info', 2500); return; }
+    if (!game.canSell(o)) return; // den ersten PC kann man (noch) nicht verkaufen
     if (ui.delArmed === o.uid) { const v = game.objectValue(o); game.removeObject(o.uid); ui.resume(); ui.delArmed = null; ui.toast(`Verkauft für ${v.toLocaleString('de-DE')} $`, 'good', 2500); }
     else { ui.delArmed = o.uid; ui.toast('Nochmal Entf drücken, um das Objekt zu verkaufen.', 'info', 3000); setTimeout(() => { if (ui.delArmed === o.uid) ui.delArmed = null; }, 3000); }
   }

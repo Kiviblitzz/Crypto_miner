@@ -6,14 +6,13 @@ import { fmtUSD, fmtNum, fmtCoin, fmtHash, fmtDate, fmtWatt, BUILD_FEE } from '.
 import { skillsMenu, skRefresh, skCloseDetail, osWizard, osAbort, deviceSecs, repairRow, skillCard, pointCard, POT_SVG } from './skills.js'; // Fähigkeiten 2.0 (Taste T)
 import { POTS, SKILL } from '../data/skills.js';
 import { toDay, BTC_HASH, inHeatwave, HALVINGS, BTC_REWARD } from '../data/history.js';
-import { EVENT, REL_PERK } from '../data/events.js';
+import { EVENT } from '../data/events.js';
 import { ACH, ACHIEVEMENTS } from '../data/achievements.js';
 import { talkTo, PEOPLE, talkWho, KEEPSAKES, KEEPSAKE, pickKeepsake, keepsakeCount, TALK_REL } from '../data/story.js';
-import { DIFFICULTY } from '../data/world.js';
 import { ROLES, TRAITS, QUOTES } from '../data/staff.js';
 import { CONTACTS, CONTACT, FEE_TIERS, FAMILY_CONTACTS } from '../data/contacts.js';
 import { showFinale, endlessGoals, egoalKey, egoalDone } from './finale.js';
-import { BILL_STAGE, billText, monthName, PAPA_HELP } from '../data/bills.js';
+import { BILL_STAGE, billText, monthName, PAPA_HELP, siteIn } from '../data/bills.js';
 
 const $ = (s) => document.querySelector(s);
 const h = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
@@ -38,6 +37,7 @@ const LOCK_SVG = '<svg class="lock-ic" viewBox="0 0 24 24" width="14" height="14
 const MONTH_RE = /^(Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)\s+\d{4}:\s*/;
 const PKG_SVG = '<svg class="pkg-ic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 7.5 12 3.5l8.5 4v9L12 20.5l-8.5-4z"/><path d="M3.5 7.5 12 11.5l8.5-4M12 11.5v9M7.8 5.5l8.4 4"/></svg>'; // Paket
 const PHONE_SVG = '<svg class="ph-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18h2"/></svg>';
+const LESSON_OF = Object.fromEntries(Object.entries(FEATURES).filter(([, F]) => typeof F.msg === 'string').map(([f, F]) => [F.msg, f])); // alte Stände: Lektions-Nachricht am Text erkennen
 const PAUSE_LABEL = { heat: 'Pausiert (zu heiß)', event: 'Gedrosselt (Ereignis)', loss: 'Pausiert (kaum rentabel)' }; // Grund der Auto-Pause (Game.autoLimit)
 const MOVE_TO = { kinder: 'In die Wohnung tragen', keller: 'In den Keller tragen', werkstatt: 'In die Werkstatt bringen', halle: 'In die Halle bringen', rz: 'Ins Rechenzentrum schicken', fjord: 'In die Fjordhalle schicken' };
 
@@ -87,7 +87,7 @@ export class UI {
     world.onLoose = (t) => { this.w.pickupFx(t); if (!this.g.s.loose?.[t]) return; this.toast(`${PNAME[t]} in der Tasche`, 'good', 2200); if (!this.g.pickUp(t)) return; this.lastPick = { t, at: performance.now() }; setTimeout(() => this.goals(), 1300); this.audio?.install?.(); this.goals(); };
     world.onKeep = (id) => this.pickKeep(id);
     game.on('xp', (k, n, lv) => this.xpPop(k, n, lv));
-    game.on('skill', (id) => { if (this.w.focus || this.installing) { this.lvQ = ['sk', id]; return; } setTimeout(() => skillCard(this, id), 700); this.dock(); }); // „Gelernt …“
+    game.on('skill', (id) => { if (!this.g.has('skills')) return; if (this.w.focus || this.installing) { this.lvQ = ['sk', id]; return; } setTimeout(() => skillCard(this, id), 700); this.dock(); }); // „Gelernt …“ (erst, wenn es den Fähigkeiten-Baum gibt)
     game.on('skillopen', (ids) => { if (!this.g.has('skills')) return; this.toast(`<b>Neu lernbar:</b> ${ids.slice(0, 3).map((id) => esc(SKILL[id]?.name || id)).join(', ')}${ids.length > 3 ? ' …' : ''} – <kbd>T</kbd>`, 'good', 6000); this.dock(); });
     game.on('skills', () => { skRefresh(this); this.dock(); });
     world.onIncome = () => { this.bumpWallet(); this.audio?.tick?.(); };
@@ -100,7 +100,7 @@ export class UI {
     $('#modal .modal-x').onclick = () => this.closeModal();
     $('#modal').addEventListener('pointerdown', (e) => { if (e.target.id === 'modal') this.closeModal(); });
     $('#pause-resume').onclick = () => this.resume();
-    $('#pause-menu').onclick = () => { this.pause(false); this.menu(); };
+    $('#pause-menu').onclick = () => this.toTitle(); // Pause: zurück zum Titelbild (dort Weiterspielen oder Neues Spiel)
     // Einstellungen in der Pause: Ton, Mausempfindlichkeit (pro Gerät gemerkt)
     const pref = (() => { try { return JSON.parse(localStorage.getItem('hashwerk_prefs') || '{}'); } catch (e) { return {}; } })();
     const savePref = () => { try { localStorage.setItem('hashwerk_prefs', JSON.stringify(pref)); } catch (e) { /* egal */ } };
@@ -111,15 +111,18 @@ export class UI {
     sens.value = pref.sens || 1; const applySens = () => { this.w.player.sens = 0.0022 * (+sens.value || 1); const v = $('#ps-val'); if (v) v.textContent = (+sens.value).toLocaleString('de-DE', { minimumFractionDigits: 1 }) + '×'; };
     sens.oninput = () => { pref.sens = +sens.value; savePref(); applySens(); };
     setTimeout(() => { applySnd(); applySens(); }, 0);
+    // Grafik in der Pause (früher im eigenen „Menü“): Hoch / Mittel / Niedrig
+    if (!$('#ps-gfx')) { const q = h('<div id="ps-gfx" class="ps-q"><span>Grafik</span></div>'); for (const [k, l] of [['high', 'Hoch'], ['medium', 'Mittel'], ['low', 'Niedrig']]) { const b = h(`<button class="ps-qb" data-q="${k}">${l}</button>`); b.onclick = () => { this.w.setQuality(k); this.applyGfx(); }; q.append(b); } snd.after(q); }
     $('#clickhint').onclick = () => this.w.requestLock();
     game.on('toast', (t, k, ms) => this.toast(t, k, ms));
     const showMsg = (m) => { if (document.querySelector('#featcards .featcard:not(.lesson)') || document.getElementById('lvup') || this.lvBusy) { setTimeout(() => showMsg(m), 1200); return; } this.toast(`<b>${m.tip ? 'Tipp von ' : ''}${esc(m.from)}:</b> ${esc(m.text)}`, 'msg', m.tip ? 10000 : 7000); this.dock(); };
     this.flushMsgs = (base = 3000) => { const q = this.msgQ || []; this.msgQ = []; q.forEach((m, i) => setTimeout(() => showMsg(m), base + i * 2500)); };
     game.on('message', (m) => { if (this.inspUid || this.w.focus) { (this.msgQ ||= []).push(m); this.dock(); return; } showMsg(m); });
     game.on('news', () => this.ticker());
-    game.on('feature', (f) => this.featureCard(f));
-    game.on('lesson', (f) => { if (!f) this.lessonDone(); }); // Lektion benutzt: Hinweiskarte weg (die nächste kommt über 'feature')
-    game.on('milestone', (t, sub) => this.milestone(t, sub));
+    game.on('feature', (f) => { this.featureCard(f); this.goals(); this.sites(); }); // neue Funktion: Ziele und Standort-Leiste zeigen sie gleich
+    game.on('lesson', (f) => { if (!f) this.lessonDone(); this.goals(); }); // Lektion benutzt: Hinweiskarte weg (die nächste kommt über 'feature')
+    game.on('milestone', (t, sub) => { if (t !== 'Bonus') this.milestone(t, sub); }); // Bonusziele: eigene Überraschungskarte ('bonus')
+    game.on('bonus', (b) => this.bonusDone(b));
     game.on('won', () => this.ending());
     game.on('egoal', (id) => egoalDone(this, id));
     game.on('event', () => { this.evSnooze = null; this.tryEvent(); });
@@ -149,11 +152,13 @@ export class UI {
   missText(p, ex = null) { const g = this.g, gap = p - g.s.cash; if (!(gap > 0)) return ''; ex ??= g.has('market') ? g.exchangeValue() : 0; return `Dir fehlen ${this.money(gap)}${ex >= gap ? ' – verkauf Bitcoin an der Börse (M)' : ''}`; }
   buildAfford() {
     if (!document.body.classList.contains('show-build')) return;
-    const cash = this.g.s.cash, ex = this.g.has('market') ? this.g.exchangeValue() : 0;
+    const cash = this.g.s.cash, ex = this.g.has('market') ? this.g.exchangeValue() : 0; let again = false;
     for (const card of document.querySelectorAll('#build .item[data-price]')) {
       const p = +card.dataset.price, fp = +(card.dataset.fp || p), short = p > cash; const off = !!(card.dataset.hydro || card.dataset.sold || card.dataset.full); card.classList.toggle('dis', short || off); const pb = card.querySelector('.place'); if (pb) pb.disabled = short || off;
-      const m = card.querySelector('.miss'); if (m) { const t = card.dataset.full ? 'Kein Platz mehr – Zeit für einen größeren Standort' : fp > cash ? this.missText(fp, ex) : ''; if (m.textContent !== t) m.textContent = t; } // fp: voller Rig („Dir fehlen …“), p: kleinster Einstieg
+      const m = card.querySelector('.miss'); if (m) { const t = card.dataset.full ? 'Kein Platz mehr – Zeit für einen größeren Standort' : fp > cash ? (card.dataset.save ? this.saveText(fp, ex) : this.missText(fp, ex)) : ''; if (m.textContent !== t) m.textContent = t; } // fp: voller Rig („Dir fehlen …“), p: kleinster Einstieg
+      if (card.dataset.save && fp <= cash) again = true; // jetzt reicht's: Vorschlag neu bauen
     }
+    if (again && !this.affordT) this.affordT = setTimeout(() => { this.affordT = null; this.build(true); }, 50);
     for (const b of document.querySelectorAll('#build button[data-p]')) b.disabled = +b.dataset.p > cash || b.dataset.full === '1';
   }
   // Offener Katalog: Tagespreise aktualisieren, ohne die Karten neu aufzubauen
@@ -182,11 +187,12 @@ export class UI {
   speedBar() {
     const el = $('#speed'); el.innerHTML = '';
     SPEEDS.forEach((s) => { const b = h(`<button title="${s.t}">${s.l}</button>`); b.onclick = () => this.setSpeed(s.v); if (!this.speedOk(s.v)) b.style.display = 'none'; el.append(b); });
-    el.style.display = this.g.s.flags?.tutor && !this.g.has('speed2') ? 'none' : ''; // Anlernen: Tempo-Knöpfe erst mit dem Zeitraffer
+    el.style.display = this.speedShown() ? '' : 'none'; // Anlernen: Tempo-Knöpfe erst mit dem Zeitraffer
     this.setSpeed(this.g.s.speed ?? 0);
   }
+  speedShown() { return !this.g.s.flags?.tutor || this.g.has('speed2'); }
   speedOk(v) { const g = this.g; return v <= 1 || (v <= 4 && g.has('speed2')) || (v >= 5 && g.has('speed3')); } // Zeitraffer: Minuten bis 6 Std/s, schneller vorspulen: Tage pro Sekunde
-  setSpeed(v) { if (!this.speedOk(v)) { this.toast('Noch nicht freigeschaltet.', 'info', 1800); return; } this.g.s.speed = v; if (v) this.lastSpeed = v; this.g.s.paused = v === 0; if (v >= 2) this.g.learned?.('speed2'); if (v >= 5) this.g.learned?.('speed3'); [...$('#speed').children].forEach((b, i) => b.classList.toggle('on', SPEEDS[i].v === v)); }
+  setSpeed(v) { if (!this.speedOk(v)) return; this.g.s.speed = v; if (v) this.lastSpeed = v; this.g.s.paused = v === 0; if (v >= 2) this.g.learned?.('speed2'); if (v >= 5) this.g.learned?.('speed3'); [...$('#speed').children].forEach((b, i) => b.classList.toggle('on', SPEEDS[i].v === v)); } // gesperrtes Tempo: Taste tut nichts
   top() {
     const g = this.g, s = g.s;
     const vf = this.w.visFrac ?? s.frac, day = vf > 0.27 && vf < 0.79;
@@ -203,7 +209,8 @@ export class UI {
     const ease = (cur, target) => (cur == null || Math.abs(target - cur) > Math.abs(target) * 0.5 + 1e4 || Math.abs(target - cur) < 0.005 ? target : cur + (target - cur) * k);
     this.dCash = ease(this.dCash, s.cash); this.dNw = ease(this.dNw, nw);
     const mOn = !s.feat || s.flags.miningStarted;
-    for (const [id, ok] of [['#st-profit', mOn], ['#st-hash', mOn], ['#st-nw', g.has('rigs')], ['#st-btc', !s.flags.tutor || g.has('market')]]) $(id).style.display = ok ? '' : 'none';
+    const cashFlow = mOn && g.has('autosell') && Object.values(s.autoSell || {}).some((v) => v > 0); // „$ / Tag“ unterm Kontostand nur, wenn Coins wirklich aufs Konto fließen (Auto-Verkauf) – sonst steht der Ertrag als Coins am Bitcoin-Bestand
+    for (const [id, ok] of [['#st-profit', cashFlow], ['#st-hash', mOn], ['#st-nw', g.has('rigs')], ['#st-btc', !s.flags.tutor || g.has('market')]]) $(id).style.display = ok ? '' : 'none';
     document.body.classList.toggle('tut-nobtc', !!s.flags.tutor && !g.has('market')); // Anlernen: Bitcoin-Kurs erst mit der Börse (CSS erzwingt sonst die Anzeige)
     $('#st-cash').title = 'Bargeld · am 1. jedes Monats werden Miete und Strom abgebucht (Handy → Konto)'; $('#st-nw').title = 'Kontostand + Coins + Wiederverkaufswert der Hardware − Kredit, Papas Darlehen und Rechnungen'; $('#st-profit').title = 'Mining-Ertrag minus Strom, Miete, Löhne und Zinsen pro Tag';
     const ob = g.owed?.() || 0, dl = (g.nextBillDay?.() ?? s.day + 99) - s.day, est = ob <= 0 && mOn && s.flags.miningStarted && dl <= 5 ? g.billEstimate() : 0;
@@ -260,8 +267,8 @@ export class UI {
     el.classList.remove('hidden'); el.classList.toggle('edge', !sp.on); el.classList.toggle('left', !sp.on && sp.side < 0);
     const ex = sp.side < 0 ? 150 : innerWidth - 150, ey = Math.min(innerHeight - 140, Math.max(200, sp.front ? sp.y : innerHeight * 0.55));
     el.style.transform = sp.on ? `translate(${Math.round(sp.x)}px, ${Math.round(Math.min(sp.y, innerHeight - 120))}px)` : `translate(${ex}px, ${Math.round(ey)}px)`;
-    // nicht mit Meldungen überlappen
-    const mr = el.querySelector('.om-in').getBoundingClientRect(); let hit = false; for (const t of document.querySelectorAll('#toasts .toast')) { const r = t.getBoundingClientRect(); if (mr.right > r.left - 12 && mr.left < r.right + 12 && mr.bottom > r.top - 12 && mr.top < r.bottom + 12) { hit = true; break; } } el.style.visibility = hit ? 'hidden' : '';
+    // nicht mit Meldungen und Lektionskarten überlappen (der Marker scheint sonst durch die Handy-Karte)
+    const mr = el.querySelector('.om-in').getBoundingClientRect(); let hit = false; for (const t of document.querySelectorAll('#toasts .toast, #featcards .featcard')) { const r = t.getBoundingClientRect(); if (mr.right > r.left - 12 && mr.left < r.right + 12 && mr.bottom > r.top - 12 && mr.top < r.bottom + 12) { hit = true; break; } } el.style.visibility = hit ? 'hidden' : '';
     const t = el.querySelector('.om-t'), full = label; if (t.textContent !== full) t.textContent = full;
   }
   // Heute schon geschürft, aber noch nicht gutgeschrieben
@@ -276,14 +283,16 @@ export class UI {
     const on = (!s.feat || s.flags.miningStarted) && !document.getElementById('splash')?.offsetParent;
     el.style.display = on ? '' : 'none'; document.body.classList.toggle('has-wallet', on); document.body.classList.toggle('showrun', !!this.showRun); if (!on) return;
     if (this.rateDay !== s.day || !this.rateT || performance.now() - this.rateT > 1000) { this.rate = this.btcRate(); this.rateDay = s.day; this.rateT = performance.now(); }
-    const w = s.wallet.BTC, live = w.ex + w.cold + this.pendingBtc();
-    const txt = `<div class="v"><span class="cn">₿</span> ${fmtCoin(live)}</div><div class="l">≈ ${fmtUSD(live * g.price('BTC'))}</div>`;
+    const w = s.wallet.BTC, live = w.ex + w.cold + this.pendingBtc(), usd = live * g.price('BTC'), rate = s.flags.miningStarted ? this.rate || 0 : 0;
+    const txt = `<div class="v"><span class="cn">₿</span> ${fmtCoin(live)}</div><div class="l">${usd < 0.01 ? 'noch keinen Cent wert' : `≈ ${fmtUSD(usd)}`}${rate > 0 ? ` · schürft +${fmtCoin(rate)} BTC/Tag` : ''}</div>`; // Ertrag als Coins, am Bestand – nicht am Kontostand
     const pl = document.getElementById('pcb-live'); if (pl) { const pb = this.pendingBtc() + (w.ex + w.cold - (this.btcAtStart ?? 0)); const t2 = pb < 0.01 ? 'Miner startet …' : '₿ ' + pb.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); if (pl.textContent !== t2) pl.textContent = t2; }
     if (txt !== this.walletTxt) { el.innerHTML = txt; this.walletTxt = txt; }
   }
   bumpWallet() { const el = $('#st-wallet'); if (!el) return; el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
 
   // ---------- Standorte ----------
+  // Was zeigt die Standort-Leiste schon? Platz erst mit „Mehr PCs“, Strom mit Opas Nachricht (Firma) oder sobald er nach Zähler zählt, °C mit dem Wärmebild
+  siteBits(fid) { const g = this.g; return { plc: g.has('rigs'), pw: g.has('company') || g.elecPrice(fid) > 0, temp: g.has('heat') }; }
   sites() {
     const el = $('#sites'); el.innerHTML = '';
     const g = this.g;
@@ -292,13 +301,13 @@ export class UI {
       const sm = g.summary[f.id] || (un ? g.facSummary(f.id) : null);
       if (!un) {
         if (g.canUnlock(f.id)) { const b = h(`<div class="site" title="Freischalten"><div class="n">${f.short}</div><div class="m">${fmtUSD(f.cost)} · freischalten</div></div>`); b.onclick = () => this.company(); el.append(b); }
-        else if (f.tier === g.s.unlocked.length) el.append(h(`<div class="site locked"><div class="n">${f.short}</div><div class="m">${esc(f.place.split(',')[0])}</div></div>`));
-        continue;
+        continue; // gesperrte Standorte nicht ankündigen
       }
-      const kw = sm.watt / 1000, cap = sm.capKw, ci = this.capInfo(f.id);
+      const kw = sm.watt / 1000, cap = sm.capKw, ci = this.capInfo(f.id), sb = this.siteBits(f.id);
+      const caps = `${sb.plc ? `<span class="cp ${ci.c.used >= ci.c.max ? 'full' : ''}" title="Stellplätze für Rigs, Miner und Regale"><em>Platz</em> ${ci.plc}<i><b style="width:${ci.sp}%"></b></i></span>` : ''}${sb.pw ? `<span class="cp ${ci.pp >= 90 ? 'full' : ''}" title="Last am Stromanschluss"><em>Strom</em> ${ci.pw}<i><b style="width:${ci.pp}%"></b></i></span>` : ''}`;
       const b = h(`<div class="site ${g.s.current === f.id ? 'on' : ''}"><div class="n">${f.short} ${sm.tripped ? '<b class="neg">· Sicherung raus</b>' : ''}${g.s.fac[f.id].mothball ? '<b class="moth">· eingemottet</b>' : ''}</div>
-        <div class="m" title="${kw < 10 ? kw.toFixed(2) : kw.toFixed(0)} / ${cap} kW"><span class="${sm.temp > 38 ? 'neg' : ''}">${sm.temp.toFixed(0)} °C</span></div>
-        <div class="caps"><span class="cp ${ci.c.used >= ci.c.max ? 'full' : ''}" title="Stellplätze für Rigs, Miner und Regale"><em>Platz</em> ${ci.plc}<i><b style="width:${ci.sp}%"></b></i></span><span class="cp ${ci.pp >= 90 ? 'full' : ''}" title="Last am Stromanschluss"><em>Strom</em> ${ci.pw}<i><b style="width:${ci.pp}%"></b></i></span></div></div>`);
+        ${sb.temp ? `<div class="m" title="${kw < 10 ? kw.toFixed(2) : kw.toFixed(0)} / ${cap} kW"><span class="${sm.temp > 38 ? 'neg' : ''}">${sm.temp.toFixed(0)} °C</span></div>` : ''}
+        ${caps ? `<div class="caps">${caps}</div>` : ''}</div>`);
       b.onclick = () => { if (g.s.current !== f.id) this.goSite(f.id); };
       el.append(b);
     }
@@ -338,9 +347,9 @@ export class UI {
     if (!force && el.childElementCount) return;
     this.lastBuildDay = g.s.day;
     el.innerHTML = '';
-    const head = h(`<div class="bhead"><h2>Shop${pm ? '<span class="bsub">Online-Shop · Lieferung morgen vor deine Wohnungstür</span>' : ''}</h2><button class="modal-x" title="Schließen (B)">✕</button></div>`); head.querySelector('button').onclick = () => this.resume(); head.lastElementChild.before(this.capStrip(fac)); el.append(head);
+    const head = h(`<div class="bhead"><h2>Shop${pm ? '<span class="bsub">Online-Shop · Lieferung morgen vor deine Wohnungstür</span>' : ''}</h2><button class="modal-x" title="Schließen (B)">✕</button></div>`); head.querySelector('button').onclick = () => this.resume(); const cs = this.capStrip(fac); if (cs) head.lastElementChild.before(cs); el.append(head);
     const cats = h('<div class="cats"></div>');
-    const catOk = (c) => (c.id === 'parts' ? (g.has('rigs') || !!g.s.flags.cpuStart) && PARTS.some((p) => g.available(p)) : (c.id !== 'rigs' || g.has('rigs')) && g.shopList(c.id, fac).length > 0); // CPU-Start: Teile (Grafikkarten) gleich von Anfang an
+    const catOk = (c) => (c.id === 'parts' ? (g.has('rigs') || !!g.s.flags.cpuStart) && PARTS.some((p) => g.available(p)) : (c.id !== 'rigs' || g.has('rigs')) && (c.id !== 'cool' || g.has('heat')) && (c.id !== 'decor' || this.decorOk()) && g.shopList(c.id, fac).length > 0); // CPU-Start: Teile (Grafikkarten) gleich von Anfang an; Kühlung mit dem Wärmebild, Deko mit Mamas Nachricht
     if (!CATEGORIES.some((c) => c.id === this.cat && catOk(c))) this.cat = (CATEGORIES.find(catOk) || CATEGORIES[0]).id;
     for (const c of CATEGORIES.filter(catOk)) { const b = h(`<button class="${this.cat === c.id ? 'on' : ''}"><span class="ic">${c.icon}</span>${c.name}</button>`); b.onclick = () => { this.cat = c.id; this.build(true); }; cats.append(b); }
     el.append(cats);
@@ -354,6 +363,7 @@ export class UI {
     if (!items.length) list.append(h('<div class="empty">Noch nichts da.</div>'));
     for (const it of items) {
       const lk = g.skillLock(it); // Fähigkeit fehlt (z. B. Milchkiste: Riser und Open-Frame, FPGA, Roboter)
+      if (lk && !g.has('skills')) continue; // ohne Fähigkeiten-Baum gibt es keinen Weg dorthin: ausblenden
       if (lk) { const c = h(`<div class="item dis sk-locked"><div class="t"><span>${esc(it.name)}</span><span class="p">${this.money(g.itemPrice(it))}</span></div><div class="s">${esc(it.desc || '')}</div><div class="sk-lock"><span>${esc(lk)}</span></div><button class="btn small">Im Fähigkeiten-Baum ansehen</button></div>`); try { const url = this.w.thumbnail(it.id); if (url) c.prepend(h(`<div class="thumb"><img alt="" src="${url}"/></div>`)); } catch (e) { /* ohne Vorschau */ } c.querySelector('button').onclick = (e) => { e.stopPropagation(); this.resume(); this.skills(it.skill); }; list.append(c); continue; }
       if (it.kind === 'rig') { list.append(this.rigCard(it, fac)); continue; }
       const price = g.itemPrice(it); const isNew = g.s.day - it.releaseDay < 120;
@@ -377,18 +387,10 @@ export class UI {
       };
       list.append(card);
     }
-    // Vorschau: was demnächst erscheint (echte Release-Daten)
-    const soon = (this.cat === 'rigs' ? [...PLACEABLES.filter((p) => p.cat === 'rigs'), ...PARTS.filter((p) => p.type === 'gpu' || p.type === 'mobo')] : PLACEABLES.filter((p) => p.cat === this.cat))
-      .filter((p) => p.releaseDay > g.s.day).sort((a, b) => a.releaseDay - b.releaseDay).slice(0, 3);
-    if (soon.length) {
-      list.append(h('<div style="font-size:11px;color:#7d8aa0;text-transform:uppercase;letter-spacing:.8px;margin:10px 4px 6px">Demnächst</div>'));
-      for (const it of soon) {
-        const spec = it.kind === 'device' ? `${fmtHash(it.hash, it.algo)} · ${fmtWatt(it.watt)}` : it.type === 'gpu' ? `${it.vram} GB · ${it.watt} W` : it.type === 'mobo' ? `${it.slots} GPU-Slots` : '';
-        list.append(h(`<div class="item dis" style="cursor:default"><div class="t"><span>${esc(it.name)}</span><span class="p" style="color:#7d8aa0">${it.release.slice(5, 7)}/${it.release.slice(0, 4)}</span></div><div class="s">${spec}</div></div>`));
-      }
-    }
     el.append(list);
   }
+  // Deko im Shop erst mit einem Grund (Mamas Nachricht), alte Stände ohne Anlernen wie bisher
+  decorOk() { const s = this.g.s; return !s.flags?.tutor || s.chapter >= 2 || s.messages.some((m) => m.id === 'mDeko'); }
   // Kaufknopf: im Paket-Modus „Bestellen · X $“, sonst „Platzieren · X $“
   buyLabel(price, verb = null) { return `${verb || (this.g.parcelMode() ? 'Bestellen' : 'Platzieren')} · ${this.money(price)}`; }
   // Shop oben: was unterwegs ist, was vor der Tür liegt, und der Bestand „Ausgepackt – zum Aufstellen“
@@ -456,16 +458,20 @@ export class UI {
     this.pause(false);
     if (!$('#modal').classList.contains('hidden') && this.modalKind === 'event' && this.g.s.ev?.open) this.evSnooze = this.g.s.ev.open.key; // ESC = später entscheiden
     if (!$('#modal').classList.contains('hidden')) { this.modalKind = null; document.body.dataset.modal = ''; $('#modal').classList.add('hidden'); this.onModalClose?.(); this.onModalClose = null; }
-    document.body.classList.remove('show-build', 'show-goals'); this.dock();
+    this.modalBack = null; document.body.classList.remove('show-build', 'show-goals'); this.dock();
     if (this.inspUid) { this.inspUid = null; $('#inspector').classList.add('hidden'); this.w.select(null); }
     this.w.focusObject?.(null); this.pickType = null; this.showRun = false; this.w.ghostPart?.(null);
     const hadLv = !!this.lvQ;
     if (this.lvQ) { const [k, lv] = this.lvQ; this.lvQ = null; this.lvBusy = true; setTimeout(() => this.levelUp(k, lv), 2600); }
     this.osWiz = null; // Installer bricht mit dem Schließen des Inspektors ab
-    this.flushMsgs?.(hadLv ? 7200 : 3000);
+    this.flushMsgs?.(hadLv ? 7200 : 3000); this.keysHint();
     if (this.w.mode === 'ui' || this.w.mode === 'play') this.w.setMode('play');
   }
+  applyGfx() { document.querySelectorAll('#ps-gfx .ps-qb').forEach((b) => b.classList.toggle('on', b.dataset.q === this.w.quality)); }
+  // Pause → „Zum Titelbild“: speichern, dann neu laden – dort Weiterspielen oder Neues Spiel
+  toTitle() { if (!this.g.save()) { this.toast('Speichern fehlgeschlagen – bleib lieber hier.', 'bad', 3000); return; } location.reload(); }
   pause(on) {
+    if (on) { this.applyGfx(); const yb = $('#ps-year'); if (yb) yb.style.display = this.g.s.flags?.yrSeen || this.pref?.year === false ? '' : 'none'; } // Jahresrückblick-Schalter erst nach dem ersten Rückblick
     if (on && !this.paused) this.pausedAt = performance.now();
     this.paused = on; this.w.paused = on; // Welt: keine Bewegung/Spieltasten in der Pause
     $('#pause').classList.toggle('hidden', !on);
@@ -493,7 +499,7 @@ export class UI {
   showFeatures() {
     const les = this.g.lesson(), isLes = les && (this.featQ || []).includes(les); // Anlernen: Lektionskarte darf neben der Handy-Nachricht stehen
     if (this.w.mode !== 'play' || this.paused || document.getElementById('lvup') || this.lvQ || this.lvBusy || (!isLes && document.querySelector('#toasts .toast.msg'))) { clearTimeout(this.featT); this.featT = setTimeout(() => this.showFeatures(), 700); return; }
-    const q = this.featQ || []; this.featQ = []; if (!q.length) return;
+    const done = this.g.s.flags?.tutor ? this.g.s.learn?.done || {} : {}, q = (this.featQ || []).filter((f) => f === les || !done[f]); this.featQ = []; if (!q.length) return; // schon benutzt (z. B. Shop gleich geöffnet): keine nachträgliche „Neu“-Karte
     if (isLes) { this.lessonCard(les); return; }
     this.audio?.message();
     const box = $('#featcards'); box.innerHTML = '';
@@ -670,17 +676,18 @@ export class UI {
       ag.onclick = () => { if (pm) { this.orderAgain(lock ? src : o, lock); return; } this.resume(); this.w.startPlacement(o.type, null, lock ? kitT() : o); };
       const as = h('<div class="sec again-sec"></div>'); as.append(ag);
       if (ow) as.append(h(`<div class="again-why">${esc(ow)}.</div>`));
-      else if (rig && !full && lock && cid && !g.readyOk(o.type)) { const ll = h(this.lockLine(cid)); this.lockWire(ll); as.append(ll); }
+      else if (rig && !full && lock && cid && !g.readyOk(o.type)) { const lt = this.lockLine(cid); if (lt) { const ll = h(lt); this.lockWire(ll); as.append(ll); } } // Sperrkasten erst nach Kemals Vorstellung
       else if (rig && !full && !lock) { const kb = h(`<button class="btn small again-kit" ${ck > g.s.cash ? 'disabled' : ''} title="Gleiches Gehäuse, alle Teile ins Lager – selbst einbauen (günstiger, Schrauben-EP)">Als Bausatz${pm ? ' bestellen' : ''} · ${this.money(ck)}</button>`); kb.onclick = () => { if (pm) { this.orderAgain(o, true); return; } this.resume(); this.w.startPlacement(o.type, null, kitT()); }; as.append(kb); }
       c.prepend(as);
     }
     if (ks) c.prepend(ks);
-    const mv = h('<button class="btn">✥ Verschieben</button>'); mv.onclick = () => { this.resume(); this.w.startPlacement(o.type, uid); }; row.append(mv);
-    const mvb = this.moveButton(o); if (mvb) row.append(mvb);
-    const rt = h('<button class="btn">⟳ Drehen</button>'); rt.onclick = () => { const r0 = o.rot; o.rot = (o.rot + 1) % 4; if (!this.w.canPlace(def, o.x, o.z, o.rot, uid)) { o.rot = r0; this.toast('Kein Platz zum Drehen.', 'bad'); } this.w.syncObjects(); }; row.append(rt);
+    const first = g.isFirstPc(o); // der erste PC bleibt, wo er ist: kein Verschieben, Drehen oder Umziehen
+    if (!first) { const mv = h('<button class="btn">✥ Verschieben</button>'); mv.onclick = () => { this.resume(); this.w.startPlacement(o.type, uid); }; row.append(mv); }
+    const mvb = first ? null : this.moveButton(o); if (mvb) row.append(mvb);
+    const rt = first ? null : h('<button class="btn">⟳ Drehen</button>'); if (rt) rt.onclick = () => { const r0 = o.rot; o.rot = (o.rot + 1) % 4; if (!this.w.canPlace(def, o.x, o.z, o.rot, uid)) { o.rot = r0; this.toast('Kein Platz zum Drehen.', 'bad'); } this.w.syncObjects(); }; if (rt) row.append(rt);
     if (def.kind !== 'decor' && !g.slotKind(def)) { const blk = g.cloneBlocked(o), pm = g.parcelMode(); const dp = h(`<button class="btn" title="${blk ? esc(blk) + ' gibt es nicht mehr zu kaufen' : pm ? 'Gleiches Gerät noch mal bestellen – Lieferung morgen' : 'Gleiches Objekt inkl. Teilen noch mal kaufen'}" ${blk ? 'disabled' : ''}>⧉ ${pm ? 'Nachbestellen' : 'Duplizieren'} ${blk ? '· Teile nicht mehr im Handel' : `(${fmtUSD(this.g.cloneCost ? this.g.cloneCost(o) : 0)})`}</button>`); dp.onclick = () => { if (pm) { this.orderAgain(o, false); return; } this.resume(); this.w.startPlacement(o.type, null, o); }; row.append(dp); }
-    const sell = h(`<button class="btn danger">Verkaufen (+${fmtUSD(g.objectValue(o))})</button>`); sell.onclick = () => { if (!g.canSell(o)) { this.toast('Den PC brauchst du noch.', 'info', 2500); return; } g.removeObject(uid); this.resume(); }; row.append(sell);
-    c.append(row);
+    if (g.canSell(o)) { const sell = h(`<button class="btn danger">Verkaufen (+${fmtUSD(g.objectValue(o))})</button>`); sell.onclick = () => { const v = g.objectValue(o); if (!g.canSell(o)) return; g.removeObject(uid); this.resume(); this.audio?.cash?.(); this.toast(`Verkauft für ${this.money(v)}`, 'good', 2500); }; row.append(sell); } // nur, wo es auch wirklich geht
+    if (row.childElementCount) c.append(row);
   }
   // „Noch so einen“ / Nachbestellen im Paket-Modus (Game.orderClone)
   orderAgain(src, kit) {
@@ -694,7 +701,7 @@ export class UI {
   // ---------- Umziehen: Gerät samt Teilen an einen anderen Standort ----------
   moveButton(o) {
     const g = this.g, def = PLACEABLE[o.type]; if (!g.slotKind(def) && def.kind !== 'cooling') return null;
-    if (g.isFirstPc(o)) return h('<button class="btn" disabled title="Dein erster PC bleibt in der Wohnung – zur Erinnerung">Bleibt in der Wohnung</button>');
+    if (g.isFirstPc(o)) return null; // der erste PC bleibt in der Wohnung
     const from = g.facOf(o.uid), tg = g.s.unlocked.filter((id) => id !== from); if (!tg.length) return null;
     if (tg.length === 1) {
       const to = tg[0], why = g.moveWhy(o, to), fee = g.moveFee(o, to);
@@ -712,7 +719,7 @@ export class UI {
       const b = h(`<button class="btn small ${why ? '' : 'primary'}" style="margin-top:6px" ${why ? 'disabled' : ''}>${fee ? `Hinbringen · ${this.money(fee)}` : 'Hinbringen'}</button>`); b.onclick = () => { this.closeModal(); this.doMove(o.uid, to); };
       c.append(b); cards.append(c);
     }
-    this.openModal(body, 'narrow', 'move');
+    this.openModal(body, 'narrow', 'move', true); // Unterfenster des Inspektors
   }
   doMove(uid, to) {
     const g = this.g, o = g.findObj(uid); if (!o) return;
@@ -769,9 +776,15 @@ export class UI {
     if (def.kind !== 'decor' && a.watt > 0) rows.push(['Verbrauch', fmtWatt(a.watt)]);
     if (def.kind === 'cooling') { rows.push(['Kühlleistung', fmtWatt(def.cool)]); rows.push(['Auslastung', `${Math.round((a.util ?? 1) * 100)} %`]); }
     if (sm.elec === 0 && g.s.flags.miningStarted) rows.push(['Strom', '<span class="pos">Pauschale in der Warmmiete</span>']);
-    if (a.units.length) { rows.push(['Ertrag / Tag', `<span class="pos">${fmtUSD(rev)}</span>`]); if (cost > 0.005) rows.push(['Strom / Tag', `<span class="neg">−${fmtUSD(cost)}</span>`]); if (cost > 0.005) rows.push(['Gewinn / Tag', `<b class="${rev - cost >= 0 ? 'pos' : 'neg'}">${fmtUSD(rev - cost)}</b>`]); }
+    if (a.units.length) { rows.push(['Ertrag / Tag', this.coinYield(a.units, sm.throttle, rev)]); if (cost > 0.005) rows.push(['Strom / Tag', `<span class="neg">−${fmtUSD(cost)}</span>`]); if (cost > 0.005) rows.push(['Gewinn / Tag', `<b class="${rev - cost >= 0 ? 'pos' : 'neg'}">${fmtUSD(rev - cost)}</b>`]); }
     else if (def.kind === 'cooling') rows.push(['Strom / Tag', `<span class="neg">−${fmtUSD(cost)}</span>`]);
     const el = $('#insp-stats'); if (el) el.innerHTML = `<div class="kv">${rows.map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join('')}</div>`;
+  }
+  // Ertrag eines Geräts: als Coins (mit Dollarwert in Klammern) – geschürft wird Bitcoin, kein Bargeld
+  coinYield(units, thr, rev) {
+    const g = this.g, by = {}; for (const u of units) if (u.coin && u.rev > 0) by[u.coin] = (by[u.coin] || 0) + (u.rev * thr) / (g.price(u.coin) || 1);
+    const ks = Object.keys(by); if (ks.length !== 1) return `<span class="pos">${fmtUSD(rev)}</span>${ks.length ? ' <span style="color:var(--dim)">in Coins</span>' : ''}`;
+    const n = by[ks[0]]; return `<span class="pos">≈ ${n >= 10 ? Math.round(n).toLocaleString('de-DE') : fmtCoin(n)} ${ks[0]}</span> <span style="color:var(--dim)">(${fmtUSD(rev)})</span>`;
   }
   // Erster Mining-PC: Schritt für Schritt zusammenbauen
   pcBuild(o) {
@@ -801,7 +814,7 @@ export class UI {
       (partsBox || sec).append(row);
     });
     // CPU-Start: der Grafikkarten-Platz bleibt erst mal frei – die Karte bestellt man später im Shop
-    if (!need.includes('gpu')) { const gid = p.gpus[0], gi = gid ? PART[gid] : null; (partsBox || sec).append(h(`<div class="pcb-step ${gi ? 'done' : 'opt'}"><span class="ic">${partSvg('gpu')}${gi ? '<i class="tick"></i>' : ''}</span><div class="tx"><b>Grafikkarte</b><span>${gi ? esc(gi.name) : 'Noch keine – der Prozessor schürft erst mal allein. Eine Karte bestellst du später im Shop.'}</span></div></div>`)); }
+    if (!need.includes('gpu')) { const gid = p.gpus[0], gi = gid ? PART[gid] : null; (partsBox || sec).append(h(`<div class="pcb-step ${gi ? 'done' : 'opt'}"><span class="ic">${partSvg('gpu')}${gi ? '<i class="tick"></i>' : ''}</span><div class="tx"><b>Grafikkarte</b><span>${gi ? esc(gi.name) : `Noch keine – der Prozessor schürft erst mal allein.${g.has('build') ? ' Eine Karte bestellst du im Shop.' : ''}`}</span></div></div>`)); }
     if (!running) {
       // Live-Vorschau: was der PC mit den eingebauten Teilen schafft
       const hs = [p.cpu, ...p.gpus].filter(Boolean).reduce((a, id) => a + (PART[id].hash.sha256 || 0), 0), watt = g.rigWatt(o);
@@ -843,7 +856,7 @@ export class UI {
       if (type === 'gpu' || type === 'cpu') {
         const c = g.bestCoin(it.hash, it.vram || 99); const r = c ? g.revenueFor(it.hash, c, it.vram || 99) : 0; const cost = it.watt / 1000 * 24 * elec;
         const algos = Object.entries(it.hash).map(([a, v]) => `${ALGO_LABEL[a]} ${fmtHash(v, a)}`).slice(0, 3).join(' · ');
-        s = `${it.watt} W${it.vram ? ` · ${it.vram} GB` : ''} · ${algos}<br/>Allein: ${c ? `<b class="${r - cost >= 0 ? 'pos' : 'neg'}">${fmtUSD(r - cost)}/Tag</b> mit ${COIN[c].name}` : 'kein lohnender Coin'}`;
+        const multi = g.has('coins'); s = `${it.watt} W${it.vram && multi ? ` · ${fmtNum(it.vram, it.vram < 1 ? 1 : 0)} GB` : ''} · ${algos}<br/>Schürft allein: ${c ? `<b class="${r - cost >= 0 ? 'pos' : 'neg'}">${fmtUSD(r - cost)}/Tag</b>${multi ? ` mit ${COIN[c].name}` : ''}` : 'kein lohnender Coin'}`;
       }
       if (type === 'psu') s = `${it.cap} W Kapazität`;
       if (type === 'mobo') s = `${it.slots} GPU-Slots (Rahmen: max. ${PLACEABLE[o.type].maxGpu})`;
@@ -861,7 +874,7 @@ export class UI {
       };
       list.append(row);
     }
-    this.openModal(body, 'narrow');
+    this.openModal(body, 'narrow', 'parts', true); // Unterfenster des Inspektors
   }
   holderUI(o) {
     const g = this.g, def = PLACEABLE[o.type];
@@ -892,64 +905,74 @@ export class UI {
   }
 
   // ---------- Ziele ----------
+  // Eine Zeile: das erste offene Ziel, dessen Grund schon da ist (goalVisible). Bonusziele bleiben unsichtbar, bis man sie schafft (bonusDone).
   goals() {
     const el = $('#goals'), g = this.g, s = g.s;
     const ch = CHAPTERS[s.chapter];
-    el.innerHTML = '';
+    el.innerHTML = ''; this.shownGoal = null;
+    const fin = () => el.classList.toggle('empty', !el.childElementCount);
     // Freischaltbarer Standort: eine Zeile
     const fu = FACILITIES.find((f) => g.canUnlock(f.id));
-    if (fu) { const b = h(`<div class="goal next"><div class="ck"></div><div>${esc(fu.short)} ist frei · geh durch die Tür</div></div>`); el.append(b); return; }
-    if (!ch) { endlessGoals(this, el); return; }
-    const nDone = ch.goals.filter((go) => s.goals[go.id]).length;
-    let shown = 0;
-    for (const go of ch.goals) {
-      const done = !!s.goals[go.id];
-      if (done || shown >= 1) continue; shown++;
-      let prog = '';
-      if (!done && go.progress && !(go.id === 'pcbuild' && this.w.facId === 'keller')) { const [cur, tgt, kind, fid] = go.progress(s, g.helpers()); if (kind === 'n' || kind === 'fill' || kind === 'use') prog = this.goalProg(cur, tgt, kind, fid); else if (kind === 'parts') { const lp = this.lastPick && performance.now() - this.lastPick.at < 1200 ? `<span class="lastpick">+ ${PNAME[this.lastPick.t]}</span>` : ''; prog = `<span class="cnt">${cur} / ${tgt}</span>${lp}`; } else { const f = (v) => (kind === 'hash' ? fmtHash(v) : fmtUSD(v)); const pc = Math.max(0, Math.min(100, tgt ? (cur / tgt) * 100 : 0)); prog = `<div style="font-size:11px;color:var(--dim)">${f(Math.max(0, cur))} / ${f(tgt)}</div><div class="bar" style="width:180px"><div style="width:${pc}%;background:#ffb000"></div></div>`; } }
-      // Bezahl-Ziele: Fortschritt aus Bargeld + verkaufbaren Coins (Börse und Cold-Wallet) bis zum offenen Rest
-      const left = go.action ? g.payLeft(go) : 0, paid = go.action ? g.payPaid(go) : 0;
-      if (!done && go.action) { const fund = Math.min(g.payFunds(), left), pc = left ? Math.max(0, Math.min(100, (fund / left) * 100)) : 100; prog = `${paid > 0 && left > 0 ? `<span class="gnoch"> · noch ${fmtUSD(left)}</span>` : ''}<div class="gpay" title="Bargeld und Coins (Börse und Cold-Wallet, nach Gebühr) – was an Bargeld fehlt, wird beim Bezahlen aus den Coins verkauft"><span class="cnt">${fmtNum(Math.floor(fund), 0)} / ${this.money(left)}</span><div class="bar" style="width:180px"><div style="width:${pc}%;background:#ffb000"></div></div></div>`; }
-      const gk = s.chapter + ':' + go.id, enter = gk !== this.goalKey; this.goalKey = gk;
-      const bag = s.loose && !s.flags.miningStarted && go.id === 'collect' ? `<span class="bag">${g.firstNeed().map((t) => `<i class="${s.loose[t] ? 'miss' : 'got'}" title="${PNAME[t]}${s.loose[t] ? ' – noch nicht gefunden' : ' – eingesammelt'}">${partSvg(t, 16)}${s.loose[t] ? '' : '<b class="tk"></b>'}<em>${{ mobo: 'Board', cpu: 'CPU', gpu: 'GPU', psu: 'Netzteil' }[t]}</em></i>`).join('')}</span>` : '';
-      const gtext = (go.id === 'sell' && !g.has('market') ? 'Lass deinen PC ein paar Tage schürfen' : go.id === 'pcbuild' && this.w.facId === 'keller' ? `Alle ${g.firstNeed().length} Teile gefunden · zurück in die Wohnung` : go.text) + (go.orDate ? ` – sonst ab ${this.monthYear(g.orDate(ch, go))}` : '');
-      const gh = this.goalHint(go);
-      const row = h(`<div class="goal ${done ? 'done' : ''} ${enter ? 'enter' : ''}"><div class="ck">${done ? '✓' : ''}</div><div>${bag ? `<div class="goal-line">${esc(gtext)}${prog}</div>${bag}` : `${esc(gtext)}${prog}`}${gh ? `<div class="goal-hint">${gh}</div>` : ''}</div></div>`);
-      if (!done && go.action) { const b = h(`<button class="btn small primary"><kbd>G</kbd>${esc(go.action.label)}</button>`); b.disabled = !g.canPayGoal(go); b.onclick = () => { if (g.goalAction(go)) { this.toast('✔ Erledigt!', 'good'); this.goals(); } }; row.lastElementChild.append(h('<br/>'), b); }
-      el.append(row);
-      if (!done && go.open === 'company' && g.has('company')) { const cb = h('<button class="btn small primary"><kbd>C</kbd>Zur Firma: Ausbauten</button>'); cb.onclick = () => this.company(); row.lastElementChild.append(h('<br/>'), cb); } // z. B. Opas Nachtstromzähler
-      if (!done && go.action) { // Raten (z. B. 1.000 $ für Papas Laden): Knopf zeigt den Rest, daneben eine Rate
-        const b0 = row.querySelector('button.primary'); if (b0 && paid > 0) b0.innerHTML = `<kbd>G</kbd>${esc(`Rest überweisen · ${fmtUSD(left)}`)}`;
-        const part = go.action.part;
-        if (part && left > part) { const pb = h(`<button class="btn small" title="Eine Rate – was an Bargeld fehlt, kommt aus deinen Coins (erst Börse, dann Cold-Wallet)">${fmtUSD(part)} einzahlen</button>`); pb.disabled = !g.canPayGoal(go, part); pb.onclick = () => { if (g.goalAction(go, true)) { this.toast(`${fmtUSD(part)} eingezahlt – noch ${fmtUSD(g.payLeft(go))}`, 'good', 3500); this.audio?.cash?.(); this.goals(); this.top(); } }; row.lastElementChild.append(' ', pb); }
-      }
-      const od = ch.goals.find((x) => x.skip && !s.goals[x.id] && x !== go); // „voll → schneller weiter“ immer sichtbar
-      if (od && !ch.hard && s.flags.miningStarted && g.has('rigs')) { const [c2, t2, k2, f2] = od.progress ? od.progress(s, g.helpers()) : [0, 1, 'n'], rest = ch.goals.every((x) => x === od || s.goals[x.id]), sh = FACILITY[ch.unlock]?.short || 'weiter'; el.append(h(`<div class="goal sub"><div class="ck"></div><div>${esc(od.text)} <span class="gor">→ ${esc(rest || s.day >= toDay(ch.minDate) ? `${sh} sofort` : `${sh} schon vor ${this.monthYear(ch.minDate)}`)}</span>${this.goalProg(c2, t2, k2, f2)}</div></div>`)); } // „sofort“ nur, wenn sonst alles erledigt ist
+    if (fu) { const b = h(`<div class="goal next"><div class="ck"></div><div>${esc(fu.short)} ist frei · geh durch die Tür</div></div>`); el.append(b); fin(); return; }
+    if (!ch) { endlessGoals(this, el); fin(); return; }
+    const first = ch.goals.find((x) => !s.goals[x.id]);
+    let go = null; for (const x of ch.goals) { if (s.goals[x.id]) continue; if (this.goalVisible(x)) { go = x; break; } if (!x.skip) break; } // der Reihe nach; nur „Fülle …“ unter 70 % wird übersprungen
+    if (!go) {
+      // Anlernen: zwischen Einschalten und Shop – erst die Börse ansehen
+      if (first?.id === 'gpuorder' && g.lesson() === 'market') el.append(h('<div class="goal"><div class="ck"></div><div>Schau an der Börse, was deine Bitcoin wert sind</div></div>'));
+      else if (s.flags.miningStarted && s.day < toDay(ch.minDate) && ch.goals.every((x) => s.goals[x.id] || x.skip)) el.append(h(`<div class="goal wait" title="${esc(ch.waitText || '')}"><div class="ck"></div><div>${ch.unlock ? `${esc(FACILITY[ch.unlock].short)} ab ${this.monthYear(ch.minDate)}` : `Weiter ab ${this.monthYear(ch.minDate)}`}</div></div>`)); // Wartezeit: wann es weitergeht (Grund im Tooltip)
+      fin(); return;
     }
-    const allDone = ch.goals.every((go) => s.goals[go.id]);
-    this.goalsBonus(el, ch, allDone && s.day < toDay(ch.minDate), !allDone && g.saving(ch));
+    this.shownGoal = go;
+    let prog = '';
+    if (go.progress && !(go.id === 'pcbuild' && this.w.facId === 'keller')) { const [cur, tgt, kind, fid] = go.progress(s, g.helpers()); if (kind === 'n' || kind === 'fill' || kind === 'use') prog = this.goalProg(cur, tgt, kind, fid); else if (kind === 'parts') { const lp = this.lastPick && performance.now() - this.lastPick.at < 1200 ? `<span class="lastpick">+ ${PNAME[this.lastPick.t]}</span>` : ''; prog = `<span class="cnt">${cur} / ${tgt}</span>${lp}`; } else { const f = (v) => (kind === 'hash' ? fmtHash(v) : fmtUSD(v)); prog = `<span class="cnt">${f(Math.max(0, cur))} / ${f(tgt)}</span>`; } }
+    // Bezahl-Ziele: Fortschritt aus Bargeld + verkaufbaren Coins (Börse und Cold-Wallet) bis zum offenen Rest
+    const left = go.action ? g.payLeft(go) : 0, paid = go.action ? g.payPaid(go) : 0;
+    if (go.action) { const fund = Math.min(g.payFunds(), left); prog = `<span class="cnt" title="Bargeld und Coins (nach Gebühr) – was an Bargeld fehlt, wird beim Bezahlen aus den Coins verkauft">${fmtNum(Math.floor(fund), 0)} / ${this.money(left)}</span>`; }
+    const gk = s.chapter + ':' + go.id, enter = gk !== this.goalKey; this.goalKey = gk;
+    const bag = s.loose && !s.flags.miningStarted && go.id === 'collect' ? `<span class="bag">${g.firstNeed().map((t) => `<i class="${s.loose[t] ? 'miss' : 'got'}" title="${PNAME[t]}${s.loose[t] ? ' – noch nicht gefunden' : ' – eingesammelt'}">${partSvg(t, 16)}${s.loose[t] ? '' : '<b class="tk"></b>'}<em>${{ mobo: 'Board', cpu: 'CPU', gpu: 'GPU', psu: 'Netzteil' }[t]}</em></i>`).join('')}</span>` : '';
+    const step = this.goalStep(go);
+    const gtext = step || ((go.id === 'sell' && !g.has('market') ? 'Lass deinen PC ein paar Tage schürfen' : go.id === 'pcbuild' && this.w.facId === 'keller' ? `Alle ${g.firstNeed().length} Teile gefunden · zurück in die Wohnung` : go.text) + (go.orDate && !go.skip ? ` – sonst ab ${this.monthYear(g.orDate(ch, go))}` : go.skip && ch.unlock ? ` → ${FACILITY[ch.unlock].short} sofort` : ''));
+    const row = h(`<div class="goal ${enter ? 'enter' : ''}"><div class="ck"></div><div>${bag ? `<div class="goal-line">${esc(gtext)}${step ? '' : prog}</div>${bag}` : `${esc(gtext)}${step ? '' : prog}`}</div></div>`);
+    if (go.action) { const b = h(`<button class="btn small primary"><kbd>G</kbd>${esc(paid > 0 && left > 0 ? `Rest überweisen · ${fmtUSD(left)}` : go.action.label)}</button>`); b.disabled = !g.canPayGoal(go); b.onclick = () => { if (g.goalAction(go)) { this.toast('✔ Erledigt!', 'good'); this.goals(); } }; row.lastElementChild.append(b); }
+    if (go.open === 'company' && g.has('company')) { const cb = h(`<button class="btn small primary"><kbd>C</kbd>Ausbauten</button>`); cb.onclick = () => this.company(); row.lastElementChild.append(cb); } // z. B. Opas Nachtstromzähler
+    el.append(row); fin();
   }
-  // Wie geht das Ziel? Kurzer Hinweis unter „zweiter PC“ / „erstes Rig im Keller“ (Bausatz zuerst, fertig bestückt über Kontakte)
-  goalHint(go) {
+  // Grund schon da? Ziele erscheinen erst nach ihrer Nachricht bzw. Freischaltung; „Fülle …“ erst ab etwa 70 %
+  goalVisible(go) {
+    const g = this.g, s = g.s, tut = !!s.flags?.tutor, read = (id) => !!s.messages.find((m) => m.id === id)?.read;
+    if (go.skip) { if (!go.progress) return true; const [cur, tgt] = go.progress(s, g.helpers(), g); return tgt > 0 && cur / tgt >= 0.7; }
+    if (go.id === 'papa1') return !!s.flags.papa1 || s.messages.some((m) => m.id === 'mKrause'); // Herr Krause meldet sich wegen der Nachzahlung
+    if (!tut) return true;
+    if (go.id === 'settle') return read('m0p'); // erst Papas Nachricht lesen
+    if (go.id === 'collect') return read('m0b') || Object.keys(s.loose || {}).length < (s.looseN || 4); // Deniz' Nachricht gelesen (oder schon ein Teil gefunden)
+    if (go.id === 'gpuorder') return g.has('build'); // Deniz' Shop-Nachricht
+    if (go.id === 'rig2') return g.has('rigs'); // „Mehr PCs“
+    return true;
+  }
+  // Was ist gerade der nächste Handgriff? Ersetzt den Zieltext, statt eine zweite Zeile aufzumachen
+  goalStep(go) {
     const g = this.g, s0 = g.s;
-    if (go.id === 'gpuorder') return g.has('build') ? 'Am <b>Monitor</b> <kbd>E</kbd> oder <kbd>B</kbd>: Shop → Teile → Grafikkarten. Lieferung morgen früh vor deine Wohnungstür.' : '';
-    if (go.id === 'gpu') { const inBag = g.bagList('gpu').length; if (inBag) return 'Die Karte liegt im Lager: PC anschauen, <kbd>E</kbd> → Grafikkarte 1 → einbauen.'; if (s0.parcels?.length) return 'Das Paket liegt vor deiner Wohnungstür – hingehen und <kbd>E</kbd>.'; if (s0.orders?.length) return 'Bestellt – morgen früh liegt das Paket vor der Tür. Leg dich ins Bett (<kbd>E</kbd>) und schlaf bis morgen.'; return ''; }
+    if (go.id === 'gpu') { if (g.bagList('gpu').length) return ''; if (s0.parcels?.length) return 'Hol das Paket vor deiner Wohnungstür'; if (s0.orders?.length) return 'Die Karte kommt morgen früh – schlaf bis morgen'; return ''; }
     const site = { rig2: 'kinder', openrig: 'keller' }[go.id]; if (!site || !g.has('rigs') || !g.s.unlocked.includes(site)) return '';
-    if (g.facObjects(site).some((o) => g.osNeed?.(o) && g.pcReady(o))) return 'Der neue Rig braucht noch ein Betriebssystem: anschauen, <kbd>E</kbd> → System → Installer.'; // Fähigkeiten: ohne System schürft er nicht
-    if (g.kitsOpen(site).length) return g.s.current === site ? 'Bausatz steht – anschauen, <kbd>E</kbd> und die Teile aus dem Lager einbauen.' : `Dein Bausatz wartet ${site === 'kinder' ? 'in der Wohnung' : 'im Keller'} aufs Einbauen.`;
-    const t = go.id === 'rig2' ? 'tower' : 'crate', nm = t === 'tower' ? 'Tower' : 'Milchkiste';
-    if (g.parcelMode()) return g.readyOk(t) ? `<kbd>B</kbd> → Rigs → ${nm}: „Fertig bestellen“ oder als Bausatz. Morgen früh vor der Tür, dann oben im Shop „Aufstellen“.` : `<kbd>B</kbd> → Rigs → ${nm}: „Bausatz bestellen“. Morgen auspacken, aufstellen, selbst einbauen.`;
-    return g.readyOk(t) ? `<kbd>B</kbd> → Rigs → ${nm}: „Fertig bestückt“ oder als Bausatz.` : `<kbd>B</kbd> → Rigs → ${nm}: „Als Bausatz“ kaufen, hinstellen, selbst einbauen.`;
+    if (g.facObjects(site).some((o) => g.osNeed?.(o) && g.pcReady(o))) return 'Installier ein Betriebssystem auf dem neuen Rig'; // Fähigkeiten: ohne System schürft er nicht
+    if (g.kitsOpen(site).length) return g.s.current === site ? 'Bau die Teile in deinen Bausatz ein' : `Dein Bausatz wartet ${site === 'kinder' ? 'in der Wohnung' : 'im Keller'}`;
+    return '';
   }
-  // Taste G: nächste Ziel-Aktion (z. B. Papa die Stromrechnung geben) – in der Ego-Steuerung ohne Mausklick
+  // Taste G: Bezahl-Aktion des sichtbaren Ziels (z. B. die Strom-Nachzahlung) – ohne sichtbares Bezahl-Ziel tut G nichts
   goalActionKey() {
     const s = this.g.s, ch = CHAPTERS[s.chapter]; if (!ch) return egoalKey(this);
-    const go = ch.goals.find((x) => !s.goals[x.id] && x.action);
-    if (!go) { this.toast('Nichts zu bezahlen.', 'info', 2000); return false; }
-    const left = this.g.payLeft(go), part = go.action.part;
-    if (!this.g.canPayGoal(go)) { this.toast(`Du brauchst ${fmtUSD(left)}${part && left > part && this.g.canPayGoal(go, part) ? ` – oder zahl im Ziel ${fmtUSD(part)} an` : ''}.`, 'bad'); return false; }
+    const go = this.shownGoal; if (!go?.action || s.goals[go.id] || !ch.goals.includes(go)) return false;
+    const left = this.g.payLeft(go);
+    if (!this.g.canPayGoal(go)) { this.toast(`Du brauchst ${fmtUSD(left)}.`, 'bad'); return false; }
     if (this.g.goalAction(go)) { this.toast(`✔ ${esc(this.g.payPaid(go) > left ? `${fmtUSD(left)} überwiesen` : go.action.label)} – erledigt!`, 'good'); this.audio?.cash(); this.goals(); this.top(); return true; }
     return false;
+  }
+  // Bonusziel geschafft: Überraschung mit Belohnung (vorher nirgends angekündigt)
+  bonusDone(b) {
+    const rw = this.g.rewardText(b.reward);
+    this.milestone(b.text, rw, 'Bonus geschafft');
+    this.toast(`<b>Bonus geschafft:</b> ${esc(b.text)}${rw ? ` – ${esc(rw)}` : ''}`, 'good', 8000);
   }
   // Schritt-für-Schritt-Hinweise (oben in der Mitte)
   tutorial() {
@@ -996,7 +1019,7 @@ export class UI {
     const skN = g.has('skills') && g.s.sk ? g.skillsOpenN() : 0; // Fähigkeiten, die man gerade auf einem Weg lernen kann
     el.innerHTML = '';
     const btns = [
-      ['', 'Shop', 'B', () => this.toggleBuild()], ['', 'Börse', 'M', () => this.market()], ['', 'Handy', 'H', () => this.phone(), unread], ['', 'Firma', 'C', () => this.company()],
+      ['', 'Shop', 'B', () => this.toggleBuild()], ['', 'Börse', 'M', () => this.market()], ['', 'Handy', 'H', () => this.phone(), unread], ['', this.budeName(), 'C', () => this.company()],
       ['', 'Fähigkeiten', 'T', () => this.skills(), skN], ['', 'Logbuch', 'L', () => this.ranking(), this.achNew || 0], ['', this.w.empire ? 'Zurück' : 'Karte', 'K', () => this.toggleMap()], ['', 'Menü', 'ESC', () => this.menu()],
     ];
     const need = { B: 'build', M: 'market', H: 'phone', C: 'company', T: 'skills', L: 'ranking', K: 'map' };
@@ -1011,8 +1034,16 @@ export class UI {
   }
 
   // ---------- Modals ----------
-  openModal(node, cls = '', kind = null) { document.getElementById('lvup')?.remove(); this.openUI(); const m = $('#modal'); m.classList.remove('hidden'); const card = m.querySelector('.modal-card'); card.className = 'modal-card ' + cls; card.scrollTop = 0; /* neues Fenster beginnt oben (reCompany stellt die Position selbst wieder her) */ const b = m.querySelector('.modal-body'); b.innerHTML = ''; b.append(node); this.modalKind = kind; document.body.dataset.modal = kind || ''; this.dock(); }
-  closeModal() { const wasEvent = this.modalKind === 'event'; $('#modal').classList.add('hidden'); this.modalKind = null; document.body.dataset.modal = ''; this.dock(); const cb = this.onModalClose; this.onModalClose = null; cb?.(); if (wasEvent && this.g.s.ev?.open) this.evSnooze = this.g.s.ev.open.key; else if (this.g.s.ev?.open) setTimeout(() => this.tryEvent(), 500); if (!this.inspUid && !document.body.classList.contains('show-build') && $('#modal').classList.contains('hidden') && (this.w.mode === 'ui')) this.w.setMode('play'); }
+  // Nie zwei Fenster übereinander: ein neues Fenster schließt Shop und Inspektor. child: Unterfenster des Inspektors (Teile-Auswahl, Umzug) –
+  // der Inspektor wartet ausgeblendet und kommt beim Schließen zurück (Esc schließt genau das oberste Fenster).
+  openModal(node, cls = '', kind = null, child = false) {
+    document.getElementById('lvup')?.remove();
+    if (document.body.classList.contains('show-build')) document.body.classList.remove('show-build');
+    const sub = child && !!this.inspUid; if (this.inspUid) { if (sub) $('#inspector').classList.add('hidden'); else this.closeInspector(); }
+    this.modalBack = sub ? 'insp' : null;
+    this.openUI(); const m = $('#modal'); m.classList.remove('hidden'); const card = m.querySelector('.modal-card'); card.className = 'modal-card ' + cls; card.scrollTop = 0; /* neues Fenster beginnt oben (reCompany stellt die Position selbst wieder her) */ const b = m.querySelector('.modal-body'); b.innerHTML = ''; b.append(node); this.modalKind = kind; document.body.dataset.modal = kind || ''; this.dock(); }
+  closeInspector() { if (!this.inspUid) return; this.inspUid = null; $('#inspector').classList.add('hidden'); this.w.select(null); this.w.focusObject?.(null); this.w.ghostPart?.(null); this.pickType = null; this.showRun = false; this.osWiz = null; }
+  closeModal() { const wasEvent = this.modalKind === 'event', back = this.modalBack; this.modalBack = null; if (back === 'insp' && this.inspUid) $('#inspector').classList.remove('hidden'); $('#modal').classList.add('hidden'); this.modalKind = null; document.body.dataset.modal = ''; this.dock(); const cb = this.onModalClose; this.onModalClose = null; cb?.(); if (wasEvent && this.g.s.ev?.open) this.evSnooze = this.g.s.ev.open.key; else if (this.g.s.ev?.open) setTimeout(() => this.tryEvent(), 500); if (!this.inspUid && !document.body.classList.contains('show-build') && $('#modal').classList.contains('hidden') && (this.w.mode === 'ui')) this.w.setMode('play'); }
   story(title, html, btn = 'Los geht’s') {
     const n = h(`<div class="story"><div class="ch">${esc(title)}</div><p>${html}</p><div class="row" style="justify-content:flex-end"><button class="btn primary">${btn}</button></div></div>`);
     n.querySelector('button').onclick = () => this.closeModal();
@@ -1194,32 +1225,95 @@ export class UI {
     if (logScale && !mini) { ctx.fillStyle = '#9a8a78'; ctx.textAlign = 'right'; ctx.fillText('log. Skala', W - padR, 14); ctx.textAlign = 'left'; }
   }
 
-  phone(tab = null) {
+  // Handy: Chats pro Person (neuester oben, Ungelesen-Zahl), im Chat die neueste Nachricht unten. Offene Rechnung und offene Entscheidung stehen über den Chats.
+  // chat: Name des offenen Chats (null = Liste); ohne Angabe öffnet sich der eine Chat mit Ungelesenem direkt (z. B. „Bzzz … Papa“)
+  phone(tab = null, chat) {
     this.g.learned?.('phone'); this.ringOff?.(); this.ringOff = null;
-    const g = this.g;
-    const msgs = [...g.s.messages].sort((a, b) => b.day - a.day), unread = msgs.filter((m) => !m.read).length;
-    tab = tab || (unread || g.s.ev?.open ? 'msgs' : this.phoneTab || 'msgs'); this.phoneTab = tab;
+    const g = this.g, s = g.s; let chats = this.phoneChats(), unread = chats.reduce((a, c) => a + c.unread, 0);
+    const tabs = ['msgs', ...(this.contactsOk() ? ['contacts'] : []), ...(this.kontoOk() ? ['konto'] : [])];
+    tab = tab || (unread || s.ev?.open || s.bills?.open ? 'msgs' : this.phoneTab || 'msgs'); if (!tabs.includes(tab)) tab = 'msgs'; this.phoneTab = tab;
+    if (chat === undefined) { const un = chats.filter((c) => c.unread); chat = tab === 'msgs' && un.length === 1 && !s.ev?.open && !s.bills?.open ? un[0].who : null; } // genau ein Chat mit Neuem: gleich dorthin
+    this.phoneChat = tab === 'msgs' ? chat : null;
+    let fresh = new Set(); if (this.phoneChat) { const c = chats.find((x) => x.who === chat); for (const m of c?.msgs || []) if (!m.read) { fresh.add(m); m.read = true; } chats = this.phoneChats(); unread = chats.reduce((a, x) => a + x.unread, 0); if (fresh.size) this.goals(); } // geöffneter Chat gilt als gelesen (Ziele, die darauf warten, erscheinen)
     const newC = CONTACTS.filter((c) => g.contactMet(c.id) && !g.contactOn(c.id)).length, owe = g.owed?.() > 0;
-    const body = h(`<div><h2>Handy</h2><div class="ph-tabs" role="tablist"><button class="btn small ${tab === 'msgs' ? 'on' : ''}" data-t="msgs">Nachrichten${unread ? ` <span class="ph-n">${unread}</span>` : ''}</button><button class="btn small ${tab === 'contacts' ? 'on' : ''}" data-t="contacts">Kontakte${newC ? ` <span class="ph-n">${newC}</span>` : ''}</button><button class="btn small ${tab === 'konto' ? 'on' : ''}" data-t="konto">Konto${owe ? ' <span class="ph-n ph-warn">!</span>' : ''}</button></div><div class="phone"></div></div>`);
-    body.querySelectorAll('.ph-tabs button').forEach((b) => { b.onclick = () => this.phone(b.dataset.t); });
+    const TL = { msgs: `Nachrichten${unread ? ` <span class="ph-n">${unread}</span>` : ''}`, contacts: `Kontakte${newC ? ` <span class="ph-n">${newC}</span>` : ''}`, konto: `Konto${owe ? ' <span class="ph-n ph-warn">!</span>' : ''}` };
+    const body = h(`<div><h2>Handy</h2>${tabs.length > 1 ? `<div class="ph-tabs" role="tablist">${tabs.map((t) => `<button class="btn small ${tab === t ? 'on' : ''}" data-t="${t}">${TL[t]}</button>`).join('')}</div>` : ''}<div class="phone"></div></div>`);
+    body.querySelectorAll('.ph-tabs button').forEach((b) => { b.onclick = () => this.phone(b.dataset.t, null); });
     const ph = body.querySelector('.phone');
     if (tab === 'contacts') { this.phoneContacts(ph); this.openModal(body, 'narrow', 'phone'); this.dock(); return; }
     if (tab === 'konto') { g.learned?.('konto'); this.phoneKonto(ph); this.openModal(body, 'narrow', 'phone'); this.dock(); return; }
-    const oe = g.s.ev?.open && EVENT[g.s.ev.open.id];
-    const ob = g.s.bills?.open; // offene Rechnung: immer oben, auch wenn gerade eine andere Entscheidung offen ist (die Mahnung kommt dann danach)
-    if (ob && oe?.id !== 'mahnung') { const card = h(`<div class="msg decide bill"><div class="fr">${esc((ob.who || [])[0] || 'Rechnung')}<span>${esc(BILL_STAGE[Math.min(3, ob.stage)])} · ${ob.stage >= 3 ? 'Strom abgestellt' : `Frist bis ${fmtDate(ob.due)}`}</span></div><b>${fmtUSD(g.owed())} offen</b><div class="row" style="margin-top:8px"><button class="btn small primary">Zum Konto</button></div></div>`); card.querySelector('button').onclick = () => this.phone('konto'); ph.append(card); }
-    if (oe) { const card = h(`<div class="msg decide"><div class="fr">${esc(oe.from || '')}<span>Entscheidung offen · noch ${Math.max(0, g.s.ev.open.until - g.s.day)} Tage</span></div><b>${esc(g.evText(oe, 'title'))}</b><div class="row" style="margin-top:8px"><button class="btn small primary">Jetzt entscheiden</button></div></div>`); card.querySelector('button').onclick = () => { this.evSnooze = null; this.closeModal(); this.eventCard(); }; ph.append(card); }
-    if (!msgs.length) ph.append(h('<div class="empty">Keine Nachrichten.</div>'));
-    for (const m of msgs) { if (m.old) continue; const tip = MESSAGES.find((x) => x.id === m.id)?.tip; ph.append(h(`<div class="msg f-${m.from.split(' ')[0]} ${m.read ? '' : 'unread'} ${tip ? 'tip' : ''}"><div class="fr">${esc(m.from)}${tip ? '<em class="tip-tag">Tipp</em>' : ''}<span>${fmtDate(m.day)}</span></div>${esc(m.text)}</div>`)); }
-    msgs.forEach((m) => (m.read = true));
+    if (chat) { this.phoneChatView(ph, chats.find((c) => c.who === chat), fresh); this.openModal(body, 'narrow', 'phone'); this.dock(); this.keysHint(); const card = $('#modal .modal-card'); if (card) card.scrollTop = card.scrollHeight; return; }
+    // Liste: offene Rechnung (Mahnung) und offene Entscheidung ganz oben
+    const oe = s.ev?.open && EVENT[s.ev.open.id], bm = this.billMsg();
+    if (bm) ph.append(bm);
+    if (oe && oe.id !== 'mahnung') { const card = h(`<div class="msg decide"><div class="fr">${esc(oe.from || '')}<span>Entscheidung offen · noch ${Math.max(0, s.ev.open.until - s.day)} Tage</span></div><b>${esc(g.evText(oe, 'title'))}</b><div class="row" style="margin-top:8px"><button class="btn small primary">Jetzt entscheiden</button></div></div>`); card.querySelector('button').onclick = () => { this.evSnooze = null; this.closeModal(); this.eventCard(); }; ph.append(card); }
+    if (!chats.length) ph.append(h('<div class="empty">Keine Nachrichten.</div>'));
+    const list = h('<div class="ch-list"></div>');
+    for (const c of chats) {
+      const last = c.msgs[c.msgs.length - 1], svc = c.who === 'Paketdienst' && !c.unread; // Paketdienst: eingeklappt, ohne Vorschau
+      const row = h(`<button class="ch-row ${c.unread ? 'unread' : ''} ${svc ? 'svc' : ''}"><span class="ch-av">${this.chatFace(c.who)}</span><span class="ch-main"><span class="ch-top"><b>${esc(c.who)}</b><em>${fmtDate(last.day)}</em></span>${svc ? '' : `<span class="ch-last">${esc(last.text)}</span>`}</span>${c.unread ? `<span class="ch-n">${c.unread}</span>` : ''}</button>`);
+      row.onclick = () => this.phone('msgs', c.who);
+      list.append(row);
+    }
+    ph.append(list);
     this.openModal(body, 'narrow', 'phone'); this.dock();
   }
+  // Chats: Nachrichten nach Absender, im Chat aufsteigend (Tag, dann Reihenfolge des Eintreffens); Liste: neuester Chat oben, Paketdienst unten
+  phoneChats() {
+    const by = new Map();
+    this.g.s.messages.forEach((m, i) => { if (m.old) return; const who = m.from || '?'; if (!by.has(who)) by.set(who, []); by.get(who).push({ m, i }); });
+    const out = [];
+    for (const [who, arr] of by) { arr.sort((a, b) => a.m.day - b.m.day || a.i - b.i); const lastI = arr[arr.length - 1]; out.push({ who, msgs: arr.map((x) => x.m), unread: arr.filter((x) => !x.m.read).length, key: [lastI.m.day, lastI.i] }); }
+    return out.sort((a, b) => ((a.who === 'Paketdienst' && !a.unread) - (b.who === 'Paketdienst' && !b.unread)) || b.key[0] - a.key[0] || b.key[1] - a.key[1]);
+  }
+  chatFace(who) {
+    const id = { Papa: 'papa', Mama: 'mama', Opa: 'opa', 'Opa Heinz': 'opa', Deniz: 'deniz', Kemal: 'kemal', Jonas: 'jonas' }[who];
+    return id ? faceSvg(id) : `<span class="ch-ini">${esc(String(who).replace(/^Herr\s+|^Frau\s+/, '').slice(0, 1))}</span>`;
+  }
+  // Ein Chat: Datum als Trenner, neueste Nachricht unten; erledigte Anleitungen eingeklappt
+  phoneChatView(ph, c, fresh = new Set()) {
+    const g = this.g, done = g.s.learn?.done || {};
+    ph.classList.add('ph-chat');
+    const head = h(`<div class="ch-head"><button class="btn small ch-back" title="Alle Chats">‹ Chats</button><span class="ch-av">${this.chatFace(c?.who || '')}</span><b>${esc(c?.who || '')}</b></div>`);
+    head.querySelector('button').onclick = () => this.phone('msgs', null);
+    ph.append(head);
+    if (!c) { ph.append(h('<div class="empty">Keine Nachrichten.</div>')); return; }
+    const log = h('<div class="ch-log"></div>'); let day = null;
+    for (const m of c.msgs) {
+      if (m.day !== day) { day = m.day; log.append(h(`<div class="ch-day">${fmtDate(m.day)}</div>`)); }
+      const tip = MESSAGES.find((x) => x.id === m.id)?.tip, les = m.lesson || LESSON_OF[m.text], fin = les && done[les] && !fresh.has(m); // Lektion erledigt: eingeklappt
+      if (fin) { const d = h(`<details class="msg done"><summary>Anleitung: ${esc(FEATURES[les]?.title || 'erledigt')} <span>erledigt</span></summary><div>${esc(m.text)}</div></details>`); log.append(d); continue; }
+      log.append(h(`<div class="msg f-${esc(String(m.from).split(' ')[0])} ${fresh.has(m) ? 'unread' : ''} ${tip ? 'tip' : ''}">${tip ? '<em class="tip-tag">Tipp</em>' : ''}${esc(m.text)}</div>`));
+    }
+    ph.append(log);
+  }
+  // Mahnung im Handy: wie viel, bis wann, was sonst passiert – mit „Jetzt zahlen“ bzw. „Coins verkaufen“
+  billMsg() {
+    const g = this.g, s = g.s, o = s.bills?.open; if (!o) return null;
+    const amt = g.owed(), st = Math.min(3, o.stage), where = siteIn(o.sites || []);
+    const next = o.stage >= 3 ? `${where.charAt(0).toUpperCase() + where.slice(1)} bleibt der Strom aus, bis alles bezahlt ist.` : o.stage === 2 ? `Sonst wird ${where} der Strom abgestellt.` : `Sonst kommt die ${o.stage === 0 ? '2. Mahnung' : 'letzte Mahnung'} mit Gebühr.`;
+    const card = h(`<div class="msg decide bill st${st}"><div class="fr">${esc((o.who || [])[0] || 'Rechnung')}<span>${esc(BILL_STAGE[st])}</span></div><div class="bl-amt"><b>${fmtUSD(amt)}</b> offen${o.stage >= 3 ? ' · Strom abgestellt' : ` · zahlen bis <b>${fmtDate(o.due)}</b>`}</div><div class="bl-next">${esc(next)}</div><div class="row"></div></div>`);
+    const row = card.querySelector('.row'), done = () => { this.audio?.cash?.(); this.phone('msgs', null); };
+    if (g.billPayable(amt)) { const b = h(`<button class="btn small primary">Jetzt zahlen · ${fmtUSD(amt)}</button>`); b.onclick = () => { if (g.payBills(false)) done(); }; row.append(b); }
+    else if (g.billCoinOk()) { const b = h('<button class="btn small primary">Coins verkaufen und zahlen</button>'); b.onclick = () => { if (g.payBills(true)) done(); }; row.append(b); }
+    if (g.papaHelpOk() && !g.billPayable(amt)) { const b = h('<button class="btn small">Papa um Hilfe bitten</button>'); b.onclick = () => { if (g.papaHelp()) { this.toast(`<b>Papa:</b> ${esc(PAPA_HELP[Math.min(PAPA_HELP.length - 1, (s.papaLoan?.help || 1) - 1)])}`, 'msg', 8000); done(); } }; row.append(b); }
+    if (s.ev?.open?.id === 'mahnung' && g.has('loan') && s.chapter >= 2) { const b = h('<button class="btn small">Mit der Bank reden</button>'); b.onclick = () => { this.evSnooze = null; this.closeModal(); this.eventCard(); }; row.append(b); }
+    if (this.kontoOk()) { const b = h('<button class="btn small">Details</button>'); b.onclick = () => this.phone('konto'); row.append(b); }
+    if (!g.billPayable(amt) && !g.billCoinOk()) row.before(h(`<div class="bl-next">Auf dem Konto: ${fmtUSD(s.cash)}. Verkauf Teile oder Geräte, die du nicht brauchst${g.papaHelpOk() ? ' – oder frag Papa' : ''}.</div>`));
+    return card;
+  }
+  // Reiter Kontakte: ab Papas Nachricht (Umzugsdarlehen zurückzahlen), dann mit jedem Kennenlernen bzw. ersten Gespräch
+  contactsOk() { const s = this.g.s; return s.papaLoan?.total > 0 || CONTACTS.some((c) => this.g.contactMet(c.id)) || FAMILY_CONTACTS.some((f) => s.talk?.last?.[f.id] != null); }
+  famShown(id) { const s = this.g.s; return s.talk?.last?.[id] != null || (id === 'papa' && s.papaLoan?.total > 0); }
+  // Reiter Konto: ab der ersten Monatsabrechnung (bzw. wenn etwas offen ist)
+  kontoOk() { const g = this.g, B = g.s.bills; return g.has('bills') || !!B?.open || !!B?.hist?.length; }
   // Handy → Kontakte: Geschäftskontakte (fertig montierte Hardware, Stammkunden-Rabatt) und Familie (Beziehung, Wirkung ab Stufe 3)
   phoneContacts(ph) {
     const g = this.g, s = g.s;
     ph.classList.add('ph-contacts');
-    ph.append(h('<div class="ct-sec">Geschäftlich</div>'));
-    for (const c of CONTACTS) {
+    const biz = CONTACTS.filter((c) => g.contactMet(c.id)); // nur, wen man kennt (keine „?“-Karten)
+    if (biz.length) ph.append(h('<div class="ct-sec">Geschäftlich</div>'));
+    for (const c of biz) {
       const st = g.contactState(c.id), met = !!st?.met, on = !!st?.on, tier = g.contactTier(c.id), T = FEE_TIERS[tier], nx = FEE_TIERS[tier + 1], n = st?.n || 0;
       const badge = on ? '<span class="ct-b on">Freigeschaltet</span>' : met ? '<span class="ct-b off">Nicht gespeichert</span>' : '<span class="ct-b lock">Noch nicht kennengelernt</span>';
       const tierLine = on ? `<div class="ct-tier"><b>${esc(T.label)}</b> · ${Math.round(T.fee * 100)}&nbsp;% Montage · ${n} ${n === 1 ? 'Auftrag' : 'Aufträge'}${nx ? `<br/><span>Noch ${nx.n - n} ${nx.n - n === 1 ? 'Auftrag' : 'Aufträge'} bis „${esc(nx.label)}“ (${Math.round(nx.fee * 100)}&nbsp;%)</span>` : ''}</div>` : '';
@@ -1231,12 +1325,12 @@ export class UI {
       if (!act.childElementCount) act.remove();
       ph.append(card);
     }
-    ph.append(h('<div class="ct-sec">Familie</div>'));
-    for (const f of FAMILY_CONTACTS) {
+    const fam = FAMILY_CONTACTS.filter((f) => this.famShown(f.id)); // Familie erst nach dem ersten Gespräch (Papa gleich wegen des Darlehens)
+    if (fam.length) ph.append(h('<div class="ct-sec">Familie</div>'));
+    for (const f of fam) {
       const lv = s.rel?.[f.id] || 0, face = f.id;
       const dots = Array.from({ length: 5 }, (_, i) => `<i class="${i < lv ? 'on' : ''}"></i>`).join('');
-      const perk = lv >= 3 ? (f.id === 'papa' && s.flags.shopLost && REL_PERK.papaLost ? REL_PERK.papaLost : REL_PERK[f.id]) : '';
-      const card = h(`<div class="ct-card fam"><div class="ct-av">${faceSvg(face)}</div><div class="ct-main"><div class="ct-name"><b>${esc(f.name)}</b><span class="ct-rel" title="Beziehung ${lv} von 5">${lv < 0 ? `<em class="neg">verstimmt (${lv})</em>` : `<span class="ct-dots">${dots}</span>`}</span></div><div class="ct-role">${esc(f.role(s))}</div>${perk ? `<div class="ct-perk">${esc(perk)}</div>` : REL_PERK[f.id] ? `<div class="ct-how2">Ab Stufe 3: ${esc(REL_PERK[f.id])}</div>` : ''}</div></div>`);
+      const card = h(`<div class="ct-card fam"><div class="ct-av">${faceSvg(face)}</div><div class="ct-main"><div class="ct-name"><b>${esc(f.name)}</b><span class="ct-rel" title="Beziehung ${lv} von 5">${lv < 0 ? `<em class="neg">verstimmt (${lv})</em>` : `<span class="ct-dots">${dots}</span>`}</span></div><div class="ct-role">${esc(f.role(s))}</div></div></div>`);
       if (f.id === 'papa') { const lb = this.papaLoanBox(); if (lb) card.querySelector('.ct-main').append(lb); }
       ph.append(card);
     }
@@ -1262,7 +1356,8 @@ export class UI {
     if (o) {
       const box = h(`<div class="kt-open st${o.stage}"><div class="kt-oh"><b>${esc(BILL_STAGE[Math.min(3, o.stage)])}</b><span>${fmtUSD(g.owed())} offen</span></div><div class="kt-ot">${billText(s, g)}</div><div class="ct-act"></div></div>`);
       const act = box.querySelector('.ct-act');
-      if (g.billCoinOk()) { const b = h('<button class="btn small primary">Coins verkaufen und bezahlen</button>'); b.onclick = () => { if (g.payBills(true)) this.audio?.cash?.(); this.phone('konto'); }; act.append(b); }
+      if (g.billPayable(g.owed())) { const b = h(`<button class="btn small primary">Jetzt zahlen · ${fmtUSD(g.owed())}</button>`); b.onclick = () => { if (g.payBills(false)) this.audio?.cash?.(); this.phone('konto'); }; act.append(b); }
+      else if (g.billCoinOk()) { const b = h('<button class="btn small primary">Coins verkaufen und bezahlen</button>'); b.onclick = () => { if (g.payBills(true)) this.audio?.cash?.(); this.phone('konto'); }; act.append(b); }
       if (g.has('market')) { const b = h('<button class="btn small">Zur Börse</button>'); b.onclick = () => { this.closeModal(); this.market(); }; act.append(b); }
       if (g.papaHelpOk()) { const b = h('<button class="btn small">Papa um Hilfe bitten</button>'); b.onclick = () => { if (g.papaHelp()) { this.audio?.cash?.(); this.toast(`<b>Papa:</b> ${esc(PAPA_HELP[Math.min(PAPA_HELP.length - 1, (s.papaLoan?.help || 1) - 1)])}`, 'msg', 8000); } this.phone('konto'); }; act.append(b); }
       ph.append(box);
@@ -1311,6 +1406,7 @@ export class UI {
     const body = h(`<div class="story event"><div class="ev-from"><span class="ev-av">${esc((e.from || '?').slice(0, 1))}</span><span>${esc(e.from || '')}</span><span class="ev-date">${fmtDate(g.s.day)}</span></div><div class="ch">${esc(g.evText(e, 'title'))}</div><p>${g.evText(e)}</p><div class="ev-choices"></div></div>`);
     const box = body.querySelector('.ev-choices');
     for (const c of ch) {
+      if (c.hide) continue; // gibt es erst später (z. B. die Bank ab Kapitel 3): ausblenden statt ausgrauen
       const b = h(`<button class="btn ${c.i === 0 ? 'primary' : ''} ev-c" ${c.ok ? '' : 'disabled'}><span class="ev-l">${esc(c.label)}${c.cost ? ` <span class="ev-cost">· ${this.money(c.cost)}</span>` : ''}</span>${c.hint ? `<small>${esc(c.hint)}</small>` : ''}${!c.ok && c.cost && !c.needFail ? '<small>Dafür reicht dein Geld nicht.</small>' : ''}${!c.ok && c.needFail ? `<small>${esc(c.needText || 'Gerade nicht möglich.')}</small>` : ''}</button>`);
       b.onclick = () => { const k0 = o.key, reply = g.chooseEvent(c.i); this.evSnooze = null; this.closeModal(); if (g.s.ev?.open && g.s.ev.open.key !== k0) { this.evSnooze = null; setTimeout(() => this.tryEvent(), 600); } this.audio?.cash?.(); if (reply) this.toast(reply, 'msg', 7000); this.refresh(); this.dock(); }; // Folge-Ereignis (z. B. Mahnung → Bankgespräch) gleich zeigen
       box.append(b);
@@ -1364,15 +1460,15 @@ export class UI {
     if (un && f.id !== 'kinder' && !g.facInUse(f.id)) return `ruht ohne Geräte (${fmtUSD(f.rent)}/Monat)`;
     const r = f.rent * (un ? g.fx('rent', f.id) : 1); return r >= 0.5 ? `${fmtUSD(r)}/Monat${f.id === 'kinder' ? ' (warm)' : ''}` : 'keine';
   }
+  budeName() { return this.g.s.flags?.gmbh ? 'Firma' : 'Meine Bude'; } // bis zur GmbH ist es einfach deine Bude
   company() {
     this.g.learned?.('company');
     const g = this.g, s = g.s;
-    const body = h(`<div><h2>Firma</h2><div class="cards"></div><div class="sec staff"></div></div>`);
+    const body = h(`<div><h2>${this.budeName()}</h2><div class="cards"></div><div class="sec staff"></div></div>`);
     const cards = body.querySelector('.cards');
-    const nextLocked = FACILITIES.find((x) => !s.unlocked.includes(x.id));
     for (const f of FACILITIES) {
       const un = s.unlocked.includes(f.id), can = g.canUnlock(f.id);
-      if (!un && f !== nextLocked) continue;
+      if (!un && !can) continue; // gesperrte Standorte nicht ankündigen
       const fs = s.fac[f.id], sm = g.summary[f.id];
       const c = h(`<div class="card ${!un && !can ? 'lock' : ''}"><h3>${un ? '' : can ? '' : ''}${esc(f.name)}</h3><div class="sub">${esc(f.place)} · ${fmtNum(f.w, 1)}×${fmtNum(f.d, 1)} m</div>
         <div class="kv" style="margin:4px 0"><div class="k">Anschluss</div><div class="v">${fmtNum(f.power[fs.power].kw, 1)} kW</div>
@@ -1388,7 +1484,6 @@ export class UI {
         if (s.current !== f.id) { const go = h('<button class="btn small" style="margin-left:6px">Hingehen</button>'); go.onclick = () => { this.closeModal(); this.goSite(f.id); }; c.append(go); }
         c.append(this.facExtras(f.id)); // Ausbauten, Einmotten
       } else if (can) { const b = h(`<button class="btn primary small">Übernehmen (${fmtUSD(f.cost)})</button>`); b.onclick = () => { this.closeModal(); this.unlock(f.id); }; c.append(b); }
-      else { const ci = CHAPTERS.findIndex((ch) => ch.unlock === f.id); c.append(h(`<div style="font-size:12px;color:var(--dim)">Ab ${(CHAPTERS[ci]?.minDate || '').slice(0, 4)}</div>`)); }
       cards.append(c);
     }
     const st = body.querySelector('.staff');
@@ -1406,7 +1501,7 @@ export class UI {
     if (stHide) { st.innerHTML = ''; if (g.has('loan')) st.append(lb); }
     st.prepend(this.costsSec()); // Monatskosten und nächste Abrechnung ganz oben
     const nwc = h('<div class="sec"><h4>Vermögensverlauf (log)</h4><canvas class="nwchart" width="1100" height="260"></canvas></div>'); if (g.has('ranking') && (s.stats.history || []).length >= 3) st.append(nwc); requestAnimationFrame(() => this.nwChart(nwc.querySelector('canvas')));
-    st.append(h(`<div class="sec"><h4>Bilanz pro Tag</h4><div class="kv"><div class="k">Mining-Ertrag</div><div class="v pos">${fmtUSD(p.rev)}</div><div class="k">Strom, Miete, Löhne</div><div class="v neg">−${fmtUSD(p.cost)}</div><div class="k">Abgebucht wird monatlich</div><div class="v">am ${fmtDate(g.nextBillDay())} · etwa ${fmtUSD(g.billEstimate())}</div><div class="k">Gesamt geschürft</div><div class="v">${fmtUSD(s.stats.minedUSD)}</div><div class="k">Stromkosten bisher</div><div class="v">${fmtUSD(s.stats.elec)}</div><div class="k">In Hardware investiert</div><div class="v">${fmtUSD(s.stats.spentHW)}</div></div></div>`));
+    st.append(h(`<div class="sec"><h4>Bilanz pro Tag</h4><div class="kv"><div class="k">Mining-Ertrag</div><div class="v pos">${fmtUSD(p.rev)}</div><div class="k">${s.staff?.list?.length ? 'Strom, Miete, Löhne' : 'Strom und Miete'}</div><div class="v neg">−${fmtUSD(p.cost)}</div><div class="k">Abgebucht wird monatlich</div><div class="v">am ${fmtDate(g.nextBillDay())} · etwa ${fmtUSD(g.billEstimate())}</div><div class="k">Gesamt geschürft</div><div class="v">${fmtUSD(s.stats.minedUSD)}</div><div class="k">Stromkosten bisher</div><div class="v">${fmtUSD(s.stats.elec)}</div><div class="k">In Hardware investiert</div><div class="v">${fmtUSD(s.stats.spentHW)}</div></div></div>`));
     this.openModal(body, '', 'company');
   }
 
@@ -1415,7 +1510,7 @@ export class UI {
   // Je Standort: Ausbauten und Einmotten (im Firmenfenster)
   facExtras(fid) {
     const g = this.g, s = g.s, f = s.fac[fid], box = h('<div class="fac-ext"></div>');
-    const ups = g.upgrades(fid);
+    const ups = g.upgrades(fid).filter((u) => !g.upObsolete(fid, u) && (g.upActive(fid, u) || !g.upLock(fid, u))); // nur, was man gerade bauen kann (oder schon hat)
     if (ups.length) {
       box.append(h('<div class="fx-h">Ausbauten</div>'));
       for (const u of ups) {
@@ -1428,7 +1523,7 @@ export class UI {
           if (u.cancel) { const b = h('<button class="btn small">Kündigen</button>'); b.onclick = () => { g.cancelUpgrade(fid, u.id); this.toast(`${u.name} gekündigt`, 'info'); this.reCompany(); }; r.append(b); }
         } else {
           const need = Math.max(u.cost || 0, u.monthly > 0 ? u.monthly : 0), lk = g.upLock(fid, u);
-          if (lk) { r.classList.add('lock'); r.append(h(`<span class="fx-lock">${esc(lk)}</span>`)); box.append(r); continue; } // Fähigkeit oder Datum fehlt
+          if (lk) continue; // Fähigkeit oder Datum fehlt: ausblenden statt ausgrauen
           const b = h(`<button class="btn small">${was ? 'Erneuern' : u.cost ? 'Kaufen' : 'Buchen'} · ${price}</button>`); b.disabled = !g.canAfford(need);
           b.onclick = () => { if (g.buyUpgrade(fid, u.id)) { this.audio?.cash?.(); this.toast(`${u.name}: ${u.eff}`, 'good'); } else this.toast('Nicht genug Geld.', 'bad'); this.reCompany(); };
           r.append(b);
@@ -1525,7 +1620,7 @@ export class UI {
     const mine = g.algoHash('sha256');
     const entries = [
       ['GigaWatt Mining (USA)', toDay('2014-01-01'), 0.006], ['Sibir Energo (RU)', toDay('2016-01-01'), 0.0035], ['TexaHash Inc.', toDay('2019-01-01'), 0.0045],
-      ['Nordlicht Hash (IS)', toDay('2014-06-01'), 0.0025], ['Pacific Rigs (CA)', toDay('2017-01-01'), 0.002], ['GPU-Farm „Nachtfalter" (US)', toDay('2010-06-01'), 0.03, toDay('2013-01-01')],
+      ['Nordlicht Hash (IS)', toDay('2014-06-01'), 0.0025], ['Pacific Rigs (CA)', toDay('2017-01-01'), 0.002], ['GPU-Farm „Nachtfalter“ (US)', toDay('2010-06-01'), 0.03, toDay('2013-01-01')],
       ['Uni-Cluster Tokio', toDay('2010-09-01'), 0.012, toDay('2014-01-01')], ['Desert Hash (AE)', toDay('2021-06-01'), 0.003], ['Andes Mining (PY)', toDay('2022-01-01'), 0.0018],
     ].filter((e) => day >= e[1] && (!e[3] || day < e[3])).map((e) => ({ name: e[0], h: net * e[2] * (0.85 + 0.3 * Math.abs(Math.sin(e[1] + day / 200))) }));
     const mono = g.monolithHash();
@@ -1582,7 +1677,7 @@ export class UI {
   chronPane() {
     const g = this.g, log = [...(g.s.ev?.log || [])].sort((a, b) => b.d - a.d);
     const pane = h('<div class="chron"></div>');
-    if (!log.length) { pane.append(h('<div class="empty">Noch keine Einträge. Deine Entscheidungen und Bonusziele landen hier.</div>')); return pane; }
+    if (!log.length) { pane.append(h('<div class="empty">Noch keine Einträge. Deine Entscheidungen landen hier.</div>')); return pane; }
     let yr = null;
     for (const e of log) {
       const y = g.yearOf(e.d), bonus = String(e.id).startsWith('bonus:');
@@ -1591,31 +1686,6 @@ export class UI {
       pane.append(h(`<div class="cr-r ${bonus ? 'bonus' : ''}"><span class="cr-d">${fmtDate(e.d)}</span><span class="cr-t">${bonus ? '<em>Bonus</em>' : ''}${esc(t)}</span></div>`));
     }
     return pane;
-  }
-
-  // ---------- Bonusziele in der Zielleiste ----------
-  // Wartephase (alle Ziele erfüllt, Datum noch nicht erreicht): Begründung + bis zu 2 offene Bonusziele.
-  // Sonst nur ein Bonusziel mit Frist (oder im letzten Kapitel, das kein Wartedatum hat).
-  goalsBonus(el, ch, wait, saving = false) {
-    const g = this.g, s = g.s;
-    const open = (ch.bonus || []).filter((b) => !s.bonus?.[b.id] && !(b.until && s.day > toDay(b.until)) && (!b.from || b.from(s)));
-    if (saving && s.flags.miningStarted) { for (const b of open.slice(0, 2)) el.append(this.bonusRow(b)); return; } // Sparphase: Zeit für Bonusziele
-    if (wait) {
-      el.append(h(`<div class="goal wait"><div class="ck"></div><div><div class="gw-t">Weiter ab ${fmtDate(toDay(ch.minDate))}</div>${ch.waitText ? `<div class="gw-x">${esc(ch.waitText)}</div>` : ''}</div></div>`));
-      for (const b of open.slice(0, 2)) el.append(this.bonusRow(b));
-    } else if (s.flags.miningStarted) { const b = open.find((x) => !x.wait && (x.until || !ch.unlock)); if (b) el.append(this.bonusRow(b)); }
-  }
-  bonusRow(b) {
-    const g = this.g, pr = g.bonusProgress(b), rw = g.rewardText(b.reward);
-    let prog = '';
-    if (pr) {
-      const [cur, tgt, kind] = pr;
-      const f = (v) => (kind === 'usd' ? fmtUSD(v) : kind === 'hash' ? fmtHash(v) : kind === 'coin' ? fmtCoin(v) : Math.round(v).toLocaleString('de-DE'));
-      if (kind === 'jth') prog = Number.isFinite(cur) ? `<span class="gb-p">jetzt ${Math.round(cur).toLocaleString('de-DE')} J/TH</span>` : ''; // weniger ist besser
-      else if (kind === 'fill' && pr[3]) { const ci = this.capInfo(pr[3]); prog = `<span class="gb-p">${this.livePlc(ci)} · ${ci.pw}</span>`; }
-      else prog = `<span class="gb-p">${f(Math.max(0, Math.min(cur, tgt)))} / ${f(tgt)}${kind === 'days' ? ' Tage' : b.unit ? ' ' + esc(b.unit) : ''}</span>`;
-    }
-    return h(`<div class="goal bonus"><div class="ck"></div><div><div class="gb-l"><span class="gb-tag">Bonus</span><span class="gb-x">${esc(b.text)}</span>${prog}</div>${rw || b.until ? `<div class="gb-r">${rw ? `<span class="gb-rw">${esc(rw)}</span>` : ''}${b.until ? `<span class="gb-u">bis ${fmtDate(toDay(b.until))}</span>` : ''}</div>` : ''}</div></div>`);
   }
 
   // ---------- Jahresrückblick (am 1. Januar, abschaltbar im Pausenmenü) ----------
@@ -1662,7 +1732,7 @@ export class UI {
       ${wi ? `<div class="yr-p"><span class="yr-k">Was wäre wenn</span>${wi}</div>` : ''}
       <div class="row yr-act"><span class="yr-off">Abschalten: Pause · Jahresrückblick</span><button class="btn primary">Auf ins Jahr ${y + 1}</button></div></div>`);
     body.querySelector('button').onclick = () => this.closeModal();
-    this.audio?.message?.();
+    this.audio?.message?.(); s.flags.yrSeen ||= s.day || 1;
     this.openModal(body, 'narrow yr-card', 'year');
     return true;
   }
@@ -1688,35 +1758,8 @@ export class UI {
     return (t || FAMILY_MOOD[hi[0]][moodTier(hi[1])]) + tail;
   }
 
-  menu() {
-    const g = this.g;
-    const body = h(`<div><h2>Menü</h2><div class="row"><button class="btn primary" data-a="save">Speichern</button><button class="btn" data-a="load">Laden</button><button class="btn danger" data-a="new">Neues Spiel</button></div>
-      <div class="sec"><h4>Grafik</h4><div class="row"><button class="btn small ${this.w.quality === 'high' ? 'primary' : ''}" data-q="high">Hoch</button><button class="btn small ${this.w.quality === 'medium' ? 'primary' : ''}" data-q="medium">Mittel</button><button class="btn small ${this.w.quality === 'low' ? 'primary' : ''}" data-q="low">Niedrig</button></div></div>
-      <div class="sec"><h4>Ton</h4><div class="row"><button class="btn small" data-a="mute">${this.audio?.muted ? 'Ton an' : 'Ton aus'}</button></div></div>
-      <div class="sec"><div style="font-size:12px;color:var(--dim)">Fan-Projekt · alle Namen fiktiv · keine Anlageberatung<br/>Bitcoin-Kurse und Hashrate: Coin Metrics Community Data (CC BY-NC 4.0)</div></div></div>`);
-    body.querySelector('[data-a=save]').onclick = () => { this.toast(g.save() ? 'Gespeichert' : 'Speichern fehlgeschlagen', 'good', 2000); };
-    const lb = body.querySelector('[data-a=load]');
-    lb.onclick = () => {
-      if (!g.hasSave()) { this.toast('Kein Spielstand gefunden', 'bad'); return; }
-      if (!lb.dataset.armed) { lb.dataset.armed = '1'; lb.textContent = 'Sicher? Nochmal klicken = laden'; setTimeout(() => { if (lb.isConnected) { delete lb.dataset.armed; lb.textContent = 'Laden'; } }, 4000); return; }
-      if (!g.load()) { this.toast('Spielstand konnte nicht geladen werden', 'bad'); return; }
-      this.resetSession(); this.closeModal(); this.switchSite(g.s.current); this.w.syncLoose(); this.w.syncParcels?.(); this.speedBar(); this.ticker(); this.keysHint(); this.toast('Spielstand geladen', 'good');
-    };
-    const nb = body.querySelector('[data-a=new]');
-    nb.onclick = () => {
-      if (!nb.dataset.armed) { nb.dataset.armed = '1'; nb.textContent = 'Sicher? Nochmal klicken = neu starten'; setTimeout(() => { if (nb.isConnected) { delete nb.dataset.armed; nb.textContent = 'Neues Spiel'; } }, 4000); return; }
-      this.newGamePick(nb); // Schwierigkeit wählen, dann neu starten
-    };
-    body.querySelector('[data-a=mute]').onclick = () => { this.audio?.setMuted(!this.audio.muted); this.menu(); };
-    body.querySelectorAll('[data-q]').forEach((b) => (b.onclick = () => { this.w.setQuality(b.dataset.q); this.menu(); }));
-    this.openModal(body, 'narrow', 'menu');
-  }
-
-  newGamePick(nb) {
-    const g = this.g, row = h('<div class="row diff-row"></div>');
-    for (const [id, d] of Object.entries(DIFFICULTY)) { const b = h(`<button class="btn small ${id === 'normal' ? 'primary' : ''}" title="${esc(d.desc)}">${esc(d.name)}</button>`); b.onclick = () => { g.newGame(id); g.startTutor(); this.resetSession(); this.closeModal(); this.switchSite('kinder'); this.w.syncLoose(); this.w.syncParcels?.(); this.speedBar(); this.ticker(); this.dock(); this.keysHint(); this.wakeUp(); }; row.append(b); }
-    row.prepend(h('<span class="dp-lab">Neues Spiel als</span>')); nb.closest('.row').after(row); nb.remove();
-  }
+  // „Menü“ (Dock, Esc): die Pause mit Ton, Grafik und Maus – das frühere Extra-Fenster ist darin aufgegangen
+  menu() { this.resume(); this.pause(true); }
 
   // ---------- Ticker / Toasts / Hinweis ----------
   ticker() {
@@ -1748,6 +1791,7 @@ export class UI {
   // Erfahrung: kleine Einblendung, beim Stufenaufstieg eine große Karte
   flushXp() { const q = this.xpQ || []; this.xpQ = []; q.forEach(([k, n, lv]) => this.xpPop(k, n, lv)); }
   xpPop(k, n, lv) {
+    if (!this.g.has('skills')) return; // vor dem Fähigkeiten-Baum still mitzählen – keine „+25 EP“, die man noch nicht versteht
     if (this.installing && k === 'w') { (this.xpQ ||= []).push([k, n, lv]); return; }
     const box = $('#xpbox') || (() => { const b = h('<div id="xpbox"></div>'); document.body.append(b); return b; })();
     const el = h(`<div class="xp"><span class="xi">${potSvg(k, 16)}</span>+${n} ${POTS[k]?.long || 'Erfahrung'}</div>`); box.append(el); setTimeout(() => el.remove(), 2400);
@@ -1755,10 +1799,14 @@ export class UI {
     this.dock();
   }
   // Große Karte: Fähigkeitspunkt frei (pt) oder gelernt (sk) – wartet, solange der Spieler gerade etwas fokussiert
-  levelUp(kind, v) { if (kind === 'sk') skillCard(this, v); else pointCard(this, v); }
-  skills(sel) { if (!this.g.has('skills') && this.g.s.flags?.tutor) { this.toast('Noch nicht freigeschaltet.', 'info', 1800); return; } skillsMenu(this, sel); }
+  levelUp(kind, v) { if (!this.g.has('skills')) return; if (kind === 'sk') skillCard(this, v); else pointCard(this, v); }
+  skills(sel) { if (!this.g.has('skills') && this.g.s.flags?.tutor) return; skillsMenu(this, sel); } // noch kein Baum: T tut nichts
   // Esc zuerst für das, was gerade offen ist: Mini-Spiel, Installer, Details im Baum (main.js) – true = erledigt
-  escLocal() { if (this.mg) { this.mg.cancel(); return true; } if (this.osWiz) return osAbort(this); return skCloseDetail(this); }
+  escLocal() {
+    if (this.mg) { this.mg.cancel(); return true; } if (this.osWiz) return osAbort(this); if (skCloseDetail(this)) return true;
+    const b = this.modalBack; if (b && !$('#modal').classList.contains('hidden') && !this.stickyModal()) { this.closeModal(); if (b === 'shop') this.toggleBuild(); return true; } // Unterfenster: zurück zu Inspektor bzw. Shop
+    return false;
+  }
   milestone(title, sub, kicker = 'Meilenstein') {
     if (performance.now() < (this.msBusy || 0)) { (this.msQ ||= []).push([title, sub, kicker]); this.msPump(); return; } // nacheinander statt übereinander
     this.msBusy = performance.now() + 3200;
@@ -1797,26 +1845,26 @@ export class UI {
   }
   // Kopfzeile im Katalog: Plätze und Strom am Standort
   capStrip(fac) {
-    const g = this.g, f = FACILITY[fac], ci = this.capInfo(fac), nx = f.power[g.s.fac[fac].power + 1];
+    const g = this.g, f = FACILITY[fac], ci = this.capInfo(fac), nx = f.power[g.s.fac[fac].power + 1], sb = this.siteBits(fac);
+    if (!sb.plc && !sb.pw && !sb.temp) return null; // am Anfang: nichts, was man schon braucht
     const tmp = g.summary[fac]?.temp ?? 21;
-    const el = h(`<div class="bcap"><span class="bc-n">${esc(f.short)}</span><span class="bc-i ${tmp > 35 ? 'full' : ''}" title="${tmp > 35 ? 'Zu warm: Kühlung (Katalog → Kühlung) hält die Geräte auf Tempo' : 'Raumtemperatur'}">${Math.round(tmp)} °C</span><span class="bc-i ${ci.c.used >= ci.c.max ? 'full' : ''}" title="Stellplätze für Rigs, Miner und Regale – Kühlung und Deko brauchen keinen"><em>Platz</em> ${ci.plc}<i><b style="width:${ci.sp}%"></b></i></span><span class="bc-i ${ci.pp >= 90 ? 'full' : ''}" title="Last am Stromanschluss"><em>Strom</em> ${ci.pw}<i><b style="width:${ci.pp}%"></b></i></span>${nx && g.has('company') && ci.pp >= 60 ? '<button class="btn small bc-up">Strom ausbauen</button>' : ''}</div>`);
+    const el = h(`<div class="bcap"><span class="bc-n">${esc(f.short)}</span>${sb.temp ? `<span class="bc-i ${tmp > 35 ? 'full' : ''}" title="${tmp > 35 ? 'Zu warm: Kühlung (Shop → Kühlung) hält die Geräte auf Tempo' : 'Raumtemperatur'}">${Math.round(tmp)} °C</span>` : ''}${sb.plc ? `<span class="bc-i ${ci.c.used >= ci.c.max ? 'full' : ''}" title="Stellplätze für Rigs, Miner und Regale – Kühlung und Deko brauchen keinen"><em>Platz</em> ${ci.plc}<i><b style="width:${ci.sp}%"></b></i></span>` : ''}${sb.pw ? `<span class="bc-i ${ci.pp >= 90 ? 'full' : ''}" title="Last am Stromanschluss"><em>Strom</em> ${ci.pw}<i><b style="width:${ci.pp}%"></b></i></span>` : ''}${nx && g.has('company') && ci.pp >= 60 ? '<button class="btn small bc-up">Strom ausbauen</button>' : ''}</div>`);
     const b = el.querySelector('.bc-up'); if (b) b.onclick = () => { this.resume(); this.company(); };
     return el;
   }
-  // Rig-Karte: fertig bestückt (Hauptaktion), selbst zusammenstellen, nur Gehäuse
-  // Die Karte zeigt immer den VOLL bestückten Rig (bester Ertrag pro Stellplatz) und merkt sich genau diese Zusammenstellung:
-  // Klick kauft, was angezeigt wird (Preis/Verfügbarkeit werden geprüft); zu teuer → „Klein anfangen“ mit 1 Karte, später auffüllen
+  // Rig-Karte: Vorschlag aus dem, was man sich gerade leisten kann (Bausatz bzw. fertig bestückt), selbst zusammenstellen, nur Gehäuse.
+  // Klick kauft genau die gezeigte Zusammenstellung (Preis/Verfügbarkeit werden geprüft). Reicht das Geld für gar nichts: „Spar noch X $“.
   rigCard(it, fac) {
-    const g = this.g, pm = g.parcelMode(), lock = !g.readyOk(it.id), rd = !lock, r = g.readyRig(it.id, fac, Infinity, rd), cp = g.itemPrice(it), full = pm ? !g.orderRoomOk(it) : !g.slotOk(fac, it), isNew = g.s.day - it.releaseDay < 120, price = r ? r.price : cp;
+    const g = this.g, pm = g.parcelMode(), lock = !g.readyOk(it.id), rd = !lock, el = g.elecPrice(fac), cp = g.itemPrice(it), full = pm ? !g.orderRoomOk(it) : !g.slotOk(fac, it), isNew = g.s.day - it.releaseDay < 120;
+    const r0 = g.readyRig(it.id, fac, g.s.cash, rd), r = r0 && r0.price <= g.s.cash ? g.buildStats(r0, fac, rd, g.s.day, el) : null; // Strom wie im Inspektor (Pauschale = 0)
+    const entry = r ? null : this.rigEntry(it, fac, rd), price = r ? r.price : entry ? entry.price : cp;
     const cfg = r ? { type: r.type, mobo: r.mobo, cpu: r.cpu, psu: r.psu, gpu: r.gpu, n: r.n } : null;
-    const sm = cfg && cfg.n > 1 && r.price > g.s.cash ? g.buildStats({ ...cfg, n: 1 }, fac, rd) : null; // gleiches Netzteil: reicht später für alle Karten
     const per = (x) => `<b class="${x.net >= 0 ? 'pos' : 'neg'}">${x.net >= 0 ? '+' : ''}${fmtUSD(x.net)}/Tag</b>`;
-    const spec = r ? `${lock ? 'Bausatz' : 'Fertig'}: ${r.n}× ${esc(PART[r.gpu].name)} · ${fmtWatt(r.watt)}<br/>≈ ${per(r)} pro Stellplatz · ${this.roiText(r.roi)}` : esc(it.desc || '');
-    const fd = full ? 'data-full="1"' : '', warn = r && !full ? this.rigWarn(fac, r.watt) : '', cid = g.readyBy(it.id);
-    const main = !r ? '' : lock ? `<button class="btn small primary wide rc-kit" data-p="${r.price}" ${fd} ${full || r.price > g.s.cash ? 'disabled' : ''} title="${pm ? 'Gehäuse und Teile kommen morgen im Paket – auspacken, aufstellen, selbst einbauen (Schrauben-EP)' : 'Gehäuse wird aufgestellt, die Teile liegen im Lager – selbst einbauen (Schrauben-EP)'}">${pm ? 'Bausatz bestellen' : 'Als Bausatz'} · ${this.money(r.price)}</button>` : `<button class="btn small primary wide rc-ready" data-p="${r.price}" ${fd} ${full || r.price > g.s.cash ? 'disabled' : ''} title="${cid ? `Fertig montiert von ${esc(CONTACT[cid].name)} · ${Math.round(g.buildFee(it.id) * 100)} % Montage` : 'Fertig montiert'}">${pm ? 'Fertig bestellen' : 'Fertig bestückt'} · ${this.money(r.price)}</button>`;
-    const small = sm && !full ? `<button class="btn small wide rc-small" data-p="${sm.price}" ${sm.price > g.s.cash ? 'disabled' : ''} title="1 Karte jetzt, die anderen ${cfg.n - 1} später auffüllen – das Netzteil reicht für alle ${cfg.n} · ≈ ${fmtUSD(sm.net)}/Tag pro Stellplatz">Klein anfangen: 1 Karte · ${this.money(sm.price)}</button>` : '';
-    const minP = sm && !full ? Math.min(price, sm.price) : price; // Karte nur abblenden, wenn auch der kleine Einstieg zu teuer ist
-    const card = h(`<div class="item rigc ${full || minP > g.s.cash ? 'dis' : ''}" data-rig="1" data-price="${minP}" data-fp="${price}" data-id="${it.id}" ${fd}><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${this.money(price)}</span></div><div class="s">${spec}<br/><span class="rc-dim">bis ${it.maxGpu} Grafikkarten${full ? '' : ` · Platz ${g.slotsUsed(fac)}/${g.slotsMax(fac)}`}</span>${warn ? `<br/><b class="rc-warn">${warn}</b>` : ''}</div>${lock && cid ? this.lockLine(cid) : ''}<div class="miss">${full ? (pm && g.pendingSlots() ? 'Kein Platz mehr – Bestelltes belegt die letzten Plätze' : 'Kein Platz mehr – Zeit für einen größeren Standort') : this.missText(price)}</div>${main}${small}<div class="rc-row"><button class="btn small rc-cfg" data-p="0" ${fd} ${full ? 'disabled' : ''} title="Teile selbst wählen${lock ? '' : ': als Bausatz oder fertig montiert'}">Selbst bauen</button><button class="btn small rc-case" data-p="${cp}" ${fd} ${full || cp > g.s.cash ? 'disabled' : ''} title="Leeres Gehäuse – Teile einzeln einbauen">Gehäuse · ${this.money(cp)}</button></div></div>`);
+    const spec = r ? `${lock ? 'Bausatz' : 'Fertig'}: ${r.n}× ${esc(PART[r.gpu].name)} · ${fmtWatt(r.watt)}<br/>schürft ≈ ${per(r)} · ${this.roiText(r.roi)}` : entry ? `Einstieg: 1× ${esc(PART[entry.gpu].name)} · ${fmtWatt(entry.watt)}<br/>schürft ≈ ${per(entry)}` : esc(it.desc || '');
+    const fd = full ? 'data-full="1"' : '', warn = r && !full ? this.rigWarn(fac, r.watt) : '', cid = g.readyBy(it.id), slots = this.rigSlots(it);
+    const main = !r ? '' : lock ? `<button class="btn small primary wide rc-kit" data-p="${r.price}" ${fd} ${full ? 'disabled' : ''} title="${pm ? 'Gehäuse und Teile kommen morgen im Paket – auspacken, aufstellen, selbst einbauen' : 'Gehäuse wird aufgestellt, die Teile liegen im Lager – selbst einbauen'}">${pm ? 'Bausatz bestellen' : 'Als Bausatz'} · ${this.money(r.price)}</button>` : `<button class="btn small primary wide rc-ready" data-p="${r.price}" ${fd} ${full ? 'disabled' : ''} title="${cid ? `Fertig montiert von ${esc(CONTACT[cid].name)} · ${Math.round(g.buildFee(it.id) * 100)} % Montage` : 'Fertig montiert'}">${pm ? 'Fertig bestellen' : 'Fertig bestückt'} · ${this.money(r.price)}</button>`;
+    const save = !r && !full && entry; // nichts bezahlbar: statt eines leeren Kastens „Spar noch X $“
+    const card = h(`<div class="item rigc ${full || price > g.s.cash ? 'dis' : ''}" data-rig="1" data-price="${price}" data-fp="${price}" data-id="${it.id}" ${save ? 'data-save="1"' : ''} ${fd}><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${save ? 'ab ' : ''}${this.money(price)}</span></div><div class="s">${spec}<br/><span class="rc-dim">bis ${slots} ${slots === 1 ? 'Grafikkarte' : 'Grafikkarten'}${full || !g.has('rigs') ? '' : ` · Platz ${g.slotsUsed(fac)}/${g.slotsMax(fac)}`}</span>${warn ? `<br/><b class="rc-warn">${warn}</b>` : ''}</div>${lock && cid ? this.lockLine(cid) : ''}<div class="miss ${save ? 'rc-save' : ''}">${full ? (pm && g.pendingSlots() ? 'Kein Platz mehr – Bestelltes belegt die letzten Plätze' : 'Kein Platz mehr – Zeit für einen größeren Standort') : save ? this.saveText(price) : ''}</div>${main}<div class="rc-row"><button class="btn small rc-cfg" data-p="0" ${fd} ${full ? 'disabled' : ''} title="Teile selbst wählen${lock ? '' : ': als Bausatz oder fertig montiert'}">Selbst bauen</button><button class="btn small rc-case" data-p="${cp}" ${fd} ${full || cp > g.s.cash ? 'disabled' : ''} title="Leeres Gehäuse – Teile einzeln einbauen">Gehäuse · ${this.money(cp)}</button></div></div>`);
     try { const url = this.w.thumbnail(it.id); if (url) card.prepend(h(`<div class="thumb"><img alt="" src="${url}"/></div>`)); } catch (e) { /* ohne Vorschau weiter */ }
     const go = (fn) => (e) => { e?.stopPropagation(); if (g.parcelMode() ? !g.orderRoomOk(it) : !g.slotOk(fac, it)) { this.toast(g.parcelMode() ? `${esc(g.orderWhy(it))}.` : 'Kein Platz mehr – Zeit für einen größeren Standort.', 'bad'); return; } fn(); };
     // gekauft wird genau die gezeigte Zusammenstellung; hat sich der Preis spürbar geändert oder ist ein Teil ausgelaufen: Katalog neu
@@ -1829,13 +1877,24 @@ export class UI {
     const caseOnly = go(() => { if (g.itemPrice(it) > g.s.cash) { this.toast('Nicht genug Geld.', 'bad'); return; } if (g.parcelMode()) { this.orderItem(it); return; } this.resume(); this.w.startPlacement(it.id); });
     card.querySelector('.rc-ready')?.addEventListener('click', ready);
     card.querySelector('.rc-kit')?.addEventListener('click', kit);
-    card.querySelector('.rc-small')?.addEventListener('click', buy({ ...cfg, n: 1 }, rd, sm?.price || 0));
     card.querySelector('.rc-case').onclick = caseOnly;
-    card.querySelector('.rc-cfg').onclick = go(() => this.configurator(it.id));
+    card.querySelector('.rc-cfg').onclick = go(() => this.configurator(it.id, null, true));
     this.lockWire(card);
-    card.onclick = r ? (lock ? kit : ready) : caseOnly;
+    card.onclick = r ? (lock ? kit : ready) : save ? go(() => this.configurator(it.id, null, true)) : caseOnly;
     return card;
   }
+  // Wie viele Grafikkarten passen wirklich? (Rahmen und das Mainboard mit den meisten Plätzen, das es gerade gibt)
+  rigSlots(it) { const mbs = this.g.partList('mobo'); return Math.min(it.maxGpu, mbs.length ? Math.max(...mbs.map((m) => m.slots)) : it.maxGpu); }
+  // Günstigster sinnvoller Einstieg: 1 Karte, billigstes Board und CPU, kleinstes passendes Netzteil (für „Spar noch X $“)
+  rigEntry(it, fac, ready) {
+    const g = this.g, el = g.elecPrice(fac), np = g.psuCount({ type: it.id }), pr = (x) => g.itemPrice(x);
+    const mb = g.partList('mobo').filter((m) => Math.min(m.slots, it.maxGpu) >= 1).sort((a, b) => pr(a) - pr(b))[0], cpu = [...g.partList('cpu')].sort((a, b) => pr(a) - pr(b))[0], psus = [...g.partList('psu')].sort((a, b) => a.cap - b.cap);
+    if (!mb || !cpu || !psus.length) return null;
+    let best = null;
+    for (const gp of g.partList('gpu')) { const ps = psus.find((x) => x.cap * np >= 25 + mb.watt + cpu.watt + gp.watt); if (!ps) continue; const st = g.buildStats({ type: it.id, mobo: mb.id, cpu: cpu.id, psu: ps.id, gpu: gp.id, n: 1 }, fac, ready, g.s.day, el); if (st.ok && st.net > 0 && (!best || st.price < best.price)) best = st; }
+    return best;
+  }
+  saveText(price, ex = null) { const g = this.g, gap = price - g.s.cash; if (!(gap > 0)) return ''; ex ??= g.has('market') ? g.exchangeValue() : 0; return `Spar noch ${this.money(gap)}${ex >= gap ? ' – oder verkauf Bitcoin an der Börse (M)' : ''}`; }
   // Katalog: offene Bausätze am Standort in einem Rutsch fertig schrauben
   kitsBar(fac) {
     const g = this.g, k = g.kitsOpen(fac); if (!k.length) return null; const n = k.reduce((a, o) => a + g.kitPlan(o).length, 0);
@@ -1850,6 +1909,7 @@ export class UI {
     return { short: esc(c.soon), long: c.meet(g.s, g, fmtDate), call: false };
   }
   lockLine(cid) {
+    if (!this.g.contactMet(cid)) return ''; // Sperrkasten erst, wenn man den Kontakt kennt (vorher nichts ankündigen)
     const t = this.lockText(cid);
     return `<div class="rc-lock" title="${esc(t.long)}">${LOCK_SVG}<span>${t.short}</span>${t.call ? `<button class="btn small rc-call" data-c="${cid}">${esc(CONTACT[cid].name)} anrufen</button>` : ''}</div>`;
   }
@@ -1881,11 +1941,11 @@ export class UI {
   lastBuildCard(fac) {
     const g = this.g, lb = g.s.lastBuild; if (!lb || g.buildBlocked(lb) || !g.placeableAllowed(PLACEABLE[lb.type], fac)) return null;
     const lock = lb.ready && !g.readyOk(lb.type), ready = lb.ready && !lock; // fertig montiert gesperrt (z. B. alter Stand): als Bausatz wiederholen
-    const pm = g.parcelMode(), st = g.buildStats(lb, fac, ready), full = pm ? !g.orderRoomOk(PLACEABLE[lb.type]) : !g.slotOk(fac, PLACEABLE[lb.type]), fd = full ? 'data-full="1"' : '';
+    const pm = g.parcelMode(), st = g.buildStats(lb, fac, ready, g.s.day, g.elecPrice(fac)), full = pm ? !g.orderRoomOk(PLACEABLE[lb.type]) : !g.slotOk(fac, PLACEABLE[lb.type]), fd = full ? 'data-full="1"' : '';
     const card = h(`<div class="item rigc lastb ${full || st.price > g.s.cash ? 'dis' : ''}" data-rig="1" data-price="${st.price}" ${fd}><div class="t"><span>Wie zuletzt</span><span class="p">${this.money(st.price)}</span></div><div class="s">${esc(PLACEABLE[lb.type].name)} · ${st.n}× ${esc(PART[lb.gpu]?.name || 'ohne Grafikkarte')}<br/>${ready ? `fertig montiert${g.readyBy(lb.type) ? ` von ${esc(CONTACT[g.readyBy(lb.type)].name)}` : ''}` : 'als Bausatz zum Selbsteinbauen'}<br/>≈ <b class="${st.net >= 0 ? 'pos' : 'neg'}">${st.net >= 0 ? '+' : ''}${fmtUSD(st.net)}/Tag</b> · ${this.roiText(st.roi)}${!full && st.ok ? ((w) => (w ? `<br/><b class="rc-warn">${w}</b>` : ''))(this.rigWarn(fac, st.watt)) : ''}</div>${lock ? this.lockLine(g.readyBy(lb.type)) : ''}<div class="miss">${full ? 'Kein Platz mehr – Zeit für einen größeren Standort' : ''}</div><button class="btn small primary wide lb-again" data-p="${st.price}" ${fd} ${full || st.price > g.s.cash ? 'disabled' : ''}>${lock ? (pm ? 'Nochmal als Bausatz bestellen' : 'Nochmal als Bausatz') : pm ? 'Nochmal bestellen' : 'Nochmal bauen'} · ${this.money(st.price)}</button><div class="rc-row"><button class="btn small lb-edit" data-p="0" ${fd}>Ändern</button></div></div>`);
     const again = card.querySelector('.lb-again'), edit = card.querySelector('.lb-edit');
     again.onclick = (e) => { e.stopPropagation(); this.startBuild(lb, ready); };
-    edit.onclick = (e) => { e.stopPropagation(); this.configurator(lb.type, lb); };
+    edit.onclick = (e) => { e.stopPropagation(); this.configurator(lb.type, lb, true); };
     this.lockWire(card);
     card.onclick = () => this.startBuild(lb, ready);
     return card;
@@ -1942,75 +2002,90 @@ export class UI {
     else if (why === 'money' && n > 1) this.toast(`${n} Stück gesetzt – für den nächsten fehlen ${this.money(cost - g.s.cash)}.`, 'info', 4000);
     return false;
   }
-  // Konfigurator: Gehäuse, Mainboard, CPU, Grafikkarten, Netzteil – live Hashrate, Watt, Ertrag, Amortisation
-  configurator(type, cfg0 = null) {
+  // Konfigurator: Gehäuse, Mainboard, CPU, Grafikkarten, Netzteil – live Hashrate, Watt, Ertrag, Amortisation.
+  // Vorbelegt „wie dein PC“ (sonst das Bezahlbare); Felder mit nur einer Möglichkeit stehen als Text da. fromShop: Esc führt zurück in den Shop.
+  configurator(type, cfg0 = null, fromShop = false) {
     const g = this.g, fac = g.s.current;
-    const base = cfg0 || g.readyRig(type, fac, Infinity, false) || { type };
-    const cfg = { type: base.type || type, mobo: base.mobo, cpu: base.cpu, psu: base.psu, gpu: base.gpu, n: base.n ?? 1 };
+    const base = cfg0 || this.likeMyPc(type) || g.readyRig(type, fac, g.s.cash, false) || { type };
+    const cfg = { type: base.type || type, mobo: base.mobo, cpu: base.cpu, psu: base.psu, gpu: base.gpu, n: Math.max(1, base.n ?? 1) };
     const body = h(`<div class="cfgr"><h2>PC zusammenstellen</h2><p class="cf-x"></p><div class="cf-grid"></div><div class="cf-sum"></div><div class="cf-go"></div></div>`);
     const grid = body.querySelector('.cf-grid'), sum = body.querySelector('.cf-sum'), goEl = body.querySelector('.cf-go'), el = g.elecPrice(fac), cfx = body.querySelector('.cf-x');
-    const val = (it) => { const c = g.bestCoin(it.hash, it.vram); const r = c ? g.revenueFor(it.hash, c, it.vram) : 0; return r - (it.watt / 1000) * 24 * el; };
+    const val = (it) => { const c = g.bestCoin(it.hash, it.vram); const r = c ? g.revenueFor(it.hash, c, it.vram) : 0; return r - (it.watt / 1000) * 24 * el; }; // Strom wie im Inspektor (Pauschale = 0)
     const render = () => {
       grid.innerHTML = ''; goEl.innerHTML = '';
-      const cid = g.readyBy(cfg.type), lock = !g.readyOk(cfg.type), fee = Math.round(g.buildFee(cfg.type) * 100);
-      cfx.innerHTML = `${g.parcelMode() ? 'Bestellt wird heute, geliefert morgen früh vor deine Wohnungstür. ' : ''}Als <b>Bausatz</b> kommen die Teile ins Lager und du baust sie selbst ein (günstiger, Schrauben-EP). ${lock ? (cid ? this.lockText(cid).short : '') : `<b>Fertig montiert</b> läuft er sofort (+${fee}&nbsp;% Montage${cid ? ` bei ${esc(CONTACT[cid].name)}` : ''}).`}`;
+      const cid = g.readyBy(cfg.type), lock = !g.readyOk(cfg.type), met = cid && g.contactMet(cid), fee = Math.round(g.buildFee(cfg.type) * 100);
+      cfx.innerHTML = `Die Teile kommen ins Lager, du baust sie selbst ein${g.parcelMode() ? ' – Lieferung morgen früh' : ''}.${lock ? '' : ` Fertig montiert läuft er sofort (+${fee}&nbsp;%${cid ? ` bei ${esc(CONTACT[cid].name)}` : ''}).`}`;
       const rigs = PLACEABLES.filter((x) => x.kind === 'rig' && g.available(x) && g.placeableAllowed(x, fac));
       const np = g.psuCount({ type: cfg.type });
-      const sel = (lab, list, cur, txt, key, num = false) => { const r = h(`<label class="cf-r"><span>${lab}</span><select>${list.map((it) => `<option value="${it.id}" ${String(it.id) === String(cur) ? 'selected' : ''}>${esc(txt(it))}</option>`).join('')}</select></label>`); r.querySelector('select').onchange = (e) => { cfg[key] = num ? +e.target.value : e.target.value; if (key === 'type' || key === 'mobo') cfg.n = Math.max(cfg.n, 1); render(); }; grid.append(r); return r; };
+      // Auswahlfeld – oder bei nur einer Möglichkeit eine Textzeile
+      const sel = (lab, list, cur, txt, key, num = false) => {
+        if (list.length === 1) { cfg[key] = num ? +list[0].id : list[0].id; const r = h(`<div class="cf-r one"><span>${lab}</span><b>${esc(txt(list[0]))}</b></div>`); grid.append(r); return r; }
+        const r = h(`<label class="cf-r"><span>${lab}</span><select>${list.map((it) => `<option value="${it.id}" ${String(it.id) === String(cur) ? 'selected' : ''}>${esc(txt(it))}</option>`).join('')}</select></label>`); r.querySelector('select').onchange = (e) => { cfg[key] = num ? +e.target.value : e.target.value; if (key === 'type' || key === 'mobo') cfg.n = Math.max(cfg.n, 1); render(); }; grid.append(r); return r;
+      };
       sel('Gehäuse', rigs, cfg.type, (it) => `${it.name} · ${this.money(g.itemPrice(it))}`, 'type');
-      sel('Mainboard', g.partList('mobo'), cfg.mobo, (it) => `${it.name} · ${Math.min(it.slots, PLACEABLE[cfg.type].maxGpu)} Plätze · ${this.money(g.itemPrice(it))}`, 'mobo');
-      sel('Prozessor', [...g.partList('cpu')].sort((a, b) => g.itemPrice(a) - g.itemPrice(b)), cfg.cpu, (it) => `${it.name} · ${it.watt} W · ${this.money(g.itemPrice(it))}`, 'cpu');
+      const mbl = g.partList('mobo'); if (!mbl.some((x) => x.id === cfg.mobo)) cfg.mobo = mbl[0]?.id;
+      sel('Mainboard', mbl, cfg.mobo, (it) => `${it.name} · ${Math.min(it.slots, PLACEABLE[cfg.type].maxGpu)} Plätze · ${this.money(g.itemPrice(it))}`, 'mobo');
+      const cpl = [...g.partList('cpu')].sort((a, b) => g.itemPrice(a) - g.itemPrice(b)); if (!cpl.some((x) => x.id === cfg.cpu)) cfg.cpu = cpl[0]?.id;
+      sel('Prozessor', cpl, cfg.cpu, (it) => `${it.name} · ${it.watt} W · ${this.money(g.itemPrice(it))}`, 'cpu');
       const gl = [...g.partList('gpu')].sort((a, b) => val(b) / g.itemPrice(b) - val(a) / g.itemPrice(a));
       if (!gl.some((x) => x.id === cfg.gpu)) cfg.gpu = gl[0]?.id;
-      sel('Grafikkarte', gl, cfg.gpu, (it) => `${it.name} · ${it.watt} W · ${val(it) >= 0 ? '+' : ''}${fmtUSD(val(it))}/Tag · ${this.money(g.itemPrice(it))}`, 'gpu');
-      const cap = g.buildCap(cfg); cfg.n = Math.min(cfg.n, cap);
-      sel('Anzahl', Array.from({ length: cap + 1 }, (_, i) => ({ id: i })), cfg.n, (it) => `${it.id} ${it.id === 1 ? 'Grafikkarte' : 'Grafikkarten'}`, 'n', true);
+      sel('Grafikkarte', gl, cfg.gpu, (it) => `${it.name} · ${this.money(g.itemPrice(it))} · ${val(it) >= 0 ? '+' : ''}${fmtUSD(val(it))}/Tag`, 'gpu');
+      const cap = g.buildCap(cfg); cfg.n = Math.max(1, Math.min(cfg.n, cap));
+      sel('Anzahl', Array.from({ length: Math.max(1, cap) }, (_, i) => ({ id: i + 1 })), cfg.n, (it) => `${it.id} ${it.id === 1 ? 'Grafikkarte' : 'Grafikkarten'}`, 'n', true); // mindestens eine Karte
       const w0 = 25 + [cfg.mobo, cfg.cpu].filter(Boolean).reduce((a, id) => a + (PART[id].watt || 0), 0) + (cfg.gpu ? PART[cfg.gpu].watt * cfg.n : 0);
-      const psl = [...g.partList('psu')].sort((a, b) => a.cap - b.cap);
-      const ps = sel(np > 1 ? 'Netzteile (2 Stück)' : 'Netzteil', psl, cfg.psu, (it) => `${it.name}${np > 1 ? ' ×2' : ''}${it.cap * np < w0 ? ' – zu schwach' : ''} · ${this.money(g.itemPrice(it) * np)}`, 'psu');
-      const fit = psl.find((x) => x.cap * np >= w0);
-      if (fit && fit.id !== cfg.psu) { const b = h(`<button class="btn small cf-fit">Passendes nehmen</button>`); b.onclick = (e) => { e.preventDefault(); cfg.psu = fit.id; render(); }; ps.append(b); }
-      const kit = g.buildStats(cfg, fac, false), rd = g.buildStats(cfg, fac, true), algo = kit.coin ? g.coinAlgo(kit.coin) : null;
-      sum.innerHTML = `<div class="kv"><div class="k">Rechenleistung</div><div class="v">${algo ? `${fmtHash(kit.hash[algo] || 0, algo)} → ${COIN[kit.coin].name}` : '–'}</div><div class="k">Verbrauch</div><div class="v ${kit.cap && kit.watt > kit.cap ? 'neg' : ''}">${fmtWatt(kit.watt)} von ${fmtWatt(kit.cap)}</div><div class="k">Ertrag / Tag</div><div class="v pos">${fmtUSD(kit.rev)}</div><div class="k">Strom / Tag</div><div class="v neg">−${fmtUSD(kit.rev - kit.net)}</div><div class="k">Gewinn / Tag</div><div class="v"><b class="${kit.net >= 0 ? 'pos' : 'neg'}">${fmtUSD(kit.net)}</b></div><div class="k">Amortisation</div><div class="v">${Number.isFinite(rd.roi) ? `${Math.round(kit.roi)} Tage (Bausatz) · ${Math.round(rd.roi)} Tage (montiert)` : 'lohnt sich hier nicht'}</div></div>${kit.why ? `<div class="cf-why">${esc(kit.why)}</div>` : ''}`;
+      const psl = [...g.partList('psu')].sort((a, b) => a.cap - b.cap), fit = psl.find((x) => x.cap * np >= w0);
+      if (!psl.some((x) => x.id === cfg.psu) || (fit && PART[cfg.psu]?.cap * np < w0)) cfg.psu = fit?.id || psl[0]?.id; // zu schwach: gleich das passende
+      sel(np > 1 ? 'Netzteile (2 Stück)' : 'Netzteil', psl.filter((x) => x.cap * np >= w0).length ? psl.filter((x) => x.cap * np >= w0) : psl, cfg.psu, (it) => `${it.name} · ${it.cap * np} W · ${this.money(g.itemPrice(it) * np)}`, 'psu');
+      const kit = g.buildStats(cfg, fac, false, g.s.day, el), rd = g.buildStats(cfg, fac, true, g.s.day, el), algo = kit.coin ? g.coinAlgo(kit.coin) : null;
+      const cn = kit.coin ? kit.rev / (g.price(kit.coin) || 1) : 0;
+      const pausch = el === 0 && kit.watt > 0;
+      sum.innerHTML = `<div class="kv"><div class="k">Rechenleistung</div><div class="v">${algo ? fmtHash(kit.hash[algo] || 0, algo) : '–'}</div><div class="k">Verbrauch</div><div class="v ${kit.cap && kit.watt > kit.cap ? 'neg' : ''}">${fmtWatt(kit.watt)} von ${fmtWatt(kit.cap)}</div><div class="k">Ertrag / Tag</div><div class="v pos">${kit.coin ? `≈ ${cn >= 10 ? Math.round(cn).toLocaleString('de-DE') : fmtCoin(cn)} ${kit.coin} <span style="color:var(--dim)">(${fmtUSD(kit.rev)})</span>` : '–'}</div><div class="k">Strom</div><div class="v ${pausch ? 'pos' : 'neg'}">${pausch ? 'Pauschale in der Warmmiete' : `−${fmtUSD(kit.rev - kit.net)}/Tag`}</div>${pausch ? '' : `<div class="k">Gewinn / Tag</div><div class="v"><b class="${kit.net >= 0 ? 'pos' : 'neg'}">${fmtUSD(kit.net)}</b></div>`}<div class="k">Amortisation</div><div class="v">${Number.isFinite(kit.roi) ? `${Math.round(lock ? kit.roi : rd.roi)} Tage` : 'lohnt sich hier nicht'}</div></div>${kit.why ? `<div class="cf-why">${esc(kit.why)}</div>` : ''}`;
       const pm = g.parcelMode(), full = pm ? !g.orderRoomOk(PLACEABLE[cfg.type]) : !g.slotOk(fac, PLACEABLE[cfg.type]);
-      const lt = lock && cid ? this.lockText(cid) : null; // gesperrt: statt „Fertig montiert“ der Weg dorthin (abgelehnt: gleich anrufen)
       const bk = h(`<button class="btn big ${lock ? 'primary' : ''}" ${full || !kit.ok || kit.price > g.s.cash ? 'disabled' : ''} title="Gehäuse wird aufgestellt, die Teile liegen im Lager – selbst einbauen">${pm ? 'Bausatz bestellen' : 'Bausatz'} · ${this.money(kit.price)}</button>`);
-      const br = lt?.call ? h(`<button class="btn big cf-call" title="${esc(lt.long)} Danach geht’s fertig montiert.">${esc(CONTACT[cid].name)} anrufen</button>`) : h(`<button class="btn big ${lock ? 'locked' : 'primary'}" ${full || lock || !rd.ok || rd.price > g.s.cash ? 'disabled' : ''} title="${lt ? esc(lt.long) : 'Läuft sofort'}">${lock ? `${LOCK_SVG}Fertig montiert · bald` : `${pm ? 'Fertig bestellen' : 'Fertig montiert'} · ${this.money(rd.price)}`}</button>`);
-      bk.onclick = () => this.startBuild(cfg, false); br.onclick = () => { if (lt?.call) { this.callContact(cid); this.configurator(cfg.type, cfg); return; } this.startBuild(cfg, true); };
-      goEl.append(bk, br);
+      bk.onclick = () => this.startBuild(cfg, false); goEl.append(bk);
+      if (!lock) { const br = h(`<button class="btn big primary" ${full || !rd.ok || rd.price > g.s.cash ? 'disabled' : ''} title="Läuft sofort">${pm ? 'Fertig bestellen' : 'Fertig montiert'} · ${this.money(rd.price)}</button>`); br.onclick = () => this.startBuild(cfg, true); goEl.append(br); }
+      else if (met) { const lt = this.lockText(cid); const br = h(`<button class="btn big cf-call" title="${esc(lt.long)} Danach geht’s fertig montiert.">${esc(CONTACT[cid].name)} anrufen</button>`); br.onclick = () => { this.callContact(cid); this.configurator(cfg.type, cfg, fromShop); }; goEl.append(br); } // fertig montiert erst über den Kontakt
       if (full) goEl.append(h(`<div class="cf-why">${pm && g.pendingSlots() ? 'Kein Platz mehr – Bestelltes belegt die letzten Plätze.' : 'Kein Platz mehr – Zeit für einen größeren Standort.'}</div>`));
-      else if (kit.price > g.s.cash) goEl.append(h(`<div class="cf-why">${this.missText(kit.price)}.</div>`));
+      else if (kit.price > g.s.cash) goEl.append(h(`<div class="cf-why">${this.saveText(kit.price)}.</div>`));
     };
     render();
     document.body.classList.remove('show-build'); // Katalog zu, sonst liegt er über dem Fenster
     this.openModal(body, 'narrow cfg', 'config');
+    this.modalBack = fromShop ? 'shop' : null; // Esc: zurück in den Shop
+  }
+  // „Wie dein PC“: die Teile des ersten PCs, sofern es sie noch zu kaufen gibt
+  likeMyPc(type) {
+    const g = this.g, pc = g.facObjects('kinder').find((o) => g.isFirstPc(o)), p = pc?.parts; if (!p || type !== 'tower') return null;
+    const ok = (id) => id && PART[id] && g.available(PART[id]); if (![p.mobo, p.cpu, p.psu, p.gpus[0]].every(ok)) return null;
+    return { type, mobo: p.mobo, cpu: p.cpu, psu: p.psu, gpu: p.gpus[0], n: p.gpus.length };
   }
   // Katalog „Teile“: Lager + Handel (Grafikkarten, Prozessoren, Mainboards, Netzteile)
   partsView(list) {
-    const g = this.g, fac = g.s.current, T = this.partTab || 'gpu', el = g.elecPrice(fac);
+    const g = this.g, fac = g.s.current, more = g.has('rigs'), T = more ? this.partTab || 'gpu' : 'gpu', el = g.elecPrice(fac), multi = g.has('coins'); // Prozessoren, Mainboards, Netzteile erst mit „Mehr PCs“
     const NAMES = { gpu: 'Grafikkarten', cpu: 'Prozessoren', mobo: 'Mainboards', psu: 'Netzteile' };
-    const tabs = h(`<div class="pv-tabs">${['gpu', 'cpu', 'mobo', 'psu'].map((t) => `<button class="btn small ${t === T ? 'on' : ''}" data-t="${t}">${partSvg(t, 16)}${NAMES[t]}</button>`).join('')}</div>`);
-    tabs.querySelectorAll('button').forEach((b) => { b.onclick = () => { this.partTab = b.dataset.t; this.build(true); }; });
-    list.append(tabs);
+    if (more) { const tabs = h(`<div class="pv-tabs">${['gpu', 'cpu', 'mobo', 'psu'].map((t) => `<button class="btn small ${t === T ? 'on' : ''}" data-t="${t}">${partSvg(t, 16)}${NAMES[t]}</button>`).join('')}</div>`); tabs.querySelectorAll('button').forEach((b) => { b.onclick = () => { this.partTab = b.dataset.t; this.build(true); }; }); list.append(tabs); }
     const pm = g.parcelMode(), pend = g.pendingParts(), pn = Object.values(pend).reduce((a, n) => a + n, 0);
-    const bag = g.bagList(), bc = g.bagCount(), bx = h(`<div class="pv-bag"><div class="pv-h">Dein Lager${bag.length ? ` · ${bc} ${bc === 1 ? 'Teil' : 'Teile'} · Restwert ${this.money(g.bagValue())}` : ''}${pn ? ` · ${pn} unterwegs oder vor der Tür` : ''}</div></div>`);
-    if (!bag.length) bx.append(h(`<div class="pv-e">Leer. ${pm ? 'Bestellte Teile landen hier, sobald du das Paket aufhebst.' : 'Gekaufte und ausgebaute Teile landen hier.'} Einbauen: PC anschauen und <kbd>E</kbd>.</div>`));
-    for (const b of bag) { const c = h(`<span class="pv-chip">${partSvg(b.part.type, 14)}<b>${b.n}×</b> ${esc(b.part.name)}<button class="btn small" title="Ein Stück verkaufen">+${this.money(g.partResale(b.id))}</button></span>`); c.querySelector('button').onclick = (e) => { e.stopPropagation(); g.sellPart(b.id, 1); this.audio?.cash?.(); }; bx.append(c); }
-    list.append(bx); const kb = this.kitsBar(fac); if (kb) list.append(kb);
+    const bag = g.bagList(), bc = g.bagCount();
+    if (bag.length) { // Lager nur, wenn etwas drin ist (Unterwegs steht schon oben im Lieferstatus)
+      const bx = h(`<div class="pv-bag"><div class="pv-h">Dein Lager${bag.length ? ` · ${bc} ${bc === 1 ? 'Teil' : 'Teile'} · Restwert ${this.money(g.bagValue())}` : ''}${pn ? ` · ${pn} unterwegs oder vor der Tür` : ''}</div></div>`);
+      for (const b of bag) { const c = h(`<span class="pv-chip">${partSvg(b.part.type, 14)}<b>${b.n}×</b> ${esc(b.part.name)}<button class="btn small" title="Ein Stück verkaufen">+${this.money(g.partResale(b.id))}</button></span>`); c.querySelector('button').onclick = (e) => { e.stopPropagation(); g.sellPart(b.id, 1); this.audio?.cash?.(); }; bx.append(c); }
+      list.append(bx);
+    }
+    const kb = this.kitsBar(fac); if (kb) list.append(kb);
     const val = (it) => { const c = g.bestCoin(it.hash, it.vram); const r = c ? g.revenueFor(it.hash, c, it.vram) : 0; return { c, r, net: r - (it.watt / 1000) * 24 * el }; };
     let parts = g.partList(T); if (T === 'gpu') parts = [...parts].sort((a, b) => val(b).net / g.itemPrice(b) - val(a).net / g.itemPrice(a)); if (T === 'psu') parts = [...parts].sort((a, b) => a.cap - b.cap);
     const bestId = T === 'gpu' ? parts[0]?.id : null;
     for (const it of parts) {
       const price = g.itemPrice(it), n = g.bagN(it.id), isNew = g.s.day - it.releaseDay < 120;
       let spec = '';
-      if (T === 'gpu') { const v = val(it); spec = `${it.watt} W · ${it.vram} GB${v.c ? ` · ${fmtHash(it.hash[g.coinAlgo(v.c)] || 0, g.coinAlgo(v.c))}` : ''}<br/>allein ≈ <b class="${v.net >= 0 ? 'pos' : 'neg'}">${v.net >= 0 ? '+' : ''}${fmtUSD(v.net)}/Tag</b>${v.c ? ` mit ${COIN[v.c].name}` : ''}`; }
+      if (T === 'gpu') { const v = val(it); spec = `${it.watt} W${multi ? ` · ${fmtNum(it.vram, it.vram < 1 ? 1 : 0)} GB` : ''}${v.c ? ` · ${fmtHash(it.hash[g.coinAlgo(v.c)] || 0, g.coinAlgo(v.c))}` : ''}<br/>schürft allein ≈ <b class="${v.net >= 0 ? 'pos' : 'neg'}">${v.net >= 0 ? '+' : ''}${fmtUSD(v.net)}/Tag</b>${v.c && multi ? ` mit ${COIN[v.c].name}` : ''}`; } // VRAM und Coin erst, wenn es mehr als Bitcoin gibt
       if (T === 'cpu') spec = `${it.watt} W · reicht als Steuerzentrale${it.hash.sha256 ? ` · schürft mit (${fmtHash(it.hash.sha256, 'sha256')})` : ''}`;
       if (T === 'mobo') spec = `${it.slots} Grafikkarten-Plätze · ${it.watt} W`;
       if (T === 'psu') spec = `${it.cap} W Leistung${it.cap >= 1600 ? ' · für große Rahmen (8er/12er brauchen zwei)' : ''}`;
-      const card = h(`<div class="item part" data-price="${price}"><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${this.money(price)}</span></div><div class="s">${it.id === bestId ? '<b class="pv-best">Bester Wert für dein Geld</b><br/>' : ''}${spec}${n ? `<br/><b class="pv-n">Im Lager: ${n}</b>` : ''}${pend[it.id] ? `<br/><b class="pv-n">Unterwegs: ${pend[it.id]}</b>` : ''}</div><div class="miss"></div><div class="rc-row"><button class="btn small primary place" data-p="${price}">${pm ? 'Bestellen' : 'Kaufen'} · ${this.money(price)}</button>${T === 'gpu' || T === 'psu' ? `<button class="btn small" data-p="${price * 2}">2×</button>` : ''}</div></div>`);
-      const [b1, b2] = card.querySelectorAll('button');
+      const card = h(`<div class="item part" data-price="${price}"><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${this.money(price)}</span></div><div class="s">${it.id === bestId ? '<b class="pv-best">Bester Wert für dein Geld</b><br/>' : ''}${spec}${n ? `<br/><b class="pv-n">Im Lager: ${n}</b>` : ''}${pend[it.id] ? `<br/><b class="pv-n">Unterwegs: ${pend[it.id]}</b>` : ''}</div><div class="miss"></div><div class="rc-row"><button class="btn small primary place" data-p="${price}">${pm ? 'Bestellen' : 'Kaufen'} · ${this.money(price)}</button></div></div>`);
+      const [b1] = card.querySelectorAll('button');
       const buy = (k) => (e) => { e.stopPropagation(); if (g.parcelMode()) { const got = g.orderPart(it.id, k); if (!got) { this.toast('Nicht genug Geld.', 'bad'); return; } this.ordered(`${got}× ${it.name}`, ' Paket aufheben, dann PC anschauen und <kbd>E</kbd>: einbauen.'); return; } const got = g.buyPart(it.id, k); if (!got) { this.toast('Nicht genug Geld.', 'bad'); return; } this.audio?.buy?.(); this.toast(`${got}× ${esc(it.name)} im Lager – einbauen: PC anschauen und <kbd>E</kbd>`, 'good', 3500); };
-      b1.onclick = buy(1); if (b2) b2.onclick = buy(2); card.onclick = buy(1);
+      b1.onclick = buy(1); card.onclick = buy(1);
       list.append(card);
     }
   }
@@ -2049,10 +2124,11 @@ export class UI {
       else l = [...l].sort((a, b) => g.itemPrice(a) - g.itemPrice(b));
       return l.slice(0, 3);
     };
+    const swapOk = g.has('rigs'); // Mainboard, Prozessor und Netzteil tauschen erst mit „Mehr PCs“ (dann gibt es die Teile auch einzeln)
     for (const [t, lab, id, idx] of rows) {
-      const key = `${t}:${idx}`, locked = (t === 'cpu' || t === 'gpu') && !p.mobo, it = id ? PART[id] : null, isOpen = open === key;
+      const key = `${t}:${idx}`, locked = (t === 'cpu' || t === 'gpu') && !p.mobo, it = id ? PART[id] : null, isOpen = open === key, noSwap = !!it && t !== 'gpu' && !swapOk;
       const bagN = g.bagList(t).filter((b) => b.n >= (t === 'psu' ? np : 1)).length, pendT = Object.entries(pend).filter(([pid]) => PART[pid]?.type === t).reduce((a, [, n]) => a + n, 0);
-      const row = h(`<div class="pcb-step ${it ? 'done' : locked ? 'locked' : 'free'} ${isOpen ? 'open' : ''}"><span class="ic">${partSvg(t)}${it ? '<i class="tick"></i>' : ''}</span><div class="tx"><b>${lab}</b><span>${it ? esc(it.name) : locked ? 'Erst ein Mainboard einbauen' : bagN ? `frei · ${bagN} passende im Lager` : pendT ? `frei · ${pendT} unterwegs` : 'frei'}</span></div>${locked ? '' : `<button class="btn small ${!it ? 'primary' : ''}">${isOpen ? 'Zu' : it ? 'Tauschen' : 'Einbauen'}</button>`}</div>`);
+      const row = h(`<div class="pcb-step ${it ? 'done' : locked ? 'locked' : 'free'} ${isOpen ? 'open' : ''}"><span class="ic">${partSvg(t)}${it ? '<i class="tick"></i>' : ''}</span><div class="tx"><b>${lab}</b><span>${it ? esc(it.name) : locked ? 'Erst ein Mainboard einbauen' : bagN ? `frei · ${bagN} passende im Lager` : pendT ? `frei · ${pendT} unterwegs` : 'frei'}</span></div>${locked || noSwap ? '' : `<button class="btn small ${!it ? 'primary' : ''}">${isOpen ? 'Zu' : it ? 'Tauschen' : 'Einbauen'}</button>`}</div>`);
       const b = row.querySelector('button');
       if (b) b.onclick = () => { this.rbOpen = isOpen ? null : { uid, key }; this.w.ghostPart?.(null); this.inspect(uid); };
       sec.append(row);
@@ -2081,12 +2157,12 @@ export class UI {
       const more = h('<button class="btn small rb-more">Alle Teile ansehen …</button>'); more.onclick = () => this.partPicker(o, t, t === 'gpu' ? Math.max(0, idx ?? 0) : 0); if (!locked) pick.append(more);
       sec.append(pick);
     }
-    if (p.psu) { const watt = g.rigWatt(o), capW = PART[p.psu].cap * np; sec.append(h(`<div class="pcb-load"><span>Netzteil-Last</span><div class="bar"><div style="width:${Math.min(100, (watt / capW) * 100)}%;background:${watt > capW ? '#ff8f84' : 'var(--acc)'}"></div></div><span>${watt} / ${capW} W</span></div>`)); }
+    if (p.psu && (swapOk || g.rigWatt(o) >= PART[p.psu].cap * np * 0.7)) { const watt = g.rigWatt(o), capW = PART[p.psu].cap * np; sec.append(h(`<div class="pcb-load"><span>Netzteil-Last</span><div class="bar"><div style="width:${Math.min(100, (watt / capW) * 100)}%;background:${watt > capW ? '#ff8f84' : 'var(--acc)'}"></div></div><span>${watt} / ${capW} W</span></div>`)); }
     // Abkürzungen: Bausatz aus dem Lager komplett einbauen, Basis-Teile kaufen, freie Plätze füllen
     const qr = h('<div class="row rb-quick"></div>'); // Serien-Einbau steht oben (kitSec)
     if (pm) { // Paket-Modus: dieselben Abkürzungen als Bestellung (Teile kommen morgen ins Lager)
       if (!p.mobo || !p.cpu || !p.psu) { const pl = g.basePlan(o); if (pl?.items.length) { const b = h(`<button class="btn small" ${pl.total > g.s.cash ? 'disabled' : ''}>Basis-Teile bestellen · ${this.money(pl.total)}</button>`); b.onclick = () => { if (!g.orderBase(uid)) this.toast('Nicht genug Geld.', 'bad'); else this.ordered('Basis-Teile', ' Paket aufheben, dann hier einbauen.'); this.inspect(uid); }; qr.append(b); } }
-      else if (p.gpus.length < cap) { const bg = this.bestGpu(), pl = bg && g.fillPlan(o, bg.id); if (pl) { const b = h(`<button class="btn small">Freie Plätze: ${pl.k}× ${esc(bg.name)} bestellen · ${this.money(pl.total)}</button>`); b.onclick = () => { if (!g.orderFill(uid, bg.id)) this.toast('Nicht genug Geld.', 'bad'); else this.ordered(`${pl.k}× ${bg.name}${pl.psu ? ` + ${PART[pl.psu].name}` : ''}`, ' Paket aufheben, dann hier einbauen.'); this.inspect(uid); }; qr.append(b); } }
+      else if (p.gpus.length < cap) { const bg = this.bestGpu(), pl = bg && g.fillPlan(o, bg.id); if (pl) { const b = h(`<button class="btn small" title="${pl.k}× ${esc(bg.name)}${pl.psu ? ` + ${esc(PART[pl.psu].name)}` : ''}">${pl.k === 1 ? 'Freien Platz' : `${pl.k} freie Plätze`} füllen · ${pl.k}× ${esc(bg.name)} bestellen · ${this.money(pl.total)}</button>`); b.onclick = () => { if (!g.orderFill(uid, bg.id)) this.toast('Nicht genug Geld.', 'bad'); else this.ordered(`${pl.k}× ${bg.name}${pl.psu ? ` + ${PART[pl.psu].name}` : ''}`, ' Paket aufheben, dann hier einbauen.'); this.inspect(uid); }; qr.append(b); } }
     }
     else if (!p.mobo || !p.cpu || !p.psu) { const b = h('<button class="btn small">Basis-Teile kaufen & einbauen</button>'); b.onclick = () => { const r = g.quickBase(uid); if (!r) this.toast('Nicht genug Geld.', 'bad'); this.inspect(uid); }; qr.append(b); }
     else if (p.gpus.length < cap) { const bg = this.bestGpu(); if (bg) { const k = cap - p.gpus.length, pr = g.itemPrice(bg) * k; const b = h(`<button class="btn small">Freie Plätze füllen · ${k}× ${esc(bg.name)} · ${this.money(pr)}</button>`); b.onclick = () => { const n = g.fillGpus(uid, bg.id); if (!n) this.toast('Nicht genug Geld.', 'bad'); else { this.w.animateInstall?.(uid, 'gpu'); this.audio?.install?.(); } this.inspect(uid); }; qr.append(b); } }

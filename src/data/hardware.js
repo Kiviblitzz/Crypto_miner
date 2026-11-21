@@ -173,7 +173,7 @@ export const PLACEABLES = [
   { id: 'plant', kind: 'decor', cat: 'decor', name: 'Zimmerpflanze', release: '2000-01', price: 25, size: [0.5, 0.5], minTier: 0 },
   { id: 'lamp', kind: 'decor', cat: 'decor', name: 'Stehlampe', release: '2000-01', price: 40, watt: 0, size: [0.5, 0.5], minTier: 0 },
   { id: 'sofa', kind: 'decor', cat: 'decor', name: 'Gaming-Sofa', release: '2000-01', price: 350, size: [1.5, 1.0], minTier: 1 },
-  { id: 'neon', kind: 'decor', cat: 'decor', name: 'Neon-Schild „HODL"', release: '2013-12-18', price: 180, size: [1.0, 0.5], minTier: 0 },
+  { id: 'neon', kind: 'decor', cat: 'decor', name: 'Neon-Schild „HODL“', release: '2013-12-18', price: 180, size: [1.0, 0.5], minTier: 0 },
   { id: 'aquarium', kind: 'decor', cat: 'decor', name: 'Aquarium', release: '2000-01', price: 260, size: [1.0, 0.5], minTier: 0 },
   { id: 'fridge', kind: 'decor', cat: 'decor', name: 'Getränkekühlschrank', release: '2000-01', price: 220, watt: 0, size: [0.5, 0.5], minTier: 0 },
   { id: 'arcade', kind: 'decor', cat: 'decor', name: 'Arcade-Automat', release: '2000-01', price: 900, size: [0.5, 0.5], minTier: 1 },
