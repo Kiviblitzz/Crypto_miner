@@ -78,7 +78,8 @@ export function drawPcScreen(world, sc) {
   const cv = sc.canvas, g = cv.getContext('2d'), W = cv.width, H = cv.height, k = W / 1024, game = world.game, s = game.s;
   g.setTransform(k, 0, 0, k, 0, 0); g.textBaseline = 'alphabetic'; g.textAlign = 'left';
   const w = 1024, hh = H / k;
-  if (s.feat && !s.flags.miningStarted) { g.fillStyle = '#050403'; g.fillRect(0, 0, w, hh); g.fillStyle = '#3a2a18'; g.beginPath(); g.arc(w - 36, hh - 32, 8, 0, 7); g.fill(); return; } // aus, Standby-LED
+  const un = world.pcUnread?.() || 0, blink = Math.floor(world.t) % 2 === 0; // neue Nachrichten im Messenger (market.js → chat.js)
+  if (s.feat && !s.flags.miningStarted) { g.fillStyle = '#050403'; g.fillRect(0, 0, w, hh); g.fillStyle = un && blink ? '#4cc47a' : '#3a2a18'; g.beginPath(); g.arc(w - 36, hh - 32, un ? 11 : 8, 0, 7); g.fill(); return; } // aus, Standby-LED (blinkt bei neuer Nachricht)
   const sm = game.summary[world.facId];
   if (world.bootT != null && world.t - world.bootT < 5.5) { // Booten: die alte Konsole
     g.fillStyle = '#140b04'; g.fillRect(0, 0, w, hh); g.fillStyle = '#ffb347'; g.font = 'bold 50px monospace'; g.fillText('miner v0.3 – ' + fmtDate(s.day), 28, 72, w - 56);
@@ -109,4 +110,13 @@ export function drawPcScreen(world, sc) {
   g.font = `700 82px ${FUN}`; g.fillText(on ? `schürft ${fmtCoin(r.perDay)} BTC/Tag` : tripped ? 'Sicherung raus!' : 'Miner pausiert', L + 56, 466, R - L - 56);
   const wl = s.wallet.BTC, have = world.liveBtc?.() ?? wl.ex + wl.cold; // wie im HUD: mit dem heute schon Geschürften (Market setzt liveBtc)
   g.fillStyle = '#b4aa9d'; g.font = `700 50px ${TXT}`; g.fillText(`Du hast ${fmtCoin(have)} BTC`, L, 548, R - L);
+  if (un) msgBanner(g, w, hh, un, blink);
+}
+// „1 neue Nachricht“: grüne Leiste oben über der Börse, blinkt im Sekundentakt – ohne Handy die Benachrichtigung schlechthin
+function msgBanner(g, w, hh, n, on) {
+  const y = 0, bh = 104;
+  g.fillStyle = on ? '#2f9d5c' : '#1f6b3f'; g.fillRect(0, y, w, bh);
+  g.fillStyle = '#eafff0'; g.beginPath(); g.roundRect?.(46, y + 26, 72, 52, 10); if (!g.roundRect) g.rect(46, y + 26, 72, 52); g.fill();
+  g.strokeStyle = on ? '#2f9d5c' : '#1f6b3f'; g.lineWidth = 6; g.lineJoin = 'round'; g.beginPath(); g.moveTo(52, y + 32); g.lineTo(82, y + 56); g.lineTo(112, y + 32); g.stroke();
+  g.fillStyle = '#ffffff'; g.font = `700 64px ${FUN}`; g.textAlign = 'left'; g.fillText(n === 1 ? '1 neue Nachricht' : `${n} neue Nachrichten`, 146, y + 74, w - 190);
 }

@@ -162,6 +162,7 @@ export function buildRoom(def) {
     B.spawn = { x: 3.2, z: 2.7, look: [1.6, 0.9] };
     B.wake = { lie: [0.5, 0.36, 3.08], lieYaw: -0.5, stand: [1.4, 2.5], look: [1.9, 0.55] }; // Aufwachen auf der Matratze (World.wakeUp)
     B.props = [{ c: [2.6, 1.08, 0.13], s: [0.55, 0.4, 0.12], label: 'PC-Monitor', hint: 'Börse', action: 'market' }, { c: [0.5, 0.25, 2.5], s: [0.95, 0.4, 2.0], label: 'Matratze', hint: 'Schlafen', action: 'sleep' }];
+    B.letterSpots = { deniz: [2.6, 0.776, 0.34, 0.06], papa: [3.3, 0.742, 0.4, -0.3] }; // Start ohne Handy: Deniz' Zettel auf der Tastatur, Papas Umschlag neben dem Mauspad (letters.js)
   } else if (def.style === 'basement') {
     S = shell(def, {
       floorMat: mat('floorBase', { map: TEX.concrete([3, 2], 118), roughness: 0.9 }),
@@ -220,15 +221,22 @@ export function buildRoom(def) {
       // Treppenloch in der Decke
       const hole = new THREE.Mesh(new THREE.PlaneGeometry(W, 1.3), new THREE.MeshBasicMaterial({ color: 0x3a2c20 })); hole.rotation.x = Math.PI / 2; hole.position.set(x0 + W / 2, h - 0.004, 0.65); g.add(hole);
     }
-    // Regal mit Kartons
-    { // offenes Steckregal: vier Pfosten, vier Böden, Kartons darauf
-      const post = mat('shelfPost', { color: 0x6f747a, roughness: 0.45, metalness: 0.6 }), board = mat('shelfBoard', { color: 0xa39a8a, roughness: 0.8 });
-      for (const x of [2.515, 3.485]) for (const z of [0.03, 0.37]) box(g, 0.03, 1.62, 0.03, post, x, 0, z, 0, 0.004);
-      for (const y of [0.05, 0.55, 1.05, 1.55]) box(g, 1.0, 0.025, 0.4, board, 3.0, y, 0.2, 0, 0.004);
+    // Kellerregal aus verzinktem Metall: unten Kartons („Alte Spiele“), in der Mitte Deniz' alte PC-Teile (looseSpots), darüber sein Karton „PC-Kram“
+    { // vier Lochpfosten, vier Böden mit Kantblech
+      const post = mat('shelfPost', { color: 0x6f747a, roughness: 0.45, metalness: 0.6 }), board = mat('shelfBoardMetal', { color: 0xaab0b5, roughness: 0.42, metalness: 0.55 }), lip = mat('shelfLip', { color: 0x8e9399, roughness: 0.4, metalness: 0.6 }), hole = mat('shelfHole', { color: 0x2c2f33, roughness: 0.8 });
+      for (const x of [2.515, 3.485]) for (const z of [0.03, 0.37]) { box(g, 0.03, 1.62, 0.03, post, x, 0, z, 0, 0.004); if (z > 0.2) for (let y = 0.15; y < 1.6; y += 0.1) box(g, 0.008, 0.022, 0.002, hole, x, y, z + 0.016, 0, 0); }
+      for (const y of [0.05, 0.55, 1.05, 1.55]) { box(g, 1.0, 0.025, 0.4, board, 3.0, y, 0.2, 0, 0.004); box(g, 1.0, 0.04, 0.012, lip, 3.0, y - 0.012, 0.396, 0, 0.002); }
       const carton = mat('cartonDusty', { color: 0xa88a62, roughness: 0.95 }), tape = mat('cartonTape', { color: 0xcdb98e, roughness: 0.7 });
-      for (const [x, y, w2, h2, ry, z] of [[2.7, 0.075, 0.34, 0.3, 0.04, 0.19], [3.12, 0.075, 0.4, 0.26, -0.03, 0.22], [2.68, 0.575, 0.3, 0.25, -0.05, 0.17], [3.05, 0.575, 0.3, 0.32, 0.06, 0.21], [2.9, 1.075, 0.42, 0.24, 0.02, 0.2]]) { const b = box(g, w2, h2, 0.3, carton, x, y, z, ry, 0.01); b.castShadow = b.receiveShadow = true; box(g, w2 * 1.003, 0.004, 0.06, tape, x, y + h2, z, ry, 0); }
+      for (const [x, y, w2, h2, ry, z] of [[2.7, 0.075, 0.34, 0.3, 0.04, 0.19], [3.12, 0.075, 0.4, 0.26, -0.03, 0.22]]) { const b = box(g, w2, h2, 0.3, carton, x, y, z, ry, 0.01); b.castShadow = b.receiveShadow = true; box(g, w2 * 1.003, 0.004, 0.06, tape, x, y + h2, z, ry, 0); }
       const lab = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.06), new THREE.MeshStandardMaterial({ map: textTexture([{ text: 'Alte Spiele', font: 'bold 30px Nunito, sans-serif', color: '#2a2a2a' }], { w: 256, h: 96, bg: '#efe6cf' }), roughness: 0.9 }));
-      lab.position.set(2.9, 1.19, 0.351); lab.rotation.y = 0.02; g.add(lab);
+      lab.position.set(3.12, 0.22, 0.372); lab.rotation.y = -0.03; g.add(lab);
+      // Deniz' Karton „PC-Kram“ (offen, Kabel schauen raus), mit Edding beschriftet
+      const kb = box(g, 0.36, 0.24, 0.3, carton, 2.76, 1.075, 0.2, 0.03, 0.01); kb.castShadow = kb.receiveShadow = true;
+      for (const [y, z, rx] of [[1.262, 0.377, 1.1], [1.373, 0.066, -1.3]]) { const f = box(g, 0.35, 0.006, 0.12, carton, 0, 0, 0, 0, 0); f.position.set(2.76, y, z); f.rotation.set(rx, 0.03, 0); } // Deckel offen: vorne heruntergeklappt, hinten hochgestellt
+      const pk = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.1), new THREE.MeshStandardMaterial({ map: textTexture([{ text: 'PC-Kram', font: 'italic bold 58px "Comic Sans MS", "Segoe Print", Nunito, sans-serif', color: '#1d1d24' }, { text: '– Deniz', font: 'italic bold 30px "Comic Sans MS", Nunito, sans-serif', color: '#1d1d24' }], { w: 320, h: 128, bg: '#a88a62' }), roughness: 0.95 }));
+      pk.position.set(2.765, 1.155, 0.354); pk.rotation.y = 0.03; g.add(pk);
+      const cab = mat('oldCable', { color: 0x1c1c1e, roughness: 0.6 }), cabG = mat('oldCableGrey', { color: 0x9a9da2, roughness: 0.6 });
+      for (const [m, pts] of [[cab, [[2.68, 1.25, 0.2], [2.69, 1.38, 0.24], [2.74, 1.36, 0.33], [2.75, 1.22, 0.375]]], [cabG, [[2.84, 1.26, 0.18], [2.86, 1.4, 0.16], [2.95, 1.37, 0.1], [3.0, 1.3, 0.09]]]]) { const c = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p))), 16, 0.007, 6), m); c.castShadow = true; g.add(c); }
     }
     B.blocked.push(blk(2.5, 0, 3.5, 0.5));
     // Rohre an der Decke
@@ -271,7 +279,7 @@ export function buildRoom(def) {
     B.doors = [{ c: [6.98, 1.0, 3.85], s: [0.14, 2.0, 0.84], label: 'Kellertür', auto: 'keller' }];
     B.spawn = { x: 6.05, z: 3.35, look: [2.4, 2.4] };
     // Alte PC-Teile im verstaubten Keller (Start)
-    B.looseSpots = { mobo: [2.0, 0.405, 3.6, 0.4, 'auf einem Karton'], cpu: [0.32, 0.852, 1.3, 0.3, 'auf der Waschmaschine'], gpu: [1.3, 0.305, 4.45, 0.9, 'auf der Holzkiste'], psu: [4.25, 0.0, 0.48, -0.2, 'neben dem Regal'] };
+    B.looseSpots = { mobo: [2.76, 0.578, 0.2, 0.04, 'im Kellerregal'], cpu: [3.25, 0.578, 0.2, -0.14, 'im Kellerregal'], psu: [3.25, 1.078, 0.2, 0.12, 'im Kellerregal'], gpu: [2.76, 1.322, 0.2, 0.06, 'im Kellerregal'] }; // alles im Regal, nichts auf dem Boden
     { const fb = new THREE.Group(); fb.position.set(5.3, 1.3, 0.09); S.back.add(fb); box(fb, 0.5, 0.7, 0.12, mat('fusebox', { color: 0xd8d4c8, roughness: 0.6 }), 0, 0, 0); for (let i = 0; i < 6; i++) box(fb, 0.05, 0.1, 0.02, M.black(), -0.15 + i * 0.06, 0.45, 0.07); box(fb, 0.03, 0.03, 0.01, M.ledGreen(), 0.18, 0.6, 0.07); }
     B.props = [{ c: [5.3, 1.65, 0.15], s: [0.55, 0.75, 0.2], label: 'Sicherungskasten', hint: 'Firma', action: 'company' }];
   } else if (def.style === 'workshop') {
@@ -533,10 +541,10 @@ export function buildDustyClutter(def) {
   const wood = mat('crateWood', { color: 0x8a6a48, roughness: 0.9 }), sheet = mat('dustSheet', { color: 0xcfc7b8, roughness: 1, side: THREE.DoubleSide, vertexColors: true });
   const box3 = (w, hh, d, m, x, y, z, ry = 0) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, hh, d), m); b.position.set(x, y + hh / 2, z); b.rotation.y = ry; b.castShadow = b.receiveShadow = true; g.add(b); return b; };
   const kart = (x, z, w, hh, d, ry = 0, y = 0) => { box3(w, hh, d, carton, x, y, z, ry); box3(w * 1.002, 0.004, 0.06, tape, x, y + hh, z, ry); blocked.push(blk(x - w / 2 - 0.05, z - d / 2 - 0.05, x + w / 2 + 0.05, z + d / 2 + 0.05)); };
-  // Kartons (auf einem liegt das Mainboard), ein Stapel am Regal
+  // Kartons, ein Stapel am Regal
   kart(2.0, 3.6, 0.5, 0.4, 0.4, 0.15); kart(2.6, 3.8, 0.44, 0.32, 0.38, -0.3); kart(1.5, 3.9, 0.4, 0.55, 0.42, 0.1);
   kart(3.95, 0.32, 0.5, 0.36, 0.42, 0.05); box3(0.42, 0.3, 0.36, carton, 3.95, 0.36, 0.32, -0.12);
-  // Holzkiste (darauf die Grafikkarte)
+  // Holzkiste
   box3(0.55, 0.3, 0.42, wood, 1.3, 0, 4.45, 0.08); for (const dy of [0.08, 0.2]) box3(0.56, 0.03, 0.43, mat('crateSlat', { color: 0x6f5238, roughness: 0.9 }), 1.3, dy, 4.45, 0.08);
   blocked.push(blk(0.95, 4.15, 1.65, 4.75));
   // Abgedeckter alter Sessel
@@ -573,6 +581,24 @@ export function buildDustyClutter(def) {
   for (const [x, y, z, r, hh, c] of [[2.65, 1.575, 0.2, 0.08, 0.18, can], [2.85, 1.575, 0.22, 0.07, 0.15, mat('paintCan2', { color: 0x9c3b2e, roughness: 0.6 })], [3.3, 1.575, 0.2, 0.05, 0.12, mat('jar', { color: 0xc9d6c8, roughness: 0.15, transparent: true, opacity: 0.6 })]]) { const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, hh, 16), c); m.position.set(x, y + hh / 2, z); m.castShadow = true; g.add(m); }
   box3(0.3, 0.16, 0.14, mat('oldRadio', { color: 0x6b4a32, roughness: 0.7 }), 3.1, 1.575, 0.22);
   { const sp = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 0.1), mat('radioSpeaker', { color: 0x2a221c, roughness: 0.9 })); sp.position.set(3.03, 1.655, 0.2915); g.add(sp); for (const y of [1.69, 1.625]) cyl(g, 0.015, 0.015, 0.014, mat('radioKnob', { color: 0xd9cdb4, roughness: 0.4 }), 3.19, y, 0.297, 14, 'z'); }
+  // Ums Kellerregal: Farbeimer (einer mit Deckel drauf), Weihnachtsdeko auf dem Kartonstapel, alte Kabel am Pfosten
+  { const bucket = mat('paintBucket', { color: 0xeeeeea, roughness: 0.55 }), lidM = mat('paintLid', { color: 0xd8d8d2, roughness: 0.5 });
+    for (const [x, z, col, lid] of [[2.2, 0.24, 0x3f7fc0, true], [1.93, 0.33, 0xd9a43a, false]]) {
+      const b = new THREE.Mesh(new THREE.CylinderGeometry(0.125, 0.11, 0.24, 20), bucket); b.position.set(x, 0.12, z); b.castShadow = b.receiveShadow = true; g.add(b);
+      const drip = new THREE.Mesh(new THREE.CylinderGeometry(0.1265, 0.124, 0.05, 20, 1, true), mat('paintDrip' + col, { color: col, roughness: 0.4 })); drip.position.set(x, 0.215, z); g.add(drip);
+      if (lid) { const l = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.018, 20), lidM); l.position.set(x, 0.249, z); g.add(l); cyl(g, 0.004, 0.004, 0.2, M.alu(), x, 0.262, z, 6, 'x'); }
+      else { const p = new THREE.Mesh(new THREE.CircleGeometry(0.105, 20), mat('paintIn' + col, { color: col, roughness: 0.25 })); p.rotation.x = -Math.PI / 2; p.position.set(x, 0.2415, z); g.add(p); } // Farbrest oben (knapp über dem Deckel des Eimer-Körpers)
+    }
+    blocked.push(blk(1.75, 0, 2.45, 0.55));
+    // Weihnachtsdeko: Lametta-Girlande über dem Kartonstapel, ein paar Kugeln, ein Stern
+    const gar = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([[3.72, 0.67, 0.2], [3.85, 0.7, 0.45], [4.02, 0.69, 0.5], [4.18, 0.67, 0.36], [4.12, 0.5, 0.55], [4.0, 0.32, 0.56]].map((p) => new THREE.Vector3(...p))), 40, 0.017, 6), mat('garland', { color: 0x2c8a3e, roughness: 0.35, metalness: 0.55, emissive: 0x0a2a10, emissiveIntensity: 0.25 })); gar.castShadow = true; g.add(gar); // Lametta-Girlande, glänzend
+    for (const [x, y, z, c] of [[3.86, 0.705, 0.28, 0xc0392b], [3.98, 0.7, 0.2, 0xd4a017], [4.06, 0.7, 0.32, 0x2c5fa8], [3.9, 0.7, 0.4, 0xd4a017]]) { const k = new THREE.Mesh(new THREE.SphereGeometry(0.035, 14, 10), mat('bauble' + c, { color: c, roughness: 0.15, metalness: 0.7 })); k.position.set(x, y, z); k.castShadow = true; g.add(k); }
+    { const star = new THREE.Shape(); for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2 + Math.PI / 2, rr = i % 2 ? 0.035 : 0.08; if (i) star.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); else star.moveTo(Math.cos(a) * rr, Math.sin(a) * rr); }
+      const st = new THREE.Mesh(new THREE.ExtrudeGeometry(star, { depth: 0.012, bevelEnabled: false }), mat('xmasStar', { color: 0xe6c04a, roughness: 0.3, metalness: 0.8 })); st.rotation.set(-Math.PI / 2 + 0.15, 0, 0.4); st.position.set(4.08, 0.675, 0.2); g.add(st); }
+    // alte Kabel: zwei Rollen am linken Pfosten, ein Verlängerungskabel unten im Regal
+    for (const [y, c, r0] of [[1.28, 0x1c1c1e, 0.085], [1.05, 0x8e9196, 0.07]]) { const t = new THREE.Mesh(new THREE.TorusGeometry(r0, 0.012, 8, 28), mat('cableCoil' + c, { color: c, roughness: 0.6 })); t.position.set(2.47, y - r0, 0.425); t.rotation.set(0.1, 0.25, 0); t.castShadow = true; g.add(t); }
+    box3(0.26, 0.045, 0.06, mat('powerStrip', { color: 0xe4e1da, roughness: 0.5 }), 3.15, 0.337, 0.26, 0.3); // auf dem unteren Karton
+  }
   // Spinnweben in den Ecken
   const web = new THREE.MeshBasicMaterial({ map: webTexture(), transparent: true, depthWrite: false, side: THREE.DoubleSide, opacity: 0.85 });
   for (const [x, z, ry] of [[0.02, 0.02, 0], [def.w - 0.02, 0.02, -Math.PI / 2], [0.02, def.d - 0.02, Math.PI / 2], [3.4, 0.02, 0]]) {

@@ -119,6 +119,7 @@ function onKey(e) {
     if (world.mode === 'play' && !world.cine && document.pointerLockElement !== world.canvas) { ui.pause(true); return; }
     return;
   }
+  if (world.mode === 'ui' && k === 'e' && ui.modalKind === 'letter' && performance.now() - (ui.letterAt || 0) > 250) { ui.closeModal(); return; } // Brief: E legt ihn wieder weg
   if (world.mode === 'ui' && k === 'e' && ui.inspUid && document.getElementById('modal').classList.contains('hidden') && performance.now() - (ui.openedAt || 0) > 200) { ui.resume(); return; }
   if (world.mode === 'ui' && k === 'e' && ui.mk?.atMonitor && document.getElementById('modal').classList.contains('hidden') && performance.now() - (ui.mk.openedAt || 0) > 300) { ui.resume(); return; } // E am Monitor: wieder aufstehen
   if ((k === 'b' || k === 'm') && !ui.stickyModal() && ui.mk?.key(k)) return; // Browser „Shop | Börse“ offen: B/M schalten den Reiter um (im Fenster: zweimal = zu)
@@ -128,7 +129,7 @@ function onKey(e) {
     if (k !== 'b' && k !== 'k' && ui.modalKind && ui.modalKind === { m: 'market', p: 'phone', h: 'phone', c: 'company', t: 'skills', l: 'ranking', j: 'skills' }[k]) { ui.resume(); return; }
     if (ui.stickyModal()) return; // Story/Finale/Rückblick nicht wegklicken
     const NEED = { b: 'build', m: 'market', p: 'phone', h: 'phone', i: 'heat', c: 'company', t: 'skills', l: 'ranking', k: 'map', j: 'skills' };
-    if (NEED[k] && !game.has(NEED[k])) { ui.toast('Noch nicht freigeschaltet.', 'info', 1800); return; }
+    if (NEED[k] && !game.has(NEED[k])) { ui.toast(NEED[k] === 'phone' && game.s.letters ? 'Du hast noch kein Handy.' : 'Noch nicht freigeschaltet.', 'info', 1800); return; }
     HOT[k](); return;
   }
   if (e.key === 'Delete' && world.selected) {

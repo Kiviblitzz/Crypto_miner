@@ -19,6 +19,7 @@ const STARTER_GPU = 'rhd5770'; // erste Karte im Shop: ~108 W, passt zu Papas al
 const LAST_DATA_DAY = BTC_PRICE.lastDay;
 const FREE_POWER_END = toDay('2011-03-01'); // bis dahin steckt der Strom der Wohnung in der Pauschale der Warmmiete – dann sieht Herr Krause die Abrechnung
 export const SAVE_KEY = 'hashwerk-save-v1';
+export const PHONE = { name: 'Nexo T2', price: 149, desc: 'Touchscreen, Kamera, Messenger. Für 2011 ziemlich schick.' }; // Handy aus dem Shop (Anlernen ohne Handy, Game.orderPhone)
 const DEFAULT_AUTOSELL = 0.8;
 const LESSON_DAYS = 5; // Anlernen: so viele Spieltage hat eine Lektion, ehe die nächste kommt
 const monthDays = (day) => { const d = new Date(day * 864e5); return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate(); }; // Tage im Monat des Tages
@@ -290,23 +291,32 @@ export class Game {
   startTutor() {
     const s = this.s; s.flags.tutor = 1; s.flags.sk2 = 1; s.feat = {}; /* sk2: Betriebssystem, Bitstream und Shop-Sperren der Fähigkeiten */ s.learn = { cur: null, q: [], day: s.day, done: {} };
     s.frac = 0.3; // Aufwachen am Morgen
-    s.messages = s.messages.filter((m) => m.id !== 'm0' && m.id !== 'm0b'); s.flags.idea = 0; delete s.goals.settle; // erst Papas Nachricht, Deniz schreibt kurz danach (denizIdea)
-    for (const m of s.messages) if (m.id === 'm0p') m.read = false;
+    s.messages = s.messages.filter((m) => m.id !== 'm0' && m.id !== 'm0b' && m.id !== 'm0p'); s.flags.idea = 0; delete s.goals.settle; // kein Handy am Anfang: Papas Geld und Deniz' Plan liegen als Briefe auf dem Tisch
+    s.letters = { deniz: 0, papa: 0 }; // 0 = liegt noch da, sonst der Tag, an dem man ihn gelesen hat
     this.dayUpdate(true);
   }
-  // Anlernen: Deniz' Nachricht mit der Bitcoin-Idee – die Oberfläche ruft sie nach kurzer Zeit (oder ein paar Schritten) nach Papas Nachricht,
-  // spätestens kommt sie beim ersten aufgehobenen Teil. Ohne Anlernen (Bots, Tests, alte Stände) liegen die Nachrichten schon beim Start im Handy.
+  // Brief auf dem Schreibtisch lesen (World: letters.js, Oberfläche: Briefkarte). Deniz' Brief ist der Plan: runter in den Keller
+  readLetter(who) {
+    const s = this.s; if (!s.letters || !(who in s.letters) || s.letters[who]) return false;
+    s.letters[who] = s.day || 1;
+    if (who === 'deniz') { this.denizIdea(); this.learned('letter'); }
+    this.emit('letters'); this.checkFeatures(); this.emit('refresh'); return true;
+  }
+  // Anlernen: Deniz' Plan – mit Brief (readLetter) oder spätestens beim ersten aufgehobenen Teil. Alte Stände ohne Briefe (Handy): seine Nachrichten wie früher.
+  // Mit Briefen kommt die Bitcoin-Idee (m0, m0b) erst am PC, sobald er läuft (startMining → pcIdea). Ohne Anlernen liegen die Nachrichten schon beim Start da.
   ideaPending() { const s = this.s; return !!s.flags?.tutor && !s.flags.idea && !s.flags.miningStarted; }
   denizIdea() {
     const s = this.s; if (!this.ideaPending()) return false;
     s.flags.idea = s.day || 1;
-    for (const id of ['m0', 'm0b']) { const m = MESSAGES.find((x) => x.id === id); if (!m || s.messages.some((x) => x.id === id)) continue; const x = { id, day: s.day, from: m.from, text: m.text, read: false }; s.messages.push(x); this.emit('message', x); }
+    if (!s.letters) this.pcIdea();
     this.emit('idea'); this.checkGoals(); this.emit('refresh'); return true;
   }
+  pcIdea() { const s = this.s; for (const id of ['m0', 'm0b']) { const m = MESSAGES.find((x) => x.id === id); if (!m || s.messages.some((x) => x.id === id)) continue; const x = { id, day: s.day, from: m.from, text: m.text, read: false }; s.messages.push(x); this.emit('message', x); } }
   lesson() { return this.s.flags?.tutor ? this.s.learn?.cur || null : null; }
   tutorTick() {
     const s = this.s, L = s.learn; if (!s.flags?.tutor || !L) return;
     if (L.cur) { if (!(s.flags.miningStarted && s.day - L.day >= LESSON_DAYS)) return; L.done[L.cur] = 'zeit'; L.cur = null; this.emit('lesson', null); }
+    if (L.back) { const b = L.back; L.back = null; if (!L.done[b]) { L.cur = b; L.day = s.day; this.emit('feature', b); this.emit('lesson', b); return; } } // nach „Handy“ geht die unterbrochene Lektion weiter (phoneNow)
     while (L.q.length) {
       const f = L.q.shift(), F = FEATURES[f]; if (this.has(f)) continue;
       if (F?.stale?.(s, this)) continue; // z. B. „Paket abholen“, obwohl es schon aufgehoben ist
@@ -319,14 +329,16 @@ export class Game {
   // Der Spieler hat es benutzt (Oberfläche: Handy geöffnet, Shop geöffnet …; Spiel: bestellt, Paket aufgehoben, Karte eingebaut)
   learned(key) {
     const s = this.s, L = s.learn; if (!s.flags?.tutor || !L?.cur) return false;
-    if (L.cur !== key && FEATURES[L.cur]?.by !== key) return false;
+    if (L.cur !== key && FEATURES[L.cur]?.by !== key) { if (L.back && (L.back === key || FEATURES[L.back]?.by === key)) { L.done[L.back] = s.day || 1; L.back = null; } return false; } // die unterbrochene Lektion zählt auch so
     L.done[L.cur] = s.day || 1; L.cur = null; this.emit('lesson', null); this.tutorTick(); if (!L.cur) this.checkFeatures(); return true; // gleich prüfen, ob die nächste schon dran ist
   }
   checkFeatures() {
     const s = this.s; if (!s.feat) return;
     const btc = s.wallet.BTC ? s.wallet.BTC.ex + s.wallet.BTC.cold : 0;
     if (s.flags.tutor) { // Anlernen: Laufen/Benutzen, PC bauen, dann Börse und Shop gleich nach dem Einschalten, Schlafen, Paket, Einbau, Fähigkeiten
-      if (this.has('phone') && !s.flags.miningStarted) { if (Object.keys(s.loose || {}).length) this.grant('walk'); else if (s.inv?.length) this.grant('pcbuild'); }
+      if (s.letters && !s.flags.miningStarted) { if (!s.flags.idea) this.grant('letter'); else if (Object.keys(s.loose || {}).length) { this.grant('walk'); this.grant('take'); } else if (s.inv?.length) this.grant('pcbuild'); } // ohne Handy: Brief, Keller, Teile, PC
+      else if (!s.letters && this.has('phone') && !s.flags.miningStarted) { if (Object.keys(s.loose || {}).length) this.grant('walk'); else if (s.inv?.length) this.grant('pcbuild'); } // alte Stände mit Handy
+      if (s.letters && !this.has('phone') && s.unlocked.includes('keller') && !s.flags.phoneHint) { s.flags.phoneHint = s.day || 1; this.pushMsg({ from: 'Deniz', text: 'Hol dir mal ein Handy, ich erreich dich nie.' }); this.pushMsg({ from: 'Deniz', text: 'Gibt’s im Shop. Kostet nicht die Welt.' }); }
       if (s.flags.cpuStart && s.flags.miningStarted) { this.grant('market'); this.grant('build'); }
       if (s.flags.gpuOrdered && !s.flags.boughtGpu && s.orders?.length) { this.grant('speed2'); this.grant('sleep'); } // erst Tempo (Leertaste), dann ab 20 Uhr schlafen
       if (!s.flags.boughtGpu && s.parcels?.length) this.grant('parcel');
@@ -350,7 +362,7 @@ export class Game {
     this.tutorTick(); // Anlernen: abgelaufene Lektion beenden, nächste einführen
     this.skDue(); // Fähigkeiten: Grundlagen per Handy, Pflicht-Auswege
   }
-  startMining(uid) { const o = this.findObj(uid); if (!o || (o.parts && !(this.isFirstPc(o) ? this.firstReady(o) : this.pcReady(o)))) return false; o.mode = 'auto'; const first = !this.s.flags.miningStarted; this.learned('pcbuild'); if (first) { this.s.mineDay0 = this.s.day; this.s.mineFrac0 = this.s.frac || 0; } this.s.flags.miningStarted = true; this.s.flags.seenPc = true; if (first) this.addXp('mining', 40); this.checkGoals(); this.dayUpdate(true); this.emit('objects', this.facOf(uid)); return true; }
+  startMining(uid) { const o = this.findObj(uid); if (!o || (o.parts && !(this.isFirstPc(o) ? this.firstReady(o) : this.pcReady(o)))) return false; o.mode = 'auto'; const first = !this.s.flags.miningStarted; this.learned('pcbuild'); if (first) { this.s.mineDay0 = this.s.day; this.s.mineFrac0 = this.s.frac || 0; } this.s.flags.miningStarted = true; this.s.flags.seenPc = true; if (first) this.addXp('mining', 40); if (first && this.s.letters) this.pcIdea(); /* Anlernen ohne Handy: Deniz schreibt am PC, sobald er läuft */ this.checkGoals(); this.dayUpdate(true); this.emit('objects', this.facOf(uid)); return true; }
   // Zentraler Geld-Check: nur kaufen, was wirklich bezahlt werden kann (kein Kauf bei Minus-Konto)
   canAfford(usd) { return Number.isFinite(usd) && usd >= 0 && Number.isFinite(this.s.cash) && this.s.cash >= usd; }
   addObject(facId, type, x, z, rot, parts, free = false) {
@@ -445,7 +457,7 @@ export class Game {
   addXp(k, n, quiet = false) { return this.addEp(XP_POT[k] || k, n, quiet); }
   creditPending(coin, n) { const s = this.s; if (!(n > 0)) return; s.wallet[coin].ex += n; const n0 = s.accr?.day === s.day && s.accr.coin === coin ? s.accr.n || 0 : 0; s.accr = { day: s.day, f: s.frac, coin, n: n0 + n }; } // n: heute schon gutgeschrieben
   // ---------- Herumliegende Teile ----------
-  pickUp(type) { const s = this.s; if (!s.loose?.[type]) return false; if (this.ideaPending()) this.denizIdea(); s.inv.push(type); s.invIds = { ...(s.invIds || {}), [type]: s.loose[type] }; delete s.loose[type]; this.learned('walk'); this.checkGoals(); this.checkFeatures(); this.emit('loose'); return true; }
+  pickUp(type) { const s = this.s; if (!s.loose?.[type]) return false; if (this.ideaPending()) this.denizIdea(); s.inv.push(type); s.invIds = { ...(s.invIds || {}), [type]: s.loose[type] }; delete s.loose[type]; this.learned('cellar'); this.learned('take'); this.learned('walk'); this.checkGoals(); this.checkFeatures(); this.emit('loose'); return true; }
   installLoose(uid, type) {
     const s = this.s, o = this.findObj(uid); if (!o?.parts || !s.inv?.includes(type)) return false;
     if ((type === 'cpu' || type === 'gpu') && !o.parts.mobo) return false;
@@ -985,6 +997,7 @@ export class Game {
     const n = items.reduce((a, it) => a + (it.k === 'place' ? 1 : it.n || 1), 0), it = items[0];
     if (n !== 1 || !it) return `${n} Teile`;
     if (it.k === 'book') return 'Buch';
+    if (it.k === 'phone') return 'Handy';
     if (it.k === 'part') return { gpu: 'Grafikkarte', cpu: 'Prozessor', mobo: 'Mainboard', psu: 'Netzteil' }[PART[it.id]?.type] || 'Teil';
     const d = PLACEABLE[it.k === 'dev' ? it.id : it.type]; if (!d) return 'Paket';
     return d.id === 'tower' ? (it.ready ? 'Mining-PC' : 'PC-Gehäuse') : d.short || d.name.replace(/\s*\(.*\)/, '');
@@ -997,7 +1010,7 @@ export class Game {
     for (const o of due) { const p = { id: 'p' + (s.nextParcel = (s.nextParcel || 0) + 1), label: this.parcelLabel(o.items), items: o.items, day }; s.parcels.push(p); out.push(p); }
     s.stats.parcels = (s.stats.parcels || 0) + out.length;
     const txt = `Paket ist da – liegt vor deiner Wohnungstür${out.length === 1 ? ` (${out[0].label})` : ` (${out.length} Pakete)`}.`;
-    if (first) this.pushMsg({ from: 'Paketdienst', text: `${txt} Hingehen und aufheben, dann geht’s ans Auspacken.` }); else this.toast(txt, 'good', 6000);
+    this.toast(first ? `${txt} Hingehen und aufheben.` : txt, 'good', first ? 8000 : 6000); // Paketdienst ist keine Person: Hinweis statt Chat
     this.learned('sleep'); this.emit('parcels'); return out;
   }
   // Paket aufheben: Teile ins Lager, Platzierbares in den Bestand, Regal-Geräte gleich ins Regal. Gibt eine Übersicht zurück (oder null)
@@ -1014,6 +1027,7 @@ export class Game {
         const d = PLACEABLE[it.id]; if (d.look !== 'fpga' && d.look !== 'usb') s.flags.boughtAsic = true; res.names.push(`${it.n}× ${d.name}`);
       } else if (it.k === 'place' && PLACEABLE[it.type]) { const { k, ...e } = it; this.stockAdd(e); res.place++; res.names.push(this.stockName(e)); }
       else if (it.k === 'book' && BOOK[it.id]) { this.skBook(it.id); res.books = (res.books || 0) + 1; res.names.push(`Buch „${BOOK[it.id].title}“`); }
+      else if (it.k === 'phone') { if (!this.has('phone')) this.phoneNow(); res.phone = true; res.names.push(`Handy ${PHONE.name}`); }
     }
     this.learned('parcel'); this.dayUpdate(true); for (const f of facs) if (f) this.emit('objects', f);
     this.emit('parcels'); this.emit('bag'); this.emit('unpacked'); return res;
@@ -1055,6 +1069,7 @@ export class Game {
       if (it.k === 'part') return PART[it.id] && it.n > 0 ? { k: 'part', id: it.id, n: Math.round(it.n) } : null;
       if (it.k === 'dev') return PLACEABLE[it.id] && it.n > 0 ? { k: 'dev', id: it.id, n: Math.round(it.n), holder: it.holder } : null;
       if (it.k === 'book') return BOOK[it.id] ? { k: 'book', id: it.id } : null;
+      if (it.k === 'phone') return { k: 'phone' };
       if (it.k === 'place' || !it.k) { const d = PLACEABLE[it.type]; if (!d) return null; const e = { ...it, k: 'place' }; if (d.kind === 'rig') { e.parts = okParts(e.parts) || Game.emptyParts(); if (e.kit) e.kit = okParts(e.kit); } else { delete e.parts; delete e.kit; } if (d.kind === 'holder') e.items = (e.items || []).filter((i) => i && PLACEABLE[i.id]); else delete e.items; return e; }
       return null;
     };
@@ -1515,7 +1530,25 @@ export class Game {
     if (nh > e.hrec * 1.15) { e.hrec = nh; this.news(`Rekord: Die Netz-Hashrate steigt auf ${fmtHash(nh, 'sha256')}`); }
     if (day >= e.next) { let pool = ENDLESS_NEWS.map((_, i) => i).filter((i) => !e.used.includes(i)); if (!pool.length) { e.used = []; pool = ENDLESS_NEWS.map((_, i) => i); } const i = pool[Math.floor(Math.random() * pool.length)]; e.used.push(i); e.next = day + 40 + Math.floor(Math.random() * 40); this.news(ENDLESS_NEWS[i]); }
   }
-  pushMsg(m) { const s = this.s, x = { id: 'eg' + s.day + Math.random().toString(36).slice(2, 6), day: s.day, from: m.from, text: m.text, read: false }; s.messages.push(x); this.emit('message', x); }
+  // Neue Nachricht in den Chat der Person. „Gelernt: …“ am Ende ist kein Chat-Text, sondern ein kurzer Hinweis (Toast)
+  pushMsg(m) {
+    const s = this.s; let text = String(m.text || ''); const lm = /\s*Gelernt: ([^.]+)\.?\s*$/.exec(text); if (lm) { text = text.slice(0, lm.index).trim(); this.toast(`Gelernt: ${lm[1]}`, 'good', 4000); }
+    const x = { id: 'eg' + s.day + Math.random().toString(36).slice(2, 6), day: s.day, from: m.from, text, read: false }; s.messages.push(x); this.emit('message', x);
+  }
+  // Chat-Verlauf ohne Meldung (UI.eventChat: Ereignis, eigene Antwort, Reaktion) – schon gelesen; doppelte Zeile (wie die letzte der Person) entfällt
+  chatLog(from, items) {
+    const s = this.s; if (!from) return;
+    for (const it of items || []) { const text = String(it?.text || '').trim(); if (!text) continue; let last = null; for (let i = s.messages.length - 1; i >= 0; i--) if (s.messages[i].from === from) { last = s.messages[i]; break; } if (last && last.text === text && !!last.me === !!it.me) continue; s.messages.push({ id: 'cl' + s.day + Math.random().toString(36).slice(2, 6), day: s.day, from, text, me: !!it.me, read: true }); }
+  }
+  // Handy (Anlernen ohne Handy): nach Deniz' Tipp im Shop, kommt als Paket – mit dem Aufheben gilt H
+  // Handy da: H gilt sofort und ist gleich die Lektion „Handy [H]“ (bleibt, bis man es aufmacht)
+  phoneNow() { const s = this.s, L = s.learn; this.introduce('phone'); if (!s.flags?.tutor || !L) return; if (L.cur && L.cur !== 'phone') L.back = L.cur; L.cur = 'phone'; L.day = s.day; this.emit('lesson', 'phone'); } // eine laufende Lektion wartet so lange (L.back)
+  phoneOffer() { const s = this.s; return !this.has('phone') && !!s.flags?.phoneHint && !this.pendingItems(false).some((it) => it.k === 'phone'); }
+  orderPhone() {
+    if (!this.phoneOffer() || !this.canAfford(PHONE.price)) return false; const s = this.s;
+    if (!this.parcelMode()) { s.cash -= PHONE.price; s.stats.spentHW += PHONE.price; if (!this.has('phone')) this.phoneNow(); this.dayUpdate(true); return true; }
+    this.orderAdd([{ k: 'phone' }], PHONE.price); return true;
+  }
 
   // ---------- Endlosziele (nach dem Sieg über MONOLITH) ----------
   endlessDay() {
@@ -2015,7 +2048,7 @@ export class Game {
     b.hist.unshift(bill); if (b.hist.length > 24) b.hist.length = 24;
     if (total <= 0) { s.cash -= total; bill.st = 'gut'; } else this.chargeBill(bill); // Gutschrift (z. B. Lachszucht, KI-Mieter)
     s.stats.bills = (s.stats.bills || 0) + 1;
-    if (s.stats.bills === 1 && bill.st !== 'open') this.pushMsg({ from: 'Lindentaler Bank', text: `Ihr Kontoauszug: Die Monatsabrechnung für ${monthName(bill.m)} ist abgebucht – ${fmtUSD(total)}. Miete und Strom kommen ab jetzt an jedem Monatsersten. Alle Posten finden Sie im Handy unter „Konto“.` });
+    if (s.stats.bills === 1 && bill.st !== 'open') this.pushMsg({ from: 'Lindentaler Bank', text: `Ihre Monatsabrechnung für ${monthName(bill.m)}: ${fmtUSD(total)} abgebucht. Miete und Strom buchen wir ab jetzt jeden Monatsersten ab. Alle Posten: ${this.has('phone') ? 'im Handy unter „Konto“' : 'am PC im Online-Banking (Bank)'}.` });
     this.grant('bills'); this.emit('bill', bill); return bill;
   }
   chargeBill(bill) {

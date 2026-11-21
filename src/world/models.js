@@ -832,11 +832,26 @@ export function releaseModel(root) {
   for (const b of [t.hi, t.mid, t.lo]) if (b) for (const { geom } of b.meshes) geom.dispose();
 }
 
-// Herumliegendes Einzelteil (Start: alte Teile im Zimmer)
+// Einzelteil im Kellerregal (Start: Deniz' alte Teile) – so verpackt, wie man sie aufhebt: Mainboard in der Antistatik-Tüte, CPU in der Schachtel
 export function loosePartModel(type, id) {
   const root = new THREE.Group(), part = PART[id];
-  if (type === 'mobo') mobo(root, 0.3, 0.24, 0, 0.003, 0);
-  else if (type === 'cpu') cpuCooler(root, 0, 0, 0);
+  if (type === 'mobo') {
+    mobo(root, 0.3, 0.24, 0, 0.003, 0);
+    const bag = mat('esdBag', { color: 0xa7b0ba, roughness: 0.32, metalness: 0.5, transparent: true, opacity: 0.5, depthWrite: false }); // silbrig, halb durchsichtig
+    box(root, 0.335, 0.032, 0.285, bag, 0, 0, 0.012, 0, 0.008);
+    box(root, 0.335, 0.004, 0.07, mat('esdFlap', { color: 0x9aa3ad, roughness: 0.35, metalness: 0.55 }), 0, 0.032, -0.1, 0, 0.002); // umgeschlagene Lasche
+    const st = labelMat('esdSticker', 128, 96, (c, w, h) => { c.fillStyle = '#f2c21b'; c.fillRect(0, 0, w, h); c.strokeStyle = '#111'; c.lineWidth = 7; c.lineJoin = 'round'; c.beginPath(); c.moveTo(w / 2, 12); c.lineTo(w - 26, h - 14); c.lineTo(26, h - 14); c.closePath(); c.stroke(); c.fillStyle = '#111'; c.font = 'bold 22px Arial'; c.textAlign = 'center'; c.fillText('ESD', w / 2, h - 26); });
+    box(root, 0.06, 0.002, 0.045, st, 0.115, 0.033, 0.095, 0, 0);
+  } else if (type === 'cpu') { // Boxed-Prozessor: blaue Schachtel mit Kühler drin
+    const [brand, ...rest] = String(part?.name || 'CPU').split(' ');
+    const lbl = labelMat('cpuBox_' + id, 256, 256, (c, w, h) => {
+      const gr = c.createLinearGradient(0, 0, w, h); gr.addColorStop(0, '#2a6fc4'); gr.addColorStop(1, '#0d356f'); c.fillStyle = gr; c.fillRect(0, 0, w, h);
+      c.strokeStyle = 'rgba(255,255,255,.75)'; c.lineWidth = 9; c.beginPath(); c.ellipse(w * 0.52, h * 0.58, w * 0.6, h * 0.15, -0.28, 0, Math.PI * 2); c.stroke();
+      c.fillStyle = '#fff'; c.textAlign = 'center'; c.font = 'bold 46px Arial'; c.fillText(brand.toUpperCase(), w / 2, h * 0.36); c.font = 'bold 28px Arial'; c.fillText(rest.join(' '), w / 2, h * 0.6);
+      c.fillStyle = 'rgba(255,255,255,.85)'; c.font = 'bold 19px Arial'; c.fillText('BOXED · MIT KÜHLER', w / 2, h * 0.88);
+    });
+    box(root, 0.13, 0.092, 0.13, lbl, 0, 0, 0, 0, 0.004);
+  }
   else if (type === 'gpu') { const m = gpuModel(root, part.look); const L = part.look.len, T = 0.016 + 0.016 * part.look.slot; m.rotation.x = -Math.PI / 2; m.position.set(-L / 2, T / 2, 0.056); }
   else if (type === 'psu') psuBox(root, 0, 0, 0, 0.15, 0.086, 0.16, part.cap);
   return root;

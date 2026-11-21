@@ -188,27 +188,27 @@ export const moodTier = (v) => (v <= -2 ? 0 : v < 0 ? 1 : v === 0 ? 2 : v <= 2 ?
 
 // Handy-Nachrichten. when: Datum ODER cond(state, helpers)
 export const MESSAGES = [
-  { id: 'm0', date: '2010-10-01', from: 'Deniz', text: 'Ey, meine alte Grafikkarte schürft jetzt Bitcoin – Internetgeld, das Computer selbst herstellen!' },
-  { id: 'm0b', date: '2010-10-01', from: 'Deniz', text: 'Im Keller von deinem Haus steht doch noch der ganze Krempel vom Vormieter. Da waren alte PC-Teile dabei, hast du erzählt – Mainboard, Prozessor, Netzteil. Geh runter und such sie zusammen! Dein leeres Gehäuse steht ja schon da.' },
+  { id: 'm0', date: '2010-10-01', from: 'Deniz', text: 'Ey, meine alte Grafikkarte schürft jetzt Bitcoin. Internetgeld, das der Rechner selbst macht!' }, // Anlernen: kommt am PC, sobald er läuft (Game.startMining)
+  { id: 'm0b', date: '2010-10-01', from: 'Deniz', text: 'Den Miner hab ich dir schon draufgespielt. Deine Kiste schürft jetzt mit.' },
   { id: 'm2', date: '2010-10-09', from: 'Deniz', text: 'Tipp: Crimson-Karten minen viel schneller als Verdant. Die RHD 5870 ist gerade der Hit.' },
   { id: 'm3', cond: (s, h) => h.maxTemp() > 32, from: 'Mama', text: 'Ich hab dir vorhin die Wäsche vor die Tür gestellt. Warum ist es bei dir so warm? Und was brummt da?' },
   { id: 'm4', date: '2010-11-06', from: 'Deniz', text: '0,39 $ pro Bitcoin!! Ich glaub, ich spinne.' },
-  { id: 'm5', cond: (s) => s.flags.papa1, from: 'Herr Krause', text: 'Die Nachzahlung ist da. Respekt. Den alten Hobbyraum im Keller können Sie haben – 50 $ im Monat, und zu Weihnachten einen Kasten Bier. Das Gerümpel vom Vormieter räumen wir zusammen raus. Strom zahlen Sie ab jetzt nach Zähler, das steht dann auf Ihrer Monatsabrechnung.' },
+  { id: 'm5', cond: (s) => s.flags.papa1, from: 'Herr Krause', text: 'Die Nachzahlung ist da. Respekt. Den Hobbyraum im Keller können Sie haben: 50 $ im Monat und zu Weihnachten ein Kasten Bier. Strom geht ab jetzt nach Zähler.' },
   { id: 'm6', date: '2011-04-10', from: 'Deniz', text: 'Die Leute bauen jetzt Rigs in Milchkisten. Sieht wild aus, läuft aber.' },
   { id: 'm8', date: '2011-06-20', from: 'Deniz', text: 'GoxBank wurde gehackt! Lass nicht alles auf der Börse liegen.' },
   { id: 'm9', cond: (s, h) => h.facilityTripped(), from: 'Opa Heinz', text: 'Sicherung raus? Ich leg dir einen eigenen Stromkreis. Kostet aber.' },
   { id: 'm10', date: '2011-07-15', from: 'Deniz', text: 'Es gibt jetzt FPGA-Boards. Wenig Strom, viel Leistung. Aber teuer.' },
   { id: 'm11', date: '2011-10-08', from: 'Deniz', text: 'Neuer Coin: Litecoin. Da sind Grafikkarten richtig stark. Stell mal um!' },
   // Werkstatt: Papa vermietet sie dir, sobald Zweirad Öztürk auszieht (Kapitel-2-Ziel earn2). m12/m12b: nur alte Spielstände (Laden gerettet)
-  { id: 'm12x', cond: (s) => s.chapter === 1 && !!s.goals.openrig && !s.flags.debt && !s.flags.shopLost && s.day >= toDay('2012-06-01') && !s.messages.some((m) => m.id === 'm12w'), from: 'Papa', text: 'Zweirad Öztürk ist ausgezogen, die Werkstatt hinterm Laden steht leer. Willst du sie haben? 450 $ Miete im Monat, wie jeder andere auch. Zeig mir vorher, dass sich das trägt: 30 $ Gewinn am Tag.' },
-  { id: 'm12w', cond: (s) => s.chapter === 1 && !!s.goals.openrig && !s.flags.debt && !s.flags.shopLost && s.day < toDay('2012-06-01'), from: 'Papa', text: 'Zweirad Öztürk zieht im Juni 2012 aus der Werkstatt hinterm Laden aus. Willst du sie haben? 450 $ Miete im Monat, wie jeder andere auch. Zeig mir vorher, dass sich das trägt: 30 $ Gewinn am Tag. Und wenn du dich öfter blicken lässt, reden wir noch mal über die Miete.' },
+  { id: 'm12x', cond: (s) => s.chapter === 1 && !!s.goals.openrig && !s.flags.debt && !s.flags.shopLost && s.day >= toDay('2012-06-01') && !s.messages.some((m) => m.id === 'm12w'), from: 'Papa', text: 'Die Werkstatt hinterm Laden steht leer. Willst du sie? 450 $ Miete im Monat. Zeig mir vorher, dass sich das trägt: 30 $ Gewinn am Tag.' },
+  { id: 'm12w', cond: (s) => s.chapter === 1 && !!s.goals.openrig && !s.flags.debt && !s.flags.shopLost && s.day < toDay('2012-06-01'), from: 'Papa', text: 'Im Juni 2012 wird die Werkstatt hinterm Laden frei. Willst du sie? 450 $ Miete im Monat. Zeig mir vorher 30 $ Gewinn am Tag. Und lass dich öfter blicken.' },
   { id: 'm12', cond: (s) => s.flags.debt && s.day < toDay('2012-06-01'), from: 'Papa', text: 'Der Laden ist gerettet! Wenn Zweirad Öztürk im Juni 2012 auszieht, gehört die Werkstatt hinten dir. Wird’s dir im Keller vorher zu eng, red ich mit ihm.' },
   { id: 'm12b', cond: (s) => s.flags.debt && s.day >= toDay('2012-06-01') && !s.messages.some((m) => m.id === 'm12'), from: 'Papa', text: 'Der Laden ist gerettet! Zweirad Öztürk ist schon ausgezogen – die Werkstatt hinten gehört dir.' },
   { id: 'm13', date: '2012-11-28', from: 'Deniz', text: 'Halving! Nur noch 25 BTC pro Block. Unsere Erträge halbieren sich.' },
   { id: 'm14', date: '2013-02-01', from: 'Deniz', text: 'Die ersten ASICs sind da. Eine Kiste schafft so viel wie 100 Grafikkarten.' },
   { id: 'm15', date: '2013-11-29', from: 'Mama', text: 'Im Fernsehen reden sie über Bitcoin. Über 1.000 Dollar! Ist das dein Ding?' },
   // Papas Umzugsdarlehen (s.papaLoan, Game.repayPapa): nach zwei Jahren ohne Rate erinnert Mama sanft – keine Strafe
-  { id: 'mLoan', cond: (s) => s.papaLoan?.left > 0 && s.day - Math.max(s.papaLoan.since || 0, s.papaLoan.last || 0) >= 730, from: 'Mama', text: 'Schatz, Papa würde das nie sagen. Aber gestern hat er ganz nebenbei dein Umzugsgeld von damals erwähnt. Kein Druck, wirklich! Eine kleine Rate würde ihn nur sehr freuen. Geht im Handy unter Kontakte bei Papa.' },
+  { id: 'mLoan', cond: (s) => s.papaLoan?.left > 0 && s.day - Math.max(s.papaLoan.since || 0, s.papaLoan.last || 0) >= 730, from: 'Mama', text: 'Schatz, Papa hat gestern dein Umzugsgeld erwähnt. Ganz nebenbei. Kein Druck! Eine kleine Rate würde ihn aber freuen.' },
   { id: 'm16', date: '2014-02-10', from: 'Deniz', text: 'GoxBank zahlt nichts mehr aus. Hol deine Coins in die Cold-Wallet!' },
   { id: 'm17', cond: (s) => s.day >= toDay('2014-03-12') && s.day <= toDay('2014-05-31') && (s.flags.gmbh || s.unlocked.includes('werkstatt')), from: 'Viktor Kral', text: 'Viktor Kral, MONOLITH Hash AG. Wir kaufen kleine Betriebe. Denken Sie drüber nach.' },
   { id: 'm18', cond: (s) => s.flags.gmbh, from: 'Deniz', text: 'Hashwerk GmbH! Ich kündige und steig ein. CTO? Sag ja.' },
@@ -330,28 +330,36 @@ export const TECHS = [
 // pseudo: nur Lektion (Schlafen, Paket, Einbau), keine eigene Taste. stale(s, g): Lektion fällt weg, wenn sie sich schon erledigt hat.
 const centsDay = (s, g) => { const r = g.dailyProfit().rev; return r >= 1 ? `${r.toLocaleString('de-DE', { maximumFractionDigits: 2 })} $` : `${Math.max(1, Math.round(r * 100))} Cent`; };
 export const FEATURES = {
-  phone: { title: 'Handy', key: 'H', text: 'Neue Nachricht! Drück <kbd>H</kbd> für dein Handy.' },
-  bills: { title: 'Monatsabrechnung', key: 'H', by: 'konto', text: 'Am 1. jedes Monats werden Miete und Strom abgebucht. Was wann fällig ist: Handy (<kbd>H</kbd>) → Konto.' },
-  walk: { title: 'Laufen & Benutzen', key: 'E', pseudo: true, text: '<kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> laufen, mit der Maus umsehen. <kbd>E</kbd> benutzt, was du anschaust: Türen, Teile, deinen PC.', stale: (s) => !!s.flags.miningStarted || !Object.keys(s.loose || {}).length },
-  pcbuild: { title: 'PC zusammenbauen', key: 'E', pseudo: true, text: 'Alle Teile in der Tasche! Zurück in die Wohnung: PC anschauen, <kbd>E</kbd> – Teile einbauen und einschalten.', stale: (s) => !!s.flags.miningStarted },
-  market: { title: 'Börse', key: 'M', by: 'market', text: 'Am <b>Monitor</b> (<kbd>E</kbd>) oder mit <kbd>M</kbd>: Was sind deine Bitcoin wert? Hier verkaufst du sie auch.', from: 'Deniz', msg: 'Dein PC schürft! Am Monitor siehst du an der Börse, was deine Bitcoin wert sind. Oder drück einfach M.' },
-  build: { title: 'Shop', key: 'B', text: 'Am <b>Monitor</b> oder mit <kbd>B</kbd> öffnest du den Online-Shop. Was du bestellst, liegt am nächsten Morgen vor deiner Wohnungstür.', from: 'Deniz', msg: (s, g) => `Dein Prozessor schafft am Tag gerade mal ${centsDay(s, g)}. Mit einer Grafikkarte wär’s locker vierzigmal so viel! Bestell dir eine im Online-Shop – am Monitor oder mit B.` },
-  sleep: { title: 'Schlafen', key: 'E', pseudo: true, text: 'Ab 20 Uhr ins <b>Bett</b> (<kbd>E</kbd>). Morgen früh ist das Paket da.', from: 'Deniz', msg: 'Bestellt? Sehr gut. Jetzt heißt es warten – leg dich hin, morgen früh steht das Paket vor deiner Tür.', stale: (s) => !s.orders?.length || !!s.flags.boughtGpu },
-  parcel: { title: 'Paket abholen', key: 'E', pseudo: true, text: 'Vor deiner <b>Wohnungstür</b> liegt ein Paket. Hingehen und <kbd>E</kbd>.', stale: (s) => !s.parcels?.length },
-  install: { title: 'Lager & Einbau', key: 'E', pseudo: true, text: 'Ausgepackte Teile liegen im <b>Lager</b>. PC anschauen, <kbd>E</kbd> → Grafikkarte einbauen.', from: 'Deniz', msg: 'Die Karte ist da? Dann rein damit: PC anschauen, E drücken, Grafikkarte einbauen. Und nicht an die goldenen Kontakte fassen!', stale: (s) => !!s.flags.boughtGpu },
-  skills: { title: 'Fähigkeiten', key: 'T', by: 'skills', text: '<kbd>T</kbd> zeigt deinen Fähigkeiten-Baum: was du kannst, was du als Nächstes lernst – durch Tun, aus Büchern, im Forum oder bei Leuten.', from: 'Opa Heinz', msg: 'Selbst eingebaut? Sauber, Junge. Wer schraubt, lernt was. Drück mal T: Da siehst du, was du schon kannst und was du als Nächstes lernen kannst – aus Büchern, im Forum oder bei mir.' },
-  speed2: { title: 'Tempo', key: 'Leertaste', by: 'speed2', text: '<kbd>Leertaste</kbd> schaltet das Tempo weiter.', from: 'Deniz', msg: 'Läuft? Dann drück die Leertaste, dann vergeht die Zeit schneller.' },
-  heat: { title: 'Wärmebild', key: 'I', by: 'heat', text: '<kbd>I</kbd> zeigt im Wärmebild, wo es zu heiß wird.', from: 'Deniz', msg: 'Bei dir wird’s warm! Mit I siehst du im Wärmebild, wo die Hitze steht. Lüfter gibt’s im Shop unter Kühlung.' },
-  rigs: { title: 'Mehr PCs', key: 'B', by: 'build', text: 'Shop (<kbd>B</kbd>) → Rigs: als Bausatz bestellen und selbst einbauen. Teile gibt es auch einzeln. Fertig bestückt liefern dir später Kontakte.', from: 'Deniz', msg: 'Ein PC ist gut, zwei sind besser. Im Shop unter „Rigs“ gibt’s Gehäuse als Bausatz – Teile rein, fertig.' },
-  autosell: { title: 'Auto-Verkauf', key: 'M', by: 'market', text: 'Neue Coins werden automatisch verkauft – wie viel, stellst du an der Börse (<kbd>M</kbd>) ein.', from: 'Deniz', msg: 'Keine Lust, jeden Tag selbst zu verkaufen? An der Börse kannst du jetzt den Auto-Verkauf einstellen.' },
-  speed3: { title: 'Vorspulen', key: 'Leertaste', by: 'speed3', text: 'Neu: Tage pro Sekunde – <kbd>Leertaste</kbd>.', from: 'Deniz', msg: 'Du wartest eh nur noch? Mit 5 und 6 rauschen die Tage nur so vorbei.' },
-  company: { title: 'Firma', key: 'C', by: 'company', text: '<kbd>C</kbd>: Strom ausbauen, Kosten sehen.', from: 'Opa Heinz', msg: 'Noch ein paar Rechner mehr, und dir fliegt die Sicherung um die Ohren. Mit C siehst du deinen Anschluss – und ich leg dir gern einen eigenen Stromkreis.' },
-  coins: { title: 'Mehr Coins', key: 'E', by: 'inspect', text: 'Schau ein Gerät an (<kbd>E</kbd>): Dort wählst du, was es schürft.', from: 'Deniz', msg: 'Es gibt jetzt mehr als Bitcoin! Schau dir deine Rechner an (E) – dort stellst du ein, welchen Coin sie schürfen.' },
-  cold: { title: 'Cold-Wallet', key: 'M', by: 'market', text: 'Sicher vor Börsenpleiten. Findest du in der Börse (<kbd>M</kbd>).', from: 'Deniz', msg: 'Lass nicht alles auf der Börse liegen! In der Börse kannst du deine Coins jetzt in eine Cold-Wallet legen – da kommt kein Hacker ran.' },
-  map: { title: 'Karte', key: 'K', by: 'map', text: '<kbd>K</kbd> zeigt alle Standorte.', from: 'Papa', msg: 'Der Hobbyraum im Keller ist frei! Auf der Karte (K) siehst du alle deine Standorte auf einen Blick.' },
-  ranking: { title: 'Logbuch', key: 'L', by: 'ranking', text: '<kbd>L</kbd>: Rangliste, Erfolge und Chronik.', from: 'Deniz', msg: 'Ich hab dir ein Logbuch angelegt: Rangliste, Erfolge, Chronik. Drück L.' },
-  loan: { title: 'Bankkredit', key: 'C', by: 'company', text: 'Die Bank leiht dir Geld. Mit Zinsen. Steht in der Firma (<kbd>C</kbd>).', from: 'Papa', msg: 'Mein Bankberater sagt, dir würden sie jetzt Geld leihen. Mit Zinsen, natürlich. Steht in der Firmenübersicht (C).' },
-  buycoins: { title: 'Coins kaufen', key: 'M', by: 'market', text: 'In der Börse (<kbd>M</kbd>) kannst du jetzt auch kaufen.', from: 'Deniz', msg: 'An der Börse kannst du jetzt auch kaufen. Günstig rein, teuer raus – theoretisch.' },
+  // Anlernen ohne Handy: Brief auf dem Tisch, Keller, Teile, PC. Karten ganz kurz (Titel + Taste), die Erklärungen stehen in den Nachrichten am PC
+  letter: { title: 'Brief lesen', key: 'E', pseudo: true, by: 'letter', text: '', stale: (s) => !!s.flags.idea || !!s.flags.miningStarted },
+  walk: { title: 'Runter in den Keller', key: '', pseudo: true, by: 'cellar', text: '', stale: (s) => !!s.flags.miningStarted || !Object.keys(s.loose || {}).length },
+  take: { title: 'Teile nehmen', key: 'E', pseudo: true, by: 'take', text: '', stale: (s) => !!s.flags.miningStarted || !Object.keys(s.loose || {}).length },
+  pcbuild: { title: 'PC zusammenbauen', key: 'E', pseudo: true, text: '', stale: (s) => !!s.flags.miningStarted },
+  phone: { title: 'Handy', key: 'H', text: '' }, // erst gekauft (Shop, Paket) – alte Spielstände und Spiele ohne Anlernen haben es von Anfang an
+  bills: { title: 'Kontoauszug', key: '', pseudo: true, by: 'konto', text: '' }, // am PC → Bank (mit Handy: Konto)
+  market: { title: 'Börse', key: 'M', by: 'market', text: '', from: 'Deniz', msg: 'Was die Coins wert sind, siehst du am Monitor unter Börse. Oder drück M.' },
+  build: { title: 'Shop', key: 'B', text: '', from: 'Deniz', msg: (s, g) => `Dein Prozessor schafft gerade mal ${centsDay(s, g)} am Tag. Mit einer Grafikkarte locker vierzigmal so viel! Gibt’s im Shop, am Monitor oder mit B.` },
+  sleep: { title: 'Schlafen', key: 'E', pseudo: true, text: '', from: 'Deniz', msg: 'Bestellt? Dann ab 20 Uhr ins Bett. Morgen früh steht das Paket vor deiner Tür.', stale: (s) => !s.orders?.length || !!s.flags.boughtGpu },
+  parcel: { title: 'Paket abholen', key: 'E', pseudo: true, text: '', stale: (s) => !s.parcels?.length },
+  install: { title: 'Karte einbauen', key: 'E', pseudo: true, text: '', from: 'Deniz', msg: 'Karte da? Rein damit: PC anschauen, E, einbauen. Nicht an die goldenen Kontakte fassen!', stale: (s) => !!s.flags.boughtGpu },
+  skills: { title: 'Fähigkeiten', key: 'T', by: 'skills', text: '', from: 'Opa Heinz', msg: 'Selbst eingebaut? Sauber, Junge. Drück mal T.' },
+  speed2: { title: 'Tempo', key: 'Leertaste', by: 'speed2', text: '', from: 'Deniz', msg: 'Läuft? Leertaste drücken, dann vergeht die Zeit schneller.' },
+  heat: { title: 'Wärmebild', key: 'I', by: 'heat', text: '', from: 'Deniz', msg: 'Bei dir wird’s warm! Mit I siehst du, wo die Hitze steht. Lüfter gibt’s im Shop.' },
+  rigs: { title: 'Mehr PCs', key: 'B', by: 'build', text: '', from: 'Deniz', msg: 'Ein PC ist gut, zwei sind besser. Im Shop unter „Rigs“ gibt’s Gehäuse als Bausatz.' },
+  autosell: { title: 'Auto-Verkauf', key: 'M', by: 'market', text: '', from: 'Deniz', msg: 'Keine Lust, jeden Tag selbst zu verkaufen? An der Börse geht jetzt Auto-Verkauf.' },
+  speed3: { title: 'Vorspulen', key: 'Leertaste', by: 'speed3', text: '', from: 'Deniz', msg: 'Du wartest eh nur noch? Leertaste, dann rauschen die Tage vorbei.' },
+  company: { title: 'Firma', key: 'C', by: 'company', text: '', from: 'Opa Heinz', msg: 'Noch ein paar Rechner, und die Sicherung fliegt. Drück C, dann leg ich dir einen eigenen Stromkreis.' },
+  coins: { title: 'Mehr Coins', key: 'E', by: 'inspect', text: '', from: 'Deniz', msg: 'Es gibt jetzt mehr als Bitcoin! Schau dir deine Rechner an (E), da stellst du den Coin ein.' },
+  cold: { title: 'Cold-Wallet', key: 'M', by: 'market', text: '', from: 'Deniz', msg: 'Lass nicht alles auf der Börse liegen! Leg deine Coins in die Cold-Wallet, da kommt kein Hacker ran.' },
+  map: { title: 'Karte', key: 'K', by: 'map', text: '', from: 'Papa', msg: 'Der Hobbyraum im Keller ist frei! Mit K siehst du alle deine Standorte.' },
+  ranking: { title: 'Logbuch', key: 'L', by: 'ranking', text: '', from: 'Deniz', msg: 'Ich hab dir ein Logbuch angelegt: Rangliste, Erfolge, Chronik. Drück L.' },
+  loan: { title: 'Bankkredit', key: 'C', by: 'company', text: '', from: 'Papa', msg: 'Die Bank würde dir jetzt Geld leihen. Mit Zinsen, natürlich. Steht unter Firma (C).' },
+  buycoins: { title: 'Coins kaufen', key: 'M', by: 'market', text: '', from: 'Deniz', msg: 'An der Börse kannst du jetzt auch kaufen. Günstig rein, teuer raus. Theoretisch.' },
+};
+// Start ohne Handy (Anlernen): zwei Briefe auf dem Schreibtisch (World: letters.js, Game.readLetter)
+export const LETTERS = {
+  deniz: { from: 'Deniz', title: 'Brief von Deniz', lines: ['Hey!', 'Deine alten PC-Teile stehen unten im Keller im Regal. Hol sie hoch und bau dir was zusammen.', 'Ich meld mich am PC.', '– Deniz'] },
+  papa: { from: 'Papa', title: 'Umschlag von Papa', lines: (amt) => [`${amt} fürs Erste.`, 'Zahl’s zurück, wenn du kannst. Kein Stress, keine Zinsen.', '– Papa'] },
 };
 
 // Ausbauten je Standort: einmal kaufen (cost) oder laufend bezahlen (monthly, negativ = Einnahme).

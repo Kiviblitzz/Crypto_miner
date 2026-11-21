@@ -31,6 +31,7 @@ const ROOM_LIGHTS = 3, TOWER_LIGHTS = 4; // feste Lichtzahl in Wohnung und Kelle
 import { objectModel, rigPartModel, loosePartModel, releaseModel, buildRobiBot } from './models.js';
 import { keepsakeModel } from './models.js';
 import { keepsakesAt } from '../data/story.js';
+import { syncLetters } from './letters.js';
 import { nightMats, nightGround } from './rooms.js';
 const NIGHT_GRASS = new THREE.Color(0x1d2a1f), NIGHT_FACADE = new THREE.Color(0x4a5068);
 import { M, mat } from './materials.js';
@@ -187,6 +188,7 @@ export class World {
     game.on('loose', () => this.syncLoose());
     game.on('robo', (fac, bot, target) => this.roboJob(fac, bot, target)); // Robi fährt zum Gerät (Fähigkeiten: Roboter)
     game.on('keep', () => this.syncKeep()); game.on('objects', () => this.syncKeep());
+    game.on('letters', () => syncLetters(this)); // Briefe auf dem Schreibtisch (Start ohne Handy)
     game.on('update', () => this.spawnIncome());
   }
 
@@ -267,7 +269,7 @@ export class World {
     this.room = built.room; this.outside = built.outside; this.scene.add(this.room.root); this.screensDirty = true;
     this.dustBulb = dusty ? this.room.dustBulb || null : null; this.dustPts = dusty ? this.room.dustPts || null : null;
     this.syncLoose();
-    this.syncKeep();
+    this.syncKeep(); syncLetters(this);
     this.scene.add(this.outside);
     // Treppenhaus (bleibt in der Szene, wird nur verschoben)
     if (off) {
@@ -964,6 +966,7 @@ export class World {
     if (this.placing) { this.confirmPlacement(); return; }
     const a = this.aim; if (!a) { this.onNoAim?.(); return; }
     if (a.keep) { this.onKeep?.(a.keep); return; }
+    if (a.letter) { this.onLetter?.(a.letter); return; }
     if (a.parcel != null) { this.pickParcel(a.parcel); return; }
     if (a.loose) this.onLoose?.(a.loose);
     else if (a.door) this.onDoor?.(a.door);
@@ -977,13 +980,14 @@ export class World {
     this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
     this.raycaster.far = this.reach() + 1.5;
     const hits = this.raycaster.intersectObjects([...this.objGroup.children, ...this.doorGroup.children, ...(this.looseGroup?.children || []), this.room.root, ...(this.hoff && this.house ? this.house.aimables : [])], true);
-    { const extra = [...(this.keepGroup?.children || []), ...(this.people?.children || []).map((p) => p.userData.hit).filter(Boolean)]; if (extra.length) { hits.push(...this.raycaster.intersectObjects(extra, true)); hits.sort((a, b) => a.distance - b.distance); } } // Fundstücke und ansprechbare Personen
+    { const extra = [...(this.keepGroup?.children || []), ...(this.letterGroup?.children || []), ...(this.people?.children || []).map((p) => p.userData.hit).filter(Boolean)]; if (extra.length) { hits.push(...this.raycaster.intersectObjects(extra, true)); hits.sort((a, b) => a.distance - b.distance); } } // Fundstücke und ansprechbare Personen
     this.raycaster.far = Infinity;
     let aim = null; const looseHit = hits.some((x) => x.object.userData.loose);
     const keepHit = hits.some((x) => x.object.userData.keep);
     for (const h of hits) {
       const o = h.object; if (o.isSprite) continue;
       if (o.userData.keep) { aim = { keep: o.userData.keep, dist: h.distance }; break; }
+      if (o.userData.letter) { aim = { letter: o.userData.letter, dist: h.distance }; break; }
       if (o.userData.parcel != null) { aim = { parcel: o.userData.parcel, label: o.userData.parcelLabel, dist: h.distance }; break; }
       if (o.userData.door?.kind === 'kellertuer' && (this.facId !== 'keller' || this.kellerOpenable())) continue; // offen: nur das Türblatt zählt
       if (o.userData.prop && !o.userData.prop.who && keepHit) continue; // Fundstück unterm Bett hat Vorrang vor der Schlafen-Box
@@ -995,12 +999,12 @@ export class World {
       if (o.userData.uid) { aim = { uid: o.userData.uid, dist: h.distance }; break; }
       if (o.isMesh && o.visible) break; // Wand/Möbel verdeckt
     }
-    const akey = (a) => (a ? a.uid || (a.loose && 'loose:' + a.loose) || (a.keep && 'keep:' + a.keep) || (a.parcel != null && 'parcel:' + a.parcel) || (a.door || a.prop)?.label : null), key = akey(aim), prev = akey(this.aim);
+    const akey = (a) => (a ? a.uid || (a.loose && 'loose:' + a.loose) || (a.keep && 'keep:' + a.keep) || (a.letter && 'letter:' + a.letter) || (a.parcel != null && 'parcel:' + a.parcel) || (a.door || a.prop)?.label : null), key = akey(aim), prev = akey(this.aim);
     this.aim = aim;
     if (key !== prev) this.onAim?.(aim);
     const e = aim?.uid && this.entries.get(aim.uid), lp = aim?.loose && this.looseItems?.[aim.loose], pp = aim?.parcel != null && this.house?.parcels.children.find((g) => g.userData.pid === aim.parcel);
     this.outline.selectedObjects = e ? [e.group] : lp ? [lp] : pp ? [pp] : [];
-    if (aim?.keep && this.keepItems?.[aim.keep]) this.outline.selectedObjects = [this.keepItems[aim.keep]]; else if (aim?.prop?.npc) this.outline.selectedObjects = [aim.prop.npc];
+    if (aim?.keep && this.keepItems?.[aim.keep]) this.outline.selectedObjects = [this.keepItems[aim.keep]]; else if (aim?.letter && this.letterItems?.[aim.letter]) this.outline.selectedObjects = [this.letterItems[aim.letter]]; else if (aim?.prop?.npc) this.outline.selectedObjects = [aim.prop.npc];
     if (!this.selected) this.selBox.visible = false;
   }
   pick() { return this.aim?.uid || null; }

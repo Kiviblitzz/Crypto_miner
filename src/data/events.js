@@ -196,11 +196,11 @@ const XMAS = {
   2026: 'Sechzehn Jahre seit dem ersten PC in der feuchten Bude im Hinterhaus. Der alte Kasten steht immer noch da.',
 };
 
-// Kontakt kennenlernen: Nummer speichern (Standard, auch ohne Antwort) oder ablehnen – dann später im Handy unter Kontakte anrufen
+// Kontakt kennenlernen: Nummer speichern (Standard, auch ohne Antwort) oder ablehnen – dann später anrufen (Shop: Knopf an den gesperrten Geräten, Chat der Person, Handy → Kontakte)
 const pct = (f) => `${Math.round(f * 100)}\u00a0%`;
 const contactChoices = (id, yes, no, noReply) => [
   { label: yes, hint: `${CONTACT[id].offer} im Katalog (B) · ${pct(FEE_TIERS[0].fee)} Montage, Stammkunden zahlen weniger`, fx: { do: (g) => g.meetContact(id, true), log: `${CONTACT[id].name} (${CONTACT[id].biz}) kennengelernt – liefert fertig montiert` }, reply: `<b>${CONTACT[id].name}:</b> ${CONTACT[id].lines.hello}` },
-  { label: no, hint: `Selbst bauen geht immer – ${CONTACT[id].name} kannst du später im Handy (H) unter Kontakte anrufen`, fx: { do: (g) => g.meetContact(id, false), log: `${CONTACT[id].name}s Angebot abgelehnt – lieber selbst gebaut` }, reply: noReply },
+  { label: no, hint: `Selbst bauen geht immer – ${CONTACT[id].name} kannst du später noch anrufen`, fx: { do: (g) => g.meetContact(id, false), log: `${CONTACT[id].name}s Angebot abgelehnt – lieber selbst gebaut` }, reply: noReply },
 ];
 
 export const EVENTS = [
@@ -209,7 +209,7 @@ export const EVENTS = [
     id: 'kemal', from: 'Deniz', title: 'Mein Cousin Kemal', when: { date: '2010-10-01', window: 9000 }, expire: 14, fallback: 0,
     cond: (s, h, g) => g.contactDue('kemal'),
     text: (s, h, g) => `${CONTACT.kemal.trigger(s, g) ? '„Respekt, deinen zweiten PC hast du komplett selbst zusammengeschraubt!' : '„Du schraubst ja jeden Abend an deinem PC.'} Mein Cousin <b>Kemal</b> hat eine kleine PC-Ecke in der Bahnhofstraße. Der baut dir Mining-PCs fertig zusammen – verkabelt, getestet, läuft sofort. ${pct(FEE_TIERS[0].fee)} Montage, für Stammkunden weniger. Soll ich dir seine Nummer schicken?“`,
-    choices: contactChoices('kemal', 'Nummer speichern', 'Ich schraub lieber selbst', '<b>Deniz:</b> Auch gut, Schrauben macht schlau. Kemals Nummer liegt in deinem Handy, falls du es dir anders überlegst.'),
+    choices: contactChoices('kemal', 'Nummer speichern', 'Ich schraub lieber selbst', '<b>Deniz:</b> Auch gut, Schrauben macht schlau. Kemals Nummer hast du ja, falls du es dir anders überlegst.'),
   },
   {
     id: 'jonas', from: 'Jonas', title: 'Post aus dem Mining-Forum', when: { date: '2011-01-01', window: 9000 }, expire: 14, fallback: 0,

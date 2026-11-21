@@ -73,4 +73,14 @@ export class Audio {
     }
   }
   message() { this.blip(1046, 0.06, 'sine', 0.15); setTimeout(() => this.blip(1568, 0.1, 'sine', 0.12), 90); }
+  // Neue Nachricht am PC (ohne Handy): das „Uh-oh“ der alten Messenger – kurz hoch, dann tiefer
+  uhoh() {
+    if (!this.ctx || this.muted) return; const ctx = this.ctx, t = ctx.currentTime;
+    for (const [d, f0, f1, len] of [[0, 640, 700, 0.12], [0.16, 520, 440, 0.2]]) {
+      const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'triangle';
+      o.frequency.setValueAtTime(f0, t + d); o.frequency.exponentialRampToValueAtTime(f1, t + d + len);
+      g.gain.setValueAtTime(0.0001, t + d); g.gain.exponentialRampToValueAtTime(0.17, t + d + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + d + len);
+      o.connect(g).connect(this.master); o.start(t + d); o.stop(t + d + len + 0.03);
+    }
+  }
 }

@@ -3,7 +3,8 @@
 import { COINS, COIN } from '../data/coins.js';
 import { START_DAY } from '../data/world.js';
 import { toDay } from '../data/history.js';
-import { fmtUSD, fmtCoin, fmtDate } from '../sim/game.js';
+import { fmtUSD, fmtCoin, fmtDate, PHONE } from '../sim/game.js';
+import { ChatView, unreadChats } from './chat.js';
 import './market.css';
 
 const DATA0 = toDay('2010-07-17'); // erste echte Bitcoin-Tageskurse
@@ -21,6 +22,9 @@ const ICON = {
   buy: '<svg viewBox="0 0 24 24" width="1.1em" height="1.1em" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V7M6.5 12.5 12 7l5.5 5.5"/><path d="M5 3.5h14"/></svg>',
   limit: '<svg viewBox="0 0 24 24" width="1.1em" height="1.1em" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 17.5 9 12l4 3.5 7.5-8"/><path d="M3.5 6.5h17" stroke-dasharray="2.2 2.6"/></svg>',
   shop: '<svg viewBox="0 0 24 24" width="1.15em" height="1.15em" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2.4l2.3 10.6a1.6 1.6 0 0 0 1.6 1.3h7.6a1.6 1.6 0 0 0 1.6-1.2L20.4 8H6.4"/><circle cx="10" cy="19.6" r="1.4" fill="currentColor"/><circle cx="17" cy="19.6" r="1.4" fill="currentColor"/></svg>',
+  msgs: '<svg viewBox="0 0 24 24" width="1.15em" height="1.15em" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h16v10.5H9.5L5 20v-4H4z"/><path d="M8 9.5h8M8 12.5h5"/></svg>',
+  bank: '<svg viewBox="0 0 24 24" width="1.15em" height="1.15em" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 9 12 4l8.5 5z"/><path d="M5.5 10.5v6M10 10.5v6M14 10.5v6M18.5 10.5v6M3.5 19.5h17"/></svg>',
+  phone: '<svg viewBox="0 0 64 64" width="64" height="64" fill="none"><rect x="18" y="5" width="28" height="54" rx="6" fill="#1d1f24" stroke="#3a3e47" stroke-width="2"/><rect x="21.5" y="12" width="21" height="36" rx="1.5" fill="#2e5f8a"/><path d="M21.5 40l7-8 5 5 4-4 5 6v9h-21z" fill="#4f8f6a"/><circle cx="37" cy="20" r="3" fill="#f0d27a"/><circle cx="32" cy="53.5" r="2.4" stroke="#555b66" stroke-width="1.4"/><path d="M28.5 8.5h7" stroke="#555b66" stroke-width="1.6" stroke-linecap="round"/></svg>',
   chart: '<svg viewBox="0 0 24 24" width="1.15em" height="1.15em" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 19.5h17"/><path d="M5 15.5 9.5 10l3.5 3 6-7.5"/><path d="M15.5 5.5H19v3.5"/></svg>',
   back: '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
   wait: '<svg viewBox="0 0 24 24" width="1.4em" height="1.4em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
@@ -54,11 +58,16 @@ export class Market {
     this.k = { sell: 1, buy: 0.25, limit: 1 }; this.up = 0.1; this.hov = null;
     window.addEventListener('resize', () => { if (this.where === 'pc') this.relayout(); else if (this.where === 'win') this.place(); });
     this.w.liveBtc = () => this.hold('BTC').total; // Mini-Ansicht auf dem Monitor zeigt denselben Bestand wie HUD und Börse
+    this.w.pcUnread = () => unreadChats(this.g.s); // Monitor: „1 neue Nachricht“ (monitor.js)
+    // Nachrichten am PC: dieselbe Chat-Ansicht wie im Handy (chat.js)
+    this.chat = new ChatView(this.g, { face: (k) => ui.face(k), money: (v) => ui.money(v), onEvent: () => { ui.evSnooze = null; ui.eventCard(); }, onBank: () => this.setTab('bank'), onCall: (id) => ui.callContact(id), onRead: () => this.read() });
   }
   get atMonitor() { return this.where === 'pc'; }
   get open() { return !!this.where && this.tab === 'market'; } // Börsen-Reiter ist zu sehen
   // Reiter nur mit Freischaltung (sonst ausgeblendet); der Shop am Monitor nur am PC in der Wohnung (UI.monitorUse)
-  tabs() { const g = this.g; return [['shop', g.has('build') && (this.where !== 'pc' || this.ui.monitorUse(this.prop) !== 'market')], ['market', g.has('market')]].filter(([, ok]) => ok).map(([t]) => t); }
+  // Nachrichten und Bank (ab der ersten Abrechnung) nur am PC in der Wohnung – auch, wenn er als Fenster aufgeht (kleiner Bildschirm)
+  tabs() { const g = this.g, pc = this.where === 'pc' || this.pcWin; return [['shop', g.has('build') && (this.where !== 'pc' || ['both', 'shop'].includes(this.ui.monitorUse(this.prop)))], ['market', g.has('market')], ['msgs', pc], ['bank', pc && this.bankOk()]].filter(([, ok]) => ok).map(([t]) => t); }
+  bankOk() { const s = this.g.s; return (s.stats?.bills || 0) > 0 || !!s.bills?.open || !!s.bills?.hist?.length; }
 
   // ---------- Öffnen, Reiter, Schließen ----------
   // UI.market(update): M, Dock, Fähigkeiten-Baum; update = true: nur auffrischen, falls die Börse zu sehen ist
@@ -67,7 +76,7 @@ export class Market {
   openTab(tab) {
     if (this.where) { if (this.where === 'win' && this.tab === tab) this.ui.resume(); else this.setTab(tab); return; }
     if (this.w.fc?.page && this.w.focusK > 0) return; // die Kamera fährt gerade vom Monitor zurück: nichts doppelt öffnen
-    this.openWindow(tab);
+    this.pcWin = false; this.openWindow(tab);
   }
   // Tasten B/M bei offenem Browser (main.js): am PC nur den Reiter umschalten, im Fenster wie ein Schalter
   key(k) {
@@ -89,19 +98,20 @@ export class Market {
   atPc(prop, mon) {
     if (this.where === 'pc') return;
     this.prop = prop; // Shop-Reiter nur am PC-Monitor in der Wohnung (UI.monitorUse), auch wenn er erst während des Besuchs freigeschaltet wird
+    const s = this.g.s, les = this.g.lesson?.(); // erster Reiter: Ungelesenes, sonst was gerade dran ist (Anlernen), sonst der zuletzt benutzte
+    const first = mon === 'msgs' || unreadChats(s) ? 'msgs' : les === 'market' ? 'market' : les === 'build' || (s.flags.cpuStart && !s.flags.gpuOrdered && !s.flags.boughtGpu) ? 'shop' : this.pcTab || 'market';
     const P = this.canZoom() ? this.w.focusMonitor?.({ page: true, top: this.topEdge() }) : null;
-    if (!P) { this.openTab(mon === 'shop' ? 'shop' : 'market'); return; }
+    if (!P) { if (this.where) return; this.pcWin = true; this.openWindow(first); return; } // kleiner Bildschirm: als Fenster, aber mit Nachrichten und Bank
     this.ui.openUI();
     this.where = 'pc'; this.openedAt = performance.now();
     this.browser('pc'); this.size(P);
     this.w.monitorPage?.(this.el, () => this.tick());
     document.body.classList.add('at-monitor'); this.ui.prompt?.(null);
     this.loop();
-    const s = this.g.s, les = this.g.lesson?.(); // erster Reiter: was gerade dran ist (Anlernen), sonst der zuletzt benutzte
-    this.setTab(les === 'market' ? 'market' : les === 'build' || (s.flags.cpuStart && !s.flags.gpuOrdered && !s.flags.boughtGpu) ? 'shop' : this.pcTab || 'market');
+    this.setTab(first);
   }
   browser(where) {
-    this.el = h(`<div class="mkb mkb-${where}"><div class="mkb-bar"><div class="mkb-tabs"></div><button class="mkb-x" title="Zurück (Esc)">${ICON.back}</button></div><div class="mkb-body"><div class="mkb-pane mkb-shop"></div><div class="mkb-pane mkb-mk"></div></div></div>`);
+    this.el = h(`<div class="mkb mkb-${where}"><div class="mkb-bar"><div class="mkb-tabs"></div><button class="mkb-x" title="Zurück (Esc)">${ICON.back}</button></div><div class="mkb-body"><div class="mkb-pane mkb-shop"></div><div class="mkb-pane mkb-mk"></div><div class="mkb-pane mkb-msgs"></div><div class="mkb-pane mkb-bank"></div></div></div>`);
     this.el.querySelector('.mkb-x').onclick = () => this.ui.resume();
     this.pg = this.page(where); this.el.querySelector('.mkb-mk').append(this.pg);
     this.hov = null; if (this.ui.trade) this.ui.trade.open = false;
@@ -116,12 +126,15 @@ export class Market {
       this.closePicker(true); this.hostShop();
       if (was !== 'shop') { const s = g.s; if (s.flags.cpuStart && !s.goals.gpuorder) { ui.cat = 'parts'; ui.partTab = 'gpu'; } } // erste Grafikkarte: gleich bei den Grafikkarten
       document.body.classList.add('show-build'); ui.build(true); g.learned?.('build');
-    } else { document.body.classList.remove('show-build'); g.learned?.('market'); this.render(); requestAnimationFrame(() => this.chart()); }
+    } else if (tab === 'msgs') { document.body.classList.remove('show-build'); if (was !== 'msgs') this.chat.who = null; this.renderChat(); }
+    else if (tab === 'bank') { document.body.classList.remove('show-build'); g.learned?.('konto'); this.renderBank(); }
+    else { document.body.classList.remove('show-build'); g.learned?.('market'); this.render(); requestAnimationFrame(() => this.chart()); }
     ui.dock?.(); this.renderTabs(); // benutzt → evtl. kommt gerade der nächste Reiter dazu (Anlernen: erst Börse, dann Shop)
   }
   renderTabs() {
-    const bar = this.el?.querySelector('.mkb-tabs'); if (!bar) return; const tabs = this.tabs(); this.tabKey = tabs.join() + this.tab; bar.innerHTML = '';
-    for (const t of tabs) { const b = h(`<button class="mkb-tab ${t === this.tab ? 'on' : ''}">${t === 'shop' ? ICON.shop : ICON.chart}<span>${t === 'shop' ? 'Shop' : 'Börse'}</span><kbd>${t === 'shop' ? 'B' : 'M'}</kbd></button>`); b.onclick = () => this.setTab(t); bar.append(b); }
+    const bar = this.el?.querySelector('.mkb-tabs'); if (!bar) return; const tabs = this.tabs(); this.tabKey = this.tabSig(); bar.innerHTML = '';
+    const L = { shop: 'Shop', market: 'Börse', msgs: 'Nachrichten', bank: 'Bank' }, K = { shop: 'B', market: 'M' }, un = unreadChats(this.g.s), owe = !!this.g.s.bills?.open;
+    for (const t of tabs) { const n = t === 'msgs' && un ? `<i class="mkb-n">${un}</i>` : t === 'bank' && owe ? '<i class="mkb-n warn">!</i>' : ''; const b = h(`<button class="mkb-tab ${t === this.tab ? 'on' : ''}">${ICON[t === 'market' ? 'chart' : t]}<span>${L[t]}</span>${K[t] ? `<kbd>${K[t]}</kbd>` : ''}${n}</button>`); b.onclick = () => this.setTab(t); bar.append(b); }
   }
   // Der Katalog (#build) wandert in den Shop-Reiter und beim Schließen zurück an seinen Platz im HUD
   hostShop() { const b = document.getElementById('build'), pane = this.el?.querySelector('.mkb-shop'); if (!b || !pane || b.parentNode === pane) return; if (!this.home) this.home = { p: b.parentNode, n: b.nextSibling }; pane.append(b); }
@@ -144,11 +157,31 @@ export class Market {
     const ui = this.ui, w = this.w, m = document.getElementById('modal'), modal = m && !m.classList.contains('hidden'), cfg = modal && ui.modalKind === 'config';
     if (w.mode !== 'ui' || (modal && !cfg) || ui.inspUid || ui.paused || (this.where === 'pc' && !w.focus?.page)) { this.left(); return; }
     if (cfg && !ui.onModalClose) ui.onModalClose = () => this.backToShop(); // Konfigurator zu: zurück in den Shop-Reiter (UI.closeModal ruft das vor dem Moduswechsel)
-    if (this.tabs().join() + this.tab !== this.tabKey) this.renderTabs(); // neu freigeschaltet: Reiter erscheint
+    if (this.tabSig() !== this.tabKey) this.renderTabs(); // neu freigeschaltet: Reiter erscheint; neue Nachricht: Zähler
+  }
+  tabSig() { return this.tabs().join() + this.tab + unreadChats(this.g.s) + (this.g.s.bills?.open ? '!' : ''); }
+  // ---------- Nachrichten und Bank (nur am PC) ----------
+  renderChat() { const pane = this.el?.querySelector('.mkb-msgs'); if (!pane) return; if (this.chat.el.parentNode !== pane) pane.replaceChildren(this.chat.el); this.chat.render(); }
+  renderBank() {
+    const pane = this.el?.querySelector('.mkb-bank'); if (!pane) return; const top = pane.scrollTop;
+    const box = h('<div class="mkb-bankin"><h2>Online-Banking</h2><div class="phone"></div></div>');
+    this.ui.phoneKonto(box.querySelector('.phone'), { re: () => this.renderBank(), toMarket: () => this.setTab('market'), inline: true });
+    pane.replaceChildren(box); pane.scrollTop = top;
+  }
+  // neue Nachricht (UI, game 'message'): offene Chats auffrischen, sonst nur den Zähler am Reiter
+  onMessage() { if (!this.where) return; if (this.tab === 'msgs') this.renderChat(); else this.renderTabs(); }
+  onBill() { if (this.where && this.tab === 'bank') this.renderBank(); else if (this.where) this.renderTabs(); }
+  read() { this.renderTabs(); this.ui.dock?.(); this.ui.keysHint?.(); this.w.screensDirty = true; }
+  // Shop: das Handy (Anlernen ohne Handy, nach Deniz' Tipp) – kommt als Paket, mit dem Aufheben gilt H
+  shopExtra(list) {
+    const g = this.g, ui = this.ui; if (!g.phoneOffer?.()) return; const p = PHONE.price;
+    const c = h(`<div class="item mk-phone" data-price="${p}"><div class="thumb">${ICON.phone}</div><div class="t"><span>Handy ${esc(PHONE.name)}<span class="new">NEU</span></span><span class="p">${ui.money(p)}</span></div><div class="s">${esc(PHONE.desc)}</div><div class="miss">${ui.missText(p)}</div><button class="btn small primary place" ${p > g.s.cash ? 'disabled' : ''}>${ui.buyLabel(p)}</button></div>`);
+    c.onclick = () => { if (!g.orderPhone()) { ui.toast(g.canAfford(p) ? 'Bestellen ging nicht.' : 'Nicht genug Geld.', 'bad'); return; } if (g.parcelMode()) ui.ordered(`Handy ${PHONE.name}`); else { ui.audio?.buy?.(); ui.toast(`Handy ${esc(PHONE.name)} gekauft – <kbd>H</kbd>`, 'good', 4000); } ui.build(true); ui.dock?.(); };
+    list.append(c);
   }
   backToShop() { if (this.where && this.tab === 'shop') { this.hostShop(); document.body.classList.add('show-build'); this.ui.build(true); } }
   left() {
-    const was = this.where; this.where = null; this.closePicker(true);
+    const was = this.where; this.where = null; this.pcWin = false; this.closePicker(true); this.chat.who = null;
     document.body.classList.remove('at-monitor', 'mk-win', 'show-build'); this.homeShop();
     if (was === 'win') this.win?.classList.add('hidden');
     if (this.w.focus?.page) this.w.focusObject?.(null); // Kamera fährt zurück
@@ -160,6 +193,7 @@ export class Market {
     const m = document.getElementById('modal');
     if (m && !m.classList.contains('hidden') && this.ui.modalKind === 'config') { this.ui.closeModal(); return true; }
     if (this.tab === 'market' && this.ui.trade?.open) { this.closePicker(); return true; }
+    if (this.tab === 'msgs' && this.chat.back()) return true; // im Verlauf: erst zurück zur Liste
     return false;
   }
   // ---------- Daten ----------

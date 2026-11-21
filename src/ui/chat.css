@@ -1,0 +1,67 @@
+/* Chats (src/ui/chat.js): Messenger wie um 2010 – Liste mit Gesichtern, Verlauf mit Sprechblasen. Maße in em (am Monitor wächst die Schrift mit). */
+.chat { --ch-them: #2a2b31; --ch-me: #2f6a47; --ch-line: rgba(255, 255, 255, .07); --ch-dim: #a99f93; --ch-text: #f5efe6; --ch-gold: #f0b54a;
+  color: var(--ch-text); font-family: var(--font); line-height: 1.35; text-align: left; box-sizing: border-box; }
+.chat button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; margin: 0; text-align: left; -webkit-tap-highlight-color: transparent; }
+.chat-list { display: flex; flex-direction: column; gap: .2em; padding: .9em 1em 1.2em; }
+.ch-row { display: flex; align-items: center; gap: .85em; width: 100%; padding: .7em .8em; border-radius: .9em; transition: background-color .12s; }
+.ch-row:hover { background: rgba(255, 255, 255, .05) !important; }
+.ch-row + .ch-row { box-shadow: 0 -1px 0 var(--ch-line); }
+.ch-av { flex: none; width: 2.9em; height: 2.9em; border-radius: 50%; overflow: hidden; display: grid; place-items: center; position: relative; }
+.ch-av svg { width: 100%; height: 100%; display: block; }
+.ch-ini { background: var(--c); color: #fff; font: 700 1.25em var(--font-fun, var(--font)); width: 2.32em; height: 2.32em; }
+.ch-mid { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: .15em; }
+.ch-name { font: 700 1.05em var(--font-fun, var(--font)); }
+.ch-prev { color: var(--ch-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: .92em; }
+.ch-row.unread .ch-prev { color: var(--ch-text); font-weight: 600; }
+.ch-row.ev .ch-prev { color: #ffd27a; }
+.ch-side { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: .3em; }
+.ch-date { color: var(--ch-dim); font-size: .8em; white-space: nowrap; }
+.ch-n { min-width: 1.5em; height: 1.5em; padding: 0 .4em; box-sizing: border-box; border-radius: 999px; display: grid; place-items: center; background: #4cc47a; color: #08210f; font: 800 .78em var(--font); }
+.ch-n.ch-warn { background: var(--ch-gold); color: #2a1a00; }
+.ch-empty { color: var(--ch-dim); padding: 2em 1em; text-align: center; }
+.ch-bill { display: flex; flex-direction: column; gap: .15em; width: 100%; padding: .7em 1em; margin-bottom: .4em; border-radius: .9em; background: rgba(255, 138, 128, .1) !important; box-shadow: inset 0 0 0 1px rgba(255, 138, 128, .35); }
+.ch-bill b { color: #ffb0a8; } .ch-bill span { color: var(--ch-dim); font-size: .9em; }
+
+/* Verlauf: Kopf mit Zurück, Blasen (andere links, eigene rechts), unten Entscheidung bzw. Anrufen */
+.chat-thread { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.ch-head { flex: none; display: flex; align-items: center; gap: .7em; padding: .65em 1em; background: linear-gradient(180deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .02)); box-shadow: 0 1px 0 var(--ch-line); }
+.ch-head .ch-av { width: 2.3em; height: 2.3em; }
+.ch-head .ch-ini { width: 1.85em; height: 1.85em; }
+.ch-head b { font: 700 1.1em var(--font-fun, var(--font)); }
+.ch-back { display: grid; place-items: center; width: 2.2em; height: 2.2em; border-radius: 50%; color: var(--ch-dim) !important; background: rgba(255, 255, 255, .05) !important; }
+.ch-back:hover { color: var(--ch-text) !important; background: rgba(255, 255, 255, .1) !important; }
+.ch-log { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .18) transparent; display: flex; flex-direction: column; gap: .32em; padding: .9em 1.1em 1.1em; }
+.ch-day { align-self: center; margin: .7em 0 .35em; }
+.ch-day span { font-size: .78em; color: var(--ch-dim); background: rgba(255, 255, 255, .05); padding: .2em .8em; border-radius: 999px; }
+.ch-b { max-width: 78%; padding: .5em .85em .55em; border-radius: 1.1em; font-size: .98em; overflow-wrap: anywhere; }
+.ch-b.them { align-self: flex-start; background: var(--ch-them); border-bottom-left-radius: .35em; }
+.ch-b.me { align-self: flex-end; background: var(--ch-me); border-bottom-right-radius: .35em; color: #eafff0; }
+.ch-b.new { box-shadow: inset 0 0 0 1px rgba(76, 196, 122, .45); }
+.ch-tip { font-style: normal; font: 800 .7em var(--font); letter-spacing: .05em; text-transform: uppercase; color: #2a1a00; background: var(--ch-gold); border-radius: .4em; padding: .05em .45em; margin-right: .5em; vertical-align: .1em; }
+.ch-foot { flex: none; display: flex; flex-wrap: wrap; gap: .6em; align-items: center; padding: .7em 1em .9em; box-shadow: 0 -1px 0 var(--ch-line); }
+.ch-dec { flex: 1 1 auto; display: flex; align-items: center; gap: .8em; padding: .6em .8em; border-radius: .9em; background: rgba(240, 181, 74, .08); box-shadow: inset 0 0 0 1px rgba(240, 181, 74, .4); }
+.ch-dec > div { flex: 1 1 auto; display: flex; flex-direction: column; gap: .1em; min-width: 0; }
+.ch-dec span { color: var(--ch-dim); font-size: .85em; }
+.chat .ch-go { flex: none; padding: .55em 1.2em; border-radius: 999px; background: var(--ch-gold) !important; color: #1d1405 !important; font: 700 .95em var(--font-fun, var(--font)); text-align: center; }
+.chat .ch-go:hover { filter: brightness(1.08); }
+
+/* im Handy (Modal): feste Höhe, damit der Verlauf scrollt und nicht das ganze Fenster */
+.phone .chat { font-size: 14px; }
+.phone .chat-list { padding: 4px 0 6px; }
+.phone .chat-thread { height: min(62vh, 560px); margin: 0 -6px; }
+
+/* Brief auf dem Schreibtisch (UI.letterCard): liniertes Papier mit Kuli-Schrift bzw. Papas Umschlag */
+.story.letter .lt-paper { position: relative; margin: 2px 0 14px; padding: 22px 26px 20px; border-radius: 6px; color: #23305f; transform: rotate(-.6deg);
+  background: repeating-linear-gradient(180deg, transparent 0 29px, rgba(110, 140, 200, .32) 29px 30px), #f6f2e6; box-shadow: 0 14px 34px rgba(0, 0, 0, .45); font: italic 600 19px/30px 'Nunito', var(--font); }
+.story.letter .lt-paper p { margin: 0; }
+.story.letter .lt-h { font: 700 12px/30px var(--font); font-style: normal; letter-spacing: .12em; text-transform: uppercase; color: rgba(35, 48, 95, .55); }
+.story.letter.lt-papa .lt-paper { background: linear-gradient(160deg, #e4cfa6, #d6bd8f); color: #3a2a1a; transform: rotate(.5deg); }
+.story.letter.lt-papa .lt-h { color: rgba(58, 42, 26, .55); }
+.story.letter .btn kbd { margin-left: 6px; }
+
+/* Lektionskarte ganz kurz: Titel und Taste (UI.lessonCard) */
+.featcard.mini { width: auto !important; min-width: 0; max-width: 320px; padding: 12px 16px !important; }
+.featcard.mini .fc-h { display: flex; align-items: center; gap: 10px; margin: 0 !important; font-size: 21px !important; }
+.featcard.mini .fc-t { margin-bottom: 4px; }
+.featcard.mini .fc-k { display: inline-grid; place-items: center; min-width: 34px; height: 34px; padding: 0 8px; margin: 0 0 0 auto; border-radius: 9px; font: 800 16px var(--font); background: var(--acc); color: #3a2300; box-shadow: 0 3px 0 #b07800; }
+.featcard.mini .fc-h svg { color: var(--acc); flex: none; }

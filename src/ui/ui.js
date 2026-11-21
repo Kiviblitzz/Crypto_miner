@@ -15,6 +15,8 @@ import { CONTACTS, CONTACT, FEE_TIERS, FAMILY_CONTACTS } from '../data/contacts.
 import { showFinale, endlessGoals, egoalKey, egoalDone } from './finale.js';
 import { BILL_STAGE, billText, monthName, PAPA_HELP } from '../data/bills.js';
 import { Market } from './market.js';
+import { ChatView, unreadChats } from './chat.js';
+import { LETTERS } from '../data/world.js';
 
 const $ = (s) => document.querySelector(s);
 const h = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
@@ -75,8 +77,9 @@ export class UI {
     world.onNoAim = () => { // E ohne Ziel: das markierte Ziel in Reichweite benutzen
       const t = this.objTarget, g = this.g; if (!t) return;
       const lt = Object.keys(g.s.loose || {}).find((k) => t.label === PNAME[k]); if (lt) { world.onLoose(lt); return; }
+      if (t.label === 'Brief von Deniz') { this.letterCard('deniz'); return; }
       const pc = g.facObjects(g.s.current).find((o) => o.type === 'tower'); if (pc && t.label === 'Dein PC') { this.openInspector(pc.uid); return; }
-      const pr = world.room?.props?.find((p) => p.action === 'market'); if (pr && (t.label === 'Börse' || t.label === 'Bitcoin verkaufen' || t.label === 'Shop: Grafikkarte bestellen')) { this.useProp(pr); return; } // an den Monitor (Browser „Shop | Börse“)
+      const pr = world.room?.props?.find((p) => p.action === 'market'); if (pr && (t.label === 'Börse' || t.label === 'Bitcoin verkaufen' || t.label === 'Shop: Grafikkarte bestellen' || t.label === 'Neue Nachricht')) { this.useProp(pr); return; } // an den Monitor (Browser „Shop | Börse“)
       if (t.label === 'Paket abholen' && t.final) { const p = g.s.parcels?.[0]; if (p) world.pickParcel(p.id); return; }
       if (/ freischalten$/.test(t.label)) { if (world.hoff) { if (t.final) this.travel(t.door); } else if (world.room?.doors?.[0]) this.travel(world.room.doors[0]); }
     };
@@ -87,6 +90,7 @@ export class UI {
     world.onInstalled = (uid) => { this.installing = false; this.flushXp(); if (this.inspUid === uid) this.inspect(uid); if (this.afterSnap) { this.toast(this.afterSnap, 'good', 2600); this.afterSnap = null; } };
     world.onLoose = (t) => { this.w.pickupFx(t); if (!this.g.s.loose?.[t]) return; this.toast(`${PNAME[t]} in der Tasche`, 'good', 2200); if (!this.g.pickUp(t)) return; this.lastPick = { t, at: performance.now() }; setTimeout(() => this.goals(), 1300); this.audio?.install?.(); this.goals(); };
     world.onKeep = (id) => this.pickKeep(id);
+    world.onLetter = (who) => this.letterCard(who); // Start ohne Handy: Brief bzw. Umschlag auf dem Schreibtisch
     game.on('xp', (k, n, lv) => this.xpPop(k, n, lv));
     game.on('skill', (id) => { if (this.w.focus || this.installing) { this.lvQ = ['sk', id]; return; } setTimeout(() => skillCard(this, id), 700); this.dock(); }); // „Gelernt …“
     game.on('skillopen', (ids) => { if (!this.g.has('skills')) return; this.toast(`<b>Neu lernbar:</b> ${ids.slice(0, 3).map((id) => esc(SKILL[id]?.name || id)).join(', ')}${ids.length > 3 ? ' …' : ''} – <kbd>T</kbd>`, 'good', 6000); this.dock(); });
@@ -117,7 +121,11 @@ export class UI {
     game.on('toast', (t, k, ms) => this.toast(t, k, ms));
     const showMsg = (m) => { if (document.querySelector('#featcards .featcard:not(.lesson)') || document.getElementById('lvup') || this.lvBusy) { setTimeout(() => showMsg(m), 1200); return; } this.toast(`<b>${m.tip ? 'Tipp von ' : ''}${esc(m.from)}:</b> ${esc(m.text)}`, 'msg', m.tip ? 10000 : 7000); this.dock(); };
     this.flushMsgs = (base = 3000) => { const q = this.msgQ || []; this.msgQ = []; q.forEach((m, i) => setTimeout(() => showMsg(m), base + i * 2500)); };
-    game.on('message', (m) => { if (this.inspUid || this.w.focus) { (this.msgQ ||= []).push(m); this.dock(); return; } showMsg(m); });
+    game.on('message', (m) => {
+      this.mk?.onMessage?.(); if (this.modalKind === 'phone' && this.phoneTab === 'msgs') this.phoneChat?.render(); // offene Chats laufen mit
+      if (!this.g.has('phone')) { this.pcMsg(m); return; } // noch kein Handy: die Nachricht wartet im Messenger am PC
+      if (this.inspUid || this.w.focus) { (this.msgQ ||= []).push(m); this.dock(); return; } showMsg(m);
+    });
     game.on('news', () => this.ticker());
     game.on('feature', (f) => this.featureCard(f));
     game.on('lesson', (f) => { if (!f) this.lessonDone(); }); // Lektion benutzt: Hinweiskarte weg (die nächste kommt über 'feature')
@@ -132,7 +140,7 @@ export class UI {
     game.on('refresh', () => this.refresh());
     game.on('goal', () => { this.audio?.cash(); });
     game.on('bill', (b) => this.onBill(b)); // Monatsabrechnung gebucht (b) oder offene Rechnung bezahlt (null)
-    game.on('idea', () => this.ringCard('Deniz')); // Anlernen: Deniz schreibt von Bitcoin
+    game.on('idea', () => { if (this.g.has('phone') && !this.g.s.letters) this.ringCard('Deniz'); }); // Anlernen (alte Stände mit Handy): Deniz schreibt von Bitcoin – mit Briefen kommt seine Idee am PC
     game.on('papaLoan', () => { if (this.modalKind === 'company') this.reCompany(); this.dock(); });
     game.on('facfull', (id, c) => this.facFull(id, c));
     game.on('bag', () => this.refresh()); // Teile gekauft/verkauft/ein- und ausgebaut
@@ -210,7 +218,7 @@ export class UI {
     const mOn = !s.feat || s.flags.miningStarted;
     for (const [id, ok] of [['#st-profit', mOn], ['#st-hash', mOn], ['#st-nw', g.has('rigs')], ['#st-btc', !s.flags.tutor || g.has('market')]]) $(id).style.display = ok ? '' : 'none';
     document.body.classList.toggle('tut-nobtc', !!s.flags.tutor && !g.has('market')); // Anlernen: Bitcoin-Kurs erst mit der Börse (CSS erzwingt sonst die Anzeige)
-    $('#st-cash').title = 'Bargeld · am 1. jedes Monats werden Miete und Strom abgebucht (Handy → Konto)'; $('#st-nw').title = 'Kontostand + Coins + Wiederverkaufswert der Hardware − Kredit, Papas Darlehen und Rechnungen'; $('#st-profit').title = 'Mining-Ertrag minus Strom, Miete, Löhne und Zinsen pro Tag';
+    $('#st-cash').title = `Bargeld · am 1. jedes Monats werden Miete und Strom abgebucht (${g.has('phone') ? 'Handy → Konto' : 'am PC unter „Bank“'})`; $('#st-nw').title = 'Kontostand + Coins + Wiederverkaufswert der Hardware − Kredit, Papas Darlehen und Rechnungen'; $('#st-profit').title = 'Mining-Ertrag minus Strom, Miete, Löhne und Zinsen pro Tag';
     const ob = g.owed?.() || 0, dl = (g.nextBillDay?.() ?? s.day + 99) - s.day, est = ob <= 0 && mOn && s.flags.miningStarted && dl <= 5 ? g.billEstimate() : 0;
     const bsub = ob > 0 ? `<div class="bill-due neg">${esc(BILL_STAGE[Math.min(3, s.bills.open.stage)])}: ${fmtUSD(ob)} offen</div>` : est >= 1 ? `<div class="bill-due">Abrechnung ${dl <= 1 ? 'morgen' : `in ${dl} Tagen`}: ~${fmtUSD(est)}</div>` : ''; // Monatserster: Miete und Strom
     $('#st-cash').innerHTML = `<div class="l">Kontostand</div><div class="v ${s.cash < 0 ? 'neg' : ''}">${fmtUSD(this.dCash)}</div>${bsub}`;
@@ -233,7 +241,9 @@ export class UI {
     const play = w.mode === 'play' && !this.paused && !w.cine, where = w.houseWhere?.() || null; // Haus: 'apt' | 'up' | 'low' | 'kel'
     const route = (t, lab) => { const p = w.houseRoute(t); if (p) { pos = p; label = lab; final = (t === 'haustuer' || t === 'parcels') && where === 'up'; } };
     const lying = Object.keys(s.loose || {});
-    if (s.chapter === 0 && play && !s.flags.miningStarted && where) { // Anfang: zu Fuß in den Keller, Teile suchen, wieder hoch zum PC
+    const ls = w.room?.letterSpots?.deniz; // Start ohne Handy: erst Deniz' Brief auf dem Schreibtisch
+    if (s.letters && !s.letters.deniz && !s.flags.idea && play && (where === 'apt' || (!where && w.facId === 'kinder')) && ls) { pos = [ls[0], ls[1] + 0.06, ls[2]]; label = 'Brief von Deniz'; aimed = w.aim?.letter === 'deniz'; }
+    else if (s.chapter === 0 && play && !s.flags.miningStarted && where) { // Anfang: zu Fuß in den Keller, Teile suchen, wieder hoch zum PC
       if (lying.length && where !== 'kel') route('keller', 'Runter in den Keller');
       else if (lying.length) {
         const spots = w.room?.looseSpots || {}, here = lying.filter((t) => spots[t]);
@@ -243,6 +253,7 @@ export class UI {
     } else if (s.chapter === 0 && play && !where && w.facId === 'kinder') { // (ohne Treppenhaus)
       const pc = g.facObjects('kinder').find((o) => o.type === 'tower'); if (pc && !s.flags.miningStarted) { pos = [pc.x, 0.78, pc.z]; label = 'Dein PC'; aimed = w.aim?.uid === pc.uid; }
     }
+    if (!pos && play && (where === 'apt' || (!where && w.facId === 'kinder')) && s.flags.miningStarted && !g.has('phone') && unreadChats(s) > 0) { const pr = w.room?.props?.find((p) => p.action === 'market'); if (pr) { pos = [pr.c[0], pr.c[1] + 0.16, pr.c[2]]; label = 'Neue Nachricht'; aimed = w.aim?.prop === pr; } } // ohne Handy: Ungelesenes wartet im Messenger am PC
     if (!pos && s.chapter === 0 && play && (where === 'apt' || (!where && w.facId === 'kinder')) && s.flags.miningStarted && s.flags.cpuStart && g.has('build') && !s.flags.gpuOrdered && !s.flags.boughtGpu) { const pr = w.room?.props?.find((p) => p.action === 'market'); if (pr) { pos = [pr.c[0], pr.c[1] + 0.16, pr.c[2]]; label = 'Shop: Grafikkarte bestellen'; aimed = w.aim?.prop === pr; } } // erstes Ziel nach dem Einschalten: der Shop am Monitor
     const parcelFirst = !!(where && w.parcelsLying?.()); // ein Paket vor der Tür geht vor (Börse/Freischalten können warten)
     if (!pos && !parcelFirst && s.chapter === 0 && play && (where === 'apt' || (!where && w.facId === 'kinder')) && s.flags.miningStarted && g.has('market') && !(s.stats.sold > 0)) { const pr = w.room?.props?.find((p) => p.action === 'market'); if (pr) { pos = [pr.c[0], pr.c[1] + 0.16, pr.c[2]]; label = 'Bitcoin verkaufen'; aimed = w.aim?.prop === pr; } }
@@ -351,6 +362,7 @@ export class UI {
     el.append(cats);
     const list = h('<div class="items"></div>');
     this.shopTop(list, fac); // Lieferstatus und Ausgepacktes – in allen Rubriken oben
+    this.mk?.shopExtra?.(list); // Handy (nach Deniz' Tipp, market.js)
     if (this.cat === 'parts') { el.style.setProperty('--cols', 3); this.partsView(list); el.append(list); return; }
     const items = g.shopList(this.cat, fac).sort((a, b) => b.releaseDay - a.releaseDay);
     if (this.cat === 'rigs') { const kb = this.kitsBar(fac); if (kb) list.append(kb); }
@@ -475,7 +487,7 @@ export class UI {
     clearTimeout(this.featT); this.featQ = []; this.msgQ = []; this.xpQ = []; this.lvQ = null; this.lvBusy = false; $('#featcards').innerHTML = '';
     this.osWiz = null; this.mg?.cancel(); this.skView = null; // Fähigkeiten: Installer, Mini-Spiel, Baum-Ansicht
     clearTimeout(this.instT); this.installing = false; this.afterSnap = null; this.showRun = false; this.pickType = null; this.rate = 0; this.rateDay = null;
-    this.visiting = null; this.walkGoal = null; this.lampHinted = false; this.idea0 = null; this.ideaRead = null; this.ideaSteps0 = 0; this.steps = 0; this.ringOff = null; document.body.classList.remove('visiting', 'show-build', 'show-goals');
+    this.visiting = null; this.walkGoal = null; this.lampHinted = false; this.idea0 = null; this.ideaRead = null; this.ideaSteps0 = 0; this.steps = 0; this.ringOff = null; this.phoneChat = null; this.pcMsgAt = 0; document.body.classList.remove('visiting', 'show-build', 'show-goals');
     if (this.w.heatMode) this.w.toggleHeat(false);
     if (this.inspUid) { this.inspUid = null; $('#inspector').classList.add('hidden'); this.w.select(null); }
     this.w.focusObject?.(null); this.w.ghostPart?.(null); this.pause(false);
@@ -490,14 +502,15 @@ export class UI {
   }
   showFeatures() {
     const les = this.g.lesson(), isLes = les && (this.featQ || []).includes(les); // Anlernen: Lektionskarte darf neben der Handy-Nachricht stehen
-    if (this.w.mode !== 'play' || this.paused || document.getElementById('lvup') || this.lvQ || this.lvBusy || (!isLes && document.querySelector('#toasts .toast.msg'))) { clearTimeout(this.featT); this.featT = setTimeout(() => this.showFeatures(), 700); return; }
-    const q = this.featQ || []; this.featQ = []; if (!q.length) return;
+    if (this.w.mode !== 'play' || this.paused || this.w.cine || document.getElementById('lvup') || this.lvQ || this.lvBusy || (!isLes && document.querySelector('#toasts .toast.msg'))) { clearTimeout(this.featT); this.featT = setTimeout(() => this.showFeatures(), 700); return; }
+    const done = this.g.s.learn?.done || {}, q = (this.featQ || []).filter((f) => f === les || !done[f]); this.featQ = []; if (!q.length) return; // Anlernen: schon Benutztes (z. B. Shop am PC) bekommt keine „Neu“-Karte mehr
     if (isLes) { this.lessonCard(les); return; }
     this.audio?.message();
     const box = $('#featcards'); box.innerHTML = '';
     const PRIO = ['market', 'build', 'skills', 'speed2', 'autosell', 'rigs', 'company', 'coins', 'cold', 'heat', 'map', 'techs', 'ranking', 'loan', 'buycoins', 'speed3', 'phone'];
     const top = [...q].sort((a, b) => (PRIO.indexOf(a) + 99) % 99 - (PRIO.indexOf(b) + 99) % 99)[0], rest = q.filter((f) => f !== top);
-    const el = h(`<div class="featcard"><div class="fc-t">Neu</div><div class="fc-h">${esc(FEATURES[top].title)}</div><div class="fc-b">${FEATURES[top].text}</div>${rest.length && top !== 'market' ? `<div class="fc-more">Außerdem: ${rest.map((f) => esc(FEATURES[f].title)).join(', ')}</div>` : ''}</div>`);
+    const T = FEATURES[top], tk = !T.text && T.key ? ` <kbd class="fc-k">${esc(T.key)}</kbd>` : '';
+    const el = h(`<div class="featcard ${T.text ? '' : 'mini'}"><div class="fc-t">Neu</div><div class="fc-h">${esc(T.title)}${tk}</div>${T.text ? `<div class="fc-b">${T.text}</div>` : ''}${rest.length && top !== 'market' ? `<div class="fc-more">Außerdem: ${rest.map((f) => esc(FEATURES[f].title)).join(', ')}</div>` : ''}</div>`);
     box.append(el); clearTimeout(this.featHide);
     this.featHide = setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 600); }, top === 'market' ? 4000 : 5200);
     this.speedBar(); this.dock(); this.keysHint(); this.sites(); this.goals();
@@ -506,17 +519,23 @@ export class UI {
   lessonCard(f) {
     const F = FEATURES[f]; if (!F || this.g.lesson() !== f) return;
     const box = $('#featcards'); box.querySelectorAll('.featcard').forEach((x) => x.remove()); clearTimeout(this.featHide);
-    const ring = f === 'phone', key = F.key && !F.pseudo ? `<kbd class="fc-k">${F.key}</kbd>` : '';
+    const ring = f === 'phone', ph = this.g.has('phone');
+    if (!F.text) { // Anlernen: ganz kurz – Titel und Taste (die Erklärung steht, wenn nötig, in den Nachrichten)
+      const title = f === 'bills' ? (ph ? 'Kontoauszug im Handy' : 'Kontoauszug am PC') : F.title, k = f === 'bills' ? (ph ? 'H' : '') : F.key;
+      const el = h(`<div class="featcard lesson mini ${ring ? 'ring' : ''}" data-f="${f}"><div class="fc-h">${ring ? PHONE_SVG : ''}<span>${esc(title)}</span>${k ? `<kbd class="fc-k">${esc(k)}</kbd>` : ''}</div></div>`);
+      box.append(el); this.audio?.message?.(); this.speedBar(); this.dock(); this.keysHint(); this.sites(); this.goals(); return;
+    }
+    const key = F.key && !F.pseudo ? `<kbd class="fc-k">${F.key}</kbd>` : '';
     const el = h(`<div class="featcard lesson ${ring ? 'ring' : ''}" data-f="${f}"><div class="fc-t">${ring ? `${PHONE_SVG}Bzzz … bzzz …` : F.pseudo ? 'Nächster Schritt' : 'Neu'}</div><div class="fc-h">${key}${esc(F.title)}</div><div class="fc-b">${F.text}</div></div>`);
     box.append(el); this.audio?.message();
     this.speedBar(); this.dock(); this.keysHint(); this.sites(); this.goals();
   }
   lessonDone() { const el = document.querySelector('#featcards .featcard.lesson'); if (el) { el.classList.add('out'); setTimeout(() => el.remove(), 600); } this.dock(); this.keysHint(); }
-  // Neues Spiel: Aufwachen in der Wohnung (Kamerafahrt der Welt, wenn es sie gibt), dann vibriert das Handy
+  // Neues Spiel: Aufwachen in der Wohnung (Kamerafahrt der Welt, wenn es sie gibt), dann liegt der Brief auf dem Tisch (alte Stände ohne Briefe: das Handy vibriert)
   wakeUp() {
     this.w.visFrac = this.g.s.frac; // Morgenlicht sofort (sonst dämmert es erst langsam vom Titelbild-Abend herüber)
     this.w.setMode('play');
-    let done = false; const go = () => { if (done) return; done = true; this.g.grant('phone'); this.setSpeed(1); this.keysHint(); this.dock(); };
+    let done = false; const go = () => { if (done) return; done = true; if (this.g.s.letters) this.g.checkFeatures(); else this.g.grant('phone'); this.setSpeed(1); this.keysHint(); this.dock(); };
     if (this.w.wakeUp) { try { this.w.wakeUp(go); setTimeout(go, 15000); return; } catch (e) { /* ohne Kamerafahrt weiter */ } }
     setTimeout(go, 1400);
   }
@@ -525,7 +544,7 @@ export class UI {
   // Tasten-Hinweise unten rechts: nur, was schon freigeschaltet ist
   keysHint() {
     const g = this.g, el = $('#keys'); if (!el) return;
-    const unread = g.s.messages.filter((m) => !m.read).length;
+    const unread = unreadChats(g.s);
     const ks = [['build', 'B', 'Shop'], ['market', 'M', 'Börse']].filter(([f]) => g.has(f));
     if (g.has('phone')) ks.unshift(['phone', 'H', unread ? `Handy (${unread})` : 'Handy']);
     if (this.w.facId === 'keller' && this.w.dusty) ks.unshift(['lamp', 'F', this.w.vm?.lampOn ? 'Lampe aus' : 'Taschenlampe']);
@@ -538,7 +557,9 @@ export class UI {
     if (!aim || this.w.mode !== 'play') { el.classList.add('hidden'); return; }
     if (aim.keep || aim.prop?.action === 'talk') { el.innerHTML = this.promptLife(aim); el.classList.remove('hidden'); return; }
     let html = '';
-    if (aim.loose) {
+    if (aim.letter) {
+      html = aim.letter === 'papa' ? '<kbd>E</kbd>Umschlag öffnen<span> · von Papa</span>' : '<kbd>E</kbd>Brief lesen<span> · von Deniz</span>';
+    } else if (aim.loose) {
       html = `<kbd>E</kbd>${PNAME[aim.loose]} aufheben`;
     } else if (aim.parcel != null) {
       html = `<kbd>E</kbd>Paket aufheben${aim.label ? `<span> · ${esc(aim.label)}</span>` : ''}`;
@@ -546,8 +567,8 @@ export class UI {
       const k = aim.door.kind;
       html = k === 'kellertuer' ? (this.g.canUnlock('keller') ? `<kbd>E</kbd>${esc(FACILITY.keller.short)} freischalten` : '<kbd>E</kbd>Kellertür<span> · abgeschlossen</span>') : k === 'haustuer' ? '<kbd>E</kbd>Haustür<span> · raus in die Stadt</span>' : `<kbd>E</kbd>${esc(aim.door.label)}`;
     } else if (aim.prop) {
-      const mon = this.monitorUse(aim.prop); // PC-Monitor: Shop und/oder Börse
-      html = mon ? `<kbd>E</kbd>${mon === 'both' ? 'Shop · Börse' : mon === 'shop' ? 'Online-Shop' : esc(aim.prop.hint)}` : aim.prop.action === 'market' ? `Monitor · ${this.g.s.flags.miningStarted ? 'Miner läuft' : 'aus'}` : `<kbd>E</kbd>${esc(aim.prop.hint)}`;
+      const mon = this.monitorUse(aim.prop), un = mon && aim.prop.label === 'PC-Monitor' ? unreadChats(this.g.s) : 0; // PC-Monitor: Shop, Börse, Nachrichten
+      html = un ? `<kbd>E</kbd>An den PC<span> · ${un === 1 ? 'eine neue Nachricht' : `${un} neue Nachrichten`}</span>` : mon === 'msgs' ? '<kbd>E</kbd>Nachrichten' : mon ? `<kbd>E</kbd>${mon === 'both' ? 'Shop · Börse' : mon === 'shop' ? 'Online-Shop' : esc(aim.prop.hint)}` : aim.prop.action === 'market' ? `Monitor · ${this.g.s.flags.miningStarted ? 'Miner läuft' : 'aus'}` : `<kbd>E</kbd>${esc(aim.prop.hint)}`;
     } else {
       const o = this.g.findObj(aim.uid); if (!o) { el.classList.add('hidden'); return; }
       const def = PLACEABLE[o.type], sm = this.g.summary[this.g.facOf(aim.uid)], a = sm?.per.get(aim.uid);
@@ -595,7 +616,8 @@ export class UI {
   // Was kann man am Monitor? 'both' (Shop und Börse), 'shop', 'market' oder '' – der Shop nur am PC-Monitor in der Wohnung
   monitorUse(p) {
     if (p?.action !== 'market') return ''; const g = this.g, shop = g.has('build') && (p.label === 'PC-Monitor' || this.w.facId === 'kinder'), mk = g.has('market');
-    return shop && mk ? 'both' : shop ? 'shop' : mk ? 'market' : '';
+    const msgs = p.label === 'PC-Monitor' && this.w.facId === 'kinder' && (g.s.flags.miningStarted || !g.s.feat) && (g.s.messages || []).length > 0; // Messenger am PC
+    return shop && mk ? 'both' : shop ? 'shop' : mk ? 'market' : msgs ? 'msgs' : '';
   }
   // Am Anfang in den verstaubten Keller: früher per Überblendung, jetzt zu Fuß (der Marker zeigt den Weg)
   searchTrip(down) {
@@ -605,6 +627,7 @@ export class UI {
   // Wechsel der Szene auf der Kellertreppe (World.checkHouseSwitch): Standort still umstellen, ohne Überblendung
   houseMove(id) {
     const s = this.g.s, cur = id === 'keller' && s.unlocked.includes('keller') ? 'keller' : 'kinder', prev = s.current;
+    if (id === 'keller') this.g.learned?.('cellar'); // Anlernen: „Runter in den Keller“
     this.visiting = id === 'keller' && cur !== 'keller' ? 'keller' : null; // Keller noch nicht frei (Teile-Suche): nur zu Besuch
     document.body.classList.toggle('visiting', !!this.visiting);
     if (cur !== prev) { s.current = cur; this.toast(esc(FACILITY[cur].name), 'info', 1600); }
@@ -1001,7 +1024,7 @@ export class UI {
   // ---------- Dock ----------
   dock() {
     const el = $('#dock'), g = this.g;
-    const unread = g.s.messages.filter((m) => !m.read).length + (g.s.ev?.open ? 1 : 0);
+    const unread = unreadChats(g.s) + (g.s.ev?.open ? 1 : 0);
     const skN = g.has('skills') && g.s.sk ? g.skillsOpenN() : 0; // Fähigkeiten, die man gerade auf einem Weg lernen kann
     el.innerHTML = '';
     const btns = [
@@ -1060,6 +1083,34 @@ export class UI {
     n.querySelector('button').onclick = () => this.closeModal();
     this.openModal(n, 'narrow', 'keep');
   }
+  face(k) { return faceSvg(k); } // gezeichnete Gesichter für die Chats (chat.js)
+  // Start ohne Handy: Brief von Deniz bzw. Papas Umschlag lesen (E nimmt ihn, Esc oder E legt die Karte weg)
+  letterCard(who) {
+    const g = this.g, L = LETTERS[who]; if (!L || !g.s.letters || g.s.letters[who]) return;
+    const lines = typeof L.lines === 'function' ? L.lines(this.money(g.s.papaLoan?.total || g.s.cash)) : L.lines;
+    const n = h(`<div class="story letter lt-${who}"><div class="lt-paper"><div class="lt-h">${esc(L.title)}</div>${lines.map((l) => `<p>${esc(l)}</p>`).join('')}</div><div class="row" style="justify-content:flex-end"><button class="btn primary">${who === 'papa' ? 'Einstecken' : 'Weglegen'} <kbd>E</kbd></button></div></div>`);
+    n.querySelector('button').onclick = () => this.closeModal();
+    this.audio?.click?.(); this.letterAt = performance.now();
+    this.openModal(n, 'narrow', 'letter');
+    g.readLetter(who); // gelesen: das Modell verschwindet vom Tisch, Deniz' Brief schaltet „Runter in den Keller“ frei
+    if (who === 'papa') this.flashCash(0);
+  }
+  // Ohne Handy: Nachrichten warten im Messenger am PC – kurzer Hinweis (höchstens alle paar Sekunden), „Uh-oh“, der Monitor blinkt (monitor.js)
+  pcMsg() {
+    this.w.screensDirty = true; this.dock(); this.keysHint();
+    if (this.mk?.where && this.mk.tab === 'msgs') { this.audio?.message?.(); return; } // Chat ist offen: die Nachricht erscheint gleich dort
+    const now = performance.now(); if (now - (this.pcMsgAt || 0) < 8000) return; this.pcMsgAt = now;
+    setTimeout(() => { this.audio?.uhoh?.(); this.toast(`Neue Nachricht am PC${this.mk?.where === 'pc' ? '' : ' – setz dich an den Monitor'}`, 'info', 4200); }, 300);
+  }
+  // Ereignis entschieden: Frage, eigene Antwort (rechts) und Reaktion landen im Chat der Person – die Reaktion bei der, die spricht („<b>Kemal:</b> …“)
+  eventChat(e, intro, label, reply) {
+    const g = this.g; if (!e?.from || !g.chatLog) return;
+    const plain = (t) => String(t || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim(), unq = (t) => t.replace(/^„(.*)“$/s, '$1');
+    let who = e.from, text = plain(reply); const m = /^<b>([^<:]+):<\/b>\s*/.exec(String(reply || '')); if (m) { who = m[1].trim(); text = plain(String(reply).slice(m[0].length)); }
+    g.chatLog(e.from, [{ text: unq(plain(intro)) }, { me: true, text: plain(typeof label === 'function' ? label(g) : label) }]);
+    if (text) g.chatLog(who, [{ text: unq(text) }]);
+    this.mk?.onMessage?.();
+  }
 
   // Börse: eigene Seite (market.js) – als Fenster (M) oder am PC-Monitor (useProp → Market.atPc)
   market(update = false) { (this.mk ||= new Market(this)).show(update); }
@@ -1067,7 +1118,7 @@ export class UI {
   phone(tab = null) {
     this.g.learned?.('phone'); this.ringOff?.(); this.ringOff = null;
     const g = this.g;
-    const msgs = [...g.s.messages].sort((a, b) => b.day - a.day), unread = msgs.filter((m) => !m.read).length;
+    const unread = unreadChats(g.s), prevTab = this.modalKind === 'phone' ? this.phoneTab : null;
     tab = tab || (unread || g.s.ev?.open ? 'msgs' : this.phoneTab || 'msgs'); this.phoneTab = tab;
     const newC = CONTACTS.filter((c) => g.contactMet(c.id) && !g.contactOn(c.id)).length, owe = g.owed?.() > 0;
     const body = h(`<div><h2>Handy</h2><div class="ph-tabs" role="tablist"><button class="btn small ${tab === 'msgs' ? 'on' : ''}" data-t="msgs">Nachrichten${unread ? ` <span class="ph-n">${unread}</span>` : ''}</button><button class="btn small ${tab === 'contacts' ? 'on' : ''}" data-t="contacts">Kontakte${newC ? ` <span class="ph-n">${newC}</span>` : ''}</button><button class="btn small ${tab === 'konto' ? 'on' : ''}" data-t="konto">Konto${owe ? ' <span class="ph-n ph-warn">!</span>' : ''}</button></div><div class="phone"></div></div>`);
@@ -1075,14 +1126,11 @@ export class UI {
     const ph = body.querySelector('.phone');
     if (tab === 'contacts') { this.phoneContacts(ph); this.openModal(body, 'narrow', 'phone'); this.dock(); return; }
     if (tab === 'konto') { g.learned?.('konto'); this.phoneKonto(ph); this.openModal(body, 'narrow', 'phone'); this.dock(); return; }
-    const oe = g.s.ev?.open && EVENT[g.s.ev.open.id];
-    const ob = g.s.bills?.open; // offene Rechnung: immer oben, auch wenn gerade eine andere Entscheidung offen ist (die Mahnung kommt dann danach)
-    if (ob && oe?.id !== 'mahnung') { const card = h(`<div class="msg decide bill"><div class="fr">${esc((ob.who || [])[0] || 'Rechnung')}<span>${esc(BILL_STAGE[Math.min(3, ob.stage)])} · ${ob.stage >= 3 ? 'Strom abgestellt' : `Frist bis ${fmtDate(ob.due)}`}</span></div><b>${fmtUSD(g.owed())} offen</b><div class="row" style="margin-top:8px"><button class="btn small primary">Zum Konto</button></div></div>`); card.querySelector('button').onclick = () => this.phone('konto'); ph.append(card); }
-    if (oe) { const card = h(`<div class="msg decide"><div class="fr">${esc(oe.from || '')}<span>Entscheidung offen · noch ${Math.max(0, g.s.ev.open.until - g.s.day)} Tage</span></div><b>${esc(g.evText(oe, 'title'))}</b><div class="row" style="margin-top:8px"><button class="btn small primary">Jetzt entscheiden</button></div></div>`); card.querySelector('button').onclick = () => { this.evSnooze = null; this.closeModal(); this.eventCard(); }; ph.append(card); }
-    if (!msgs.length) ph.append(h('<div class="empty">Keine Nachrichten.</div>'));
-    for (const m of msgs) { if (m.old) continue; const tip = MESSAGES.find((x) => x.id === m.id)?.tip; ph.append(h(`<div class="msg f-${m.from.split(' ')[0]} ${m.read ? '' : 'unread'} ${tip ? 'tip' : ''}"><div class="fr">${esc(m.from)}${tip ? '<em class="tip-tag">Tipp</em>' : ''}<span>${fmtDate(m.day)}</span></div>${esc(m.text)}</div>`)); }
-    msgs.forEach((m) => (m.read = true));
-    this.openModal(body, 'narrow', 'phone'); this.dock();
+    // Nachrichten: eine Zeile pro Person, darin der Verlauf (chat.js – dieselbe Ansicht wie am PC); offene Rechnung und Entscheidung stehen oben
+    const pc = (this.phoneChat ||= new ChatView(g, { face: (k) => faceSvg(k), money: (v) => this.money(v), onEvent: () => { this.evSnooze = null; this.closeModal(); this.eventCard(); }, onBank: () => this.phone('konto'), onCall: (id) => this.callContact(id),
+      onRead: () => { const n = unreadChats(g.s), b = document.querySelector('#modal .ph-tabs [data-t="msgs"]'); if (b) b.innerHTML = `Nachrichten${n ? ` <span class="ph-n">${n}</span>` : ''}`; this.dock(); this.keysHint(); this.w.screensDirty = true; } }));
+    if (prevTab !== 'msgs') pc.who = null; ph.append(pc.el);
+    this.openModal(body, 'narrow', 'phone'); pc.render(); this.dock();
   }
   // Handy → Kontakte: Geschäftskontakte (fertig montierte Hardware, Stammkunden-Rabatt) und Familie (Beziehung, Wirkung ab Stufe 3)
   phoneContacts(ph) {
@@ -1093,7 +1141,7 @@ export class UI {
       const st = g.contactState(c.id), met = !!st?.met, on = !!st?.on, tier = g.contactTier(c.id), T = FEE_TIERS[tier], nx = FEE_TIERS[tier + 1], n = st?.n || 0;
       const badge = on ? '<span class="ct-b on">Freigeschaltet</span>' : met ? '<span class="ct-b off">Nicht gespeichert</span>' : '<span class="ct-b lock">Noch nicht kennengelernt</span>';
       const tierLine = on ? `<div class="ct-tier"><b>${esc(T.label)}</b> · ${Math.round(T.fee * 100)}&nbsp;% Montage · ${n} ${n === 1 ? 'Auftrag' : 'Aufträge'}${nx ? `<br/><span>Noch ${nx.n - n} ${nx.n - n === 1 ? 'Auftrag' : 'Aufträge'} bis „${esc(nx.label)}“ (${Math.round(nx.fee * 100)}&nbsp;%)</span>` : ''}</div>` : '';
-      const last = on ? [...s.messages].reverse().find((m) => m.from === c.name) : null;
+      const last = on ? [...s.messages].reverse().find((m) => m.from === c.name && !m.me) : null;
       const card = h(`<div class="ct-card ${on ? 'on' : met ? 'met' : 'unknown'}"><div class="ct-av">${met ? faceSvg(c.id) : `<span class="ct-q">?</span>`}</div><div class="ct-main"><div class="ct-name"><b>${esc(met ? c.name : c.unknown)}</b>${met ? `<span class="ct-biz">${esc(c.biz)}</span>` : ''}${badge}</div>${met ? `<div class="ct-role">${esc(c.role)}</div>` : ''}<div class="ct-offer">${on ? 'Liefert' : 'Bietet'}: ${esc(c.offer)}</div>${tierLine}${last ? `<div class="ct-last">„${esc(last.text)}“</div>` : ''}${!met ? `<div class="ct-how">${LOCK_SVG}<span>${esc(c.meet(s, g, fmtDate))}</span></div>` : ''}<div class="ct-act"></div></div></div>`);
       const act = card.querySelector('.ct-act');
       if (met && !on) { const b = h(`<button class="btn small primary">${esc(c.name)} anrufen</button>`); b.onclick = () => { this.callContact(c.id); this.phone('contacts'); }; act.append(b); act.append(h('<span class="ct-hint">Danach gibt’s fertig bestückte Geräte im Katalog.</span>')); }
@@ -1107,34 +1155,35 @@ export class UI {
       const dots = Array.from({ length: 5 }, (_, i) => `<i class="${i < lv ? 'on' : ''}"></i>`).join('');
       const perk = lv >= 3 ? (f.id === 'papa' && s.flags.shopLost && REL_PERK.papaLost ? REL_PERK.papaLost : REL_PERK[f.id]) : '';
       const card = h(`<div class="ct-card fam"><div class="ct-av">${faceSvg(face)}</div><div class="ct-main"><div class="ct-name"><b>${esc(f.name)}</b><span class="ct-rel" title="Beziehung ${lv} von 5">${lv < 0 ? `<em class="neg">verstimmt (${lv})</em>` : `<span class="ct-dots">${dots}</span>`}</span></div><div class="ct-role">${esc(f.role(s))}</div>${perk ? `<div class="ct-perk">${esc(perk)}</div>` : REL_PERK[f.id] ? `<div class="ct-how2">Ab Stufe 3: ${esc(REL_PERK[f.id])}</div>` : ''}</div></div>`);
-      if (f.id === 'papa') { const lb = this.papaLoanBox(); if (lb) card.querySelector('.ct-main').append(lb); }
+      if (f.id === 'papa') { const lb = this.papaLoanBox(() => this.phone('contacts')); if (lb) card.querySelector('.ct-main').append(lb); }
       ph.append(card);
     }
   }
   // Papas Umzugsdarlehen (Kontakte → Papa): Rest, Raten, alles zurückzahlen
-  papaLoanBox() {
+  papaLoanBox(re = () => this.phone('contacts')) {
     const g = this.g, s = g.s, L = s.papaLoan; if (!L || !(L.total > 0)) return null;
     if (!(L.left > 0)) return h(`<div class="ct-loan done">Umzugsdarlehen <b>zurückgezahlt</b>${L.done ? ` am ${fmtDate(L.done)}` : ''} · ${this.money(L.total)}</div>`);
     const pc = Math.round(Math.max(0, Math.min(1, 1 - L.left / L.total)) * 100), rate = Math.min(L.left, Math.max(50, Math.round(L.total / 10 / 50) * 50));
     const el = h(`<div class="ct-loan"><div>Umzugsdarlehen: noch <b>${this.money(L.left)}</b> von ${this.money(L.total)} · ohne Zinsen, ohne Frist</div><div class="bar"><div style="width:${pc}%"></div></div><div class="ct-act"></div></div>`);
     const act = el.querySelector('.ct-act');
-    const pay = (v) => { const r = g.repayPapa(v); if (r) { this.audio?.cash?.(); this.toast(g.papaLeft() > 0 ? `${this.money(r)} an Papa überwiesen – noch ${this.money(g.papaLeft())}` : `${this.money(r)} an Papa überwiesen – alles zurückgezahlt!`, 'good', 4000); } this.phone('contacts'); };
+    const pay = (v) => { const r = g.repayPapa(v); if (r) { this.audio?.cash?.(); this.toast(g.papaLeft() > 0 ? `${this.money(r)} an Papa überwiesen – noch ${this.money(g.papaLeft())}` : `${this.money(r)} an Papa überwiesen – alles zurückgezahlt!`, 'good', 4000); } re(); };
     const b1 = h(`<button class="btn small">${this.money(rate)} zurückzahlen</button>`); b1.disabled = !g.canAfford(rate); b1.onclick = () => pay(rate); act.append(b1);
     if (L.left > rate) { const b2 = h(`<button class="btn small primary">Alles zurückzahlen · ${this.money(L.left)}</button>`); b2.disabled = !g.canAfford(L.left); b2.onclick = () => pay(L.left); act.append(b2); }
     if (!g.canAfford(rate)) act.append(h('<span class="ct-hint">Dafür reicht dein Konto gerade nicht.</span>'));
     return el;
   }
-  // Handy → Konto: Kontostand, nächste Abrechnung, offene Rechnung (Mahnung), laufende Monatskosten, Monatsabrechnungen, Schulden
-  phoneKonto(ph) {
+  // Handy → Konto bzw. am PC → Bank (market.js): Kontostand, nächste Abrechnung, offene Rechnung (Mahnung), laufende Monatskosten, Monatsabrechnungen, Schulden
+  phoneKonto(ph, opt = {}) {
+    const re = opt.re || (() => this.phone('konto')), toMarket = opt.toMarket || (() => { this.closeModal(); this.market(); });
     const g = this.g, s = g.s, B = s.bills || { hist: [] }, o = B.open, L = s.papaLoan, nb = g.nextBillDay();
     ph.classList.add('ph-contacts', 'ph-konto');
     ph.append(h(`<div class="kt-head"><div><span>Kontostand</span><b class="${s.cash < 0 ? 'neg' : ''}">${fmtUSD(s.cash)}</b></div><div><span>Nächste Abrechnung</span><b>${fmtDate(nb)}</b><small>etwa ${fmtUSD(g.billEstimate())} · bisher ${fmtUSD(g.billAccrued())}</small></div></div>`));
     if (o) {
       const box = h(`<div class="kt-open st${o.stage}"><div class="kt-oh"><b>${esc(BILL_STAGE[Math.min(3, o.stage)])}</b><span>${fmtUSD(g.owed())} offen</span></div><div class="kt-ot">${billText(s, g)}</div><div class="ct-act"></div></div>`);
       const act = box.querySelector('.ct-act');
-      if (g.billCoinOk()) { const b = h('<button class="btn small primary">Coins verkaufen und bezahlen</button>'); b.onclick = () => { if (g.payBills(true)) this.audio?.cash?.(); this.phone('konto'); }; act.append(b); }
-      if (g.has('market')) { const b = h('<button class="btn small">Zur Börse</button>'); b.onclick = () => { this.closeModal(); this.market(); }; act.append(b); }
-      if (g.papaHelpOk()) { const b = h('<button class="btn small">Papa um Hilfe bitten</button>'); b.onclick = () => { if (g.papaHelp()) { this.audio?.cash?.(); this.toast(`<b>Papa:</b> ${esc(PAPA_HELP[Math.min(PAPA_HELP.length - 1, (s.papaLoan?.help || 1) - 1)])}`, 'msg', 8000); } this.phone('konto'); }; act.append(b); }
+      if (g.billCoinOk()) { const b = h('<button class="btn small primary">Coins verkaufen und bezahlen</button>'); b.onclick = () => { if (g.payBills(true)) this.audio?.cash?.(); re(); }; act.append(b); }
+      if (g.has('market')) { const b = h('<button class="btn small">Zur Börse</button>'); b.onclick = () => toMarket(); act.append(b); }
+      if (g.papaHelpOk()) { const b = h('<button class="btn small">Papa um Hilfe bitten</button>'); b.onclick = () => { if (g.papaHelp()) { this.audio?.cash?.(); this.toast(`<b>Papa:</b> ${esc(PAPA_HELP[Math.min(PAPA_HELP.length - 1, (s.papaLoan?.help || 1) - 1)])}`, 'msg', 8000); } re(); }; act.append(b); }
       ph.append(box);
     }
     const mc = g.monthlyCosts(), OTHER = { staff: 'Gehälter', ups: 'Ausbauten (laufend)', deals: 'Laufende Verträge', income: 'Einnahmen aus Verträgen' };
@@ -1150,7 +1199,8 @@ export class UI {
       ph.append(h('<div class="ct-sec">Schulden</div>'));
       const kv = []; if (L?.total > 0) kv.push(['Papas Umzugsdarlehen', L.left > 0 ? `${fmtUSD(L.left)} von ${fmtUSD(L.total)}` : '<span class="pos">zurückgezahlt</span>']); if (loan > 0) kv.push(['Bankkredit', fmtUSD(loan)]);
       const c = h(`<div class="kt-card"><div class="kv">${kv.map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join('')}</div>${L?.left > 0 ? '<div class="ct-act"></div>' : ''}</div>`);
-      if (L?.left > 0) { const b = h('<button class="btn small">Bei Papa zurückzahlen</button>'); b.onclick = () => this.phone('contacts'); c.querySelector('.ct-act').append(b); c.querySelector('.ct-act').append(h('<span class="ct-hint">ohne Zinsen, ohne Frist – auch in Raten</span>')); }
+      if (L?.left > 0 && opt.inline) { const lb = this.papaLoanBox(re); c.querySelector('.ct-act').replaceWith(lb || ''); } // am PC: gleich hier zurückzahlen
+      else if (L?.left > 0) { const b = h('<button class="btn small">Bei Papa zurückzahlen</button>'); b.onclick = () => this.phone('contacts'); c.querySelector('.ct-act').append(b); c.querySelector('.ct-act').append(h('<span class="ct-hint">ohne Zinsen, ohne Frist – auch in Raten</span>')); }
       ph.append(c);
     }
   }
@@ -1182,19 +1232,19 @@ export class UI {
     const box = body.querySelector('.ev-choices');
     for (const c of ch) {
       const b = h(`<button class="btn ${c.i === 0 ? 'primary' : ''} ev-c" ${c.ok ? '' : 'disabled'}><span class="ev-l">${esc(c.label)}${c.cost ? ` <span class="ev-cost">· ${this.money(c.cost)}</span>` : ''}</span>${c.hint ? `<small>${esc(c.hint)}</small>` : ''}${!c.ok && c.cost && !c.needFail ? '<small>Dafür reicht dein Geld nicht.</small>' : ''}${!c.ok && c.needFail ? `<small>${esc(c.needText || 'Gerade nicht möglich.')}</small>` : ''}</button>`);
-      b.onclick = () => { const k0 = o.key, reply = g.chooseEvent(c.i); this.evSnooze = null; this.closeModal(); if (g.s.ev?.open && g.s.ev.open.key !== k0) { this.evSnooze = null; setTimeout(() => this.tryEvent(), 600); } this.audio?.cash?.(); if (reply) this.toast(reply, 'msg', 7000); this.refresh(); this.dock(); }; // Folge-Ereignis (z. B. Mahnung → Bankgespräch) gleich zeigen
+      b.onclick = () => { const k0 = o.key, intro = g.evText(e), reply = g.chooseEvent(c.i); if (g.s.ev?.open?.key !== k0) this.eventChat(e, intro, c.label, reply); this.evSnooze = null; this.closeModal(); if (g.s.ev?.open && g.s.ev.open.key !== k0) { this.evSnooze = null; setTimeout(() => this.tryEvent(), 600); } this.audio?.cash?.(); if (reply) this.toast(reply, 'msg', 7000); this.refresh(); this.dock(); }; // Folge-Ereignis (z. B. Mahnung → Bankgespräch) gleich zeigen
       box.append(b);
     }
     this.openModal(body, 'narrow', 'event');
   }
   // Monatsabrechnung gebucht: kurze Meldung (im Zeitraffer nur die ersten, offene und Dispo-Abbuchungen), Details im Handy → Konto
   onBill(b) {
-    this.dock(); if (this.modalKind === 'phone' && this.phoneTab === 'konto') this.phone('konto');
+    this.dock(); this.mk?.onBill?.(); if (this.modalKind === 'phone' && this.phoneTab === 'konto') this.phone('konto');
     if (!b || b.st === 'open') return; // offen: chargeBill meldet sich selbst, die Mahnung kommt als Ereignis
     const s = this.g.s, first = (s.stats.bills || 0) <= 2;
     if (!first && (s.speed || 0) >= 5 && b.st !== 'dispo') return;
     const parts = (b.items || []).map((it) => `${FACILITY[it.fac]?.short || it.fac} ${fmtUSD(it.rent + it.elec)}`).join(', ');
-    this.toast(`<b>Monatsabrechnung ${esc(monthName(b.m))}:</b> ${b.total < 0 ? `+${fmtUSD(-b.total)} gutgeschrieben` : `${fmtUSD(b.total)} abgebucht`}${parts ? ` (${esc(parts)})` : ''}${b.st === 'dispo' ? ' – das Konto ist im Dispo' : ''}. Details: Handy → Konto.`, b.st === 'dispo' ? 'bad' : 'info', first ? 9000 : 5000);
+    this.toast(`<b>Monatsabrechnung ${esc(monthName(b.m))}:</b> ${b.total < 0 ? `+${fmtUSD(-b.total)} gutgeschrieben` : `${fmtUSD(b.total)} abgebucht`}${parts ? ` (${esc(parts)})` : ''}${b.st === 'dispo' ? ' – das Konto ist im Dispo' : ''}. Details: ${this.g.has('phone') ? 'Handy → Konto' : 'am PC unter „Bank“'}.`, b.st === 'dispo' ? 'bad' : 'info', first ? 9000 : 5000);
   }
   // Anlernen: nach Papas Nachricht schreibt Deniz – nach ein paar Schritten oder spätestens 40 Sekunden (liest man das Handy nicht: nach 90 Sekunden)
   ideaTick() {
@@ -1225,7 +1275,7 @@ export class UI {
     if (L?.left > 0) rows.push(['Papas Umzugsdarlehen', `${fmtUSD(L.left)} · ohne Zinsen`]);
     const sec = h(`<div class="sec costs"><h4>Monatskosten</h4><div class="kv">${rows.map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join('')}</div><div class="row"></div></div>`), r = sec.querySelector('.row');
     if (o && g.billCoinOk()) { const b = h('<button class="btn small primary">Coins verkaufen und bezahlen</button>'); b.onclick = () => { if (g.payBills(true)) this.audio?.cash?.(); this.reCompany(); }; r.append(b); }
-    const b = h('<button class="btn small">Abrechnungen im Handy</button>'); b.onclick = () => { this.closeModal(); this.phone('konto'); }; r.append(b);
+    if (g.has('phone')) { const b = h('<button class="btn small">Abrechnungen im Handy</button>'); b.onclick = () => { this.closeModal(); this.phone('konto'); }; r.append(b); } else r.append(h('<span class="ct-hint">Alle Abrechnungen: am PC unter „Bank“</span>'));
     return sec;
   }
   rentLabel(f, un) {
@@ -1618,7 +1668,7 @@ export class UI {
   levelUp(kind, v) { if (kind === 'sk') skillCard(this, v); else pointCard(this, v); }
   skills(sel) { if (!this.g.has('skills') && this.g.s.flags?.tutor) { this.toast('Noch nicht freigeschaltet.', 'info', 1800); return; } skillsMenu(this, sel); }
   // Esc zuerst für das, was gerade offen ist: Mini-Spiel, Installer, Details im Baum (main.js) – true = erledigt
-  escLocal() { if (this.mg) { this.mg.cancel(); return true; } if (this.osWiz) return osAbort(this); return skCloseDetail(this); }
+  escLocal() { if (this.mg) { this.mg.cancel(); return true; } if (this.osWiz) return osAbort(this); if (this.modalKind === 'phone' && this.phoneTab === 'msgs' && this.phoneChat?.back()) return true; return skCloseDetail(this); }
   milestone(title, sub, kicker = 'Meilenstein') {
     if (performance.now() < (this.msBusy || 0)) { (this.msQ ||= []).push([title, sub, kicker]); this.msPump(); return; } // nacheinander statt übereinander
     this.msBusy = performance.now() + 3200;
@@ -1706,7 +1756,7 @@ export class UI {
   // Gesperrt: wer liefert fertig montiert, und wie lernt man ihn kennen? (abgelehnt: gleich anrufen)
   lockText(cid) {
     const g = this.g, c = CONTACT[cid], st = g.contactState(cid);
-    if (st?.met) return { short: `Fertig bestückt liefert dir ${esc(c.name)}, sobald du ihn anrufst.`, long: `${c.name} (${c.biz}): ${c.offer}. Auch im Handy (H) unter Kontakte.`, call: true };
+    if (st?.met) return { short: `Fertig bestückt liefert dir ${esc(c.name)}, sobald du ihn anrufst.`, long: `${c.name} (${c.biz}): ${c.offer}.${g.has('phone') ? ' Auch im Handy (H) unter Kontakte.' : ''}`, call: true };
     return { short: esc(c.soon), long: c.meet(g.s, g, fmtDate), call: false };
   }
   lockLine(cid) {

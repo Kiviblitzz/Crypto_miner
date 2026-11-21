@@ -22,7 +22,18 @@
 .mkb-x:hover { color: var(--mk-text) !important; background: rgba(255, 255, 255, .1) !important; }
 .mkb-body { position: relative; flex: 1 1 auto; min-height: 0; }
 .mkb-pane { position: absolute; inset: 0; overflow: auto; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .18) transparent; }
-.mkb[data-tab="shop"] .mkb-mk, .mkb[data-tab="market"] .mkb-shop { display: none; }
+.mkb-pane { display: none; }
+.mkb[data-tab="shop"] .mkb-shop, .mkb[data-tab="market"] .mkb-mk, .mkb[data-tab="msgs"] .mkb-msgs, .mkb[data-tab="bank"] .mkb-bank { display: block; }
+.mkb[data-tab="msgs"] .mkb-msgs { overflow: hidden; } /* der Verlauf scrollt selbst (chat.css) */
+.mkb-n { font-style: normal; min-width: 1.45em; height: 1.45em; padding: 0 .38em; box-sizing: border-box; border-radius: 999px; display: grid; place-items: center; background: #4cc47a; color: #08210f; font: 800 .72em var(--font); }
+.mkb-n.warn { background: var(--mk-gold); color: #2a1a00; }
+.mkb-msgs .chat-list { max-width: 46em; margin: 0 auto; overflow-y: auto; max-height: 100%; }
+.mkb-msgs .chat-thread { max-width: 52em; margin: 0 auto; }
+.mkb-bankin { max-width: 680px; margin: 0 auto; padding: 18px 22px 26px; }
+.mkb-bankin h2 { font: 700 20px var(--font-fun); margin: 4px 2px 12px; }
+.mkb-bank .phone { background: none !important; box-shadow: none !important; border-radius: 0; padding: 0; max-width: none; }
+#build .item.mk-phone .thumb { display: grid; place-items: center; }
+#build .item.mk-phone .thumb svg { width: 72px; height: 72px; }
 .mkp-in { min-height: 100%; box-sizing: border-box; padding: 1.3em 1.7em 1.4em; }
 .mkp-in .mkp-chart { flex: 1 1 auto; min-height: 12em; }
 
