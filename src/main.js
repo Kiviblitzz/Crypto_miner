@@ -15,7 +15,7 @@ world.loadFacility('kinder');
 const ui = new UI(game, world);
 const audio = new Audio(); ui.audio = audio;
 window.addEventListener('pointerdown', () => audio.init(), { once: true });
-world.player.onStep = (run) => audio.step(run);
+world.player.onStep = (run) => { audio.step(run); ui.steps = (ui.steps || 0) + 1; }; // Schritte zählen: Deniz schreibt, sobald man sich in der Bude umgesehen hat (ui.ideaTick)
 window.__hw = { game, world, ui }; // Debug/Tests
 document.body.dataset.mode = 'title';
 if (world.touchMode) initTouch(world, ui);

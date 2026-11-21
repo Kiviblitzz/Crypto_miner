@@ -97,14 +97,14 @@ export function buildRoom(def) {
       const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; const ps = poster(S.left, t, 0.5, 0.71, 1.5, 1.6, 0.085); ps.rotation.z = 0.035;
       const tape = mat('tapeClear', { color: 0xf2ecd6, roughness: 0.3, transparent: true, opacity: 0.7 });
       for (const [tx, ty, tr] of [[1.27, 1.95, 0.7], [1.73, 1.93, -0.6], [1.29, 1.25, -0.7]]) { const p = new THREE.Mesh(new THREE.PlaneGeometry(0.09, 0.025), tape); p.position.set(tx, ty, 0.087); p.rotation.z = tr; S.left.add(p); } }
-    // Pinnwand mit Zetteln und Polaroid
+    // Pinnwand mit Zetteln und Polaroid (frisch eingezogen, noch ohne Plan: Bitcoin kommt erst mit Deniz)
     { const c = document.createElement('canvas'); c.width = 600; c.height = 400; const g2 = c.getContext('2d');
       g2.fillStyle = '#b98a5a'; g2.fillRect(0, 0, 600, 400); for (let k = 0; k < 2600; k++) { g2.fillStyle = Math.random() < 0.5 ? 'rgba(90,55,25,.25)' : 'rgba(230,190,140,.22)'; g2.fillRect(Math.random() * 600, Math.random() * 400, 2, 2); }
       g2.strokeStyle = '#8a6440'; g2.lineWidth = 16; g2.strokeRect(8, 8, 584, 384);
       const note = (x, y, w, h, rot, col, txt, sz = 26) => { g2.save(); g2.translate(x, y); g2.rotate(rot); g2.fillStyle = 'rgba(0,0,0,.18)'; g2.fillRect(4, 5, w, h); g2.fillStyle = col; g2.fillRect(0, 0, w, h); g2.fillStyle = '#3a3226'; g2.font = `600 ${sz}px Fredoka, Arial`; txt.split('|').forEach((l, i) => g2.fillText(l, 12, 38 + i * (sz + 6))); g2.fillStyle = '#d94b4b'; g2.beginPath(); g2.arc(w / 2, 8, 7, 0, 7); g2.fill(); g2.restore(); };
-      note(40, 40, 150, 120, -0.06, '#fff2a8', 'BTC|0,06 $ ?!', 30); note(220, 30, 140, 110, 0.05, '#bfe3c4', 'Heizung|tropft!'); note(400, 60, 150, 120, -0.03, '#f7c6c0', 'Deniz|anrufen!'); note(70, 220, 140, 110, 0.07, '#c9dcf5', 'Grafik-|karte?');
+      note(40, 40, 150, 120, -0.06, '#fff2a8', 'Miete|am 1.!', 30); note(220, 30, 140, 110, 0.05, '#bfe3c4', 'Heizung|tropft!'); note(400, 60, 150, 120, -0.03, '#f7c6c0', 'Deniz|anrufen!'); note(70, 220, 140, 110, 0.07, '#c9dcf5', 'Job|suchen?');
       g2.save(); g2.translate(270, 190); g2.rotate(-0.05); g2.fillStyle = 'rgba(0,0,0,.2)'; g2.fillRect(5, 6, 150, 170); g2.fillStyle = '#f7f4ee'; g2.fillRect(0, 0, 150, 170); const sky = g2.createLinearGradient(0, 12, 0, 120); sky.addColorStop(0, '#7fb2e5'); sky.addColorStop(1, '#f6d8a8'); g2.fillStyle = sky; g2.fillRect(12, 12, 126, 110); g2.fillStyle = '#3d6f8f'; g2.fillRect(12, 92, 126, 30); g2.fillStyle = '#2a2a2a'; for (const px of [50, 72, 96]) { g2.beginPath(); g2.arc(px, 82, 7, 0, 7); g2.fill(); g2.fillRect(px - 5, 86, 10, 22); } g2.fillStyle = '#d94b4b'; g2.beginPath(); g2.arc(75, 6, 7, 0, 7); g2.fill(); g2.restore();
-      note(450, 230, 120, 110, 0.04, '#fff2a8', 'GPU|sparen', 24);
+      note(450, 230, 120, 110, 0.04, '#fff2a8', 'Wäsche|zu Mama', 24);
       const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; poster(S.back, t, 0.9, 0.6, 2.75, 1.85, 0.085); }
     // Wasserfleck an Decke und Wand (vorne links), abblätternde Tapete darüber
     { const stain = new THREE.MeshStandardMaterial({ map: stainTex(), transparent: true, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2 });

@@ -1,5 +1,6 @@
 // Erfolge: check(s, h, g) wird täglich geprüft; ohne check nur über Ereignisse/Bonusziele (fx.ach) vergeben.
 // hidden: true – bis zur Freischaltung im Logbuch nur als „???“ sichtbar.
+// legacy: true – nicht mehr erreichbar (entfallene Story), erscheint nur, wenn ein alter Spielstand ihn schon hat.
 // Unbekannte IDs (fx.ach aus anderen Inhalten) landen in s.ach, zeigen aber kein Popup und keine Kachel.
 // Statistiken dafür sammelt Game.progressDay (s.stats: y, trips, tmax, halv, asicDay, wonDay, neg1, btc2010).
 import { toDay } from './history.js';
@@ -21,7 +22,8 @@ export const ACHIEVEMENTS = [
   { id: 'sauna', name: 'Sauna-Club', desc: 'Ein Standort wurde heißer als 40 °C.', hidden: true, check: (s) => (s.stats.tmax || 0) > 40 },
   { id: 'pizza', name: 'Pizza-Tag', desc: 'Eine Pizza mit Bitcoin bezahlt.' },
   { id: 'pizzarich', name: 'Teuerste Pizza', desc: 'Deine Pizza-Bitcoin sind über 100.000 $ wert.', hidden: true, check: (s, h, g) => (s.stats.pizzaBTC || 0) * g.price('BTC') >= 1e5 },
-  { id: 'deadline', name: 'Zwei Jahre zu früh', desc: 'Papas Laden schon 2011 gerettet.' },
+  { id: 'deadline', name: 'Zwei Jahre zu früh', desc: 'Papas Laden schon 2011 gerettet.', legacy: true }, // nur alte Spielstände (Bankfrist entfallen) – ohne Freischaltung nicht im Logbuch
+  { id: 'payback', name: 'Ehrensache', desc: 'Papas Umzugsdarlehen auf den Cent zurückgezahlt.', check: (s) => !!s.papaLoan?.done },
   { id: 'diamond', name: 'Diamantpfoten', desc: 'Im Juni 2011 nicht verkauft – und Ende 2013 noch 50 BTC gehabt.', check: (s) => !!s.flags.hodl11 && (s.stats.y?.[2013]?.btc || 0) >= 50 },
   { id: 'early', name: 'Früher Vogel', desc: 'Einen ASIC-Miner vor dem 1. Juli 2013 gekauft.', check: (s) => !!s.stats.asicDay && s.stats.asicDay < toDay('2013-07-01') },
   { id: 'coolhead', name: 'Kalter Kopf', desc: 'Die GoxBank-Pleite ohne Verlust überstanden.', check: (s) => s.day >= toDay('2014-02-24') && s.day <= toDay('2014-04-30') && (s.stats.lostBtc?.gox || 0) < 1e-6 && s.wallet.BTC.cold > 0.01 },
