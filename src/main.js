@@ -117,7 +117,8 @@ function onKey(e) {
     return;
   }
   if (world.mode === 'ui' && k === 'e' && ui.inspUid && document.getElementById('modal').classList.contains('hidden') && performance.now() - (ui.openedAt || 0) > 200) { ui.resume(); return; }
-  if (world.mode === 'ui' && k === 'e' && ui.mk?.atMonitor && performance.now() - (ui.mk.openedAt || 0) > 300) { ui.resume(); return; } // E am Monitor: wieder aufstehen
+  if (world.mode === 'ui' && k === 'e' && ui.mk?.atMonitor && document.getElementById('modal').classList.contains('hidden') && performance.now() - (ui.mk.openedAt || 0) > 300) { ui.resume(); return; } // E am Monitor: wieder aufstehen
+  if ((k === 'b' || k === 'm') && !ui.stickyModal() && ui.mk?.key(k)) return; // Browser „Shop | Börse“ offen: B/M schalten den Reiter um (im Fenster: zweimal = zu)
   if (HOT[k] && (world.mode === 'play' || world.mode === 'ui' || ui.paused || world.mode === 'map')) {
     if (world.mode === 'map' && k !== 'k') return;
     if (k === 'b' && world.mode === 'ui' && document.body.classList.contains('show-build')) { ui.resume(); return; }
@@ -150,7 +151,7 @@ function loop(now) {
     world.camera.position.set(3.3, 1.6, 3.05);
     world.controls.target.set(2.35 + Math.sin(t) * 0.4, 1.0 + Math.sin(t * 0.7) * 0.1, 0.4 + Math.cos(t) * 0.25);
     s.frac = 0.83;
-  } else if (s.speed && document.getElementById('modal').classList.contains('hidden') && !ui.paused && !ui.mg && !ui.mk?.atMonitor && (s.flags.miningStarted || !s.feat)) { // Zeit steht, bis der erste PC läuft – und wie bei jedem Fenster, solange man an der Börse am Monitor sitzt
+  } else if (s.speed && document.getElementById('modal').classList.contains('hidden') && !ui.paused && !ui.mg && !ui.mk?.where && (s.flags.miningStarted || !s.feat)) { // Zeit steht, bis der erste PC läuft – und wie bei jedem Fenster, solange Shop/Börse offen sind (Fenster oder Monitor)
     const slow = ui.showRun && performance.now() < (ui.slowUntil || 0); s.frac += dt / (slow ? Math.max(60, SEC_PER_DAY[s.speed]) : SEC_PER_DAY[s.speed]); // Einschalt-Moment kurz in Zeitlupe
     let n = 0;
     while (s.frac >= 1 && n < 4) { s.frac -= 1; game.advanceDay(); n++; }

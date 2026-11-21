@@ -75,8 +75,7 @@ export class UI {
       const t = this.objTarget, g = this.g; if (!t) return;
       const lt = Object.keys(g.s.loose || {}).find((k) => t.label === PNAME[k]); if (lt) { world.onLoose(lt); return; }
       const pc = g.facObjects(g.s.current).find((o) => o.type === 'tower'); if (pc && t.label === 'Dein PC') { this.openInspector(pc.uid); return; }
-      const pr = world.room?.props?.find((p) => p.action === 'market'); if (pr && (t.label === 'Börse' || t.label === 'Bitcoin verkaufen')) { this.useProp(pr); return; }
-      if (t.label === 'Shop: Grafikkarte bestellen') { this.openShop?.(); return; }
+      const pr = world.room?.props?.find((p) => p.action === 'market'); if (pr && (t.label === 'Börse' || t.label === 'Bitcoin verkaufen' || t.label === 'Shop: Grafikkarte bestellen')) { this.useProp(pr); return; } // an den Monitor (Browser „Shop | Börse“)
       if (t.label === 'Paket abholen' && t.final) { const p = g.s.parcels?.[0]; if (p) world.pickParcel(p.id); return; }
       if (/ freischalten$/.test(t.label)) { if (world.hoff) { if (t.final) this.travel(t.door); } else if (world.room?.doors?.[0]) this.travel(world.room.doors[0]); }
     };
@@ -174,7 +173,7 @@ export class UI {
     if (this.g.s.day % 7 === 0) this.dock();
     if (this.g.s.day - this.lastBuildDay >= 7) this.build(true); else this.buildPrices();
     if (this.inspUid) this.inspectStats();
-    if (this.modalKind === 'market') this.market(true);
+    this.market(true); // Börse auffrischen, falls sie offen ist
     if (this.modalKind === 'ranking') this.ranking();
     if (this.modalKind === 'company') this.company();
   }
@@ -527,11 +526,8 @@ export class UI {
     if (this.w.facId === 'keller' && this.w.dusty) ks.unshift(['lamp', 'F', this.w.vm?.lampOn ? 'Lampe aus' : 'Taschenlampe']);
     el.innerHTML = ks.map(([, k, l]) => `<span><kbd>${k}</kbd>${l}</span>`).join('') + '<span><kbd>Esc</kbd>Menü</span>';
   }
-  toggleBuild() {
-    if (document.body.classList.contains('show-build')) { this.resume(); return; }
-    const s = this.g.s; if (s.flags.cpuStart && !s.goals.gpuorder) { this.cat = 'parts'; this.partTab = 'gpu'; } // erste Grafikkarte: gleich bei den Grafikkarten
-    this.resume(); document.body.classList.add('show-build'); this.build(true); this.openUI(); this.dock(); this.g.learned?.('build');
-  }
+  // Shop (B): Reiter im Browser „Shop | Börse“ (market.js) – als Fenster oder am PC-Monitor; der Katalog selbst bleibt build()
+  toggleBuild() { (this.mk ||= new Market(this)).openTab('shop'); }
   prompt(aim) {
     const el = $('#prompt');
     if (!aim || this.w.mode !== 'play') { el.classList.add('hidden'); return; }
@@ -562,7 +558,7 @@ export class UI {
   useProp(p) {
     if (p.action === 'talk') { this.talk(p.who); return; }
     if (p.action === 'shop') { if (this.g.has('build')) this.openShop(); else this.toast('Bau erst deinen PC zusammen.', 'info', 3000); return; }
-    if (p.action === 'market') { const mon = this.monitorUse(p); if (mon === 'shop') { this.openShop(); return; } if (!this.g.has('market')) { this.toast(this.g.s.flags.miningStarted ? 'Noch nichts zu verkaufen – lass den PC arbeiten.' : 'Bau erst deinen PC zusammen.', 'info', 3000); return; } (this.mk ||= new Market(this)).atPc(p, mon === 'both'); }
+    if (p.action === 'market') { const mon = this.monitorUse(p); if (!mon) { this.toast(this.g.s.flags.miningStarted ? 'Noch nichts zu verkaufen – lass den PC arbeiten.' : 'Bau erst deinen PC zusammen.', 'info', 3000); return; } (this.mk ||= new Market(this)).atPc(p, mon); } // Browser „Shop | Börse“ auf dem Bildschirm
     else if (p.action === 'company') this.company();
     else if (p.action === 'techs') this.skills(); // Opas Werkbank: der Fähigkeiten-Baum
     else if (p.action === 'ranking') this.ranking();
