@@ -1051,7 +1051,7 @@ export const EVENTS = [
 export const EVENT = Object.fromEntries(EVENTS.map((e) => [e.id, e]));
 
 // ---------- Rechnungen einzelner Ereignisse ----------
-function opaFac(s) { for (const id of ['werkstatt', 'keller', 'kinder']) if (has(s, id) && FACILITY[id].power[s.fac[id].power + 1]) return id; return null; }
+function opaFac(s) { for (const id of ['werkstatt', 'keller', 'kinder']) if (has(s, id) && !(id === 'kinder' && s.home?.out) && FACILITY[id].power[s.fac[id].power + 1]) return id; return null; } // gekündigte Wohnung: kein Stromausbau mehr
 function opaCost(s) { const id = opaFac(s); return id ? Math.round(FACILITY[id].power[s.fac[id].power + 1].cost * 0.6) : 0; }
 function svFee(g) { return nice(Math.max(300, elecDay(g, LINDENTAL) * 25)); }
 function fpFee(g) { return nice(Math.max(500, elecDay(g, [...LINDENTAL, 'rz']) * 20)); }

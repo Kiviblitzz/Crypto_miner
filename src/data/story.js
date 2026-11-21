@@ -158,6 +158,12 @@ export const TALK = [
   { who: 'papa', cond: (s) => month(s) === 12, lines: [L('Zu Weihnachten gibt es im Laden wieder Lichterketten zum halben Preis. Für dich gratis. Für deine Hallen … reden wir noch.', 'Früher gab es zu Weihnachten im Laden Lichterketten zum halben Preis. Jetzt hängen sie an deinen Racks. Gratis.')] },
   { who: 'papa', cond: halving, lines: ['Halbierung? Wenn mir einer den Stundenlohn halbiert, streike ich. Deine Rechner nicht. Tapfer, die Dinger.'] },
   { who: 'papa', cond: (s) => !!s.keep?.loetkolben, lines: ['Mein erster Lötkolben liegt jetzt bei dir. Pass gut auf ihn auf, der hat mehr Fernseher gerettet als jeder Kundendienst.'] },
+  // Papas Miner (Neben-Quest, src/sim/papa.js) und der Umzug ins Zimmer über dem Laden
+  { who: 'papa', cond: (s) => s.papa?.st === 'psu', lines: ['Hörst du das Piepen? Das ist meiner. Guck mal rein, ich trau mich nicht.'] },
+  { who: 'papa', cond: (s) => s.papa?.st === 'heat', lines: ['Fass den lieber nicht an. Der ist heiß wie ein Bügeleisen.'] },
+  { who: 'papa', cond: (s) => ['wait1', 'wait2', 'wait3'].includes(s.papa?.st), lines: ['Gestern hab ich den Kurs angeguckt. Zwölfmal. Mama sagt, ich bin jetzt wie du.'] },
+  { who: 'papa', cond: (s) => s.papa?.st === 'done', lines: ['Wenn Kunden fragen, was da brummt, sag ich: Der Kleine ist meiner. Der Rest gehört meinem Kind.'] },
+  { who: 'papa', cond: (s) => !!s.home?.out, lines: ['Und, schläfst du gut auf dem Feldbett? Opa hat 1974 drauf geschworen.'] },
 
   // ===================== Deniz (Werkstatt und Hallen) =====================
   { who: 'deniz', ch: [2], lines: [

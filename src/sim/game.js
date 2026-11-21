@@ -13,7 +13,9 @@ import { FUTURE, futureModel, ENDLESS_GOALS, EGOAL, ENDLESS_NEWS } from '../data
 import { BTC_HASH, POWER_HOUSEHOLD, GPU_BOOM, MONOLITH_SHARE, DAG_AET, DAG_AEC, seasonOffset, noise, toDay, BTC_PRICE, curve, HALVINGS, BTC_REWARD } from '../data/history.js';
 import { SKILL_METHODS, migrateSkills, skEmpty } from './skills.js'; // Fähigkeiten 2.0: Handgriffe statt Prozent-Boni
 import { XP_POT, BIOSMOD } from '../data/skills.js';
-for (const e of [...BANK_EVENTS, ...BILL_EVENTS]) if (!EVENT[e.id]) { EVENTS.push(e); EVENT[e.id] = e; } // Bankgespräch (Game.dispoDay), Mahnung (Game.billsDay)
+import { HOME_EVENTS } from '../data/papa.js';
+import { PAPA_METHODS } from './papa.js'; // Papas Miner (Neben-Quest) und Umzug ins Zimmer über dem Laden
+for (const e of [...BANK_EVENTS, ...BILL_EVENTS, ...HOME_EVENTS]) if (!EVENT[e.id]) { EVENTS.push(e); EVENT[e.id] = e; } // Bankgespräch (Game.dispoDay), Mahnung (Game.billsDay), Umzug (Game.papaDay)
 
 const STARTER_GPU = 'rhd5770'; // erste Karte im Shop: ~108 W, passt zu Papas altem 400-W-Netzteil
 const LAST_DATA_DAY = BTC_PRICE.lastDay;
@@ -131,6 +133,7 @@ export class Game {
       const oldFull = !s.full; s.full ||= {};
       s.bag ||= {}; for (const id of Object.keys(s.bag)) if (!PART[id] || !(s.bag[id] > 0)) delete s.bag[id]; if (s.lastBuild && !PLACEABLE[s.lastBuild.type]) s.lastBuild = null;
       this.migrateParcels(s); // Bestellungen, Pakete, Bestand „zum Aufstellen“ (alte Stände: leer, Paket-Modus aus)
+      this.papaMigrate(s); // Papas Miner, Umzug (alte Stände: Quest und Angebot kommen ganz normal)
       migrateSkills(s); // Fähigkeiten 2.0: alte EP → Punkte, Techniken → Fähigkeiten/Ausbauten, Geräte mit Betriebssystem (src/sim/skills.js)
       s.since ||= {}; const oldContacts = !s.contacts || typeof s.contacts !== 'object'; if (oldContacts) s.contacts = {};
       for (const id of Object.keys(s.contacts)) { const c = s.contacts[id]; if (!CONTACT[id] || !c || typeof c !== 'object') delete s.contacts[id]; else { c.met = +c.met || 0; c.on = +c.on || 0; c.n = Math.max(0, +c.n || 0); } }
@@ -397,6 +400,7 @@ export class Game {
     const from = o && this.facOf(o.uid), def = o && PLACEABLE[o.type], F = FACILITY[to]; if (!from || !F) return 'Geht nicht';
     if (from === to) return 'Steht schon hier';
     if (!this.s.unlocked.includes(to)) return `${F.short} ist noch nicht frei`;
+    if (this.siteGone(to)) return 'Da wohnst du nicht mehr';
     if (this.isFirstPc(o)) return 'Dein erster PC bleibt in der Wohnung';
     if (!this.placeableAllowed(def, to)) return `Passt nicht in ${F.short}`;
     if (!this.slotOk(to, def)) return `${F.short}: alle ${this.slotsMax(to)} Plätze belegt`;
@@ -425,21 +429,24 @@ export class Game {
   }
   moveAll(to, list = this.moveCandidates(to)) { let n = 0, fee = 0; for (const c of list) { const r = this.moveObject(c.o.uid, to); if (r) { n++; fee += r.fee; } } return { n, fee }; }
   // Freier Fleck auf dem Raster (Raum-Hindernisse über layoutOf, das die Welt setzt; ohne Welt nur Wände und Geräte)
-  freeSpot(facId, def) {
+  freeSpot(facId, def, near = null) { // near [x, z]: der freie Fleck, der dem Punkt am nächsten liegt (sonst der erste im Raster)
     const F = FACILITY[facId], L = this.layoutOf?.(facId), g = F.grid || 0.5, e = 0.001, objs = this.s.fac[facId]?.objects || [];
     const hit = (a, r) => a.x0 < r.x1 - e && a.x1 > r.x0 + e && a.z0 < r.z1 - e && a.z1 > r.z0 + e;
     const rects = objs.map((o) => { const d = PLACEABLE[o.type], [w, h] = o.rot % 2 ? [d.size[1], d.size[0]] : d.size; return { x0: o.x - w / 2, x1: o.x + w / 2, z0: o.z - h / 2, z1: o.z + h / 2 }; });
     const keep = L ? [...(L.doors || []).map((dd) => ({ x0: dd.c[0] - dd.s[0] / 2 - 0.6, x1: dd.c[0] + dd.s[0] / 2 + 0.6, z0: dd.c[2] - dd.s[2] / 2 - 0.6, z1: dd.c[2] + dd.s[2] / 2 + 0.6 })), ...(L.spawn ? [{ x0: L.spawn.x - 0.6, x1: L.spawn.x + 0.6, z0: L.spawn.z - 0.6, z1: L.spawn.z + 0.6 }] : [])] : [];
+    keep.push(...this.homeRects(facId), ...this.crateRects(facId)); // Papas Ecke (Feldbett, Schreibtisch) und Umzugskisten in der Werkstatt
+    let best = null;
     for (const rot of [0, 1]) {
       const [w, d] = rot ? [def.size[1], def.size[0]] : def.size; if (rot && w === d) continue;
       for (let z = d / 2; z <= F.d - d / 2 + 1e-9; z += g) for (let x = w / 2; x <= F.w - w / 2 + 1e-9; x += g) {
         const r = { x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2 };
         if (L && L.blocked.some((b) => hit(b, r))) continue;
         if (keep.some((b) => hit(b, r)) || rects.some((b) => hit(b, r))) continue;
-        return { x, z, rot };
+        if (!near) return { x, z, rot };
+        const dd = Math.hypot(x - near[0], z - near[1]); if (!best || dd < best.dd) best = { x, z, rot, dd };
       }
     }
-    return null;
+    return best ? { x: best.x, z: best.z, rot: best.rot } : null;
   }
   objectValue(o) {
     const def = PLACEABLE[o.type];
@@ -577,7 +584,7 @@ export class Game {
   slotLive(o) { const d = PLACEABLE[o.type]; return d.kind === 'device' || (d.kind === 'rig' && this.pcReady(o)) || (d.kind === 'holder' && (o.items?.length || 0) > 0); }
   slotsLive(facId) { let n = 0; for (const o of this.s.fac[facId]?.objects || []) if (this.slotKind(PLACEABLE[o.type]) && this.slotLive(o)) n++; return n; }
   slotsMax(facId) { return FACILITY[facId]?.slots ?? Infinity; }
-  slotOk(facId, def) { return !this.slotKind(def) || this.slotsUsed(facId) < this.slotsMax(facId); } // Grenze: jedes aufgestellte Gerät belegt einen Platz
+  slotOk(facId, def) { if (this.siteGone(facId)) return false; return !this.slotKind(def) || this.slotsUsed(facId) < this.slotsMax(facId); } // Grenze: jedes aufgestellte Gerät belegt einen Platz; in der gekündigten Wohnung gar nichts mehr
   // Belegung eines Standorts: Plätze, Strom am aktuellen Anschluss; voll = alle Plätze mit lauffähigen Geräten belegt oder letzter Ausbau zu 95 % ausgelastet
   facCap(facId) {
     const fd = FACILITY[facId], f = this.s.fac[facId], sm = this.summary?.[facId];
@@ -595,7 +602,7 @@ export class Game {
   checkFull(silent = false) {
     const s = this.s; if (!s.full || !s.flags?.miningStarted) return;
     for (const id of s.unlocked) {
-      if (s.full[id] || !this.summary?.[id]) continue;
+      if (s.full[id] || !this.summary?.[id] || this.siteGone(id)) continue;
       const c = this.facCap(id); if (!c.full) continue;
       s.full[id] = s.day || 1; if (silent) continue;
       const t = FULL_TALK[id]; if (t) { const m = { id: 'full:' + id, day: s.day, from: t.from, text: t.text, read: false }; s.messages.push(m); }
@@ -890,7 +897,7 @@ export class Game {
   // Freie Stellplätze für Bestellungen: an allen Standorten, wo das Gerät stehen darf – minus alles, was schon bestellt oder ausgepackt ist
   orderRoom(def) {
     if (!this.slotKind(def)) return Infinity; let free = 0;
-    for (const id of this.s.unlocked) if (this.placeableAllowed(def, id)) free += Math.max(0, this.slotsMax(id) - this.slotsUsed(id));
+    for (const id of this.liveSites()) if (this.placeableAllowed(def, id)) free += Math.max(0, this.slotsMax(id) - this.slotsUsed(id));
     return free - this.pendingSlots();
   }
   orderRoomOk(def) { return this.orderRoom(def) >= 1; }
@@ -1033,20 +1040,25 @@ export class Game {
     this.emit('parcels'); this.emit('bag'); this.emit('unpacked'); return res;
   }
   stockAdd(e) { const s = this.s; (s.unpacked ||= []).push({ ...e, sid: 'u' + (s.nextParcel = (s.nextParcel || 0) + 1) }); }
-  stockName(e) { const d = PLACEABLE[e.type]; if (!d) return 'Gerät'; if (d.kind === 'rig') return `${d.id === 'tower' ? (e.ready ? 'Mining-PC' : e.kit ? 'PC-Bausatz' : 'PC-Gehäuse') : d.name}${e.ready && d.id !== 'tower' ? ' (fertig bestückt)' : e.kit && d.id !== 'tower' ? ' (Bausatz)' : ''}`; return d.name; }
-  stockKey(e) { return JSON.stringify([e.type, e.parts || null, e.kit || null, (e.items || []).map((i) => i.id), !!e.ready, e.coin || 'auto']); }
+  stockName(e) { const d = PLACEABLE[e.type]; if (!d) return 'Gerät'; if (e.moved && d.kind === 'rig') return d.id === 'tower' ? 'Mining-PC' : d.name; if (d.kind === 'rig') return `${d.id === 'tower' ? (e.ready ? 'Mining-PC' : e.kit ? 'PC-Bausatz' : 'PC-Gehäuse') : d.name}${e.ready && d.id !== 'tower' ? ' (fertig bestückt)' : e.kit && d.id !== 'tower' ? ' (Bausatz)' : ''}`; return d.name; }
+  stockKey(e) { return JSON.stringify([e.type, e.parts || null, e.kit || null, (e.items || []).map((i) => i.id), !!e.ready, e.coin || 'auto', e.moved ? 1 : 0]); } // Umzugskisten (moved) nie mit Gekauftem zusammenfassen
   // Bestand „zum Aufstellen“, gleiche Dinge zusammengefasst: [{ key, e, n }]
   stockGroups() { const m = new Map(); for (const e of this.s.unpacked || []) { const k = this.stockKey(e), g = m.get(k); if (g) g.n++; else m.set(k, { key: k, e, n: 1 }); } return [...m.values()]; }
   stockFind(key) { return (this.s.unpacked || []).find((e) => e.sid === key || this.stockKey(e) === key) || null; }
   // Aufstellen aus dem Bestand: kostet nichts, Stellplätze und Standort-Regeln gelten wie beim Kaufen
   placeStock(key, facId, x, z, rot) {
     const s = this.s, e = this.stockFind(key), def = e && PLACEABLE[e.type]; if (!def || !s.fac[facId] || !this.placeableAllowed(def, facId) || !this.slotOk(facId, def)) return null;
-    const o = { uid: s.nextUid++, type: e.type, x, z, rot, coin: e.coin || 'auto', broken: false, bought: s.day };
-    if (def.kind === 'rig') o.parts = e.parts ? JSON.parse(JSON.stringify(e.parts)) : Game.emptyParts();
-    if (def.kind === 'rig' && e.kit) o.kit = JSON.parse(JSON.stringify(e.kit));
-    if (def.kind === 'holder') o.items = (e.items || []).map((i) => ({ id: i.id, b: 0 }));
-    if (e.mods) o.mods = { ...e.mods }; // Robi mit Greifarm/Lötkopf
-    this.rigNew(o, !!e.ready, facId);
+    let o;
+    if (e.moved) o = { ...JSON.parse(JSON.stringify(e.moved)), uid: s.nextUid++, type: e.type, x, z, rot }; // Umzugskiste: das Gerät, wie es in der Wohnung stand (Teile, System, Profile, Schäden)
+    else {
+      o = { uid: s.nextUid++, type: e.type, x, z, rot, coin: e.coin || 'auto', broken: false, bought: s.day };
+      if (def.kind === 'rig') o.parts = e.parts ? JSON.parse(JSON.stringify(e.parts)) : Game.emptyParts();
+      if (def.kind === 'rig' && e.kit) o.kit = JSON.parse(JSON.stringify(e.kit));
+      if (def.kind === 'holder') o.items = (e.items || []).map((i) => ({ id: i.id, b: 0 }));
+      if (e.mods) o.mods = { ...e.mods }; // Robi mit Greifarm/Lötkopf
+      this.rigNew(o, !!e.ready, facId);
+    }
+    if (def.kind === 'rig') o.parts ||= Game.emptyParts(); if (def.kind === 'holder') o.items ||= [];
     s.unpacked = s.unpacked.filter((x) => x !== e); s.fac[facId].objects.push(o);
     if (def.kind === 'device' && def.look !== 'fpga' && def.look !== 'usb') s.flags.boughtAsic = true;
     this.addXp('hw', 10);
@@ -1058,7 +1070,7 @@ export class Game {
     for (const it of this.pendingItems()) {
       if (it.k === 'part' && PART[it.id]) v += this.partResale(it.id) * it.n;
       else if (it.k === 'dev' && PLACEABLE[it.id]) v += this.itemPrice(PLACEABLE[it.id]) * 0.5 * it.n;
-      else if (it.k === 'place' && PLACEABLE[it.type]) v += this.objectValue({ type: it.type, parts: PLACEABLE[it.type].kind === 'rig' ? it.parts || Game.emptyParts() : undefined, items: it.items, broken: false });
+      else if (it.k === 'place' && PLACEABLE[it.type]) v += this.objectValue(it.moved ? { ...it.moved, type: it.type } : { type: it.type, parts: PLACEABLE[it.type].kind === 'rig' ? it.parts || Game.emptyParts() : undefined, items: it.items, broken: false }); // Umzugskiste: Wert wie aufgestellt (auch defekt)
     }
     return v;
   }
@@ -1071,7 +1083,12 @@ export class Game {
       if (it.k === 'dev') return PLACEABLE[it.id] && it.n > 0 ? { k: 'dev', id: it.id, n: Math.round(it.n), holder: it.holder } : null;
       if (it.k === 'book') return null; // Bücher gibt es nicht mehr (Paket 18: nur Punkte)
       if (it.k === 'phone') return { k: 'phone' };
-      if (it.k === 'place' || !it.k) { const d = PLACEABLE[it.type]; if (!d) return null; const e = { ...it, k: 'place' }; if (d.kind === 'rig') { e.parts = okParts(e.parts) || Game.emptyParts(); if (e.kit) e.kit = okParts(e.kit); } else { delete e.parts; delete e.kit; } if (d.kind === 'holder') e.items = (e.items || []).filter((i) => i && PLACEABLE[i.id]); else delete e.items; return e; }
+      if (it.k === 'place' || !it.k) {
+        const d = PLACEABLE[it.type]; if (!d) return null; const e = { ...it, k: 'place' }; if (d.kind === 'rig') { e.parts = okParts(e.parts) || Game.emptyParts(); if (e.kit) e.kit = okParts(e.kit); } else { delete e.parts; delete e.kit; } if (d.kind === 'holder') e.items = (e.items || []).filter((i) => i && PLACEABLE[i.id]); else delete e.items;
+        if (e.moved && typeof e.moved === 'object') { const m = (e.moved = { ...e.moved, type: it.type }); if (d.kind === 'rig') { m.parts = okParts(m.parts) || Game.emptyParts(); if (m.kit) m.kit = okParts(m.kit); } if (d.kind === 'holder') m.items = (m.items || []).filter((i) => i && PLACEABLE[i.id]); if (m.coin !== 'auto' && !COIN[m.coin]) m.coin = 'auto'; } else delete e.moved; // Umzugskiste: Inhalt prüfen wie ein aufgestelltes Gerät
+        if (e.pos && !(Array.isArray(e.pos) && e.pos.every(Number.isFinite))) delete e.pos;
+        return e;
+      }
       return null;
     };
     const list = (a) => (Array.isArray(a) ? a.map(okItem).filter(Boolean) : []);
@@ -1386,6 +1403,7 @@ export class Game {
     }
     // Story
     this.checkMessages(); this.checkGoals(true); this.checkEvents();
+    this.papaDay(day); // Papas Miner, Umzugsangebot (src/sim/papa.js)
     this.endlessDay();
     if (day % 7 === 0) this.checkAchievements();
     if (day % 30 === 0) s.mods = s.mods.filter((m) => m.until > day);
@@ -1783,6 +1801,7 @@ export class Game {
     if (key === 'powerCost') return s.staff?.list && this.staffFx().elec ? 0.8 : 1;
     if (key === 'elec') return this.diff('elec') * (facId && s.fac?.[facId]?.up ? this.upFx(facId, 'elec') : 1) * this.peakFx('elec', facId); // Schwierigkeit, Ausbauten, Lastmanagement
     if (key === 'hash' && facId) return (s.fac?.[facId]?.up ? this.upFx(facId, 'hash') : 1) * this.peakFx('hash', facId);
+    if (key === 'rent' && facId === 'kinder' && s.home?.rentEnd && this.homeRentOff()) return 0; // Wohnung gekündigt: ab dem nächsten Monat keine Miete mehr
     if (!facId || !s.fac?.[facId]?.up) return 1;
     let m = this.upFx(facId, key);
     if (key === 'rent' && (facId === 'kinder' || facId === 'keller') && s.flags?.freeFlat) return 0; // alte Spielstände: Wohnung und Keller bleiben mietfrei wie bisher
@@ -2196,6 +2215,7 @@ export class Game {
 }
 
 Object.assign(Game.prototype, SKILL_METHODS); // Fähigkeiten 2.0 (src/sim/skills.js)
+Object.assign(Game.prototype, PAPA_METHODS); // Papas Miner und Umzug (src/sim/papa.js)
 
 // ---------- Formatierung ----------
 const nf = (d) => new Intl.NumberFormat('de-DE', { maximumFractionDigits: d, minimumFractionDigits: d });
