@@ -2039,8 +2039,8 @@ export class Game {
   }
   billAutoPay() { const o = this.s.bills?.open; if (!o || !this.billPayable(o.amt + o.fee)) return false; this.payOpen(); return true; }
   billCoinOk() { return !!this.s.bills?.open && Math.max(0, this.s.cash) + this.coinFunds() >= this.owed() - 1e-6; }
-  // Offenes bezahlen (coins: was fehlt, aus Coins verkaufen – erst Börse, dann Cold-Wallet)
-  payBills(coins = false) { if (!this.s.bills?.open) return false; const amt = this.owed(); if (coins && !this.billPayable(amt)) this.raiseCash(amt); if (!this.billPayable(amt)) return false; this.payOpen(); return true; }
+  // Offenes bezahlen (coins: was fehlt, aus Coins verkaufen – erst Börse, dann Cold-Wallet; mit einem Dollar Luft, damit nicht 0,01 $ übrig bleiben)
+  payBills(coins = false) { if (!this.s.bills?.open) return false; const amt = this.owed(); if (coins && !this.billPayable(amt)) this.raiseCash(Math.ceil(amt) + 1); if (!this.billPayable(amt)) return false; this.payOpen(); return true; }
   payOpen() {
     const s = this.s, o = s.bills.open, amt = o.amt + o.fee; s.cash -= amt; s.bills.open = null; s.bills.lastWho = o.who?.[0] || '';
     for (const b of s.bills.hist) if (b.st === 'open') { b.st = 'paid'; b.paidDay = s.day || 1; }
