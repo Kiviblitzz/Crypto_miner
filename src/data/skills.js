@@ -3,7 +3,7 @@
 //
 // SKILL_CATS: Äste im Baum (Farbe und Richtung in src/ui/skills.js).
 // Ein gemeinsamer Punktetopf (Paket 18): Erfahrung kommt nur durchs Selbermachen (Bauen, Reparieren, Verkaufen …), POTS sagt nur, woher sie kam.
-//   Der n-te Fähigkeitspunkt braucht 50·n Erfahrung mehr als der vorige (50, 150, 300, 500, 750 …), höchstens EP_DAY_CAP am Tag.
+//   Punkt n braucht insgesamt 6·n² + 40·n Erfahrung (46, 104, 174, 256 … 1.000 für 10, 3.200 für 20) – jeder weitere etwas mehr; höchstens EP_DAY_CAP am Tag.
 // SKILLS[]: { id, nr, cat, name, feel, from?, minTier?, needs?, learn: [Lernweg], can, desc, use, hint?, where?, play?, soon?, due? }
 //   feel: 'Handgriff' | 'Mini-Spiel' | 'Freischaltung'
 //   from: ab Datum lernbar (vorher „Bald“ bzw. „Später“), minTier: ab Standort-Stufe, needs: andere Fähigkeiten, gate(s, g): '' oder Grund
@@ -26,8 +26,8 @@ export const SKILL_CAT = Object.fromEntries(SKILL_CATS.map((c) => [c.id, c]));
 export const POTS = { w: { name: 'Werkstatt', long: 'Erfahrung' }, r: { name: 'Rechner', long: 'Erfahrung' }, g: { name: 'Geschäft', long: 'Erfahrung' } }; // Herkunft der Erfahrung (Symbol), alles in einen Topf
 export const XP_POT = { hw: 'w', mining: 'r', trade: 'g' }; // alte addXp-Schlüssel → Herkunft
 export const EP_DAY_CAP = 600;
-export const ptsFor = (ep) => Math.floor((Math.sqrt(1 + (8 * Math.max(0, ep)) / 50) - 1) / 2); // 25·n·(n+1) ≤ ep
-export const epFor = (n) => 25 * n * (n + 1);
+export const ptsFor = (ep) => Math.floor((Math.sqrt(1600 + 24 * Math.max(0, ep)) - 40) / 12 + 1e-9); // 6·n² + 40·n ≤ ep
+export const epFor = (n) => 6 * n * n + 40 * n;
 
 // Tuning-Profile (Nr. 7 Takt & Spannung für GPU-Rigs, Nr. 27 Firmware für ASICs): Faktoren auf Strom (P), Hashrate (H), Ausfälle (F)
 // imm: Turbo im Immersionsbecken (Ausbau „immersion“, Nr. 34) – mehr Takt, kein Hitze-Verschleiß

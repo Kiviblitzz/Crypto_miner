@@ -832,7 +832,7 @@ export class Game {
     const price = p0;
     while (added < k) { o.items.push({ id: devId, b: 0 }); this.s.cash -= price; this.s.stats.spentHW += price; added++; }
     this.stockUse(dev, added);
-    if (added) { if (dev.look !== 'fpga' && dev.look !== 'usb') this.s.flags.boughtAsic = true; this.dayUpdate(true); this.capWarn(this.facOf(uid)); this.emit('objects', this.facOf(uid)); }
+    if (added) { if (dev.look !== 'fpga' && dev.look !== 'usb') this.s.flags.boughtAsic = true; this.addXp('hw', 2 * added, true); this.dayUpdate(true); this.capWarn(this.facOf(uid)); this.emit('objects', this.facOf(uid)); }
     return added;
   }
   holderRemove(uid, idx) {
