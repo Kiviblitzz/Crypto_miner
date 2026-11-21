@@ -24,7 +24,7 @@ Zitate sind wörtlich (Tippfehler bleiben stehen), damit der Ton erhalten bleibt
 - **Keine Prozent-Boni:** „mining skill ist auch quatsch“. Kein „+2 % Ertrag pro Stufe“.
 - **Freischaltungen im Menü:** „das sollen skills sein in so nem menü, dass man dann fpga bedienen kann betriebssysteme installieren kann usw“
 - **Möglichst viele:** „so viel geben wie möglich“. Gewünscht sind z. B. Wasserkühlung, Betriebssystem installieren, Übertakten/Undervolten, FPGA und ASIC-Firmware, Löten und Reparieren, Builds direkt kaufen, mehrere PCs im Inventar.
-- **Lernen auf allen drei Wegen:** durch Tun (Punkte), über Kurse, Bücher und Forum, und von Leuten (Opa, Deniz, Jonas …). „einige sachen am anfang kriegt man über sein handy nachrichten“
+- **(veraltet, ersetzt am 21.11.: nur Punkte)** **Lernen auf allen drei Wegen:** durch Tun (Punkte), über Kurse, Bücher und Forum, und von Leuten (Opa, Deniz, Jonas …). „einige sachen am anfang kriegt man über sein handy nachrichten“
 - **Benutzen:** „teils echter handgriff aber bei zb irgendwie reperatur maybe so ein mini game mit löten oder stecken“
 
 ## Bedienung aus Spielersicht (der Vertreter prüft das immer)
@@ -38,7 +38,7 @@ Zitate sind wörtlich (Tippfehler bleiben stehen), damit der Ton erhalten bleibt
 - **Was er sehen will:** die spielbare Version als Artifact, das nach jeder Runde aktualisiert wird: https://claude.ai/artifact/RLtXTTQaYJExVNeNKcRBGq
 
 ## Antworten vom 20.11.2026 (Fragebogen und Nachrichten)
-- **Anlernen statt Menüflut:** „die menüs lernt man nicht das soll doch so angelernt sein … man wacht auf und dann steht da neue nachricht aufs handy und dann steht da drück H für handy“. Eingebaut: Lektionen, Handy auf H, Wärmebild auf I.
+- **(Start-Teil ersetzt am 21.11.: Brief statt Handy)** **Anlernen statt Menüflut:** „die menüs lernt man nicht das soll doch so angelernt sein … man wacht auf und dann steht da neue nachricht aufs handy und dann steht da drück H für handy“. Eingebaut: Lektionen, Handy auf H, Wärmebild auf I.
 - **Geld im Alltag:** „sowieso muss man miete und strom zahlen das so machen“. Miete und Strom werden monatlich fällig, auch in der Wohnung.
 - **Papas Laden:** „denk dir aber für das andere nochmal was aus“. Die Bankfrist mit 15.000 $ bis Ende 2013 wirkt sinnlos („15000 bis in 2 jahren ist ja garnichts“). Es braucht eine neue Idee.
 - **Tempo:** „anpassbar aber 1x echtzeit“. 1× = echte Zeit, schnellere Stufen zum Vorspulen.
@@ -76,6 +76,18 @@ Zitate sind wörtlich (Tippfehler bleiben stehen), damit der Ton erhalten bleibt
   - Die Leertaste schaltet das Tempo weiter. Die Stufen kommen nach und nach: erst 1×, mit der ersten Bestellung 60× und 1 h/s, mit der ersten Karte 6 h/s, später Tage pro Sekunde.
   - Schlafen geht nur ab 20 Uhr, mit Schlafszene (Blende, Uhr, Morgenlicht, Wecker, kurze Morgen-Zeile).
   - Esc schließt in jedem Fenster zuerst das Fenster; das ist automatisch getestet.
+- **Start ohne Handy, alles am PC (21.11.2026, ersetzt den früheren „drück H“-Start):** „am echten pc sollen die menüs sein die man da hat also nachrichten vielleicht auch und man kauft ein handy erst später. und die erste nachricht ist vielleicht ein brief von deniz oder so dass ich meine teile aus dem keller suchen soll und mach es so, dass da regale stehen und die pc sachen da drin stehen und nicht random auf ner waschmaschine“.
+  - Man wacht ohne Handy auf. Auf dem Tisch liegen ein Brief von Deniz (die Teile stehen im Keller im Regal) und Papas Umschlag mit 1.000 $.
+  - Nachrichten, Shop und Börse laufen als Programme am echten PC. Neue Nachrichten zeigt der PC an, man muss hingehen.
+  - Das Handy wird später gekauft (Deniz: „Hol dir mal ein Handy“), ab dann gilt H.
+  - Im Keller stehen die PC-Teile ordentlich im Regal.
+- **Nachrichten als Chats (21.11.2026):** „das ist aufjedenfall mega unübersichtlich mach da einzelne chats raus“.
+  - Es gibt eine Chat-Liste pro Person mit Ungelesen-Zahl; ein Klick öffnet den Verlauf (die neueste Nachricht unten).
+  - Paketdienst ist kein Chat. Die Nachrichten sind kurz wie im echten Messenger.
+- **Fähigkeiten nur mit Punkten (21.11.2026, ersetzt „Lernen auf allen drei Wegen“):** „fähigkeiten mit punkten das mit dem buch ist kacke“, „nur mit punkten also alles in dem menü nur mit punkten so sachen wie shop angebote über leute aber das soll auch nicht im baum auftauchen und der baum soll auch nicht wie ein zeitstrahl aufgebaut sein“.
+  - Es gibt einen Punktetopf aus eigener Arbeit, jeder Knoten hat einen Knopf „Freischalten“.
+  - Leute bringen Shop-Angebote außerhalb des Baums.
+  - Der Baum ist sternförmig mit Nebel und ohne Jahreszahlen.
 - **Arbeitsweise:** „der ideen typ soll mit dir quatschen und mit mir in einem andern chat so dass du nicht auf antworten warten musst“. Der Spieler-Vertreter läuft als eigener Chat, fragt den Auftraggeber dort und schickt die Ergebnisse an den Entwicklungs-Chat.
 
 ## Roadmap (später)
