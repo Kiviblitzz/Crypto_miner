@@ -64,6 +64,13 @@ Zitate sind wörtlich (Tippfehler bleiben stehen), damit der Ton erhalten bleibt
 - **Techniker, entschieden vom Auftraggeber (21.11.2026, morgens):** „Nur noch Robi“. Es gibt keine Techniker und keinen externen Reparaturdienst mehr. Reparieren geht selbst (Mini-Spiel bzw. Routine) oder mit Robi; als Notknopf bleibt „Reparieren lassen“ zum vollen Preis beim Händler. Mehrere Robis mit Ladestation je Standort und Robi-Stufen (USB-Stick → Teile tauschen → Löten) sorgen dafür, dass große Hallen nicht nerven. Alte Stände: Die Techniker kündigen, Deniz besorgt einen Robi.
 - **Baum-UI wie in Upgrade-Spielen (21.11.2026):** „Bei dem skill tree sollst du dich an Ähnlichen erfolgreichen Spielen orientieren wie potatoes pls moon sweeper needle in a haystack“. Nachgefragt: „ich meine du sollst davon klauen wie der baum aufgebaut ist nicht wie das spiel an sich komplett ist. ich meine die UI“. Der Baum hat den Start in der Mitte und sternförmige Äste mit Farben, Nebel (sichtbar sind nur Gelerntes und direkte Nachbarn), Knoten mit großem Symbol und Tooltip statt Textkästen, leuchtende Linien und ein saftiges Freischalt-Feedback. Die Inhalte bleiben Handgriffe ohne Prozent-Boni.
 - **Shop auf dem PC (21.11.2026):** „Mach den shop auch auf den pc maybe“. Am PC-Monitor läuft ein Browser mit Reitern Shop | Börse (Kamera zoomt rein). B bzw. M öffnen dieselbe Seite als Fenster.
+- **Bildschirm-Texte kurz und knapp (21.11.2026):** „diese nachrihcten auf dem bildschrim sind auch komisch, dass ergibt keinen sinn dass die so riesig sind es soll alles immer kurz und knapp sein. und nicht so ai mässig overexplained“. Regeln:
+  - Die Ziel-Zeile hat höchstens 5–6 Wörter und keine Erklärung („Grafikkarte einbauen“, „Stärkeres Netzteil bestellen“). Ein Hindernis ersetzt die Zeile als nächstes Teilziel, statt angehängt zu werden.
+  - Das Wie steht nur dort, wo man das Ding anschaut (Inspektor, ein kurzer Satz), oder einmal im Handy. Keine Tasten-Ketten im HUD.
+  - Marker in der Welt haben 1–2 Wörter und sitzen nur am echten Ziel (Monitor, Tür, Paket), sonst steht ein schlichter Pfeil am Rand.
+  - Toasts sind eine kurze Zeile.
+  - Kein AI-Ton: nichts übererklären, keine Schachtelsätze. So schreiben, wie ein Kumpel kurz Bescheid sagt.
+  - Negative Beträge sind rot, positive grün.
 - **Arbeitsweise:** „der ideen typ soll mit dir quatschen und mit mir in einem andern chat so dass du nicht auf antworten warten musst“. Der Spieler-Vertreter läuft als eigener Chat, fragt den Auftraggeber dort und schickt die Ergebnisse an den Entwicklungs-Chat.
 
 ## Roadmap (später)
