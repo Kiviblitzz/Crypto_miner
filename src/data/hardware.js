@@ -167,13 +167,13 @@ export const PLACEABLES = [
   { id: 'crac', kind: 'cooling', cat: 'cool', name: 'Präzisionsklima (CRAC)', release: '2000-01', price: 45000, watt: 45000, cool: 260000, size: [2.0, 1.0], minTier: 4 },
 
   // Roboter (Fähigkeiten Nr. 46–48): Ladestation mit Robi – braucht Platz und Strom, kein Gehalt. Module im Inspektor (Game.roboMod)
-  { id: 'robi', kind: 'robot', cat: 'robo', skill: 'robo_usb', name: 'Robi mit Ladestation', release: '2014-01', price: 6000, watt: 120, size: [1.0, 0.5], minTier: 3, desc: 'Fährt zu neuen Rigs und steckt den USB-Stick mit dem Mining-Image ein. Nachrüstbar: Greifarm, Lötkopf.' },
+  { id: 'robi', kind: 'robot', cat: 'robo', skill: 'robo_usb', name: 'Robi mit Ladestation', release: '2014-01', price: 6000, watt: 120, size: [1.0, 0.5], minTier: 3, desc: 'Fährt zu neuen Rigs und steckt den USB-Stick mit dem Mining-Image ein. Jede Ladestation versorgt ihren Standort – in großen Hallen einfach mehrere aufstellen. Nachrüstbar: Greifarm (Teile tauschen), Lötkopf (löten). Kein Gehalt, nur Material.' },
 
   // Deko
   { id: 'plant', kind: 'decor', cat: 'decor', name: 'Zimmerpflanze', release: '2000-01', price: 25, size: [0.5, 0.5], minTier: 0 },
   { id: 'lamp', kind: 'decor', cat: 'decor', name: 'Stehlampe', release: '2000-01', price: 40, watt: 0, size: [0.5, 0.5], minTier: 0 },
   { id: 'sofa', kind: 'decor', cat: 'decor', name: 'Gaming-Sofa', release: '2000-01', price: 350, size: [1.5, 1.0], minTier: 1 },
-  { id: 'neon', kind: 'decor', cat: 'decor', name: 'Neon-Schild „HODL"', release: '2013-12-18', price: 180, size: [1.0, 0.5], minTier: 0 },
+  { id: 'neon', kind: 'decor', cat: 'decor', name: 'Neon-Schild „HODL“', release: '2013-12-18', price: 180, size: [1.0, 0.5], minTier: 0 },
   { id: 'aquarium', kind: 'decor', cat: 'decor', name: 'Aquarium', release: '2000-01', price: 260, size: [1.0, 0.5], minTier: 0 },
   { id: 'fridge', kind: 'decor', cat: 'decor', name: 'Getränkekühlschrank', release: '2000-01', price: 220, watt: 0, size: [0.5, 0.5], minTier: 0 },
   { id: 'arcade', kind: 'decor', cat: 'decor', name: 'Arcade-Automat', release: '2000-01', price: 900, size: [0.5, 0.5], minTier: 1 },

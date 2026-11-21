@@ -129,12 +129,12 @@ function onKey(e) {
     if (k !== 'b' && k !== 'k' && ui.modalKind && ui.modalKind === { m: 'market', p: 'phone', h: 'phone', c: 'company', t: 'skills', l: 'ranking', j: 'skills' }[k]) { ui.resume(); return; }
     if (ui.stickyModal()) return; // Story/Finale/Rückblick nicht wegklicken
     const NEED = { b: 'build', m: 'market', p: 'phone', h: 'phone', i: 'heat', c: 'company', t: 'skills', l: 'ranking', k: 'map', j: 'skills' };
-    if (NEED[k] && !game.has(NEED[k])) { ui.toast(NEED[k] === 'phone' && game.s.letters ? 'Du hast noch kein Handy.' : 'Noch nicht freigeschaltet.', 'info', 1800); return; }
+    if (NEED[k] && !game.has(NEED[k])) { if (NEED[k] === 'phone' && game.s.letters) ui.toast('Du hast noch kein Handy.', 'info', 1800); return; } // Tasten ohne Funktion tun nichts; H ohne Handy sagt kurz Bescheid
     HOT[k](); return;
   }
   if (e.key === 'Delete' && world.selected) {
     const o = game.findObj(world.selected); if (!o) return;
-    if (!game.canSell(o)) { ui.toast('Den PC brauchst du noch.', 'info', 2500); return; }
+    if (!game.canSell(o)) return; // den ersten PC kann man (noch) nicht verkaufen
     if (ui.delArmed === o.uid) { const v = game.objectValue(o); game.removeObject(o.uid); ui.resume(); ui.delArmed = null; ui.toast(`Verkauft für ${v.toLocaleString('de-DE')} $`, 'good', 2500); }
     else { ui.delArmed = o.uid; ui.toast('Nochmal Entf drücken, um das Objekt zu verkaufen.', 'info', 3000); setTimeout(() => { if (ui.delArmed === o.uid) ui.delArmed = null; }, 3000); }
   }

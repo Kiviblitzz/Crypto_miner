@@ -2,6 +2,7 @@
 //
 // Am Anfang baust du alles selbst (Bausatz, Gehäuse, Teile-Shop). Fertig bestückte Geräte gibt es erst über Leute, die du kennenlernst:
 //   Kemal (PC-Ecke) → fertige Mining-PCs (Tower) · Jonas (Rig-Bau aus dem Forum) → fertige Open-Frame-Rigs
+//   Herr Lindqvist (Großhändler, ab GmbH oder Lagerhalle) → befristete Sammelangebote für Miner (wholesale: true, liefert keine Rig-Typen)
 // Aufbau eines Geschäftskontakts:
 //   id, name, biz (Laden/Firma), role (eine Zeile), offer (was er liefert), types (Rig-Typen, die er fertig bestückt liefert),
 //   intro: Ereignis in events.js, unknown: Name, solange man ihn nicht kennt, soon: Hinweis im Katalog (gesperrt), meet(s, g, fmt): wie/wann man ihn kennenlernt,
@@ -48,6 +49,22 @@ export const CONTACTS = [
       order: ['Rig ist raus. Die Spedition kennt deine Adresse inzwischen auswendig.', 'Hab einen Lüfter mehr reingebaut. Sicher ist sicher.', 'Im Forum fragen sie, wer der Typ mit den vielen Rigs ist. Ich sag nix.', 'Meine Garage riecht nach Alu und Lötzinn. Ich liebe es.'],
       tier: ['', 'Drei Rigs! Du bist jetzt Stammkunde – 7 % Montage statt 10.', 'Du bist mein bester Kunde. Ab jetzt 5 % Montage. Und dein Name steht auf meiner Werkbank.'],
       call: 'Hey, schön, dass du dich meldest! Klar bau ich dir Rigs. Schick mir, was du brauchst.',
+    },
+  },
+  {
+    id: 'lindqvist', name: 'Herr Lindqvist', biz: 'Nordic Mining Supply', color: '#9fc6e8', wholesale: true,
+    role: 'Mining-Großhändler aus Göteborg · beliefert Farmen in ganz Europa',
+    offer: 'Sammelangebote für Miner – fester Preis unter Einzelpreis, nur ein paar Tage gültig', types: [], intro: 'lindqvist',
+    callHint: 'Danach meldet er sich, wenn er einen Posten hat.', callLog: 'meldet sich mit Sammelangeboten',
+    unknown: 'Ein Großhändler', soon: '', meet: () => 'Er meldet sich, sobald die Hashwerk GmbH gegründet ist oder du in die Lagerhalle ziehst.',
+    can: (s, g) => g.staffAllowed(), trigger: (s) => Object.values(s.fac || {}).some((f) => (f.objects || []).some((o) => (o.items?.length || 0) >= 8)),
+    due: (s) => Math.max(typeof s.flags?.gmbh === 'number' ? s.flags.gmbh : 0, s.since?.halle || 0) + 30,
+    lines: {
+      hello: 'God dag! Ab und zu habe ich größere Posten übrig. Dann melde ich mich – meistens nur für ein paar Tage. Wer schnell zusagt, zahlt weniger.',
+      first: 'Tack! Freut mich, dass wir ins Geschäft kommen.',
+      order: ['Wie immer per Spedition. Der Fahrer fragt, ob es bei Ihnen Kaffee gibt.', 'Der Posten kam direkt aus Shenzhen – noch eingeschweißt.', 'In Göteborg schneit es. Bei Ihnen hoffentlich nur Hashes.'],
+      tier: ['', '', ''], // keine Montage-Stufen (wholesale), nur für das gemeinsame Format
+      call: 'Ah, Hashwerk! Schön, dass Sie anrufen. Ich melde mich beim nächsten Posten.',
     },
   },
 ];

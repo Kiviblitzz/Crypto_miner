@@ -50,17 +50,17 @@ export const CHAPTERS = [
     title: 'Kapitel 1 – Die erste Bude', unlock: 'keller', minDate: '2011-01-01', site: 'kinder', // volle Wohnung: Herr Krause gibt den Hobbyraum im Keller sofort frei, sonst über die Feiertage
     intro: 'Oktober 2010. Du bist 19 und gerade in deine erste eigene Bude gezogen: ein Zimmer im Hinterhaus, feucht, die Tapete löst sich. Papa hat dir das Geld für den Umzug geliehen. Einen Plan hast du noch nicht – nur ein leeres PC-Gehäuse, das seit dem Umzug in der Ecke steht.',
     goals: [
-      { id: 'settle', text: 'Schau dich in deiner neuen Bude um', doneText: '', check: (s) => !s.flags.tutor || !!s.flags.idea || !!s.flags.miningStarted }, // Anlernen: erst Papas Nachricht, nach kurzer Zeit schreibt Deniz von Bitcoin (Game.denizIdea)
-      { id: 'collect', text: 'Such die PC-Teile im Keller', doneText: 'Alle Teile gefunden! Bring sie hoch zu deinem\u00a0PC.', check: (s) => s.flags.miningStarted || !s.loose || !Object.keys(s.loose).length, progress: (s) => [(s.looseN || 4) - Object.keys(s.loose || {}).length, s.looseN || 4, 'parts'] }, // looseN: 3 Startteile (CPU-Start), alte Stände 4
-      { id: 'pcbuild', text: 'Bau die Teile in deinen PC ein', doneText: '', check: (s) => s.flags.miningStarted || !!s.flags.pcBuilt, progress: (s) => { const pc = s.fac.kinder.objects.find((o) => o.type === 'tower'); const p = pc?.parts || {}, need = s.flags.cpuStart ? [p.mobo, p.cpu, p.psu] : [p.mobo, p.cpu, p.gpus?.length, p.psu]; return [need.filter(Boolean).length, need.length, 'parts']; } },
-      { id: 'look', text: 'Schalte deinen PC ein', doneText: 'Dein PC läuft – erst mal nur mit dem Prozessor. Das geht langsam.', check: (s) => s.flags.miningStarted },
+      { id: 'settle', text: 'In der Bude umsehen', doneText: '', check: (s) => !s.flags.tutor || !!s.flags.idea || !!s.flags.miningStarted }, // Anlernen: erst Papas Nachricht, nach kurzer Zeit schreibt Deniz von Bitcoin (Game.denizIdea)
+      { id: 'collect', text: 'PC-Teile im Keller suchen', doneText: 'Alle Teile gefunden!', check: (s) => s.flags.miningStarted || !s.loose || !Object.keys(s.loose).length, progress: (s) => [(s.looseN || 4) - Object.keys(s.loose || {}).length, s.looseN || 4, 'parts'] }, // looseN: 3 Startteile (CPU-Start), alte Stände 4
+      { id: 'pcbuild', text: 'Teile in den PC einbauen', doneText: '', check: (s) => s.flags.miningStarted || !!s.flags.pcBuilt, progress: (s) => { const pc = s.fac.kinder.objects.find((o) => o.type === 'tower'); const p = pc?.parts || {}, need = s.flags.cpuStart ? [p.mobo, p.cpu, p.psu] : [p.mobo, p.cpu, p.gpus?.length, p.psu]; return [need.filter(Boolean).length, need.length, 'parts']; } },
+      { id: 'look', text: 'PC einschalten', doneText: 'Dein PC läuft!', check: (s) => s.flags.miningStarted },
       // CPU-Start: die erste Grafikkarte im Shop bestellen (Monitor oder B), Paket am nächsten Morgen vor der Wohnungstür, einbauen
-      { id: 'gpuorder', text: 'Bestell eine Grafikkarte im Shop', doneText: '', check: (s) => !s.flags.cpuStart || !!s.flags.gpuOrdered || !!s.flags.boughtGpu },
-      { id: 'gpu', text: 'Bau eine Grafikkarte in deinen PC ein', doneText: 'Die Grafikkarte schürft mit – jetzt geht’s richtig los!', check: (s) => s.flags.boughtGpu },
-      { id: 'sell', text: 'Verkaufe deine Bitcoin am Monitor', doneText: 'Erste Bitcoin verkauft!', check: (s) => s.stats.sold > 0 },
-      { id: 'rig2', text: 'Bau einen zweiten Mining-PC', doneText: 'Zwei PCs schürfen!', check: (s, h) => h.rigsAt('kinder') >= 2, progress: (s, h) => [h.rigsAt('kinder'), 2, 'n'] }, // Katalog B → Rigs → „Als Bausatz“ (selbst einbauen); danach stellt Deniz Kemal vor (fertig bestückt, contacts.js)
-      { id: 'fill1', text: 'Fülle deine Wohnung mit Mining-PCs', orDate: true, skip: true, doneText: 'Deine Wohnung ist voll!', check: (s) => !!s.full?.kinder, progress: (s, h) => [h.fill('kinder'), 1, 'fill', 'kinder'] }, // alle Plätze belegt oder Strom am Limit
-      { id: 'papa1', text: 'Zahl Herrn Krause die Strom-Nachzahlung', action: { label: '2.000 $ überweisen', cost: 2000, flag: 'papa1' }, check: (s) => s.flags.papa1 }, // Flag-Name aus alten Ständen (früher: Papas Stromrechnung)
+      { id: 'gpuorder', text: 'Grafikkarte bestellen', doneText: '', check: (s) => !s.flags.cpuStart || !!s.flags.gpuOrdered || !!s.flags.boughtGpu },
+      { id: 'gpu', text: 'Grafikkarte einbauen', doneText: 'Die Grafikkarte schürft mit!', check: (s) => s.flags.boughtGpu },
+      { id: 'sell', text: 'Bitcoin verkaufen', doneText: 'Erste Bitcoin verkauft!', check: (s) => s.stats.sold > 0 },
+      { id: 'rig2', text: 'Zweiten PC bauen', doneText: 'Zwei PCs schürfen!', check: (s, h) => h.rigsAt('kinder') >= 2, progress: (s, h) => [h.rigsAt('kinder'), 2, 'n'] }, // Katalog B → Rigs → „Als Bausatz“ (selbst einbauen); danach stellt Deniz Kemal vor (fertig bestückt, contacts.js)
+      { id: 'fill1', text: 'Wohnung mit PCs füllen', orDate: true, skip: true, doneText: 'Deine Wohnung ist voll!', check: (s) => !!s.full?.kinder, progress: (s, h) => [h.fill('kinder'), 1, 'fill', 'kinder'] }, // alle Plätze belegt oder Strom am Limit
+      { id: 'papa1', text: 'Strom-Nachzahlung überweisen', action: { label: '2.000 $ überweisen', cost: 2000, flag: 'papa1' }, check: (s) => s.flags.papa1 }, // Flag-Name aus alten Ständen (früher: Papas Stromrechnung)
     ],
     waitText: 'Herr Krause räumt mit Papa über die Feiertage das Gerümpel aus dem Hobbyraum im Keller – ab Januar darfst du ihn nutzen.',
     bonus: [
@@ -73,12 +73,12 @@ export const CHAPTERS = [
     title: 'Kapitel 2 – Der Hobbykeller', unlock: 'werkstatt', minDate: '2012-06-01', site: 'keller', // voller Keller: die Werkstatt sofort (Papa redet mit Herrn Öztürk), sonst ab Juni 2012
     intro: 'Das Gerümpel vom Vormieter ist raus, Papa hat den Sperrmüll gefahren. Herr Krause überlässt dir den alten Hobbyraum im Keller – für 50 $ im Monat und einen Kasten Bier zu Weihnachten. Und solange die Waschküche nebenan weiterläuft.',
     goals: [
-      { id: 'openrig', text: 'Bau dein erstes Rig im Keller', orDate: '2013-03-01', check: (s, h, g) => h.rigsAt('keller') > 0 || (s.unlocked.includes('keller') && (s.fac.keller?.objects || []).some((o) => !o.parts && g.slotLive(o))) }, // Rig mit mindestens 1 GPU – oder ein Miner (FPGA, ASIC) im Keller; spätestens im März 2013 auch so (früher half dort die Bankfrist: nicht für immer im Keller festhängen)
+      { id: 'openrig', text: 'Erstes Rig im Keller bauen', orDate: '2013-03-01', check: (s, h, g) => h.rigsAt('keller') > 0 || (s.unlocked.includes('keller') && (s.fac.keller?.objects || []).some((o) => !o.parts && g.slotLive(o))) }, // Rig mit mindestens 1 GPU – oder ein Miner (FPGA, ASIC) im Keller; spätestens im März 2013 auch so (früher half dort die Bankfrist: nicht für immer im Keller festhängen)
       // Ausbauten kennenlernen: Opas Nachtstromzähler (UPGRADES.keller nightmeter, −30 % Strom im Keller) – Knopf im Ziel oder Firma (C) → Ausbauten
-      { id: 'night', text: 'Lass Opa den alten Nachtstromzähler anklemmen (Firma → Ausbauten, 400 $)', orDate: '2011-10-01', open: 'company', doneText: 'Nachtstrom! Im Keller kostet der Strom jetzt 30 % weniger. In der Firma (C) gibt es weitere Ausbauten.', check: (s) => !!s.fac.keller?.up?.nightmeter }, // open: Knopf im Ziel-Panel öffnet die Firma; orDate: kein Muss (sonst ab Oktober 2011)
+      { id: 'night', text: 'Nachtstromzähler anklemmen', orDate: '2011-10-01', open: 'company', doneText: 'Nachtstrom: Keller-Strom −30 %', check: (s) => !!s.fac.keller?.up?.nightmeter }, // open: Knopf im Ziel-Panel öffnet die Firma; orDate: kein Muss (sonst ab Oktober 2011)
       // Abschlussziel: Papa vermietet dir die Werkstatt (450 $ im Monat), wenn sich das trägt – 30 $ Gewinn am Tag nach Strom und Miete (Tagesabschluss); spätestens ab März 2013 auch so
-      { id: 'earn2', text: 'Mach 30 $ Gewinn am Tag – dann vermietet dir Papa die Werkstatt', orDate: '2013-03-01', eod: true, doneText: 'Läuft! 30 $ Gewinn am Tag – Papa hält dir die Werkstatt frei.', check: (s, h, g) => g.dailyProfit().net >= 30, progress: (s, h, g) => [g.dailyProfit().net, 30, 'usd'] },
-      { id: 'fill2', text: 'Fülle den Keller', orDate: true, skip: true, doneText: 'Der Keller ist voll!', check: (s) => !!s.full?.keller, progress: (s, h) => [h.fill('keller'), 1, 'fill', 'keller'] }, // orDate: ab minDate auch ohne vollen Keller erledigt
+      { id: 'earn2', text: '30 $ Gewinn am Tag', orDate: '2013-03-01', eod: true, doneText: 'Papa hält dir die Werkstatt frei.', check: (s, h, g) => g.dailyProfit().net >= 30, progress: (s, h, g) => [g.dailyProfit().net, 30, 'usd'] },
+      { id: 'fill2', text: 'Keller füllen', orDate: true, skip: true, doneText: 'Der Keller ist voll!', check: (s) => !!s.full?.keller, progress: (s, h) => [h.fill('keller'), 1, 'fill', 'keller'] }, // orDate: ab minDate auch ohne vollen Keller erledigt
     ],
     waitText: 'Papas Untermieter Zweirad Öztürk zieht erst im Juni 2012 aus der Werkstatt aus.',
     bonus: [
@@ -92,9 +92,9 @@ export const CHAPTERS = [
     intro: 'Zweirad Öztürk ist ausgezogen. Papa drückt dir den Schlüssel zur Werkstatt hinterm Laden in die Hand: „450 $ im Monat, wie bei jedem anderen auch. Der Kaffee geht aufs Haus.“',
     introLost: 'Elektro Brandt gibt es nicht mehr. Herr Öztürk hat das Haus ersteigert und vermietet dir die Werkstatt hinterm alten Laden. Papa trägt die erste Kiste hinein.', // nur alte Spielstände (früheres Ereignis „ladenzu“)
     goals: [
-      { id: 'asic', text: 'Kauf deinen ersten ASIC-Miner', check: (s) => s.flags.boughtAsic },
-      { id: 'miners20', text: 'Betreibe 20 ASIC-Miner', check: (s, h) => h.asics() >= 20, progress: (s, h) => [h.asics(), 20, 'n'] }, // einzeln oder im Regal; FPGAs zählen nicht (2012 viel zu teuer für ihren Ertrag)
-      { id: 'gmbh', text: 'Gründe die Hashwerk GmbH', action: { label: 'Gründen · 25.000 $', cost: 25000, flag: 'gmbh' }, check: (s) => s.flags.gmbh },
+      { id: 'asic', text: 'Ersten ASIC-Miner kaufen', check: (s) => s.flags.boughtAsic },
+      { id: 'miners20', text: '20 ASIC-Miner betreiben', check: (s, h) => h.asics() >= 20, progress: (s, h) => [h.asics(), 20, 'n'] }, // einzeln oder im Regal; FPGAs zählen nicht (2012 viel zu teuer für ihren Ertrag)
+      { id: 'gmbh', text: 'Hashwerk GmbH gründen', action: { label: 'Gründen · 25.000 $', cost: 25000, flag: 'gmbh' }, check: (s) => s.flags.gmbh },
     ],
     waitText: 'Die Halle in Lindental-Nord wird erst im Juni 2015 fertig – der Bauträger ist pleite gegangen, ein neuer baut weiter.',
     bonus: [
@@ -110,8 +110,8 @@ export const CHAPTERS = [
     title: 'Kapitel 4 – Die Lagerhalle', unlock: 'rz', minDate: '2017-06-01', site: 'halle',
     intro: 'Die Hashwerk GmbH zieht ins Gewerbegebiet Lindental-Nord. Deniz hat sich im Büro-Container schon den Platz am Fenster gesichert.',
     goals: [
-      { id: 'tech', text: 'Stell einen Techniker ein', live: true, eod: true, check: (s) => s.staff.tech > 0 }, // zählt erst am Tagesende
-      { id: 'rack12', text: 'Bestücke ein Rack komplett', check: (s, h) => h.fullRack() }, // 12 Geräte in einem 42U-Rack
+      { id: 'tech', text: 'Robi in die Lagerhalle stellen', eod: true, check: (s) => (s.fac.halle?.objects || []).some((o) => o.type === 'robi') || !!s.flags.robiGift }, // id bleibt (Spielstände); früher: Techniker einstellen
+      { id: 'rack12', text: 'Ein Rack komplett bestücken', check: (s, h) => h.fullRack() }, // 12 Geräte in einem 42U-Rack
       { id: 'fill4', text: 'Lagerhalle zu 75 % auslasten', orDate: '2017-10-01', skip: true, check: (s, h) => h.use('halle') >= 0.75, progress: (s, h) => [h.use('halle'), 0.75, 'use', 'halle'] }, // volle Racks zählen ganz, halbe halb (Game.facUse); orDate: spätestens im Oktober 2017 ist das RZ trotzdem frei – mitten im Boom, nicht erst im Winter 2018
     ],
     waitText: 'Das Frankfurter Rechenzentrum ist noch bis Juni 2017 an eine Bank vermietet.',
@@ -119,7 +119,7 @@ export const CHAPTERS = [
       { id: 'b4bear', until: '2016-01-07', text: 'Überstehe den Bärenmarkt: Schließ 2015 mit Gewinn ab', check: (s) => { const Y = s.stats.y?.[2015]; return !!Y && Y.nw1 != null && Y.rev - Y.elec - Y.fix > 0; }, reward: { rel: { papa: 1 }, text: 'Papa: „Wer im Winter verdient, schafft alles.“' } },
       { id: 'b4plus', streak: 90, text: 'Halte die Halle 90 Tage am Stück im Plus', check: (s, h, g) => facNet(g, 'halle') > 0, reward: { mod: [{ key: 'rent', mult: 0.8, fac: 'halle' }], text: 'Der Vermieter senkt die Hallenmiete um 20 %' } },
       { id: 'b4eff', text: 'Bring deine SHA-256-Flotte unter 150 J/TH (ab 100 TH/s)', check: (s, h, g) => h.algoHash('sha256') >= 1e14 && g.fleetJTH() <= 150, progress: (s, h, g) => [g.fleetJTH(), 150, 'jth'], reward: { rel: { deniz: 1 }, text: 'Deniz: „Effizienz ist alles.“' } },
-      { id: 'b4cover', unit: 'Geräte', text: 'Volle Techniker-Abdeckung bei mindestens 60 Geräten', check: (s, h, g) => s.staff.tech > 0 && g.techCoverage() >= 1 && devices(s, g) >= 60, progress: (s, h, g) => [devices(s, g), 60, 'n'], reward: { mod: [{ key: 'fail', mult: 0.95 }], text: '5 % weniger Ausfälle' } },
+      { id: 'b4cover', unit: 'Geräte', text: 'Lass Robi mit Greifarm bei mindestens 60 Geräten nach dem Rechten sehen', check: (s, h, g) => devices(s, g) >= 60 && s.unlocked.some((id) => g.robiIn(id).some((b) => b.mods?.steck)), progress: (s, h, g) => [devices(s, g), 60, 'n'], reward: { mod: [{ key: 'fail', mult: 0.95 }], text: '5 % weniger Ausfälle' } },
       { id: 'b4eth', text: 'Schürfe 500 Ethereum', check: (s) => (s.stats.coins?.ETH || 0) >= 500, progress: (s) => [s.stats.coins?.ETH || 0, 500, 'coin'], reward: { rel: { opa: 1 }, text: 'Opa: „Ether? Damit hat man früher operiert.“' } },
     ],
   },
@@ -127,7 +127,7 @@ export const CHAPTERS = [
     title: 'Kapitel 5 – Das Rechenzentrum', unlock: 'fjord', minDate: '2020-06-01', site: 'rz', hard: true, // hart: eine Fjordhalle im Krypto-Winter 2018/19 (80.000 $ Miete) ruiniert fast jeden
     intro: 'Ein echtes Rechenzentrum in Frankfurt. In der Branche spricht sich herum, dass es Hashwerk gibt – sogar bei MONOLITH in Zug.',
     goals: [
-      { id: 'mw6', text: 'Bau das Rechenzentrum auf 6 MW aus', orDate: true, check: (s) => s.fac.rz.power >= 1 }, // im Winter keine Pflicht
+      { id: 'mw6', text: 'Rechenzentrum auf 6 MW ausbauen', orDate: true, check: (s) => s.fac.rz.power >= 1 }, // im Winter keine Pflicht
       { id: 'fill5', text: 'Rechenzentrum zu 75 % auslasten', orDate: true, skip: true, check: (s, h) => h.use('rz') >= 0.75, progress: (s, h) => [h.use('rz'), 0.75, 'use', 'rz'] }, // orDate: im Krypto-Winter 2018–2020 keine Pflicht; Norwegen trotzdem erst ab Juni 2020 (hard)
     ],
     waitText: 'Das Wasserkraftwerk in Sogn liefert erst ab Juni 2020 Strom für die Fjordhalle.',
@@ -143,8 +143,8 @@ export const CHAPTERS = [
     title: 'Kapitel 6 – Die Fjordhalle', unlock: null, minDate: '2021-01-01', site: 'fjord', // frühester Sieg: Neujahr 2021
     intro: 'Wasserkraft, Fjordluft, 30 Megawatt. Jetzt geht es gegen MONOLITH.',
     goals: [
-      { id: 'eh1', text: 'Schaff 1 EH/s', check: (s, h) => h.algoHash('sha256') >= 1e18, progress: (s, h) => [h.algoHash('sha256'), 1e18, 'hash'] },
-      { id: 'mono', text: 'Überhol MONOLITH', live: true, check: (s, h) => h.algoHash('sha256') > h.monolithHash(), progress: (s, h) => [h.algoHash('sha256'), h.monolithHash(), 'hash'] },
+      { id: 'eh1', text: '1 EH/s schaffen', check: (s, h) => h.algoHash('sha256') >= 1e18, progress: (s, h) => [h.algoHash('sha256'), 1e18, 'hash'] },
+      { id: 'mono', text: 'MONOLITH überholen', live: true, check: (s, h) => h.algoHash('sha256') > h.monolithHash(), progress: (s, h) => [h.algoHash('sha256'), h.monolithHash(), 'hash'] },
     ],
     // Wartedatum nur als Sperre gegen einen Sieg vor 2021; sonst stehen die Bonusziele direkt unter dem aktuellen Ziel
     waitText: 'Die erste Weltrangliste der Miner erscheint im Januar 2021 – bis dahin musst du vorn bleiben.',
@@ -193,6 +193,10 @@ export const MESSAGES = [
   { id: 'm2', date: '2010-10-09', from: 'Deniz', text: 'Tipp: Crimson-Karten minen viel schneller als Verdant. Die RHD 5870 ist gerade der Hit.' },
   { id: 'm3', cond: (s, h) => h.maxTemp() > 32, from: 'Mama', text: 'Ich hab dir vorhin die Wäsche vor die Tür gestellt. Warum ist es bei dir so warm? Und was brummt da?' },
   { id: 'm4', date: '2010-11-06', from: 'Deniz', text: '0,39 $ pro Bitcoin!! Ich glaub, ich spinne.' },
+  // Grund fürs Ziel „Strom-Nachzahlung“ (papa1): Herr Krause merkt, dass zwei Rechner rund um die Uhr laufen
+  { id: 'mKrause', cond: (s) => s.chapter === 0 && !!s.goals.rig2 && !s.flags.papa1, from: 'Herr Krause', text: 'Bei Ihnen brummt’s ja Tag und Nacht. Die Strompauschale in der Warmmiete war für einen Kühlschrank gedacht, nicht für zwei Rechner. Ich rechne mit 2.000 $ Nachzahlung. Überweisen Sie das, dann reden wir über den alten Hobbyraum im Keller.' },
+  // Grund für die Deko im Shop: Mama findet die Bude ungemütlich
+  { id: 'mDeko', cond: (s) => s.chapter <= 1 && (!!s.goals.rig2 || s.chapter === 1), from: 'Mama', text: 'Ich war vorhin kurz bei dir. Zwei Computer, aber kein einziges Bild an der Wand! Mach’s dir mal ein bisschen gemütlich – in deinem Online-Shop gibt’s doch bestimmt auch Pflanzen und Lampen.' },
   { id: 'm5', cond: (s) => s.flags.papa1, from: 'Herr Krause', text: 'Die Nachzahlung ist da. Respekt. Den Hobbyraum im Keller können Sie haben: 50 $ im Monat und zu Weihnachten ein Kasten Bier. Strom geht ab jetzt nach Zähler.' },
   { id: 'm6', date: '2011-04-10', from: 'Deniz', text: 'Die Leute bauen jetzt Rigs in Milchkisten. Sieht wild aus, läuft aber.' },
   { id: 'm8', date: '2011-06-20', from: 'Deniz', text: 'GoxBank wurde gehackt! Lass nicht alles auf der Börse liegen.' },
@@ -233,7 +237,7 @@ export const MESSAGES = [
   { id: 't_gpuwait', tip: true, cond: (s) => s.chapter === 1 && s.day < toDay('2013-01-20') && (s.stats.pauseRun || 0) >= 30, from: 'Deniz', text: 'GPUs lohnen gerade nicht – Bitcoin halten, 2013 kommen ASICs. Spul ruhig vor (Tempo 4).' }, // ≥ 75 % der Rigs seit 30 Tagen unrentabel pausiert (Game.progressDay)
   { id: 't_idle', tip: true, cond: (s) => s.chapter >= 1 && s.stats.idle > 0, from: 'Deniz', text: 'Eins deiner Geräte pausiert – der Strom kostet mehr, als es schürft. Stell es auf einen anderen Coin oder verkauf es, solange es noch was wert ist.' },
   { id: 't_hot', tip: true, cond: (s, h) => s.chapter >= 1 && h.maxTemp() > 34, from: 'Deniz', text: 'Über 34 Grad bei dir! Ab 38 drosseln die Karten, und heiße Hardware geht schneller kaputt. Im Katalog (B) gibt es Lüfter.' },
-  { id: 't_trip', tip: true, cond: (s) => s.chapter >= 1 && !!s.flags.everTripped, from: 'Deniz', text: 'Im Firmenfenster (C) siehst du, wie viel dein Anschluss schafft. Erst den Strom ausbauen, dann neue Geräte hinstellen.' },
+  { id: 't_trip', tip: true, cond: (s) => s.chapter >= 1 && !!s.flags.everTripped, from: 'Deniz', text: 'Unter C siehst du, wie viel dein Anschluss schafft. Erst den Strom ausbauen, dann neue Geräte hinstellen.' },
   { id: 't_halv12', tip: true, date: '2012-10-29', from: 'Deniz', text: 'In einem Monat ist Halving: nur noch halb so viele Bitcoin pro Block. Alte, stromhungrige Karten rechnen sich danach kaum noch.' },
   { id: 't_net14', tip: true, date: '2014-06-10', from: 'Deniz', text: 'Die Netz-Hashrate verdoppelt sich gerade alle zwei Monate. Ein Miner, der sich heute rechnerisch in 90 Tagen bezahlt, schafft das so nie. Lieber weniger kaufen – und nur die sparsamsten.' },
   { id: 't_halv16', tip: true, date: '2016-06-09', from: 'Deniz', text: 'Noch 30 Tage bis zum zweiten Halving. Verkauf ineffiziente Miner jetzt, solange sie noch Geld bringen.' },
@@ -256,7 +260,7 @@ export const NEWS = [
   ['2011-06-08', 'Bitcoin bei 30 $! Medien berichten weltweit'],
   ['2011-06-19', 'GoxBank gehackt – Kurs kurzzeitig auf 1 Cent'],
   ['2011-07-01', 'FPGA-Miner kommen auf den Markt'],
-  ['2011-10-07', 'Litecoin (Scrypt) startet – „Silber zum Bitcoin-Gold"'],
+  ['2011-10-07', 'Litecoin (Scrypt) startet – „Silber zum Bitcoin-Gold“'],
   ['2012-11-28', 'Erstes Halving: Blockbelohnung sinkt auf 25 BTC'],
   ['2013-02-01', 'Erste ASIC-Miner ausgeliefert: Glacier A1 mit 66 GH/s'],
   ['2013-04-10', 'Bitcoin-Blase platzt: von 230 $ auf 70 $'],
@@ -296,7 +300,7 @@ export const NEWS = [
   ['2022-07-17', 'Hitzewelle und Energiekrise: Strom so teuer wie nie'],
   ['2022-09-15', 'The Merge: Ethereum wechselt zu Proof-of-Stake – GPU-Mining endet'],
   ['2022-11-11', 'Börse FXT bricht zusammen – Milliarden Kundengelder weg', { exchangeLoss: 0.85 }],
-  ['2022-12-21', 'Großer Miner „CoreHash" insolvent – zu viele Kredite, zu wenig Hashprice'],
+  ['2022-12-21', 'Großer Miner „CoreHash“ insolvent – zu viele Kredite, zu wenig Hashprice'],
   ['2023-08-15', 'Kaspa-ASICs ausgeliefert – GPUs verlieren'],
   ['2024-01-11', 'US-Behörde genehmigt Spot-Bitcoin-ETFs'],
   ['2024-03-14', 'Bitcoin erreicht 73.000 $'],
@@ -348,12 +352,12 @@ export const FEATURES = {
   rigs: { title: 'Mehr PCs', key: 'B', by: 'build', text: '', from: 'Deniz', msg: 'Ein PC ist gut, zwei sind besser. Im Shop unter „Rigs“ gibt’s Gehäuse als Bausatz.' },
   autosell: { title: 'Auto-Verkauf', key: 'M', by: 'market', text: '', from: 'Deniz', msg: 'Keine Lust, jeden Tag selbst zu verkaufen? An der Börse geht jetzt Auto-Verkauf.' },
   speed3: { title: 'Vorspulen', key: 'Leertaste', by: 'speed3', text: '', from: 'Deniz', msg: 'Du wartest eh nur noch? Leertaste, dann rauschen die Tage vorbei.' },
-  company: { title: 'Firma', key: 'C', by: 'company', text: '', from: 'Opa Heinz', msg: 'Noch ein paar Rechner, und die Sicherung fliegt. Drück C, dann leg ich dir einen eigenen Stromkreis.' },
+  company: { title: 'Meine Bude', key: 'C', by: 'company', text: '', from: 'Opa Heinz', msg: 'Noch ein paar Rechner, und die Sicherung fliegt. Drück C, dann leg ich dir einen eigenen Stromkreis.' },
   coins: { title: 'Mehr Coins', key: 'E', by: 'inspect', text: '', from: 'Deniz', msg: 'Es gibt jetzt mehr als Bitcoin! Schau dir deine Rechner an (E), da stellst du den Coin ein.' },
   cold: { title: 'Cold-Wallet', key: 'M', by: 'market', text: '', from: 'Deniz', msg: 'Lass nicht alles auf der Börse liegen! Leg deine Coins in die Cold-Wallet, da kommt kein Hacker ran.' },
   map: { title: 'Karte', key: 'K', by: 'map', text: '', from: 'Papa', msg: 'Der Hobbyraum im Keller ist frei! Mit K siehst du alle deine Standorte.' },
   ranking: { title: 'Logbuch', key: 'L', by: 'ranking', text: '', from: 'Deniz', msg: 'Ich hab dir ein Logbuch angelegt: Rangliste, Erfolge, Chronik. Drück L.' },
-  loan: { title: 'Bankkredit', key: 'C', by: 'company', text: '', from: 'Papa', msg: 'Die Bank würde dir jetzt Geld leihen. Mit Zinsen, natürlich. Steht unter Firma (C).' },
+  loan: { title: 'Bankkredit', key: 'C', by: 'company', text: '', from: 'Papa', msg: 'Die Bank würde dir jetzt Geld leihen. Mit Zinsen, natürlich. Steht unter C.' },
   buycoins: { title: 'Coins kaufen', key: 'M', by: 'market', text: '', from: 'Deniz', msg: 'An der Börse kannst du jetzt auch kaufen. Günstig rein, teuer raus. Theoretisch.' },
 };
 // Start ohne Handy (Anlernen): zwei Briefe auf dem Schreibtisch (World: letters.js, Game.readLetter)

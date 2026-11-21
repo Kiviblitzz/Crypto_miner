@@ -1,25 +1,26 @@
 // Personal der Hashwerk GmbH: Rollen, Eigenschaften, Namen (alle Namen fiktiv)
 //
-// Rolle: sal = Gehaltsfaktor (× Game.techSalary), max = sinnvolle Höchstzahl (Wirkung stapelt nicht)
-// Eigenschaft: wirkt nur in der passenden Rolle (Techniker), Text für die Karte
+// Rolle: sal = Gehaltsfaktor (× Game.techSalary, das Grundgehalt), max = sinnvolle Höchstzahl (Wirkung stapelt nicht)
+// Eigenschaft: nur Charakter (Schlagwort und Satz im Bewerbungsgespräch), keine Wirkung
+// Techniker gibt es nicht mehr: Reparieren geht selbst (Mini-Spiele), mit Robi (Shop → Roboter) oder als „Reparieren lassen“ zum vollen Preis.
 
 export const ROLES = {
-  tech: { m: 'Techniker', f: 'Technikerin', sal: 1, eff: 'Repariert Geräte (60 Stück je Person)' },
   elec: { m: 'Elektriker', f: 'Elektrikerin', sal: 1.2, max: 1, eff: 'Stromausbau −20 %, warnt 3 Tage vor der Sicherung' },
   trader: { m: 'Händler', f: 'Händlerin', sal: 1.5, max: 1, eff: 'Verkauft nur über dem 7-Tage-Schnitt, Gebühr −0,5 %' },
 };
+export const STAFF_ROLES = Object.keys(ROLES); // je eine Stelle
 
 export const TRAITS = {
-  flink: { name: 'Flink', eff: '+20 % Abdeckung' },
-  gruendlich: { name: 'Gründlich', eff: 'Weniger Ausfälle' },
-  sparfuchs: { name: 'Sparfuchs', eff: '−15 % Reparaturkosten' },
+  flink: { name: 'Flink', eff: 'Schnell bei der Sache' },
+  gruendlich: { name: 'Gründlich', eff: 'Arbeitet sorgfältig' },
+  sparfuchs: { name: 'Sparfuchs', eff: 'Achtet aufs Geld' },
 };
 
 // Kurze Sätze aus dem Bewerbungsgespräch (je Eigenschaft)
 export const QUOTES = {
-  flink: ['„Ich bin schneller am Rack, als die Sicherung fliegt."', '„Zwei Lüfter tauschen, bevor der Kaffee kalt ist? Gern."'],
-  gruendlich: ['„Ich schraube lieber einmal richtig als dreimal schnell."', '„Staub ist mein persönlicher Feind."'],
-  sparfuchs: ['„Ersatzteile? Hab ich noch welche im Kofferraum."', '„Warum neu kaufen, wenn man löten kann?"'],
+  flink: ['„Ich bin schneller am Rack, als die Sicherung fliegt.“', '„Zwei Lüfter tauschen, bevor der Kaffee kalt ist? Gern.“'],
+  gruendlich: ['„Ich schraube lieber einmal richtig als dreimal schnell.“', '„Staub ist mein persönlicher Feind.“'],
+  sparfuchs: ['„Ersatzteile? Hab ich noch welche im Kofferraum.“', '„Warum neu kaufen, wenn man löten kann?“'],
 };
 
 // Vornamen mit Geschlecht (für die Rollenbezeichnung) und Nachnamen – bunt gemischt aus Lindental, Frankfurt und Sogn
