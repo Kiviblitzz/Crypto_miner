@@ -568,7 +568,10 @@ export class UI {
       const s = this.g.s;
       if (s.feat && !s.flags.miningStarted) { this.toast('Erst den PC bauen, dann schlafen.', 'info', 2500); return; }
       const vf = this.w.visFrac ?? s.frac;
-      this.fade(); const steps = vf >= 0.29 ? 1 : 0; // jederzeit hinlegen: bis zum nächsten Morgen (nachts nach Mitternacht: bis 7 Uhr) for (let i = 0; i < steps; i++) this.g.advanceDay(); s.frac = 0.29; this.w.visFrac = 0.29;
+      // jederzeit hinlegen: bis zum nächsten Morgen (nachts nach Mitternacht: bis 7 Uhr)
+      this.fade(); const steps = vf >= 0.29 ? 1 : 0;
+      for (let i = 0; i < steps; i++) this.g.advanceDay();
+      s.frac = 0.29; this.w.visFrac = 0.29;
       this.g.learned?.('sleep'); this.toast(s.parcels?.length ? 'Guten Morgen! Vor deiner Wohnungstür liegt ein Paket.' : 'Guten Morgen!', 'good', 3000);
     }
   }
