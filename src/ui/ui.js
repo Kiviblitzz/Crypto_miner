@@ -270,7 +270,8 @@ export class UI {
     if (!sp || aimed || (w.aim && !aimed)) { el.classList.add('hidden'); return; }
     el.classList.toggle('far', sp.dist > 2.2);
     el.classList.remove('hidden'); el.classList.toggle('edge', !sp.on); el.classList.toggle('left', !sp.on && sp.side < 0);
-    const ex = sp.side < 0 ? 150 : innerWidth - 150, ey = Math.min(innerHeight - 140, Math.max(200, sp.front ? sp.y : innerHeight * 0.55));
+    const fc = sp.side >= 0 && document.querySelector('#featcards .featcard'), fcTop = fc ? fc.getBoundingClientRect().top - 40 : innerHeight; // Pfeil am rechten Rand über der Lektionskarte
+    const ex = sp.side < 0 ? 150 : innerWidth - 150, ey = Math.min(innerHeight - 140, fcTop, Math.max(200, sp.front ? sp.y : innerHeight * 0.55));
     el.style.transform = sp.on ? `translate(${Math.round(sp.x)}px, ${Math.round(Math.min(sp.y, innerHeight - 120))}px)` : `translate(${ex}px, ${Math.round(ey)}px)`;
     // nicht mit Meldungen und Lektionskarten überlappen (der Marker scheint sonst durch die Handy-Karte)
     const mr = el.querySelector('.om-in').getBoundingClientRect(); let hit = false; for (const t of document.querySelectorAll('#toasts .toast, #featcards .featcard')) { const r = t.getBoundingClientRect(); if (mr.right > r.left - 12 && mr.left < r.right + 12 && mr.bottom > r.top - 12 && mr.top < r.bottom + 12) { hit = true; break; } } el.style.visibility = hit ? 'hidden' : '';
@@ -1278,7 +1279,7 @@ export class UI {
     if (L?.left > 0) rows.push(['Papas Umzugsdarlehen', `${fmtUSD(L.left)} · ohne Zinsen`]);
     const sec = h(`<div class="sec costs"><h4>Monatskosten</h4><div class="kv">${rows.map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join('')}</div><div class="row"></div></div>`), r = sec.querySelector('.row');
     if (o && g.billCoinOk()) { const b = h('<button class="btn small primary">Coins verkaufen und bezahlen</button>'); b.onclick = () => { if (g.payBills(true)) this.audio?.cash?.(); this.reCompany(); }; r.append(b); }
-    const b = h('<button class="btn small">Abrechnungen im Handy</button>'); b.onclick = () => { this.closeModal(); this.phone('konto'); }; r.append(b);
+    if (this.kontoOk()) { const b = h('<button class="btn small">Abrechnungen im Handy</button>'); b.onclick = () => { this.closeModal(); this.phone('konto'); }; r.append(b); }
     return sec;
   }
   rentLabel(f, un) {
@@ -1988,10 +1989,10 @@ export class UI {
     const qr = h('<div class="row rb-quick"></div>'); // Serien-Einbau steht oben (kitSec)
     if (pm) { // Paket-Modus: dieselben Abkürzungen als Bestellung (Teile kommen morgen ins Lager)
       if (!p.mobo || !p.cpu || !p.psu) { const pl = g.basePlan(o); if (pl?.items.length) { const b = h(`<button class="btn small" ${pl.total > g.s.cash ? 'disabled' : ''}>Basis-Teile bestellen · ${this.money(pl.total)}</button>`); b.onclick = () => { if (!g.orderBase(uid)) this.toast('Nicht genug Geld.', 'bad'); else this.ordered('Basis-Teile', ' Paket aufheben, dann hier einbauen.'); this.inspect(uid); }; qr.append(b); } }
-      else if (p.gpus.length < cap) { const bg = this.bestGpu(), pl = bg && g.fillPlan(o, bg.id); if (pl) { const b = h(`<button class="btn small" title="${pl.k}× ${esc(bg.name)}${pl.psu ? ` + ${esc(PART[pl.psu].name)}` : ''}">${pl.k === 1 ? 'Freien Platz' : `${pl.k} freie Plätze`} füllen · ${pl.k}× ${esc(bg.name)} bestellen · ${this.money(pl.total)}</button>`); b.onclick = () => { if (!g.orderFill(uid, bg.id)) this.toast('Nicht genug Geld.', 'bad'); else this.ordered(`${pl.k}× ${bg.name}${pl.psu ? ` + ${PART[pl.psu].name}` : ''}`, ' Paket aufheben, dann hier einbauen.'); this.inspect(uid); }; qr.append(b); } }
+      else if (p.gpus.length < cap) { const bg = this.bestGpu(), pl = bg && g.fillPlan(o, bg.id); if (pl) { const b = h(`<button class="btn small" title="${pl.k}× ${esc(bg.name)}${pl.psu ? ` + ${esc(PART[pl.psu].name)}` : ''}">${pl.k}× ${esc(bg.name)} bestellen · ${this.money(pl.total)}</button>`); b.onclick = () => { if (!g.orderFill(uid, bg.id)) this.toast('Nicht genug Geld.', 'bad'); else this.ordered(`${pl.k}× ${bg.name}${pl.psu ? ` + ${PART[pl.psu].name}` : ''}`, ' Paket aufheben, dann hier einbauen.'); this.inspect(uid); }; qr.append(b); } }
     }
     else if (!p.mobo || !p.cpu || !p.psu) { const b = h('<button class="btn small">Basis-Teile kaufen & einbauen</button>'); b.onclick = () => { const r = g.quickBase(uid); if (!r) this.toast('Nicht genug Geld.', 'bad'); this.inspect(uid); }; qr.append(b); }
-    else if (p.gpus.length < cap) { const bg = this.bestGpu(); if (bg) { const k = cap - p.gpus.length, pr = g.itemPrice(bg) * k; const b = h(`<button class="btn small">Freie Plätze füllen · ${k}× ${esc(bg.name)} · ${this.money(pr)}</button>`); b.onclick = () => { const n = g.fillGpus(uid, bg.id); if (!n) this.toast('Nicht genug Geld.', 'bad'); else { this.w.animateInstall?.(uid, 'gpu'); this.audio?.install?.(); } this.inspect(uid); }; qr.append(b); } }
+    else if (p.gpus.length < cap) { const bg = this.bestGpu(); if (bg) { const k = cap - p.gpus.length, pr = g.itemPrice(bg) * k; const b = h(`<button class="btn small">${k}× ${esc(bg.name)} kaufen · ${this.money(pr)}</button>`); b.onclick = () => { const n = g.fillGpus(uid, bg.id); if (!n) this.toast('Nicht genug Geld.', 'bad'); else { this.w.animateInstall?.(uid, 'gpu'); this.audio?.install?.(); } this.inspect(uid); }; qr.append(b); } }
     if (qr.childElementCount) sec.append(qr);
     return sec;
   }
