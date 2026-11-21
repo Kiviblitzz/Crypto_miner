@@ -23,7 +23,7 @@ const SEG = [[2010.6, 2013, 250], [2013, 2017, 150], [2017, 2031, 105]];
 const xs = (t) => { let x = 0; for (const [a, b, w] of SEG) { if (t <= a) break; x += (Math.min(t, b) - a) * w; } return PADL + x; };
 const yearOf = (iso) => { const d = new Date(iso + (iso.length <= 7 ? '-01' : '')); return d.getUTCFullYear() + d.getUTCMonth() / 12 + (d.getUTCDate() - 1) / 365; };
 const dayYear = (day) => { const d = new Date(day * 864e5); return d.getUTCFullYear() + d.getUTCMonth() / 12 + (d.getUTCDate() - 1) / 365; };
-const lines2 = (t) => { if (t.length <= 20) return [t]; const w = t.split(' '); let a = ''; while (w.length && (a + ' ' + w[0]).trim().length <= 20) a = (a + ' ' + w.shift()).trim(); let b = w.join(' '); if (b.length > 21) b = b.slice(0, 20) + '…'; return a ? [a, b] : [t.slice(0, 20), t.slice(20, 40)]; };
+const lines2 = (t) => { const M = 17; if (t.length <= M) return [t]; const w = t.split(' '); let a = ''; while (w.length && (a + ' ' + w[0]).trim().length <= M) a = (a + ' ' + w.shift()).trim(); let b = w.join(' '); if (b.length > M + 1) b = b.slice(0, M) + '…'; return a ? [a, b] : [t.slice(0, M), t.slice(M, 2 * M)]; }; // Platz fürs Symbol rechts
 const ICON = {
   check: '<path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>',
   lock: '<rect x="6" y="11" width="12" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8.5 11V8.5a3.5 3.5 0 0 1 7 0V11" fill="none" stroke="currentColor" stroke-width="2"/>',
@@ -128,7 +128,7 @@ function drawTree(ui, root) {
     name.forEach((ln, i) => { const t = sv('text', { x: 12, y: name.length === 1 ? 28 : 19 + i * 15, class: 'skn-t' }); t.textContent = ln; grp.append(t); });
     if (later) { const t = sv('text', { x: 12, y: 40, class: 'skn-d' }); t.textContent = k.from ? 'ab ' + k.from.slice(0, 4) : 'später'; grp.append(t); }
     const ic = { known: 'check', soon: 'lock', later: 'lock', wip: 'wip', auto: 'phone' }[s0];
-    if (ic) { const gi = sv('g', { transform: `translate(${NW - 24},${NH / 2 - 9}) scale(0.75)`, class: 'skn-i', color: s0 === 'known' ? col : '#6c7586' }); gi.innerHTML = ICON[ic]; grp.append(gi); }
+    if (ic) { const gi = sv('g', { transform: `translate(${NW - 21},${NH / 2 - 8}) scale(0.66)`, class: 'skn-i', color: s0 === 'known' ? col : '#6c7586' }); gi.innerHTML = ICON[ic]; grp.append(gi); }
     else if (s0 === 'open') grp.append(sv('circle', { cx: NW - 15, cy: NH / 2, r: 5, fill: col, class: 'skn-dot' }));
     root.append(grp);
   }
