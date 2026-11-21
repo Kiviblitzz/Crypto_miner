@@ -15,6 +15,7 @@ import { SKILL_METHODS, migrateSkills, skEmpty } from './skills.js'; // Fähigke
 import { BOOK, XP_POT } from '../data/skills.js';
 for (const e of [...BANK_EVENTS, ...BILL_EVENTS]) if (!EVENT[e.id]) { EVENTS.push(e); EVENT[e.id] = e; } // Bankgespräch (Game.dispoDay), Mahnung (Game.billsDay)
 
+const STARTER_GPU = 'rhd5770'; // erste Karte im Shop: ~108 W, passt zu Papas altem 400-W-Netzteil
 const LAST_DATA_DAY = BTC_PRICE.lastDay;
 const FREE_POWER_END = toDay('2011-03-01'); // bis dahin steckt der Strom der Wohnung in der Pauschale der Warmmiete – dann sieht Herr Krause die Abrechnung
 export const SAVE_KEY = 'hashwerk-save-v1';
@@ -263,7 +264,9 @@ export class Game {
   shopList(cat, facId) {
     return PLACEABLES.filter((p) => p.cat === cat && this.available(p) && (this.placeableAllowed(p, facId) || (p.hydro && this.facTier(facId) >= 3)));
   }
-  partList(type) { return PARTS.filter((p) => p.type === type && this.available(p)).sort((a, b) => b.releaseDay - a.releaseDay); }
+  partList(type) { return PARTS.filter((p) => p.type === type && this.available(p) && (type !== 'gpu' || this.gpuShopOk(p))).sort((a, b) => b.releaseDay - a.releaseDay); }
+  // Am Anfang gibt's im Shop nur eine Einsteigerkarte (läuft mit dem 400-W-Netzteil); die große Auswahl kommt ein paar Tage nach der ersten Karte mit Deniz' Nachricht
+  gpuShopOk(p) { const s = this.s; return !s.feat || !!s.flags.gpuMore || p.id === STARTER_GPU; }
 
   // ---------- Objekte ----------
   facObjects(facId = this.s.current) { return this.s.fac[facId].objects; }
@@ -332,6 +335,7 @@ export class Game {
     }
     if (s.flags.miningStarted && btc * this.price('BTC') >= 12) this.grant('market');
     if (s.flags.boughtGpu) { this.grant('build'); this.grant('speed2'); this.grant('rigs'); } // gleich weitere Mining-PCs bauen
+    if (s.flags.boughtGpu && !s.flags.gpuMore) { s.flags.gpuDay ??= s.day; if (s.day >= s.flags.gpuDay + 3 || s.chapter >= 1) { s.flags.gpuMore = true; if (s.chapter < 1) this.pushMsg({ from: 'Deniz', text: 'Läuft die Karte? Dann wird’s jetzt richtig was: Im Shop gibt’s auch die dicken. Aber guck aufs Netzteil.' }); } }
     if (s.flags.cpuStart && s.flags.miningStarted) this.grant('build'); // CPU-Start: der Shop ist sofort da – die erste Grafikkarte bestellt man dort
     if (s.goals.rig2 || (s.unlocked.includes('kinder') && this.summary?.kinder?.watt > 1200)) this.grant('company'); // Strom ausbauen (Eigener Stromkreis)
     if (this.has('build')) { let hot = false; for (const id of s.unlocked) if ((this.summary[id]?.temp || 0) > 30) hot = true; if (hot) this.grant('heat'); }

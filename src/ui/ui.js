@@ -923,7 +923,7 @@ export class UI {
   goalHint(go) {
     const g = this.g, s0 = g.s;
     if (go.id === 'gpuorder') return g.has('build') ? 'Am <b>Monitor</b> <kbd>E</kbd> oder <kbd>B</kbd>: Shop → Teile → Grafikkarten. Lieferung morgen früh vor deine Wohnungstür.' : '';
-    if (go.id === 'gpu') { const inBag = g.bagList('gpu').length; if (inBag) return 'Die Karte liegt im Lager: PC anschauen, <kbd>E</kbd> → Grafikkarte 1 → einbauen.'; if (s0.parcels?.length) return 'Das Paket liegt vor deiner Wohnungstür – hingehen und <kbd>E</kbd>.'; if (s0.orders?.length) return 'Bestellt – morgen früh liegt das Paket vor der Tür. Leg dich ins Bett (<kbd>E</kbd>) und schlaf bis morgen.'; return ''; }
+    if (go.id === 'gpu') { const bag = g.bagList('gpu'), pc0 = g.facObjects('kinder').find((x) => x.type === 'tower' && x.parts); if (bag.length) { const fits = !pc0 || bag.some((b) => !g.psuWhy(pc0, b.id)); return fits ? 'Die Karte liegt im Lager: PC anschauen, <kbd>E</kbd> → Grafikkarte 1 → einbauen.' : 'Die Karte braucht mehr Strom, als dein Netzteil liefert: PC anschauen, <kbd>E</kbd> → Grafikkarte 1 → „Netzteil bestellen“, dann einbauen.'; } if (s0.parcels?.length) return 'Das Paket liegt vor deiner Wohnungstür – hingehen und <kbd>E</kbd>.'; if (s0.orders?.length) return 'Bestellt – morgen früh liegt das Paket vor der Tür. Leg dich ins Bett (<kbd>E</kbd>) und schlaf bis morgen.'; return ''; }
     const site = { rig2: 'kinder', openrig: 'keller' }[go.id]; if (!site || !g.has('rigs') || !g.s.unlocked.includes(site)) return '';
     if (g.facObjects(site).some((o) => g.osNeed?.(o) && g.pcReady(o))) return 'Der neue Rig braucht noch ein Betriebssystem: anschauen, <kbd>E</kbd> → System → Installer.'; // Fähigkeiten: ohne System schürft er nicht
     if (g.kitsOpen(site).length) return g.s.current === site ? 'Bausatz steht – anschauen, <kbd>E</kbd> und die Teile aus dem Lager einbauen.' : `Dein Bausatz wartet ${site === 'kinder' ? 'in der Wohnung' : 'im Keller'} aufs Einbauen.`;
@@ -1532,7 +1532,7 @@ export class UI {
   menu() {
     const g = this.g;
     const body = h(`<div><h2>Menü</h2><div class="row"><button class="btn primary" data-a="save">Speichern</button><button class="btn" data-a="load">Laden</button><button class="btn danger" data-a="new">Neues Spiel</button></div>
-      <div class="sec"><h4>Grafik</h4><div class="row"><button class="btn small ${this.w.quality === 'high' ? 'primary' : ''}" data-q="high">Hoch</button><button class="btn small ${this.w.quality === 'medium' ? 'primary' : ''}" data-q="medium">Mittel</button><button class="btn small ${this.w.quality === 'low' ? 'primary' : ''}" data-q="low">Niedrig</button></div></div>
+      <div class="sec"><h4>Grafik</h4><div class="row">${[['auto', 'Automatisch'], ['high', 'Hoch'], ['medium', 'Mittel'], ['low', 'Niedrig']].map(([k, l]) => `<button class="btn small ${(this.w.gfx?.mode || 'auto') === k ? 'primary' : ''}" data-q="${k}">${l}</button>`).join('')}</div><div style="font-size:12px;color:var(--dim);margin-top:6px">${(this.w.gfx?.mode || 'auto') === 'auto' ? `Gerade: ${({ high: 'Hoch', medium: 'Mittel', low: 'Niedrig' })[this.w.quality]} – ruckelt es, schaltet das Spiel selbst herunter.` : 'Ruckelt es? Stell auf „Niedrig“ oder öffne das Spiel im Browser statt in der App.'}</div>${this.w.glInfo ? `<div style="font-size:12px;color:${this.w.glSoft ? '#ffb36b' : 'var(--dim)'};margin-top:4px">${this.w.glSoft ? '⚠ Grafikkarte wird nicht genutzt – der Browser rechnet die 3D-Grafik auf dem Prozessor. Abhilfe: Spiel im Browser (Chrome, Edge, Firefox) öffnen und dort „Hardwarebeschleunigung verwenden“ einschalten.' : 'Grafikkarte: ' + esc(this.w.glInfo)}</div>` : ''}</div>
       <div class="sec"><h4>Ton</h4><div class="row"><button class="btn small" data-a="mute">${this.audio?.muted ? 'Ton an' : 'Ton aus'}</button></div></div>
       <div class="sec"><div style="font-size:12px;color:var(--dim)">Fan-Projekt · alle Namen fiktiv · keine Anlageberatung<br/>Bitcoin-Kurse und Hashrate: Coin Metrics Community Data (CC BY-NC 4.0)</div></div></div>`);
     body.querySelector('[data-a=save]').onclick = () => { this.toast(g.save() ? 'Gespeichert' : 'Speichern fehlgeschlagen', 'good', 2000); };
@@ -1549,7 +1549,7 @@ export class UI {
       this.newGamePick(nb); // Schwierigkeit wählen, dann neu starten
     };
     body.querySelector('[data-a=mute]').onclick = () => { this.audio?.setMuted(!this.audio.muted); this.menu(); };
-    body.querySelectorAll('[data-q]').forEach((b) => (b.onclick = () => { this.w.setQuality(b.dataset.q); this.menu(); }));
+    body.querySelectorAll('[data-q]').forEach((b) => (b.onclick = () => { this.w.setGfxMode(b.dataset.q); this.menu(); }));
     this.openModal(body, 'narrow', 'menu');
   }
 
@@ -1844,13 +1844,15 @@ export class UI {
     for (const it of parts) {
       const price = g.itemPrice(it), n = g.bagN(it.id), isNew = g.s.day - it.releaseDay < 120;
       let spec = '';
-      if (T === 'gpu') { const v = val(it); spec = `${it.watt} W · ${it.vram} GB${v.c ? ` · ${fmtHash(it.hash[g.coinAlgo(v.c)] || 0, g.coinAlgo(v.c))}` : ''}<br/>allein ≈ <b class="${v.net >= 0 ? 'pos' : 'neg'}">${v.net >= 0 ? '+' : ''}${fmtUSD(v.net)}/Tag</b>${v.c ? ` mit ${COIN[v.c].name}` : ''}`; }
+      let psuNeed = 0; // passt die Karte in keinen PC mit freiem Platz, weil das Netzteil zu schwach ist? Dann gleich beim Kauf sagen
+      if (T === 'gpu') { const v = val(it); const rigs = g.facObjects(fac).filter((o2) => o2.parts?.mobo && o2.parts.psu && PLACEABLE[o2.type]?.kind === 'rig' && o2.parts.gpus.length < g.rigGpuCap(o2)); if (rigs.length && rigs.every((o2) => g.psuWhy(o2, it.id))) psuNeed = Math.min(...rigs.map((o2) => g.wattAfter(o2, it.id)));
+        spec = `${it.watt} W · ${it.vram} GB${v.c ? ` · ${fmtHash(it.hash[g.coinAlgo(v.c)] || 0, g.coinAlgo(v.c))}` : ''}<br/>allein ≈ <b class="${v.net >= 0 ? 'pos' : 'neg'}">${v.net >= 0 ? '+' : ''}${fmtUSD(v.net)}/Tag</b>${v.c ? ` mit ${COIN[v.c].name}` : ''}${psuNeed ? `<br/><b class="neg">Dein Netzteil reicht dafür nicht – du brauchst eins ab ${psuNeed} W</b>` : ''}`; }
       if (T === 'cpu') spec = `${it.watt} W · reicht als Steuerzentrale${it.hash.sha256 ? ` · schürft mit (${fmtHash(it.hash.sha256, 'sha256')})` : ''}`;
       if (T === 'mobo') spec = `${it.slots} Grafikkarten-Plätze · ${it.watt} W`;
       if (T === 'psu') spec = `${it.cap} W Leistung${it.cap >= 1600 ? ' · für große Rahmen (8er/12er brauchen zwei)' : ''}`;
       const card = h(`<div class="item part" data-price="${price}"><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${this.money(price)}</span></div><div class="s">${it.id === bestId ? '<b class="pv-best">Bester Wert für dein Geld</b><br/>' : ''}${spec}${n ? `<br/><b class="pv-n">Im Lager: ${n}</b>` : ''}${pend[it.id] ? `<br/><b class="pv-n">Unterwegs: ${pend[it.id]}</b>` : ''}</div><div class="miss"></div><div class="rc-row"><button class="btn small primary place" data-p="${price}">${pm ? 'Bestellen' : 'Kaufen'} · ${this.money(price)}</button>${T === 'gpu' || T === 'psu' ? `<button class="btn small" data-p="${price * 2}">2×</button>` : ''}</div></div>`);
       const [b1, b2] = card.querySelectorAll('button');
-      const buy = (k) => (e) => { e.stopPropagation(); if (g.parcelMode()) { const got = g.orderPart(it.id, k); if (!got) { this.toast('Nicht genug Geld.', 'bad'); return; } this.ordered(`${got}× ${it.name}`, ' Paket aufheben, dann PC anschauen und <kbd>E</kbd>: einbauen.'); return; } const got = g.buyPart(it.id, k); if (!got) { this.toast('Nicht genug Geld.', 'bad'); return; } this.audio?.buy?.(); this.toast(`${got}× ${esc(it.name)} im Lager – einbauen: PC anschauen und <kbd>E</kbd>`, 'good', 3500); };
+      const buy = (k) => (e) => { e.stopPropagation(); if (g.parcelMode()) { const got = g.orderPart(it.id, k); if (!got) { this.toast('Nicht genug Geld.', 'bad'); return; } this.ordered(`${got}× ${it.name}`, psuNeed ? ` Achtung: Dein Netzteil reicht dafür nicht – bestell eins ab ${psuNeed} W mit (Reiter Netzteile).` : ' Paket aufheben, dann PC anschauen und <kbd>E</kbd>: einbauen.'); return; } const got = g.buyPart(it.id, k); if (!got) { this.toast('Nicht genug Geld.', 'bad'); return; } this.audio?.buy?.(); this.toast(`${got}× ${esc(it.name)} im Lager – einbauen: PC anschauen und <kbd>E</kbd>`, 'good', 3500); };
       b1.onclick = buy(1); if (b2) b2.onclick = buy(2); card.onclick = buy(1);
       list.append(card);
     }
@@ -1908,6 +1910,13 @@ export class UI {
         c.onmouseenter = () => this.w.ghostPart?.(uid, t, b2.id); c.onmouseleave = () => this.w.ghostPart?.(null);
         c.querySelector('button').onclick = () => install(b2.id, t === 'gpu' && id ? idx : null);
         pick.append(c);
+        if (bw && t !== 'psu' && p.psu) { // Netzteil zu schwach: Grund lesbar machen und das kleinste passende gleich anbieten
+          const need = g.wattAfter(o, b2.id, t === 'gpu' && id ? idx : null), cap = PART[p.psu].cap * np;
+          const fit = g.partList('psu').filter((x) => g.available(x) && x.cap * np >= need).sort((a, b) => a.cap - b.cap || g.itemPrice(a) - g.itemPrice(b))[0];
+          const fx = h(`<div class="rb-fix"><span>Braucht ${need} W – dein Netzteil schafft nur ${cap} W.</span>${fit ? `<button class="btn small primary">${pm ? 'Netzteil bestellen' : 'Netzteil kaufen'} · ${esc(fit.name)} · ${this.money(g.itemPrice(fit) * np)}</button>` : '<span>Dafür gibt es noch kein passendes Netzteil.</span>'}</div>`);
+          if (fit) fx.querySelector('button').onclick = () => buyIn(fit.id, null);
+          pick.append(fx);
+        }
       }
       const shop = shopFor(t).filter((x) => x.id !== id);
       if (shop.length) pick.append(h(`<div class="rb-h">${pm ? 'Im Shop bestellen · Lieferung morgen' : 'Neu kaufen'}</div>`));
