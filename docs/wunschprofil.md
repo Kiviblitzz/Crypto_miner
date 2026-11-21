@@ -71,6 +71,7 @@ Zitate sind wörtlich (Tippfehler bleiben stehen), damit der Ton erhalten bleibt
   - Toasts sind eine kurze Zeile.
   - Kein AI-Ton: nichts übererklären, keine Schachtelsätze. So schreiben, wie ein Kumpel kurz Bescheid sagt.
   - Negative Beträge sind rot, positive grün.
+- **Erste Grafikkarte (21.11.2026):** „und vielleicht am anfang so machen, dass man nur eine schelchet gpu hat und nicht alle shcoin dass das passieren kann“. Am Anfang gibt es im Shop nur eine Einsteigerkarte (RHD 5770, läuft mit dem Startnetzteil). Drei Tage nach dem Einbau meldet sich Deniz, dann kommt die volle Auswahl. Die Daten der Karten bleiben echt; begrenzt wird nur das Angebot.
 - **Arbeitsweise:** „der ideen typ soll mit dir quatschen und mit mir in einem andern chat so dass du nicht auf antworten warten musst“. Der Spieler-Vertreter läuft als eigener Chat, fragt den Auftraggeber dort und schickt die Ergebnisse an den Entwicklungs-Chat.
 
 ## Roadmap (später)
