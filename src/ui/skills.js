@@ -1,8 +1,13 @@
-// Fähigkeiten-Seite (Taste T, J geht auch): EIN großer Baum – Knoten mit Verbindungslinien, zeitlich von links (2010) nach rechts,
-// Äste je Kategorie als Farbe, ziehen = verschieben, Rad/Pinch = zoomen, Klick auf einen Knoten öffnet rechts die Details.
-// Dazu die Handgriffe im Inspektor (Betriebssystem-Installer, BIOS-Profile, Firmware, Wartung, Wasserkühlung, Bitstream, Roboter)
-// und die Reparatur-Knöpfe (selbst = Mini-Spiel, Routine, reparieren lassen). Esc: erst Details/Installer zu, dann der Baum, dann Pause.
-import { SKILLS, SKILL, SKILL_CAT, POTS, PROFILES, OS, TEACHERS } from '../data/skills.js';
+// Fähigkeiten-Seite (Taste T, J geht auch): EIN Stern-Baum, aufgebaut wie die Upgrade-Bäume von Moon Sweepers und Find the Needle.
+// Start in der Mitte, sechs Äste wachsen sternförmig nach außen (je eine Farbe und Richtung) – kein Zeitstrahl, keine Jahreszahlen.
+// Nebel: sichtbar sind gelernte Knoten und ihre direkten Nachbarn (dunkler Umriss mit Symbol) – wer lernt, deckt auf. Was erst mit neuer Hardware,
+// einem größeren Standort oder später Sinn ergibt (z. B. ASIC-Firmware), bleibt im Nebel, bis der Vorgänger gelernt ist UND es so weit ist.
+// Gelernt wird nur mit Punkten (Paket 18): ein Topf, oben „N Punkte frei“; jeder Knoten hat genau einen Knopf „Freischalten · N Punkte“.
+// Knoten: runde Symbole ohne Textkasten; Hover, Fokus oder erstes Tippen zeigt einen kurzen Tooltip (Name, ein Satz, Knopf).
+// Robi (USB-Stick → Greifarm → Lötkopf) ist ein Knoten mit Stufen 1/3–3/3. Im Baum stehen nur gebaute Fähigkeiten (TREE, needsOf).
+// Dazu die Handgriffe im Inspektor (Betriebssystem-Installer, BIOS-Profile, Leistungsziel, Firmware, BIOS-Mod, Netzteil-Mod, Wartung, Wasserkühlung, Bitstream, Robi)
+// und die Reparatur-Knöpfe je Defekt (selbst = Mini-Spiel Löten / Fehlersuche / Chip-Kette, Routine, reparieren lassen). Esc: erst Tooltip/Installer zu, dann der Baum, dann Pause.
+import { TREE, needsOf, SKILL, SKILL_CAT, PROFILES, OS, REPAIR, PLIMIT, PSUMOD } from '../data/skills.js';
 import { PLACEABLE } from '../data/hardware.js';
 import { FACILITY } from '../data/world.js';
 import { fmtUSD, fmtHash, fmtWatt, fmtDate } from '../sim/game.js';
@@ -13,167 +18,208 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 const money = (v) => `${Math.round(v).toLocaleString('de-DE')} $`;
 const NS = 'http://www.w3.org/2000/svg';
 const sv = (tag, a = {}) => { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(a)) e.setAttribute(k, v); return e; };
-// Äste: Reihenfolge von oben nach unten (Lieblinge oben: OS & Firmware, Tuning, Löten & Reparatur) und Farbe
-const LANES = [['sof', '#38c8ff'], ['tun', '#ff8a3d'], ['rep', '#ffb000'], ['sch', '#8fd16b'], ['kst', '#4fd6c8'], ['ges', '#c58cff']];
-const CAT_COLOR = Object.fromEntries(LANES);
-const AT = { grosshandel: '2014-03-01', einarbeiten: '2014-03-01', robo_usb: '2015-09-01', robo_steck: '2016-06-01', robo_loet: '2017-03-01', windows: '2010-11-01', wartung: '2010-10-20', loeten: '2010-11-15', serie: '2012-06-01', lager: '2011-06-01', elektrik: '2011-03-01', stecken: '2011-03-01', abluft: '2010-11-20', gpuminer: '2010-10-25', boerse: '2010-11-01' }; // Platz im Zeitstrahl für Knoten ohne Datum
-const NW = 150, NH = 46, ROWH = 58, PADL = 96, PADT = 46;
-// Zeitachse: die ersten Jahre breiter (dort liegen die meisten Fähigkeiten), später enger
-const SEG = [[2010.6, 2013, 250], [2013, 2017, 150], [2017, 2031, 105]];
-const xs = (t) => { let x = 0; for (const [a, b, w] of SEG) { if (t <= a) break; x += (Math.min(t, b) - a) * w; } return PADL + x; };
-const yearOf = (iso) => { const d = new Date(iso + (iso.length <= 7 ? '-01' : '')); return d.getUTCFullYear() + d.getUTCMonth() / 12 + (d.getUTCDate() - 1) / 365; };
-const dayYear = (day) => { const d = new Date(day * 864e5); return d.getUTCFullYear() + d.getUTCMonth() / 12 + (d.getUTCDate() - 1) / 365; };
-const lines2 = (t) => { const M = 17; if (t.length <= M) return [t]; const w = t.split(' '); let a = ''; while (w.length && (a + ' ' + w[0]).trim().length <= M) a = (a + ' ' + w.shift()).trim(); let b = w.join(' '); if (b.length > M + 1) b = b.slice(0, M) + '…'; return a ? [a, b] : [t.slice(0, M), t.slice(M, 2 * M)]; }; // Platz fürs Symbol rechts
+// Äste: Richtung in Grad (0 = rechts, im Uhrzeigersinn) und Farbe. Software und Reparatur liegen nebeneinander, dazwischen Robi.
+const BRANCH = { sof: { a: -90, c: '#38c8ff' }, tun: { a: -30, c: '#ff8a3d' }, kst: { a: 30, c: '#4fd6c8' }, sch: { a: 90, c: '#8fd16b' }, ges: { a: 150, c: '#c58cff' }, rep: { a: 210, c: '#ffb000' } };
+const CAT_COLOR = Object.fromEntries(Object.entries(BRANCH).map(([k, v]) => [k, v.c]));
+// Knoten mit Stufen: ein Symbol, unten „1/3“; liegt zwischen zwei Ästen (Winkel a)
+const GROUPS = { robo: { ids: ['robo_usb', 'robo_steck', 'robo_loet'], name: 'Robi', cat: 'rep', a: -120 } };
+const GROUP_OF = Object.fromEntries(Object.entries(GROUPS).flatMap(([g, G]) => G.ids.map((id) => [id, g])));
+const SYM = { start: '⭐', bauen: '🔧', riser: '🔌', cpustart: '🖥️', gpuminer: '🎮', windows: '🪟', linux: '🐧', image: '💾', fpga: '🧩', asic: '⛏️', firmware: '📟', fernwartung: '📡', skript: '📜', takt: '⏱️', biosmod: '🧬', autotuning: '🎛️', luefter: '🌀', asictakt: '⚙️', wasser: '💧', immersion: '🛢️', lastman: '⚡', abwaerme: '♨️', wartung: '🧹', loeten: '🔥', stecken: '🔍', hashboard: '💠', psumod: '🔋', boerse: '💱', limit: '📈', cold: '🧊', robo: '🤖' };
+const ORDER = { robo_usb: '2015-09-01', robo_steck: '2016-06-01', robo_loet: '2017-03-01', windows: '2010-11-01', wartung: '2010-10-20', loeten: '2010-11-15', stecken: '2011-03-01', gpuminer: '2010-10-25', boerse: '2010-11-01' }; // nur die Reihenfolge am Ast (nicht sichtbar)
 const ICON = {
   check: '<path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>',
   lock: '<rect x="6" y="11" width="12" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8.5 11V8.5a3.5 3.5 0 0 1 7 0V11" fill="none" stroke="currentColor" stroke-width="2"/>',
-  phone: '<rect x="8" y="3.5" width="8" height="17" rx="2" fill="none" stroke="currentColor" stroke-width="2"/>',
-  wip: '<path d="M4 20l6-6M14 4l6 6-8 8-6-6z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
 };
+const order = (iso) => { const d = new Date(iso); return d.getUTCFullYear() + d.getUTCMonth() / 12 + (d.getUTCDate() - 1) / 365; };
+const R0 = 100, STEP = 74, NR = 24, RAD = Math.PI / 180;
 
-// ---------- Layout: x nach Zeit, y nach Ast (mehrere Reihen je Ast, ohne Überlappung) ----------
+// ---------- Graph und Layout: Knoten (gebaute Fähigkeiten, Stufen-Gruppen, Start), Eltern = Voraussetzungen; ohne Voraussetzung hängt ein Knoten am Vorgänger seines Astes ----------
+// Abstand vom Start = Tiefe im Ast (kein Zeitstrahl); Winkel nahe den Eltern im eigenen Ast, ohne Überlappung
 function layout() {
-  const pos = {}, X = {};
-  const base = (k) => yearOf(k.from || AT[k.id] || '2010-10-15');
-  const order = [...SKILLS].sort((a, b) => base(a) - base(b));
-  const xOf = (k) => { if (X[k.id] != null) return X[k.id]; let x = xs(base(k)); for (const n of k.needs || []) if (SKILL[n]) x = Math.max(x, xOf(SKILL[n]) + NW + 26); return (X[k.id] = x); }; // rechts von allen Voraussetzungen
-  const lanes = []; let y = PADT;
-  for (const [cat, color] of LANES) {
-    const rows = []; const list = order.filter((k) => k.cat === cat).map((k) => ({ k, x: xOf(k) })).sort((a, b) => a.x - b.x);
-    for (const it of list) { let r = rows.findIndex((last) => last + NW + 18 <= it.x); if (r < 0) { rows.push(0); r = rows.length - 1; } rows[r] = it.x; pos[it.k.id] = { x: it.x, y: y + r * ROWH, cat }; }
-    const hgt = Math.max(1, rows.length) * ROWH + 18; lanes.push({ cat, color, y, h: hgt }); y += hgt;
+  const N = {}, nodeOf = (id) => GROUP_OF[id] || id;
+  N.start = { id: 'start', cat: null, ids: [], par: [], kids: [], t: 0, x: 0, y: 0, r: 0, a: 0 };
+  for (const k of TREE) {
+    const id = nodeOf(k.id), G = GROUPS[id]; N[id] ||= { id, cat: G?.cat || k.cat, ids: G?.ids || [k.id], par: [], kids: [], t: Infinity, group: !!G };
+    const n = N[id]; n.t = Math.min(n.t, order(k.from || ORDER[k.id] || '2010-10-15'));
+    for (const p of needsOf(k)) { const pid = nodeOf(p); if (pid !== id && !n.par.includes(pid)) n.par.push(pid); }
   }
-  const maxX = Math.max(...Object.values(pos).map((p) => p.x)) + NW + 60;
-  return { pos, lanes, W: maxX, H: y + 10 };
+  for (const cat of Object.keys(BRANCH)) { let prev = null; const br = Object.values(N).filter((x) => x.cat === cat && !x.group); for (const n of br.filter((x) => !x.par.length).sort((a, b) => a.t - b.t)) { const up = (x, seen = new Set()) => !seen.has(x.id) && (seen.add(x.id), x.par.some((p) => p === n.id || (N[p] && up(N[p], seen)))), before = br.filter((x) => x !== n && x.par.length && x.t < n.t && !up(x)).sort((a, b) => b.t - a.t)[0]; n.par = [prev || (before ? before.id : 'start')]; n.trunk = true; prev = n.id; } }
+  for (const n of Object.values(N)) for (const p of n.par) N[p].kids.push(n.id);
+  const placed = [N.start], done = new Set(['start']), todo = Object.values(N).filter((n) => n.id !== 'start').sort((a, b) => a.t - b.t);
+  while (todo.length) {
+    const i = todo.findIndex((n) => n.par.every((p) => done.has(p))); const n = todo.splice(i < 0 ? 0 : i, 1)[0];
+    const B = n.group ? { a: GROUPS[n.id].a, w: 12 } : { a: BRANCH[n.cat].a, w: 26 }, ps = n.par.map((p) => N[p]).filter((p) => p.id !== 'start'), own = ps.filter((p) => p.cat === n.cat || n.group), rel = (a) => ((a - B.a + 540) % 360) - 180;
+    let pref = B.a + (own.length ? own : ps).reduce((s, p) => s + rel(p.a), 0) / Math.max(1, (own.length ? own : ps).length); pref = ps.length ? Math.max(B.a - B.w, Math.min(B.a + B.w, pref)) : B.a; // Eltern in anderen Ästen: an den Rand zu ihnen hin
+    let r = Math.max(R0, ...n.par.map((p) => (N[p].r || 0) + STEP)), ok = false;
+    for (let tries = 0; tries < 30 && !ok; tries++, r += 24) {
+      const cands = [0]; for (let d = 5; d <= 2 * B.w; d += 5) cands.push(d, -d);
+      for (const d of cands) { const a = pref + d; if (a < B.a - B.w || a > B.a + B.w) continue; const x = Math.cos(a * RAD) * r, y = Math.sin(a * RAD) * r; if (placed.every((p) => Math.hypot(p.x - x, p.y - y) >= (p.id === 'start' ? 84 : 2 * NR + 18))) { Object.assign(n, { x, y, r, a }); ok = true; break; } }
+    }
+    if (!ok) Object.assign(n, { r, a: pref, x: Math.cos(pref * RAD) * r, y: Math.sin(pref * RAD) * r });
+    placed.push(n); done.add(n.id);
+  }
+  const all = Object.values(N);
+  return { N, minX: Math.min(...all.map((n) => n.x)) - 140, maxX: Math.max(...all.map((n) => n.x)) + 140, minY: Math.min(...all.map((n) => n.y)) - 140, maxY: Math.max(...all.map((n) => n.y)) + 140 };
 }
 let LAYOUT = null;
 export const skLayout = () => (LAYOUT ||= layout()); // für Tests
 
+// Zustand eines Knotens: Einzel-Fähigkeit wie skillState; Stufen-Gruppe nach der nächsten offenen Stufe (n = gelernte Stufen)
+function nodeState(g, n) {
+  if (n.id === 'start') return { st: 'known', n: 0, of: 0, cur: null };
+  const kn = n.ids.filter((id) => g.knows(id)).length, cur = n.ids.find((id) => !g.knows(id)) || n.ids[n.ids.length - 1], s0 = g.skillState(cur);
+  if (!n.group) return { ...s0, n: kn, of: 1, cur };
+  return { st: kn === n.ids.length ? 'known' : kn && s0.st !== 'open' ? 'known' : s0.st, why: s0.why, hw: s0.hw, n: kn, of: n.ids.length, cur, part: kn > 0 && kn < n.ids.length };
+}
+// Nebel: gelernte Knoten, ihre Nachbarn (wenn es sie schon gibt), alles Lernbare und der gerade gezeigte Knoten
+function fog(g, L, v) {
+  const S = {}, known = new Set(['start']), vis = new Set(['start']);
+  for (const n of Object.values(L.N)) { S[n.id] = nodeState(g, n); if (n.id !== 'start' && (S[n.id].st === 'known' || S[n.id].n > 0)) known.add(n.id); }
+  for (const n of Object.values(L.N)) {
+    const S0 = S[n.id], near = n.par.some((p) => known.has(p)) || n.kids.some((c) => known.has(c));
+    if (known.has(n.id) || S0.st === 'open' || v.reveal === n.id || (near && !S0.hw && S0.st !== 'wip')) vis.add(n.id);
+  }
+  return { S, known, vis };
+}
+
 export function skillsMenu(ui, sel = undefined) {
   const g = ui.g; g.learned?.('skills');
-  LAYOUT ||= layout();
-  const v = (ui.skView ||= { k: 1, tx: null, ty: 0, sel: null });
-  if (sel !== undefined) v.sel = sel;
-  const body = h(`<div class="skt"><div class="skt-head"></div><div class="skt-body"><div class="skt-view" tabindex="0"></div><div class="skt-det hidden"></div></div><div class="skt-foot">Ziehen = verschieben · Mausrad oder zwei Finger = zoomen · Knoten antippen = Details</div></div>`);
+  const L = (LAYOUT ||= layout());
+  const v = (ui.skView ||= { k: 1, tx: null, ty: 0, tip: null, pin: false });
+  v.tip = null; v.pin = false; v.reveal = sel ? GROUP_OF[sel] || sel : null; v.seen = null;
+  const body = h(`<div class="skt"><div class="skt-head"></div><div class="skt-view" tabindex="0"><div class="skt-tip hidden" role="dialog"></div><div class="skt-foot">Ziehen = verschieben · Rad oder zwei Finger = zoomen · Symbol antippen = Details</div></div></div>`);
   ui.openModal(body, 'skt-card', 'skills');
-  renderHead(ui, body.querySelector('.skt-head'));
   const view = body.querySelector('.skt-view');
-  const svg = sv('svg', { class: 'skt-svg', width: '100%', height: '100%' }), root = sv('g'); svg.append(root); view.append(svg);
-  drawTree(ui, root);
+  const svg = sv('svg', { class: 'skt-svg', width: '100%', height: '100%' }), root = sv('g'); svg.append(root); view.prepend(svg);
   const vw = () => view.clientWidth || 900, vh = () => view.clientHeight || 500;
-  if (v.tx == null) { const tx0 = xs(dayYear(g.s.day)); v.k = 0.82; v.tx = Math.min(0, vw() * 0.22 - tx0 * v.k); v.ty = 0; } // lesbar starten, „Heute“ links; herauszoomen geht mit Rad/Pinch
-  const clamp = () => { const k = v.k; v.tx = Math.min(80, Math.max(vw() - LAYOUT.W * k - 80, v.tx)); v.ty = Math.min(60, Math.max(Math.min(0, vh() - LAYOUT.H * k - 60), v.ty)); };
-  const apply = () => { clamp(); root.setAttribute('transform', `translate(${v.tx.toFixed(1)},${v.ty.toFixed(1)}) scale(${v.k.toFixed(3)})`); };
-  const zoomAt = (px, py, f) => { const k1 = Math.max(0.35, Math.min(1.8, v.k * f)); v.tx = px - ((px - v.tx) * k1) / v.k; v.ty = py - ((py - v.ty) * k1) / v.k; v.k = k1; apply(); };
-  apply();
-  // Ziehen, Pinch, Rad, Tippen (Maus, Touch, Stift)
+  const clamp = () => { const k = v.k; v.tx = Math.min(vw() / 2 - L.minX * k, Math.max(vw() / 2 - L.maxX * k, v.tx)); v.ty = Math.min(vh() / 2 - L.minY * k, Math.max(vh() / 2 - L.maxY * k, v.ty)); };
+  const apply = () => { clamp(); root.setAttribute('transform', `translate(${v.tx.toFixed(1)},${v.ty.toFixed(1)}) scale(${v.k.toFixed(3)})`); placeTip(ui); };
+  const zoomAt = (px, py, f) => { const k1 = Math.max(0.35, Math.min(2.2, v.k * f)); v.tx = px - ((px - v.tx) * k1) / v.k; v.ty = py - ((py - v.ty) * k1) / v.k; v.k = k1; apply(); };
+  ui.skTree = { body, root, view, apply, L };
+  renderHead(ui); drawTree(ui);
+  // Beim Öffnen: auf den gezeigten, sonst einen lernbaren, sonst den zuletzt gelernten Knoten zentrieren
+  const F = v.fog, known = g.s.sk?.known || {};
+  const last = Object.keys(known).filter((id) => L.N[GROUP_OF[id] || id]).sort((a, b) => known[b] - known[a])[0], lastN = last ? GROUP_OF[last] || last : 'start';
+  const open = Object.values(L.N).filter((n) => F.S[n.id].st === 'open' && F.vis.has(n.id)).sort((a, b) => Math.hypot(a.x - L.N[lastN].x, a.y - L.N[lastN].y) - Math.hypot(b.x - L.N[lastN].x, b.y - L.N[lastN].y))[0];
+  const tgt = L.N[v.reveal] || (last && g.s.day - known[last] <= 3 ? L.N[lastN] : open || L.N[lastN]);
+  const ext = Math.max(...[...F.vis].map((id) => L.N[id].r)) + 90; v.k = Math.max(vw() < 600 ? 0.62 : 0.74, Math.min(1.05, Math.min(vw(), vh()) / (2 * ext))); // aufgedeckten Teil zeigen, Symbole lesbar
+  v.tx = vw() / 2 - tgt.x * v.k; v.ty = vh() / 2 - tgt.y * v.k; apply();
+  if (L.N[v.reveal]) showTip(ui, v.reveal, true);
+  // Ziehen, Pinch, Rad, Tippen (Maus, Touch, Stift); Hover zeigt den Tooltip nur mit der Maus
   const pts = new Map(); let moved = 0, pinch = null;
-  view.addEventListener('pointerdown', (e) => { view.setPointerCapture?.(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); moved = 0; if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), k: v.k }; } });
+  view.addEventListener('pointerdown', (e) => { if (e.target.closest('.skt-tip')) return; view.setPointerCapture?.(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); moved = 0; if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), k: v.k }; } });
   view.addEventListener('pointermove', (e) => {
     const p = pts.get(e.pointerId); if (!p) return; const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY; moved += Math.abs(dx) + Math.abs(dy);
     if (pts.size === 1) { v.tx += dx; v.ty += dy; apply(); }
     else if (pts.size === 2 && pinch) { const [a, b] = [...pts.values()], r = view.getBoundingClientRect(), d = Math.hypot(a.x - b.x, a.y - b.y); zoomAt((a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top, (pinch.k * (d / pinch.d)) / v.k); }
   });
   const up = (e) => {
-    const wasTap = pts.size === 1 && moved < 8; pts.delete(e.pointerId); if (pts.size < 2) pinch = null;
-    if (!wasTap) return; const el = document.elementFromPoint(e.clientX, e.clientY)?.closest?.('[data-sk]'); if (el) select(ui, el.dataset.sk); else if (v.sel) select(ui, null);
+    if (!pts.has(e.pointerId)) return; const wasTap = pts.size === 1 && moved < 8; pts.delete(e.pointerId); if (pts.size < 2) pinch = null; if (!wasTap) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY)?.closest?.('[data-sk]'); if (el) { showTip(ui, el.dataset.sk, true); ui.audio?.click?.(); } else hideTip(ui, true);
   };
   view.addEventListener('pointerup', up); view.addEventListener('pointercancel', (e) => { pts.delete(e.pointerId); pinch = null; });
-  view.addEventListener('wheel', (e) => { e.preventDefault(); const r = view.getBoundingClientRect(); zoomAt(e.clientX - r.left, e.clientY - r.top, e.deltaY < 0 ? 1.12 : 1 / 1.12); }, { passive: false });
-  view.addEventListener('keydown', (e) => { const st = { ArrowLeft: [60, 0], ArrowRight: [-60, 0], ArrowUp: [0, 60], ArrowDown: [0, -60] }[e.key]; if (st) { v.tx += st[0]; v.ty += st[1]; apply(); e.preventDefault(); } if (e.key === '+' || e.key === '-') zoomAt(vw() / 2, vh() / 2, e.key === '+' ? 1.15 : 1 / 1.15); });
-  ui.skTree = { body, root, apply };
-  if (v.sel) showDetail(ui, v.sel); else ui.skTree.body.querySelector('.skt-det').classList.add('hidden');
+  view.addEventListener('wheel', (e) => { if (e.target.closest('.skt-tip')) return; e.preventDefault(); const r = view.getBoundingClientRect(); zoomAt(e.clientX - r.left, e.clientY - r.top, e.deltaY < 0 ? 1.12 : 1 / 1.12); }, { passive: false });
+  view.addEventListener('keydown', (e) => { if (e.target.closest?.('.skt-tip')) return; const st = { ArrowLeft: [60, 0], ArrowRight: [-60, 0], ArrowUp: [0, 60], ArrowDown: [0, -60] }[e.key]; if (st) { v.tx += st[0]; v.ty += st[1]; apply(); e.preventDefault(); } if (e.key === '+' || e.key === '-') zoomAt(vw() / 2, vh() / 2, e.key === '+' ? 1.15 : 1 / 1.15); const n = e.target.closest?.('[data-sk]'); if (n && (e.key === 'Enter' || e.key === ' ')) { showTip(ui, n.dataset.sk, true); e.preventDefault(); } });
+  const tipEl = view.querySelector('.skt-tip'); tipEl.addEventListener('pointerenter', () => clearTimeout(v.hideT)); tipEl.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') hideTip(ui); });
 }
-// Details auf/zu (Esc schließt zuerst die Details – main.js über ui.escLocal)
-function select(ui, id) { ui.skView.sel = id; if (!ui.skTree) return; for (const n of ui.skTree.root.querySelectorAll('.skn')) n.classList.toggle('sel', n.dataset.sk === id); if (id) showDetail(ui, id); else ui.skTree.body.querySelector('.skt-det').classList.add('hidden'); }
-export function skCloseDetail(ui) { if (ui.modalKind !== 'skills' || !ui.skView?.sel) return false; select(ui, null); return true; }
-export function skRefresh(ui) { if (ui.modalKind !== 'skills' || !ui.skTree) return; renderHead(ui, ui.skTree.body.querySelector('.skt-head')); ui.skTree.root.innerHTML = ''; drawTree(ui, ui.skTree.root); ui.skTree.apply(); if (ui.skView.sel) showDetail(ui, ui.skView.sel); }
+// Tooltip: Esc schließt zuerst ihn (main.js über ui.escLocal)
+export function skCloseDetail(ui) { if (ui.modalKind !== 'skills' || !ui.skTree) return false; if (ui.skView?.tip) { hideTip(ui, true); return true; } return false; }
+export function skRefresh(ui) { if (ui.modalKind !== 'skills' || !ui.skTree) return; renderHead(ui); drawTree(ui); if (ui.skView.tip) showTip(ui, ui.skView.tip, ui.skView.pin); }
 
-function renderHead(ui, el) {
-  const g = ui.g, s = g.s, L = s.sk?.learning, T = s.sk?.teach;
-  const pot = (p) => { const e = g.epProgress(p), free = g.fpFree(p); return `<div class="skh-pot ${free ? 'has' : ''}"><div class="skh-pn"><b>${POTS[p].name}</b><span>${free ? `${free} ${free === 1 ? 'Punkt' : 'Punkte'} frei` : 'kein Punkt frei'}</span></div><div class="skh-bar"><i style="width:${e.pc}%"></i></div><div class="skh-ep">${e.cur.toLocaleString('de-DE')} / ${e.need.toLocaleString('de-DE')} Erfahrung bis zum nächsten Punkt</div></div>`; };
-  const now = L ? (() => { const k = SKILL[L.id], tot = Math.max(1, L.until - L.d0), pc = Math.round(Math.min(1, (s.day - L.d0) / tot) * 100), left = Math.max(0, L.until - s.day); return `<div class="skh-now"><span class="skh-k">${{ forum: 'Im Forum', book: 'Buch', course: 'Kurs' }[L.via] || 'Gerade'}</span><b>${esc(k?.name || L.id)}</b><div class="skh-bar"><i style="width:${pc}%"></i></div><span class="skh-left">noch ${left} ${left === 1 ? 'Tag' : 'Tage'}${s.sk.queue.length ? ` · danach: ${esc(s.sk.queue.map((q) => SKILL[q.id]?.name || q.id).join(', '))}` : ''}</span><button class="btn small skh-stop">Abbrechen</button></div>`; })() : `<div class="skh-now idle"><span class="skh-k">Gerade</span><b>Nichts in Arbeit</b><span class="skh-left">Wähl unten einen leuchtenden Knoten und fang an.</span></div>`;
-  const teach = T ? `<div class="skh-teach">${esc(TEACHERS[T.who]?.name || T.who)} bringt dir „${esc(SKILL[T.id]?.name || T.id)}“ bei – morgen kannst du es.</div>` : '';
-  el.innerHTML = `<div class="skh-t"><h2>Fähigkeiten</h2><span class="skh-sub">Was du kannst, schaltet Handgriffe frei – nichts wirkt von allein.</span><button class="modal-x skh-x" title="Schließen (T oder Esc)">✕</button></div><div class="skh-row">${['w', 'r', 'g'].map(pot).join('')}${now}</div>${teach}`;
+// Leiste oben (schmal): freie Punkte mit Balken bis zum nächsten, Geld
+function renderHead(ui) {
+  const g = ui.g, s = g.s, el = ui.skTree.body.querySelector('.skt-head'), e = g.epProgress(), free = g.fpFree();
+  el.innerHTML = `<h2>Fähigkeiten</h2><div class="skh-pts ${free ? 'has' : ''}" title="${esc(`${e.cur.toLocaleString('de-DE')} / ${e.need.toLocaleString('de-DE')} Erfahrung bis zum nächsten Punkt – Erfahrung gibt es fürs Selbermachen: bauen, einrichten, reparieren, verkaufen`)}"><b>★ ${free} ${free === 1 ? 'Punkt' : 'Punkte'} frei</b><span class="skh-bar"><i style="width:${e.pc}%"></i></span><em>nächster Punkt</em></div><div class="skh-cash">${fmtUSD(s.cash)}</div><button class="modal-x skh-x" title="Schließen (T oder Esc)">✕</button>`;
   el.querySelector('.skh-x').onclick = () => ui.resume();
-  const st = el.querySelector('.skh-stop'); if (st) st.onclick = () => { g.stopLearn(); ui.toast('Abgebrochen. Ein Buch bleibt, im Forum fängst du neu an.', 'info', 3500); skRefresh(ui); };
 }
 
-function drawTree(ui, root) {
-  const g = ui.g, { pos, lanes, W, H } = LAYOUT, defs = sv('defs');
-  defs.innerHTML = '<filter id="skglow" x="-20%" y="-40%" width="140%" height="180%"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>';
-  root.append(defs);
-  // Äste als Bänder, Jahre als Raster, „Heute“
-  for (const l of lanes) { root.append(sv('rect', { x: 0, y: l.y - 8, width: W, height: l.h - 6, rx: 14, fill: l.color, 'fill-opacity': 0.045 })); const t = sv('text', { x: 14, y: l.y + 12, class: 'skt-lane', fill: l.color }); t.textContent = SKILL_CAT[l.cat].name; root.append(t); }
-  for (let y = 2011; y <= 2026; y++) { const x = xs(y); if (x > W) break; root.append(sv('line', { x1: x, y1: 24, x2: x, y2: H, class: 'skt-yl' })); const t = sv('text', { x: x + 4, y: 18, class: 'skt-year' }); t.textContent = y; root.append(t); }
-  const tx = xs(dayYear(g.s.day)); root.append(sv('line', { x1: tx, y1: 22, x2: tx, y2: H, class: 'skt-now' })); const nt = sv('text', { x: tx + 5, y: 34, class: 'skt-nowt' }); nt.textContent = 'Heute'; root.append(nt);
-  // Kanten (Voraussetzungen, auch quer zwischen den Ästen)
-  const st = {}; for (const k of SKILLS) st[k.id] = g.skillState(k.id).st;
+function drawTree(ui) {
+  const g = ui.g, { root, L } = ui.skTree, v = ui.skView, { N } = L, F = fog(g, L, v);
+  const seen = v.seen || { known: new Set(F.known), vis: new Set(F.vis) }, newK = [...F.known].filter((id) => !seen.known.has(id)), newV = [...F.vis].filter((id) => !seen.vis.has(id));
+  v.seen = { known: new Set(F.known), vis: new Set(F.vis) }; v.fog = F;
+  root.innerHTML = '';
+  const defs = sv('defs'); defs.innerHTML = '<filter id="skglow" filterUnits="userSpaceOnUse" x="-3000" y="-3000" width="6000" height="6000"><feGaussianBlur stdDeviation="3.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter><radialGradient id="skstart"><stop offset="0" stop-color="#ffe9a8"/><stop offset="1" stop-color="#b87a12"/></radialGradient>'; root.append(defs);
+  // Äste als schwache Sektoren, so weit wie aufgedeckt, mit Namen an der Spitze
+  const vr = {}; for (const cat of Object.keys(BRANCH)) vr[cat] = Math.max(R0 - 10, ...Object.values(N).filter((n) => n.cat === cat && !n.group && F.vis.has(n.id)).map((n) => n.r)) + 46;
+  for (const [cat, B] of Object.entries(BRANCH)) { const r = vr[cat] + 40, a0 = (B.a - 30) * RAD, a1 = (B.a + 30) * RAD; root.append(sv('path', { d: `M0,0 L${Math.cos(a0) * r},${Math.sin(a0) * r} A${r},${r} 0 0 1 ${Math.cos(a1) * r},${Math.sin(a1) * r} Z`, fill: B.c, 'fill-opacity': 0.035, class: 'skt-sec' })); }
+  for (const [cat, B] of Object.entries(BRANCH)) { const r = vr[cat] + 18, cx = Math.cos(B.a * RAD), t = sv('text', { x: cx * r, y: Math.sin(B.a * RAD) * r + 4, class: 'skt-lane', fill: B.c, 'text-anchor': cx > 0.3 ? 'start' : cx < -0.3 ? 'end' : 'middle' }); t.textContent = SKILL_CAT[cat].name; root.append(t); }
+  // Linien: leuchten in der Astfarbe, wenn der Weg frei ist (gelernt → gelernt/lernbar), sonst gedimmt und gestrichelt
   const eg = sv('g', { class: 'skt-edges' }); root.append(eg);
-  for (const k of SKILLS) for (const n of k.needs || []) {
-    const a = pos[n], b = pos[k.id]; if (!a || !b) continue;
-    const x1 = a.x + NW, y1 = a.y + NH / 2, x2 = b.x, y2 = b.y + NH / 2, dx = Math.max(30, (x2 - x1) * 0.5);
-    const on = st[n] === 'known', both = on && st[k.id] === 'known';
-    eg.append(sv('path', { d: `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`, class: `skt-e ${both ? 'on' : on ? 'half' : ''}`, stroke: both || on ? CAT_COLOR[k.cat] : '#3a414e' }));
+  for (const n of Object.values(N)) for (const p of n.par) {
+    if (!F.vis.has(n.id) || !F.vis.has(p)) continue; const a = N[p], st = F.S[n.id].st, free = F.known.has(p) && (F.known.has(n.id) || st === 'open'), col = CAT_COLOR[n.cat] || '#ffd25c';
+    const e = sv('line', { x1: a.x, y1: a.y, x2: n.x, y2: n.y, class: `skt-e ${free ? (F.known.has(n.id) ? 'on' : 'free') : 'lock'}`, stroke: free ? col : '#3a414e' });
+    if (newK.includes(n.id) || (newV.includes(n.id) && F.known.has(p))) { e.classList.add('draw'); e.setAttribute('pathLength', 1); } // Linie zeichnet sich zum neuen Nachbarn
+    eg.append(e);
   }
-  // Knoten
-  const L = g.s.sk?.learning;
-  for (const k of SKILLS) {
-    const p = pos[k.id], s0 = st[k.id], col = CAT_COLOR[k.cat], later = s0 === 'later', grp = sv('g', { class: `skn st-${s0} ${ui.skView?.sel === k.id ? 'sel' : ''}`, 'data-sk': k.id, transform: `translate(${p.x},${p.y})` });
-    const fill = s0 === 'known' ? col : '#151922', fo = s0 === 'known' ? 0.22 : 1;
-    if (s0 === 'open') grp.append(sv('rect', { x: -3, y: -3, width: NW + 6, height: NH + 6, rx: 14, fill: 'none', stroke: col, 'stroke-opacity': 0.55, filter: 'url(#skglow)', class: 'skn-glow' }));
-    grp.append(sv('rect', { width: NW, height: NH, rx: 11, fill, 'fill-opacity': fo, stroke: s0 === 'known' || s0 === 'open' || s0 === 'learning' ? col : '#3b4252', 'stroke-width': s0 === 'open' ? 2 : 1.4, 'stroke-dasharray': s0 === 'wip' ? '5 4' : s0 === 'learning' ? '7 3' : 'none', class: 'skn-box' }));
-    if (s0 === 'learning' && L?.id === k.id) { const pc = Math.min(1, (g.s.day - L.d0) / Math.max(1, L.until - L.d0)); grp.append(sv('rect', { x: 8, y: NH - 6, width: (NW - 16) * pc, height: 3, rx: 1.5, fill: col })); }
-    const name = later ? ['???'] : lines2(k.name);
-    name.forEach((ln, i) => { const t = sv('text', { x: 12, y: name.length === 1 ? 28 : 19 + i * 15, class: 'skn-t' }); t.textContent = ln; grp.append(t); });
-    if (later) { const t = sv('text', { x: 12, y: 40, class: 'skn-d' }); t.textContent = k.from ? 'ab ' + k.from.slice(0, 4) : 'später'; grp.append(t); }
-    const ic = { known: 'check', soon: 'lock', later: 'lock', wip: 'wip', auto: 'phone' }[s0];
-    if (ic) { const gi = sv('g', { transform: `translate(${NW - 21},${NH / 2 - 8}) scale(0.66)`, class: 'skn-i', color: s0 === 'known' ? col : '#6c7586' }); gi.innerHTML = ICON[ic]; grp.append(gi); }
-    else if (s0 === 'open') grp.append(sv('circle', { cx: NW - 15, cy: NH / 2, r: 5, fill: col, class: 'skn-dot' }));
+  // Knoten: großes Symbol, Farbe/Rahmen nach Zustand; Stufen unten „1/3“
+  for (const n of Object.values(N)) {
+    if (!F.vis.has(n.id)) continue;
+    const S = F.S[n.id], st = n.id === 'start' ? 'start' : S.st, col = CAT_COLOR[n.cat] || '#ffd25c', R = n.id === 'start' ? 30 : NR;
+    const grp = sv('g', { class: `skn st-${st}${S.part ? ' part' : ''}${v.tip === n.id ? ' sel' : ''}`, 'data-sk': n.id, transform: `translate(${n.x.toFixed(1)},${n.y.toFixed(1)})`, tabindex: 0, role: 'button', 'aria-label': n.id === 'start' ? 'Start' : n.group ? `${GROUPS[n.id].name} ${S.n}/${S.of}` : SKILL[n.id]?.name || n.id });
+    const inner = sv('g', { class: 'skn-in' }); grp.append(inner);
+    if (st === 'open') inner.append(sv('circle', { r: R + 6, fill: 'none', stroke: col, 'stroke-width': 2, class: 'skn-pulse' }));
+    inner.append(sv('circle', { r: R, class: 'skn-c', fill: n.id === 'start' ? 'url(#skstart)' : st === 'known' ? col : '#121722', 'fill-opacity': st === 'known' ? 0.3 : 1, stroke: st === 'known' || st === 'open' ? col : '#353c49', 'stroke-width': st === 'open' ? 2.6 : 2 }));
+    const t = sv('text', { class: 'skn-sym', 'text-anchor': 'middle', 'dominant-baseline': 'central', y: 1, 'font-size': n.id === 'start' ? 26 : 22 }); t.textContent = SYM[n.id] || '•'; inner.append(t);
+    if (n.group) { const tt = sv('text', { class: 'skn-stage', 'text-anchor': 'middle', y: R + 15 }); tt.textContent = `${S.n}/${S.of}`; inner.append(tt); }
+    if (n.id === 'start') { const tt = sv('text', { class: 'skn-stage', 'text-anchor': 'middle', y: R + 16 }); tt.textContent = 'Start'; inner.append(tt); }
+    if (newK.includes(n.id)) { grp.classList.add('pop'); grp.append(sv('circle', { r: R, fill: 'none', stroke: col, 'stroke-width': 3, class: 'skn-burst' })); }
+    else if (newV.includes(n.id)) grp.classList.add('reveal');
+    grp.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse' && !v.pin) { clearTimeout(v.hideT); v.showT = setTimeout(() => showTip(ui, n.id, false), 110); } });
+    grp.addEventListener('pointerleave', (e) => { clearTimeout(v.showT); if (e.pointerType === 'mouse') hideTip(ui); });
+    grp.addEventListener('focus', () => { if (!v.pin) showTip(ui, n.id, false); });
     root.append(grp);
   }
+  if (newK.length) ui.audio?.fanfare?.(); else if (newV.length) ui.audio?.install?.();
+  setTimeout(() => root.querySelectorAll('.draw, .pop, .reveal').forEach((x) => { x.classList.remove('draw', 'pop', 'reveal'); x.removeAttribute('pathLength'); }), 1600);
 }
 
-const STATE_TXT = { known: ['Gelernt', 'ok'], open: ['Jetzt lernbar', 'warn'], learning: ['Wird gelernt', 'warn'], soon: ['Bald', 'idle'], later: ['Später', 'idle'], wip: ['Bald im Spiel', 'idle'], auto: ['Kommt per Handy', 'idle'] };
-function showDetail(ui, id) {
-  const g = ui.g, s = g.s, k = SKILL[id], el = ui.skTree?.body.querySelector('.skt-det'); if (!k || !el) return;
-  const st = g.skillState(id), [stl, stc] = STATE_TXT[st.st] || ['', 'idle'], col = CAT_COLOR[k.cat], later = st.st === 'later';
-  const needs = (k.needs || []).map((n) => `<span class="skd-need ${g.knows(n) ? 'ok' : ''}" data-go="${n}">${esc(SKILL[n]?.name || n)}</span>`).join('');
-  el.innerHTML = `<div class="skd-h"><span class="skd-cat" style="--c:${col}">${esc(SKILL_CAT[k.cat].name)} · ${esc(k.feel)}</span><button class="modal-x skd-x" title="Details schließen (Esc)">✕</button></div>
-    <h3>${later ? '???' : esc(k.name)}</h3><span class="badge ${stc}"><i></i>${stl}${st.why ? ' · ' + esc(st.why) : ''}</span>
-    ${later ? `<p class="skd-p">Noch zu weit weg${k.from ? ` – frühestens ${k.from.slice(0, 4)}` : ''}. Je weiter du kommst, desto mehr siehst du.</p>` : `<p class="skd-p">${esc(k.desc)}</p>${k.use ? `<div class="skd-kv"><span>Wo</span><b>${esc(k.use)}</b></div>` : ''}${k.hint ? `<div class="skd-kv"><span>Lohnt sich</span><b>${esc(k.hint)}</b></div>` : ''}`}
-    ${needs ? `<div class="skd-needs"><span>Braucht</span>${needs}</div>` : ''}
-    ${k.soon && !later ? `<div class="skd-soon">${esc(k.soon)} – kommt mit einem späteren Update. Lernen kannst du es dann.</div>` : ''}
-    <div class="skd-ways"></div>`;
-  el.classList.remove('hidden');
-  el.querySelector('.skd-x').onclick = () => select(ui, null);
-  el.querySelectorAll('[data-go]').forEach((n) => (n.onclick = () => select(ui, n.dataset.go)));
-  const ways = el.querySelector('.skd-ways');
-  if (st.st === 'known') { const how = s.sk.src[id] || ''; ways.append(h(`<div class="skd-done">Gelernt am ${fmtDate(s.sk.known[id])}${how ? ` · ${esc({ pts: 'mit Punkten', forum: 'im Forum', book: 'aus dem Buch', course: 'im Kurs', msg: 'per Handy', migr: 'schon früher' }[how] || (how.startsWith('person:') ? 'bei ' + (TEACHERS[how.slice(7)]?.name || how.slice(7)) : ''))}` : ''}</div>`)); if (k.where) { const b = h('<button class="btn primary wide">Zeig mir wo</button>'); b.onclick = () => showWhere(ui, k); ways.append(b); } return; }
-  if (later || st.st === 'auto') return;
-  const L = s.sk.learning;
-  if (st.st === 'learning' && L?.id === id) { const left = Math.max(0, L.until - s.day); ways.append(h(`<div class="skd-done">${{ forum: 'Du liest im Forum mit', book: 'Du liest das Buch', course: 'Du bist im Kurs' }[L.via] || 'Wird gelernt'} – noch ${left} ${left === 1 ? 'Tag' : 'Tage'}.</div>`)); return; }
-  if (st.st === 'learning') { ways.append(h(`<div class="skd-done">${s.sk.teach?.id === id ? 'Die Lehrstunde ist morgen fertig.' : 'Steht in der Warteschlange.'}</div>`)); return; }
-  ways.append(h('<div class="skd-wh">So lernst du es</div>'));
-  for (const w of g.skillWays(id)) {
-    const b = h(`<button class="skd-way ${w.ok ? '' : 'no'}" ${w.ok ? '' : 'disabled'}><span class="skd-wi">${WAY_IC[w.via] || ''}</span><span class="skd-wt"><b>${esc(w.label)}</b><small>${esc(w.ok || st.st !== 'open' ? w.sub : w.why)}</small></span></button>`);
-    b.onclick = () => { const r = g.startLearn(id, w.i); if (r) { ui.toast(esc(r), 'bad', 3000); return; } ui.audio?.click?.(); const via = w.via; ui.toast(via === 'pts' ? `<b>Gelernt:</b> ${esc(k.name)}` : via === 'book' && g.parcelMode() && !s.sk.books[k.learn[w.i].id] ? `<b>Bestellt:</b> Buch „${esc(k.learn[w.i].title)}“ – kommt morgen früh als Paket. Aufheben, dann liest du es.` : via === 'person' ? `${esc(w.label.replace(' fragen', ''))} nimmt sich morgen Zeit für dich.` : `Los geht’s: ${esc(k.name)}`, 'good', 4500); skRefresh(ui); ui.dock(); };
-    ways.append(b);
+// Tooltip (Paket 18, ganz kurz): Name, ein Satz, was man danach tun kann, ein Knopf
+function showTip(ui, id, pin = false) {
+  const g = ui.g, s = g.s, v = ui.skView, T = ui.skTree, n = T?.L.N[id]; if (!n) return;
+  const el = T.view.querySelector('.skt-tip'); clearTimeout(v.hideT); v.tip = id; v.pin = pin || (v.pin && v.tip === id);
+  for (const x of T.root.querySelectorAll('.skn')) x.classList.toggle('sel', x.dataset.sk === id);
+  if (id === 'start') { el.innerHTML = '<div class="tp-h"><span class="tp-sym">⭐</span><b>Start</b></div><p>Dein erster PC in der Einzimmerwohnung. Was du lernst, deckt den Baum auf.</p>'; el.classList.remove('hidden'); placeTip(ui); return; }
+  const S = v.fog?.S[id] || nodeState(g, n), k = SKILL[S.cur], col = CAT_COLOR[n.cat], G = n.group ? GROUPS[id] : null;
+  const name = G ? `${G.name} · Stufe ${S.st === 'known' && !S.part ? S.of : Math.min(S.n + 1, S.of)}/${S.of}` : k.name;
+  el.innerHTML = `<div class="tp-h" style="--c:${col}"><span class="tp-sym">${SYM[id] || '•'}</span><b>${esc(name)}</b><button class="tp-x" title="Schließen (Esc)">✕</button></div><p>${esc(k.can)}</p><div class="tp-act"></div>`;
+  el.querySelector('.tp-x').onclick = () => hideTip(ui, true);
+  const act = el.querySelector('.tp-act');
+  if (S.st === 'known' && !S.part) { act.append(h('<span class="tp-done">✓ Gelernt</span>')); if (k.where) { const b = h('<button class="btn small tp-where">Zeig mir wo</button>'); b.onclick = () => showWhere(ui, k); act.append(b); } }
+  else if (S.st === 'auto') act.append(h('<span class="tp-done dim">Kommt von selbst, sobald du es brauchst</span>'));
+  else {
+    const w = g.skillWays(S.cur)[0], need = S.st === 'soon' && /^braucht /.test(S.why || '') ? `Erst ${S.why.replace(/^braucht /, '').replace(/ und /g, ' und ')} lernen` : '';
+    const b = h(`<button class="btn primary tp-buy" ${w?.ok ? '' : 'disabled'}>${esc(need || w?.label || 'Freischalten')}</button>`); act.append(b);
+    if (w && !w.ok && !need && S.st === 'open') act.append(h(`<small class="tp-why">${esc(w.why)}</small>`));
+    b.onclick = (e) => { e.stopPropagation(); const r = g.startLearn(S.cur); if (r) { ui.toast(esc(r), 'bad', 3000); return; } ui.toast(`<b>Gelernt:</b> ${esc(k.name)}`, 'good', 3000); skRefresh(ui); ui.dock?.(); };
   }
+  el.classList.remove('hidden'); placeTip(ui);
 }
-const WAY_IC = { pts: '★', forum: '#', book: '▤', course: '✎', person: '☺' };
+function hideTip(ui, now = false) {
+  const v = ui.skView, T = ui.skTree; if (!T || !v) return; clearTimeout(v.hideT);
+  const go = () => { if (!ui.skTree) return; v.tip = null; v.pin = false; T.view.querySelector('.skt-tip')?.classList.add('hidden'); T.root.querySelectorAll('.skn.sel').forEach((x) => x.classList.remove('sel')); };
+  if (now) go(); else if (!v.pin) v.hideT = setTimeout(go, 260);
+}
+// Tooltip neben den Knoten (rechts, sonst links), in der Ansicht gehalten; schmal (Handy): unten angedockt
+function placeTip(ui) {
+  const v = ui.skView, T = ui.skTree; if (!v?.tip || !T) return; const el = T.view.querySelector('.skt-tip'), n = T.L.N[v.tip]; if (!n || el.classList.contains('hidden')) return;
+  const W = T.view.clientWidth, H = T.view.clientHeight; if (W < 600) { el.style.left = el.style.top = ''; el.classList.add('dock'); return; } el.classList.remove('dock');
+  const x = v.tx + n.x * v.k, y = v.ty + n.y * v.k, w = el.offsetWidth || 280, hh = el.offsetHeight || 140, off = (NR + 14) * v.k;
+  const left = x + off + w < W - 8 ? x + off : Math.max(8, x - off - w), top = Math.max(8, Math.min(H - hh - 8, y - hh / 2));
+  el.style.left = `${Math.round(left)}px`; el.style.top = `${Math.round(top)}px`;
+}
 
 // „Zeig mir wo“: Baum zu, dann das passende Fenster (nie zwei übereinander)
 function showWhere(ui, k) {
   const g = ui.g, s = g.s, fac = s.current, objs = g.facObjects(fac);
-  const pick = { rig: (o) => PLACEABLE[o.type].kind === 'rig' && o.parts, gpuRig: (o) => g.profKind(o) === 'gpu', rigNoOs: (o) => g.osNeed(o), asic: (o) => g.profKind(o) === 'asic', fpga: (o) => PLACEABLE[o.type].look === 'fpga', broken: (o) => o.broken }[k.where];
+  const pick = { rig: (o) => PLACEABLE[o.type].kind === 'rig' && o.parts, gpuRig: (o) => g.profKind(o) === 'gpu', rigNoOs: (o) => g.osNeed(o), asic: (o) => g.profKind(o) === 'asic', fpga: (o) => PLACEABLE[o.type].look === 'fpga', broken: (o) => o.broken || (o.items || []).some((i) => i.b), robi: (o) => o.type === 'robi' }[k.where];
   ui.resume();
   if (k.where === 'market') { ui.market(); return; }
   if (k.where === 'company') { ui.company(); return; }
+  if (k.where === 'phone') { ui.phone('contacts'); return; }
   if (k.where?.startsWith('shop:')) { ui.cat = k.where.slice(5); ui.toggleBuild(); return; }
   const o = pick && (objs.find(pick) || (k.where === 'rigNoOs' ? objs.find((x) => PLACEABLE[x.type].kind === 'rig') : null));
   if (o) { ui.openInspector(o.uid); return; }
-  ui.toast(k.where === 'asic' ? 'Hier steht noch kein ASIC-Miner – stell einen auf und schau ihn an (E).' : k.where === 'gpuRig' ? 'Hier steht noch kein Rig mit Grafikkarte.' : k.where === 'broken' ? 'Gerade ist nichts kaputt. Bei einem Defekt: Gerät anschauen (E) → Selbst reparieren.' : 'Hier gibt es dafür gerade kein Gerät.', 'info', 4500);
+  ui.toast(k.where === 'asic' ? 'Hier steht noch kein ASIC-Miner – stell einen auf und schau ihn an (E).' : k.where === 'gpuRig' ? 'Hier steht noch kein Rig mit Grafikkarte.' : k.where === 'broken' ? 'Gerade ist nichts kaputt. Bei einem Defekt: Gerät anschauen (E) → Selbst reparieren.' : k.where === 'robi' ? 'Hier steht noch kein Robi – Shop → Roboter.' : 'Hier gibt es dafür gerade kein Gerät.', 'info', 4500);
 }
 
 // ---------- Handgriffe im Inspektor ----------
@@ -245,6 +291,23 @@ export function deviceSecs(ui, o) {
       if (pk === 'gpu' && g.knows('luefter')) { const fs = h(`<div class="bios-row"><span>Lüfterkurve</span><div class="bios-seg sm"></div></div>`); for (const [f, l] of [['quiet', 'Leise'], ['', 'Normal'], ['cool', 'Kühl']]) { const b = h(`<button class="bios-b ${(o.fan || '') === f ? 'on' : ''}">${l}</button>`); b.onclick = () => { g.setFan(o.uid, f); re(); }; fs.querySelector('.bios-seg').append(b); } sec.append(fs); }
       if (pk === 'gpu' && g.knows('skript')) { const on = !!s.fac[fac]?.skript; const b = h(`<label class="bios-row chk"><input type="checkbox" ${on ? 'checked' : ''}/> <span>Miner-Skript für ${esc(FACILITY[fac].short)}: Profile täglich selbst wählen (nur Linux-Rigs)</span></label>`); b.querySelector('input').onchange = (e) => { g.setSkript(fac, e.target.checked); re(); }; sec.append(b); }
     } // noch nicht gelernt: kein Sperrkasten – Tuning erscheint erst mit der Fähigkeit (Fenster zeigen nur, was man gerade kann)
+    if (!g.plWhy(o)) { // Leistungsziel (Nr. 33): sichtbar an Watt und Hash
+      const pl = o.pl || 100, a = g.analyze(o, s.day, null, fac), u = a.units.reduce((m, x) => { for (const [al, v] of Object.entries(x.hash)) if (v > (m.v || 0)) { m.v = v; m.al = al; } return m; }, {});
+      const r = h(`<div class="bios-row pl"><span>Leistungsziel</span><input type="range" min="${PLIMIT.min}" max="${PLIMIT.max}" step="5" value="${pl}" aria-label="Leistungsziel in Prozent"/><b class="pl-v">${pl} %</b></div>`);
+      const r2 = h(`<div class="pl-fx">${fmtWatt(a.watt)}${u.v ? ` · ${fmtHash(u.v, u.al)}` : ''}${pl > 100 ? ' · mehr Verschleiß' : pl < 100 ? ' · spart Strom' : ''}</div>`);
+      const inp = r.querySelector('input'), lab = r.querySelector('.pl-v');
+      inp.oninput = () => { lab.textContent = `${inp.value} %`; }; inp.onchange = () => { g.setPl(o.uid, +inp.value); ui.audio?.click?.(); re(); };
+      sec.append(r, r2);
+      const row2 = h('<div class="row"></div>'), same = g.facObjects(fac).filter((x) => x !== o && x.type === o.type && !g.plWhy(x) && (x.pl || 100) !== pl).length;
+      if (same) { const b = h(`<button class="btn small">${pl} % auf alle ${same + 1} gleichen hier</button>`); b.onclick = () => { const n = g.plAll(fac, pl, o.type); ui.toast(`Leistungsziel ${pl} % auf ${n} weiteren Geräten`, 'good', 2500); re(); }; row2.append(b); }
+      const fit = h(`<button class="btn small" title="Ein Ziel für alle einstellbaren Geräte hier, sodass 95 % des Anschlusses genutzt werden">${esc(FACILITY[fac].short)} genau auf den Anschluss fahren</button>`); fit.onclick = () => { const pc = g.plFit(fac); ui.toast(`Leistungsziel ${pc} % für alle hier – ${esc(FACILITY[fac].short)} nutzt jetzt bis zu 95 % des Anschlusses.`, 'good', 4000); re(); }; row2.append(fit);
+      sec.append(row2);
+    }
+    if (pk === 'gpu' && g.knows('biosmod') && g.biosCards(o)) { // BIOS-Mod (Nr. 28): Polaris-Straps
+      const n = g.biosCards(o);
+      if (o.bios) sec.append(h(`<div class="bios-row"><span>BIOS</span><b>Polaris-Straps · +18 % Ethash auf ${n} ${n === 1 ? 'Karte' : 'Karten'}</b></div>`));
+      else { const r = h('<div class="row"></div>'), b = h(`<button class="btn" ${g.biosWhy(o) ? 'disabled' : ''} title="${esc(g.biosWhy(o) || '+18 % Ethash bei gleichem Strom, 3 % Risiko')}">BIOS flashen: Polaris-Straps (${n} ${n === 1 ? 'Karte' : 'Karten'})</button>`); b.onclick = () => handBar(ui, sec, 'Nicht ausschalten! BIOS wird geschrieben …', 3200, () => { const x = g.biosFlash(o.uid); ui.toast(x?.brick ? 'Flash hängengeblieben – der Rig startet nicht mehr. Mit dem BIOS-Clip selbst löten oder reparieren lassen.' : '<b>Polaris-Straps</b> drauf: +18 % Ethash bei gleichem Strom.', x?.brick ? 'bad' : 'good', 5000); re(); }); r.append(b); const m = g.facObjects(fac).filter((x) => !g.biosWhy(x)).length; if (m > 1) { const a = h(`<button class="btn small">Alle ${m} Rigs hier flashen</button>`); a.onclick = () => handBar(ui, sec, `${m} Rigs werden geflasht …`, 4200, () => { const x = g.biosAll(fac); ui.toast(`${x.n} Rigs mit Polaris-Straps${x.b ? ` · ${x.b} hängengeblieben (defekt)` : ''}`, x.b ? 'info' : 'good', 4500); re(); }); r.append(a); } sec.append(r); }
+    }
     if (pk === 'asic') {
       if (o.fw) { sec.append(h('<div class="bios-row"><span>Firmware</span><b>Hashwerk-FW · −10 % Strom, +8 % Hash</b></div>')); if (g.knows('autotuning')) { const b = h(`<label class="bios-row chk"><input type="checkbox" ${o.at ? 'checked' : ''}/> <span>Autotuning (Spannung je Chip, −10 % Strom)</span></label>`); b.querySelector('input').onchange = (e) => { g.setAt(o.uid, e.target.checked); re(); }; sec.append(b); } }
       else if (g.knows('firmware')) { const n = g.facObjects(fac).filter((x) => !g.flashOk(x)).length; const r = h('<div class="row"></div>'); const b = h('<button class="btn">Firmware flashen</button>'); b.onclick = () => handBar(ui, sec, 'Nicht ausschalten! Firmware wird geschrieben …', 3200, () => { const x = g.flash(o.uid); ui.toast(x?.brick ? 'Flash hängengeblieben – ein Gerät ist jetzt defekt. Reparieren lassen.' : 'Hashwerk-Firmware drauf: −10 % Strom, +8 % Hash.', x?.brick ? 'bad' : 'good', 4500); re(); }); r.append(b); if (n > 1) { const a = h(`<button class="btn small">Alle ${n} hier flashen</button>`); a.onclick = () => handBar(ui, sec, `${n} Geräte werden geflasht …`, 4200, () => { const x = g.flashAll(fac); ui.toast(`${x.n} geflasht${x.b ? ` · ${x.b} hängengeblieben (defekt)` : ''}`, x.b ? 'info' : 'good', 4500); re(); }); r.append(a); } sec.append(r); }
@@ -253,6 +316,12 @@ export function deviceSecs(ui, o) {
   }
   // Wasserkühlung (GPU-Rigs)
   if (pk === 'gpu' && g.knows('wasser')) { if (o.wk) out.append(h('<div class="sec os-ok"><span class="os-chip wk">Wasser</span><span class="os-ln">Wasserkühlung drin – 70 % der Wärme gehen nach draußen</span></div>')); else { const sec = h(`<div class="sec"><h4>Wasserkühlung</h4></div>`), why = g.wkWhy(o); const b = h(`<button class="btn" ${why ? 'disabled' : ''} title="${esc(why)}">Kühler und Schläuche einbauen · ${money(g.wkCost(o))}</button>`); b.onclick = () => handBar(ui, sec, 'Kühler drauf, Schläuche stecken, befüllen …', 2600, () => { if (g.wkInstall(o.uid)) ui.toast('Dicht! Die Wasserkühlung läuft.', 'good', 3000); re(); }); sec.append(b); out.append(sec); } }
+  // Netzteil-Mod (Nr. 44)
+  if (def.kind === 'rig' && o.parts?.psu && g.knows('psumod')) {
+    const cap = g.psuCap(o), w = g.rigWatt(o), sec = h(`<div class="sec"><h4>Netzteil</h4><div class="sv-ln">${o.psuMod ? `Umgelötet: ${fmtWatt(cap)} statt ${fmtWatt(Math.round(cap / PSUMOD.cap))}` : `${fmtWatt(cap)}`} · der Rig braucht ${fmtWatt(w)}${o.psuMod ? ' · fällt etwas öfter aus' : ''}</div><div class="row"></div></div>`), row = sec.querySelector('.row');
+    if (!o.psuMod) { const why = g.psuModWhy(o), b = h(`<button class="btn small" ${why ? 'disabled' : ''} title="${esc(why || 'Mini-Spiel: Spannung einstellen, Shunt brücken')}">Umlöten (+15 %) · ${money(PSUMOD.cost)}</button>`); b.onclick = () => psuGame(ui, o); row.append(b); if (g.psuRoutineOk(o)) { const r = h('<button class="btn small">Routine · 1 Klick</button>'); r.onclick = () => { if (g.psuMod(o.uid, { ok: true, routine: true })) ui.toast('Routine: umgelötet.', 'good', 2200); re(); }; row.append(r); } }
+    out.append(sec);
+  }
   // Wartung
   if (g.knows('wartung') && g.serviceCost(o)) {
     const left = o.serv ? Math.max(0, 180 - (s.day - o.serv)) : 0, why = g.serviceWhy(o);
@@ -261,34 +330,47 @@ export function deviceSecs(ui, o) {
     const due = g.facObjects(fac).filter((x) => !g.serviceWhy(x)).length; if (due > 1) { const a = h(`<button class="btn small">Alle ${due} hier warten</button>`); a.onclick = () => { const n = g.serviceAll(fac); ui.toast(`${n} Geräte gewartet`, 'good', 2500); re(); }; row.append(a); }
     out.append(sec);
   }
-  // Robi: Module
+  // Robi: Stufe, Fahrten, Module der Reihe nach (USB-Stick → Greifarm → Lötkopf)
   if (o.type === 'robi') {
-    const sec = h(`<div class="sec"><h4>Robi</h4><div class="sv-ln">Fährt zu neuen Rigs und steckt den USB-Stick ein${o.mods?.steck ? ', baut Bausätze ein' : ''}${o.mods?.loet ? ', lötet kaputte Rigs' : ''}.</div></div>`);
-    for (const [m, M] of Object.entries(g.roboMods)) { if (o.mods?.[m]) { sec.append(h(`<div class="bios-row"><span>${esc(M.name)}</span><b>eingebaut</b></div>`)); continue; } const why = g.roboModWhy(o, m), lk = !g.knows(M.skill); const b = h(`<button class="btn small" ${why ? 'disabled' : ''} title="${esc(why)}">${esc(M.name)} nachrüsten · ${money(M.price)}</button>`); b.onclick = () => { if (g.roboMod(o.uid, m)) ui.toast(`${M.name} eingebaut.`, 'good', 2500); re(); }; sec.append(b); if (lk) sec.insertAdjacentHTML('beforeend', lockLine(`Erst „${SKILL[M.skill].name}“ lernen`)); }
+    const n = g.robiIn(fac).length, can = ['USB-Stick an neue Rigs', o.mods?.steck && 'Riser und Karten tauschen, Bausätze einbauen', o.mods?.loet && `löten${g.knows('hashboard') ? ', Hashboards' : ''}${g.knows('psumod') ? ', Netzteile umlöten' : ''}`].filter(Boolean);
+    const sec = h(`<div class="sec"><h4>Robi · Stufe ${g.roboStage(o)}</h4><div class="sv-ln">${esc(can.join(' · '))}. ${g.roboJobs(o)} Fahrten am Tag${n > 1 ? ` · ${n} Robis teilen sich ${esc(FACILITY[fac].short)}` : ''} · nur Material, kein Gehalt.</div></div>`);
+    for (const [m, M] of Object.entries(g.roboMods)) { if (o.mods?.[m]) { sec.append(h(`<div class="bios-row"><span>${esc(M.name)}</span><b>eingebaut</b></div>`)); continue; } const why = g.roboModWhy(o, m), lk = !g.knows(M.skill); const b = h(`<button class="btn small" ${why ? 'disabled' : ''} title="${esc(why)}">${esc(M.name)} nachrüsten · ${money(M.price)}</button>`); b.onclick = () => { if (g.roboMod(o.uid, m)) ui.toast(`${M.name} eingebaut – Robi ist jetzt Stufe ${g.roboStage(o)}.`, 'good', 2500); re(); }; sec.append(b); if (lk) sec.insertAdjacentHTML('beforeend', lockLine(`Erst „${SKILL[M.skill].name}“ lernen`)); }
+    if (o.mods?.loet && !g.knows('hashboard')) sec.insertAdjacentHTML('beforeend', lockLine('Für kaputte Miner: „Hashboard-Reparatur“ lernen'));
     out.append(sec);
   }
   return out;
 }
 
-// Reparatur: selbst (Mini-Spiel, Material), Routine (1 Klick), reparieren lassen (voller Preis)
+// Reparatur je Defekt: selbst (Mini-Spiel, Material), Routine (1 Klick), reparieren lassen (Händler-Service, voller Preis)
+const DEFECT = { loet: 'Brandgeruch – ein Kondensator ist durch.', steck: 'Startet nicht – Riser, Kabel oder eine Karte?', chip: 'Ein Hashboard meldet keine Chips mehr.' };
+const RGAME = { loet: { kind: 'loeten', btn: 'Selbst löten', title: 'Löten' }, steck: { kind: 'stecken', btn: 'Fehler suchen', title: 'Fehlersuche' }, chip: { kind: 'chips', btn: 'Hashboard reparieren', title: 'Chip-Kette' } };
 export function repairRow(ui, o, row) {
   const g = ui.g, broken = o.broken || (o.items && o.items.some((i) => i.b)); if (!broken) return;
-  const rc = g.repairCost(o), re = () => ui.inspect(o.uid);
-  if (g.repairSelfOk(o)) {
-    const mc = g.repairSelfCost(o), b = h(`<button class="btn good">Selbst reparieren · ${money(mc)}</button>`);
-    b.title = g.knows('loeten') ? 'Mini-Spiel Löten (leicht) – nur Material' : 'Mini-Spiel Löten – mit der Fähigkeit „Löten“ wird es leichter und billiger';
-    b.onclick = () => repairGame(ui, o); row.append(b);
-    if (g.repairRoutineOk(o)) { const r = h(`<button class="btn">Routine · 1 Klick</button>`); r.title = 'Fünf Reparaturen geschafft – jetzt geht das im Schlaf'; r.onclick = () => { if (!g.repairSelf(o.uid, { ok: true, routine: true })) ui.toast('Nicht genug Geld.', 'bad'); else { ui.audio?.install?.(); ui.toast('Routine: repariert.', 'good', 2200); } re(); }; row.append(r); }
-  }
-  const b = h(`<button class="btn">Reparieren lassen · ${money(rc)}</button>`); b.onclick = () => { if (!g.repair(o.uid)) ui.toast('Nicht genug Geld.', 'bad'); else re(); }; row.append(b);
+  const rc = g.repairCost(o), re = () => ui.inspect(o.uid), k = g.repairKind(o), ok = g.repairSelfOk(o), nb = g.repairBrokenN(o);
+  if (k) row.append(h(`<div class="rp-d">${esc(DEFECT[k])}${o.items ? ` · ${nb} von ${o.items.length} Plätzen` : ''}</div>`));
+  if (ok) {
+    const G = RGAME[ok], R = REPAIR[ok], mc = g.repairSelfCost(o), b = h(`<button class="btn good">${G.btn}${o.items && nb > 1 ? ' (1 Platz)' : ''} · ${money(mc)}</button>`);
+    b.title = g.knows(R.sk) ? `Mini-Spiel ${G.title} (mit Übung) – nur Material` : `Mini-Spiel ${G.title} – mit der Fähigkeit „${SKILL[R.sk].name}“ leichter und billiger`;
+    b.onclick = () => repairGame(ui, o, ok); row.append(b);
+    if (g.repairRoutineOk(o)) { const all = !!o.items && nb > 1, r = h(`<button class="btn">Routine · ${all ? `alle ${nb} · ${money(g.repairSelfCost(o, true))}` : '1 Klick'}</button>`); r.title = 'Fünfmal geschafft – jetzt geht das im Schlaf'; r.onclick = () => { if (!g.repairSelf(o.uid, { ok: true, routine: true })) ui.toast('Nicht genug Geld.', 'bad'); else { ui.audio?.install?.(); ui.toast(all ? `Routine: ${nb} Plätze repariert.` : 'Routine: repariert.', 'good', 2200); } re(); }; row.append(r); }
+  } else if (k === 'chip') row.insertAdjacentHTML('beforeend', lockLine('Selbst reparieren: erst „Hashboard-Reparatur“ lernen'));
+  const b = h(`<button class="btn">Reparieren lassen · ${money(rc)}</button>`); b.title = 'Händler-Service: holt ab, bringt es repariert zurück – voller Preis'; b.onclick = () => { if (!g.repair(o.uid)) ui.toast('Nicht genug Geld.', 'bad'); else re(); }; row.append(b);
 }
-async function repairGame(ui, o) {
+async function repairGame(ui, o, k) {
   const g = ui.g; if (!g.canAfford(g.repairSelfCost(o))) { ui.toast('Fürs Material reicht das Geld nicht.', 'bad'); return; }
-  const easy = g.knows('loeten'), uid = o.uid;
-  const r = await playMinigame(ui, { kind: 'loeten', easy, title: easy ? 'Löten (mit Übung)' : 'Löten' });
-  if (r.skipped) { ui.toast('Abgebrochen – nichts passiert.', 'info', 2200); }
-  else if (!r.ok) ui.toast('Lötstellen nicht sauber – noch mal versuchen oder reparieren lassen.', 'bad', 4000);
-  else if (g.repairSelf(uid, r)) { ui.audio?.powerOn?.(); ui.toast(`<b>Repariert!</b>${r.clean ? ' Alle Lötstellen sauber.' : ''} Nur das Material bezahlt.${!easy ? ' Mit der Fähigkeit „Löten“ (T) geht es leichter.' : ''}`, 'good', 4500); }
+  const R = REPAIR[k], G = RGAME[k], easy = g.knows(R.sk), uid = o.uid;
+  const r = await playMinigame(ui, { kind: G.kind, easy, title: easy ? `${G.title} (mit Übung)` : G.title, n: o.parts?.gpus?.length || 0 });
+  if (r.skipped) ui.toast('Abgebrochen – nichts passiert.', 'info', 2200);
+  else if (!r.ok) ui.toast(k === 'steck' ? 'Den Fehler nicht gefunden – noch mal suchen oder reparieren lassen.' : k === 'chip' ? 'Die Kette läuft noch nicht – noch mal messen oder reparieren lassen.' : 'Lötstellen nicht sauber – noch mal versuchen oder reparieren lassen.', 'bad', 4000);
+  else if (g.repairSelf(uid, r)) { ui.audio?.powerOn?.(); ui.toast(`<b>Repariert!</b>${r.clean ? ' Ohne einen Fehlgriff.' : ''} Nur das Material bezahlt.${!easy ? ` Mit der Fähigkeit „${esc(SKILL[R.sk].name)}“ (T) geht es leichter.` : ''}`, 'good', 4500); }
+  if (ui.inspUid === uid) ui.inspect(uid);
+}
+async function psuGame(ui, o) {
+  const g = ui.g, uid = o.uid, why = g.psuModWhy(o); if (why) { ui.toast(esc(why), 'bad', 3000); return; }
+  const r = await playMinigame(ui, { kind: 'psu', easy: g.knows('loeten'), title: 'Netzteil-Mod' });
+  if (r.skipped) ui.toast('Abgebrochen – das Netzteil ist wie vorher.', 'info', 2200);
+  else if (!r.ok) ui.toast('Nicht geschafft – nichts kaputt, das Netzteil ist wie vorher. Noch mal versuchen?', 'bad', 4000);
+  else if (g.psuMod(uid, r)) { ui.audio?.powerOn?.(); ui.toast(`<b>Umgelötet!</b> Das Netzteil schafft jetzt ${fmtWatt(g.psuCap(g.findObj(uid)))}.`, 'good', 4000); }
   if (ui.inspUid === uid) ui.inspect(uid);
 }
 
@@ -300,10 +382,11 @@ export function skillCard(ui, id) {
   const el = h(`<div id="lvup" class="sklv"><div class="lv-ic" style="background:${CAT_COLOR[k.cat]}"><svg viewBox="0 0 24 24" width="30" height="30">${ICON.check}</svg></div><div class="lv-t1">Gelernt</div><div class="lv-t2">${esc(k.name)}</div><div class="lv-t3">${esc(k.use ? 'Neu: ' + k.use : k.desc)}</div><div class="lv-t4"><kbd>T</kbd> Fähigkeiten</div></div>`);
   document.body.append(el); setTimeout(() => el.classList.add('out'), 3600); setTimeout(() => el.remove(), 4100);
 }
-export function pointCard(ui, pot) {
+export function pointCard(ui) {
   if (ui.modalKind === 'skills') { skRefresh(ui); return; }
   document.getElementById('lvup')?.remove(); ui.audio?.fanfare?.(); ui.lvBusy = true; clearTimeout(ui.lvBT); ui.lvBT = setTimeout(() => { ui.lvBusy = false; }, 3900);
-  const el = h(`<div id="lvup"><div class="lv-ic">★</div><div class="lv-t1">Fähigkeitspunkt frei</div><div class="lv-t2">${esc(POTS[pot].name)}</div><div class="lv-t3">Einlösen im Fähigkeiten-Baum</div><div class="lv-t4"><kbd>T</kbd> Fähigkeiten</div></div>`);
+  const free = ui.g.fpFree?.() || 1;
+  const el = h(`<div id="lvup"><div class="lv-ic">★</div><div class="lv-t1">Fähigkeitspunkt frei</div><div class="lv-t2">${free} ${free === 1 ? 'Punkt' : 'Punkte'} zum Freischalten</div><div class="lv-t3">Einlösen im Fähigkeiten-Baum</div><div class="lv-t4"><kbd>T</kbd> Fähigkeiten</div></div>`);
   document.body.append(el); setTimeout(() => el.classList.add('out'), 3400); setTimeout(() => el.remove(), 3900);
 }
 export const POT_SVG = { w: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5a1.8 1.8 0 0 0 2.5 2.5l5.8-5.8a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>', r: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>', g: '<circle cx="9" cy="9" r="5.5"/><path d="M14.6 8.8a5.5 5.5 0 1 1-5.8 5.8"/>' };

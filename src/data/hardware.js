@@ -167,7 +167,7 @@ export const PLACEABLES = [
   { id: 'crac', kind: 'cooling', cat: 'cool', name: 'Präzisionsklima (CRAC)', release: '2000-01', price: 45000, watt: 45000, cool: 260000, size: [2.0, 1.0], minTier: 4 },
 
   // Roboter (Fähigkeiten Nr. 46–48): Ladestation mit Robi – braucht Platz und Strom, kein Gehalt. Module im Inspektor (Game.roboMod)
-  { id: 'robi', kind: 'robot', cat: 'robo', skill: 'robo_usb', name: 'Robi mit Ladestation', release: '2014-01', price: 6000, watt: 120, size: [1.0, 0.5], minTier: 3, desc: 'Fährt zu neuen Rigs und steckt den USB-Stick mit dem Mining-Image ein. Nachrüstbar: Greifarm, Lötkopf.' },
+  { id: 'robi', kind: 'robot', cat: 'robo', skill: 'robo_usb', name: 'Robi mit Ladestation', release: '2014-01', price: 6000, watt: 120, size: [1.0, 0.5], minTier: 3, desc: 'Fährt zu neuen Rigs und steckt den USB-Stick mit dem Mining-Image ein. Jede Ladestation versorgt ihren Standort – in großen Hallen einfach mehrere aufstellen. Nachrüstbar: Greifarm (Teile tauschen), Lötkopf (löten). Kein Gehalt, nur Material.' },
 
   // Deko
   { id: 'plant', kind: 'decor', cat: 'decor', name: 'Zimmerpflanze', release: '2000-01', price: 25, size: [0.5, 0.5], minTier: 0 },

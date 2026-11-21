@@ -110,7 +110,7 @@ export const CHAPTERS = [
     title: 'Kapitel 4 – Die Lagerhalle', unlock: 'rz', minDate: '2017-06-01', site: 'halle',
     intro: 'Die Hashwerk GmbH zieht ins Gewerbegebiet Lindental-Nord. Deniz hat sich im Büro-Container schon den Platz am Fenster gesichert.',
     goals: [
-      { id: 'tech', text: 'Techniker einstellen', live: true, eod: true, check: (s) => s.staff.tech > 0 }, // zählt erst am Tagesende
+      { id: 'tech', text: 'Robi in die Lagerhalle stellen', eod: true, check: (s) => (s.fac.halle?.objects || []).some((o) => o.type === 'robi') || !!s.flags.robiGift }, // id bleibt (Spielstände); früher: Techniker einstellen
       { id: 'rack12', text: 'Ein Rack komplett bestücken', check: (s, h) => h.fullRack() }, // 12 Geräte in einem 42U-Rack
       { id: 'fill4', text: 'Lagerhalle zu 75 % auslasten', orDate: '2017-10-01', skip: true, check: (s, h) => h.use('halle') >= 0.75, progress: (s, h) => [h.use('halle'), 0.75, 'use', 'halle'] }, // volle Racks zählen ganz, halbe halb (Game.facUse); orDate: spätestens im Oktober 2017 ist das RZ trotzdem frei – mitten im Boom, nicht erst im Winter 2018
     ],
@@ -119,7 +119,7 @@ export const CHAPTERS = [
       { id: 'b4bear', until: '2016-01-07', text: 'Überstehe den Bärenmarkt: Schließ 2015 mit Gewinn ab', check: (s) => { const Y = s.stats.y?.[2015]; return !!Y && Y.nw1 != null && Y.rev - Y.elec - Y.fix > 0; }, reward: { rel: { papa: 1 }, text: 'Papa: „Wer im Winter verdient, schafft alles.“' } },
       { id: 'b4plus', streak: 90, text: 'Halte die Halle 90 Tage am Stück im Plus', check: (s, h, g) => facNet(g, 'halle') > 0, reward: { mod: [{ key: 'rent', mult: 0.8, fac: 'halle' }], text: 'Der Vermieter senkt die Hallenmiete um 20 %' } },
       { id: 'b4eff', text: 'Bring deine SHA-256-Flotte unter 150 J/TH (ab 100 TH/s)', check: (s, h, g) => h.algoHash('sha256') >= 1e14 && g.fleetJTH() <= 150, progress: (s, h, g) => [g.fleetJTH(), 150, 'jth'], reward: { rel: { deniz: 1 }, text: 'Deniz: „Effizienz ist alles.“' } },
-      { id: 'b4cover', unit: 'Geräte', text: 'Volle Techniker-Abdeckung bei mindestens 60 Geräten', check: (s, h, g) => s.staff.tech > 0 && g.techCoverage() >= 1 && devices(s, g) >= 60, progress: (s, h, g) => [devices(s, g), 60, 'n'], reward: { mod: [{ key: 'fail', mult: 0.95 }], text: '5 % weniger Ausfälle' } },
+      { id: 'b4cover', unit: 'Geräte', text: 'Lass Robi mit Greifarm bei mindestens 60 Geräten nach dem Rechten sehen', check: (s, h, g) => devices(s, g) >= 60 && s.unlocked.some((id) => g.robiIn(id).some((b) => b.mods?.steck)), progress: (s, h, g) => [devices(s, g), 60, 'n'], reward: { mod: [{ key: 'fail', mult: 0.95 }], text: '5 % weniger Ausfälle' } },
       { id: 'b4eth', text: 'Schürfe 500 Ethereum', check: (s) => (s.stats.coins?.ETH || 0) >= 500, progress: (s) => [s.stats.coins?.ETH || 0, 500, 'coin'], reward: { rel: { opa: 1 }, text: 'Opa: „Ether? Damit hat man früher operiert.“' } },
     ],
   },
@@ -343,7 +343,7 @@ export const FEATURES = {
   sleep: { title: 'Schlafen', key: 'E', pseudo: true, text: 'Ab 20 Uhr ins <b>Bett</b>. Morgen ist das Paket da.', from: 'Deniz', msg: 'Bestellt? Sehr gut. Jetzt heißt es warten – leg dich hin, morgen früh steht das Paket vor deiner Tür.', stale: (s) => !s.orders?.length || !!s.flags.boughtGpu },
   parcel: { title: 'Paket abholen', key: 'E', pseudo: true, text: 'Liegt vor deiner Wohnungstür.', stale: (s) => !s.parcels?.length },
   install: { title: 'Lager & Einbau', key: 'E', pseudo: true, text: 'PC anschauen, Karte einbauen.', from: 'Deniz', msg: 'Die Karte ist da? Dann rein damit: PC anschauen, E drücken, Grafikkarte einbauen. Und nicht an die goldenen Kontakte fassen!', stale: (s) => !!s.flags.boughtGpu },
-  skills: { title: 'Fähigkeiten', key: 'T', by: 'skills', text: 'Was du kannst und als Nächstes lernst.', from: 'Opa Heinz', msg: 'Selbst eingebaut? Sauber, Junge. Wer schraubt, lernt was. Drück mal T: Da siehst du, was du schon kannst und was du als Nächstes lernen kannst – aus Büchern, im Forum oder bei mir.' },
+  skills: { title: 'Fähigkeiten', key: 'T', by: 'skills', text: 'Mit Punkten aus dem Selbermachen freischalten.', from: 'Opa Heinz', msg: 'Selbst eingebaut? Sauber, Junge. Wer schraubt, lernt was. Drück mal T: Da siehst du, was du schon kannst – und mit jedem Punkt, den du dir verdienst, schaltest du etwas Neues frei.' },
   speed2: { title: 'Tempo', key: 'Leertaste', by: 'speed2', text: '<kbd>Leertaste</kbd> schaltet das Tempo weiter.', from: 'Deniz', msg: 'Läuft? Dann drück die Leertaste, dann vergeht die Zeit schneller.' },
   heat: { title: 'Wärmebild', key: 'I', by: 'heat', text: 'Zeigt, wo es zu heiß wird.', from: 'Deniz', msg: 'Bei dir wird’s warm! Mit I siehst du im Wärmebild, wo die Hitze steht. Lüfter gibt’s im Shop unter Kühlung.' },
   rigs: { title: 'Mehr PCs', key: 'B', by: 'build', text: 'Shop → Rigs: Bausatz bestellen, selbst einbauen.', from: 'Deniz', msg: 'Ein PC ist gut, zwei sind besser. Im Shop unter „Rigs“ gibt’s Gehäuse als Bausatz – Teile rein, fertig.' },

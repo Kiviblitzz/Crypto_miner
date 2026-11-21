@@ -5,14 +5,14 @@ import { FACILITIES, FACILITY, CHAPTERS, MESSAGES, NEWS, START_DAY, TECHS } from
 import { EVENTS, EVENT, REL_PERK } from '../data/events.js';
 import { ACHIEVEMENTS } from '../data/achievements.js';
 import { UPGRADES, DIFFICULTY, FULL_TALK, FEATURES } from '../data/world.js';
-import { ROLES, TRAITS, FIRST, LAST } from '../data/staff.js';
+import { ROLES, TRAITS, FIRST, LAST, STAFF_ROLES } from '../data/staff.js';
 import { BANK_EVENTS } from '../data/events_bank.js';
 import { BILL_EVENTS, BILL_GRACE, LANDLORD, SUPPLIER, PAPA_LOAN_MSG, PAPA_THANKS, PAPA_DONE, monthName } from '../data/bills.js';
 import { CONTACT, CONTACTS, READY_BY, FEE_TIERS } from '../data/contacts.js';
 import { FUTURE, futureModel, ENDLESS_GOALS, EGOAL, ENDLESS_NEWS } from '../data/endless.js';
 import { BTC_HASH, POWER_HOUSEHOLD, GPU_BOOM, MONOLITH_SHARE, DAG_AET, DAG_AEC, seasonOffset, noise, toDay, BTC_PRICE, curve, HALVINGS, BTC_REWARD } from '../data/history.js';
 import { SKILL_METHODS, migrateSkills, skEmpty } from './skills.js'; // Fähigkeiten 2.0: Handgriffe statt Prozent-Boni
-import { BOOK, XP_POT } from '../data/skills.js';
+import { XP_POT, BIOSMOD } from '../data/skills.js';
 for (const e of [...BANK_EVENTS, ...BILL_EVENTS]) if (!EVENT[e.id]) { EVENTS.push(e); EVENT[e.id] = e; } // Bankgespräch (Game.dispoDay), Mahnung (Game.billsDay)
 
 const STARTER_GPU = 'rhd5770'; // erste Karte im Shop: ~108 W, passt zu Papas altem 400-W-Netzteil
@@ -135,8 +135,9 @@ export class Game {
       for (const id of Object.keys(s.contacts)) { const c = s.contacts[id]; if (!CONTACT[id] || !c || typeof c !== 'object') delete s.contacts[id]; else { c.met = +c.met || 0; c.on = +c.on || 0; c.n = Math.max(0, +c.n || 0); } }
       if (oldContacts) this.migrateContacts(s); // alte Stände: Kontakte, die man nach dem Spielstand schon hätte, still freischalten
       this.s = s; this.cache = {};
+      this.robiMigrate(); // keine Techniker mehr: alte Stände bekommen einen Robi samt Station (src/sim/skills.js)
       if (oldFull) { this.summary = {}; for (const id of s.unlocked) this.summary[id] = this.facSummary(id); this.checkFull(true); } // alte Stände: schon volle Standorte ohne Story-Moment merken
-      this.dayUpdate(true); return true;
+      this.dayUpdate(true); this.skPayout(); return true; // skPayout: alte Stände einmal Geld statt Prozent-Übergang
     } catch (e) {
       console.warn(e); this.registerFutureHW(prev.s?.futureHW || []);
       if (this.s !== prev.s) { this.s = prev.s; this.cache = prev.cache; this.summary = prev.summary; try { this.dayUpdate(true); } catch (e2) { /* alter Stand bleibt */ } }
@@ -476,7 +477,7 @@ export class Game {
       o.parts.gpus = o.parts.gpus.filter(Boolean);
       if (partId && this.s.flags.miningStarted) { this.s.flags.boughtGpu = true; this.addXp('hw', 20); }
     } else {
-      o.parts[slot] = partId;
+      o.parts[slot] = partId; if (slot === 'psu') delete o.psuMod;
       if (slot === 'mobo') { const cap = this.rigGpuCap(o); if (o.parts.gpus.length > cap) { for (const g of o.parts.gpus.slice(cap)) this.s.cash += Math.round(this.itemPrice(PART[g]) * 0.5); o.parts.gpus = o.parts.gpus.slice(0, cap); } }
     }
     if (!this.s.flags.miningStarted && o.type === 'tower' && (this.isFirstPc(o) ? this.firstReady(o) : this.pcReady(o))) this.s.flags.pcBuilt = true;
@@ -513,7 +514,7 @@ export class Game {
       if (this.rigWatt(o) + PART[gpuId].watt > maxCap) { this.toast(`Mehr GPUs schafft kein verfügbares Netzteil (max. ${maxCap} W).`, 'info'); break; }
       if (!this.setPart(uid, 'gpu', gpuId, o.parts.gpus.length)) break; n++;
     }
-    if (o.parts.psu && this.rigWatt(o) > PART[o.parts.psu].cap * this.psuCount(o)) { const ps = this.fitPsu(o); if (ps && ps.id !== o.parts.psu) this.setPart(uid, 'psu', ps.id); }
+    if (o.parts.psu && this.rigWatt(o) > this.psuCap(o)) { const ps = this.fitPsu(o); if (ps && ps.id !== o.parts.psu) this.setPart(uid, 'psu', ps.id); }
     return n;
   }
   // Noch so einen: Rigs mit Teilen kommen fertig montiert (Montageaufschlag des Kontakts) oder als Bausatz (kit: Teile ins Lager)
@@ -659,7 +660,7 @@ export class Game {
   }
   callContact(id) {
     const st = this.s.contacts?.[id], c = CONTACT[id]; if (!c || !st?.met || st.on) return false;
-    st.on = this.s.day || 1; this.contactMsg(id, c.lines.call); this.logStory('contact', `${c.name} (${c.biz}) angerufen – liefert jetzt fertig montiert`);
+    st.on = this.s.day || 1; this.contactMsg(id, c.lines.call); this.logStory('contact', `${c.name} (${c.biz}) angerufen – ${c.callLog || 'liefert jetzt fertig montiert'}`);
     this.emit('contact', id); return true;
   }
   contactMsg(id, text) { const c = CONTACT[id]; if (!c || !text) return; const m = { id: `ct:${id}:${this.s.day}:${Math.random().toString(36).slice(2, 6)}`, day: this.s.day, from: c.name, text, read: false }; this.s.messages.push(m); this.emit('message', m); }
@@ -676,7 +677,8 @@ export class Game {
     const lb = s.lastBuild, kinds = (types) => { let n = 0; for (const f of Object.values(s.fac || {})) for (const o of f.objects || []) if (types.includes(o.type)) n++; return n; }; // auch leere Gehäuse: wer schon Rigs aufstellt, behält „Fertig bestückt“
     const kemal = s.chapter >= 1 || s.day >= CONTACT.kemal.due(s) || kinds(CONTACTS.flatMap((c) => c.types)) >= 2 || !!lb?.ready;
     const jonas = s.chapter >= 2 || (s.unlocked.includes('keller') && s.day >= CONTACT.jonas.due(s)) || kinds(CONTACT.jonas.types) > 0 || (!!lb?.ready && CONTACT.jonas.types.includes(lb.type));
-    for (const [id, on] of [['kemal', kemal], ['jonas', jonas]]) if (on) { s.contacts[id] = { met: s.day || 1, on: s.day || 1, n: 0 }; s.ev.done[CONTACT[id].intro] = 'migr'; }
+    const lq = !!s.flags?.gmbh || s.unlocked.some((id) => FACILITY[id]?.tier >= 3); // Großhändler: ab GmbH oder Lagerhalle
+    for (const [id, on] of [['kemal', kemal], ['jonas', jonas], ['lindqvist', lq]]) if (on) { s.contacts[id] = { met: s.day || 1, on: s.day || 1, n: 0 }; s.ev.done[CONTACT[id].intro] = 'migr'; }
   }
   // ---------- Teile-Lager: kaufen, einbauen, ausbauen, tauschen, verkaufen ----------
   bagN(id) { return this.s.bag?.[id] || 0; }
@@ -705,7 +707,7 @@ export class Game {
   // Reicht das Netzteil nach dem Einbau? '' = ja (ohne Netzteil im Rig wird nicht geprüft – das kommt beim Netzteil selbst)
   psuWhy(o, id, idx = null) {
     const it = PART[id], p = o.parts, ps = it.type === 'psu' ? it : p.psu ? PART[p.psu] : null; if (!ps) return '';
-    const w = this.wattAfter(o, id, idx), cap = ps.cap * this.psuCount(o); if (w <= cap) return '';
+    const w = this.wattAfter(o, id, idx), cap = this.psuCap(o, ps); if (w <= cap) return '';
     return it.type === 'psu' ? `Zu schwach für diesen Rig (${w} W nötig)` : `Netzteil zu schwach (${w} W > ${cap} W) – erst ein stärkeres einbauen`;
   }
   // Verbrauch des Rigs nach dem Einbau (ersetzt das Teil an der Stelle; neues Mainboard wirft überzählige Karten raus)
@@ -728,7 +730,7 @@ export class Game {
     let psu = null, extra = 0;
     if (p.psu) {
       const w = this.wattAfter(o, id, idx);
-      if (w > PART[p.psu].cap * np) {
+      if (w > this.psuCap(o)) {
         psu = this.partList('psu').sort((a, b) => a.cap - b.cap || this.itemPrice(a) - this.itemPrice(b)).find((x) => x.cap * np >= w);
         if (!psu) return { why: `Dafür reicht kein Netzteil im Handel (${w} W nötig)` };
         extra = this.itemPrice(psu) * np;
@@ -743,14 +745,14 @@ export class Game {
     return pl;
   }
   // Netzteil überlastet? { w, cap } sonst null
-  rigOverload(o) { const p = o?.parts; if (!p?.psu) return null; const w = this.rigWatt(o), cap = PART[p.psu].cap * this.psuCount(o); return w > cap ? { w, cap } : null; }
+  rigOverload(o) { const p = o?.parts; if (!p?.psu) return null; const w = this.rigWatt(o), cap = this.psuCap(o); return w > cap ? { w, cap } : null; }
   installPart(uid, id, idx = null) {
     const o = this.findObj(uid); if (!o?.parts || this.installWhy(o, id, idx)) return false;
     const it = PART[id], p = o.parts, n = it.type === 'psu' ? this.psuCount(o) : 1;
-    if (it.type === 'gpu') { if (idx != null && p.gpus[idx]) this.bagAdd(p.gpus.splice(idx, 1)[0], 1); p.gpus.push(id); if (this.s.flags.miningStarted) this.s.flags.boughtGpu = true; } // neue Karte kommt hinten dazu (Einbau-Animation)
+    if (it.type === 'gpu') { if (idx != null && p.gpus[idx]) this.bagAdd(p.gpus.splice(idx, 1)[0], 1); p.gpus.push(id); if (this.s.flags.miningStarted) this.s.flags.boughtGpu = true; if (BIOSMOD.cards.includes(id)) delete o.bios; } // neue Karte kommt hinten dazu (Einbau-Animation); neue Polaris-Karte: BIOS noch nicht geflasht
     else {
       if (p[it.type]) this.bagAdd(p[it.type], n);
-      p[it.type] = id;
+      p[it.type] = id; if (it.type === 'psu') delete o.psuMod;
       if (it.type === 'mobo') { const cap = this.rigGpuCap(o); while (p.gpus.length > cap) this.bagAdd(p.gpus.pop(), 1); }
     }
     this.bagAdd(id, -n); const fresh = (this.s.fresh?.[id] || 0) > 0; if (fresh) this.freshAdd(id, -n);
@@ -809,7 +811,7 @@ export class Game {
     if (slot === 'gpu') { if (!p.gpus[idx]) return false; this.bagAdd(p.gpus.splice(idx, 1)[0], 1); }
     else {
       if (!p[slot]) return false;
-      this.bagAdd(p[slot], slot === 'psu' ? this.psuCount(o) : 1); p[slot] = null;
+      this.bagAdd(p[slot], slot === 'psu' ? this.psuCount(o) : 1); p[slot] = null; if (slot === 'psu') delete o.psuMod;
       if (slot === 'mobo') { if (p.cpu) { this.bagAdd(p.cpu, 1); p.cpu = null; } while (p.gpus.length) this.bagAdd(p.gpus.pop(), 1); }
     }
     this.dayUpdate(true); this.emit('objects', this.facOf(uid)); this.emit('bag'); return true;
@@ -826,11 +828,11 @@ export class Game {
     const p0 = this.itemPrice(dev);
     let added = 0;
     n = Math.min(n, this.stockLeft(dev), def.slots - o.items.length); // Kontingent, freie Plätze
-    let k = n; while (k > 0 && !this.canAfford(Math.round(p0 * (1 - this.bulkDisc(k))) * k)) k--; // Großhandel (Fähigkeit): ab 10 Stück günstiger
-    const price = Math.round(p0 * (1 - this.bulkDisc(k)));
+    let k = n; while (k > 0 && !this.canAfford(p0 * k)) k--;
+    const price = p0;
     while (added < k) { o.items.push({ id: devId, b: 0 }); this.s.cash -= price; this.s.stats.spentHW += price; added++; }
     this.stockUse(dev, added);
-    if (added) { if (dev.look !== 'fpga' && dev.look !== 'usb') this.s.flags.boughtAsic = true; this.dayUpdate(true); this.capWarn(this.facOf(uid)); this.emit('objects', this.facOf(uid)); }
+    if (added) { if (dev.look !== 'fpga' && dev.look !== 'usb') this.s.flags.boughtAsic = true; this.addXp('hw', 2 * added, true); this.dayUpdate(true); this.capWarn(this.facOf(uid)); this.emit('objects', this.facOf(uid)); }
     return added;
   }
   holderRemove(uid, idx) {
@@ -855,7 +857,7 @@ export class Game {
   repair(uid) {
     const o = this.findObj(uid); if (!o) return false;
     const c = this.repairCost(o); if (!this.canAfford(c)) return false;
-    this.s.cash -= c; o.broken = false; if (o.items) o.items.forEach((it) => (it.b = 0));
+    this.s.cash -= c; o.broken = false; delete o.defect; if (o.items) o.items.forEach((it) => (it.b = 0)); // „Reparieren lassen“: Händler-Service zum vollen Preis
     this.dayUpdate(true); this.emit('objects', this.facOf(uid)); return true;
   }
 
@@ -963,7 +965,7 @@ export class Game {
   // „Freie Plätze füllen“ als Bestellung: so viele Karten, wie Steckplätze, Netzteile im Handel und Geld hergeben (wie fillGpus)
   fillPlan(o, gpuId) {
     const gp = PART[gpuId], p = o?.parts; if (!gp || !p?.mobo) return null;
-    const np = this.psuCount(o), psus = this.partList('psu').sort((a, b) => a.cap - b.cap), cur = p.psu ? PART[p.psu].cap * np : 0;
+    const np = this.psuCount(o), psus = this.partList('psu').sort((a, b) => a.cap - b.cap), cur = p.psu ? this.psuCap(o) : 0;
     const maxCap = Math.max(cur, ...psus.map((x) => x.cap * np)), price = this.itemPrice(gp);
     for (let k = this.rigGpuCap(o) - p.gpus.length; k > 0; k--) {
       const w = this.rigWatt(o) + k * gp.watt; if (w > maxCap) continue;
@@ -977,14 +979,13 @@ export class Game {
   orderHolder(uid, devId, n = 1) {
     const o = this.findObj(uid), dev = PLACEABLE[devId]; if (!o?.items || !dev || !this.available(dev)) return 0;
     const def = PLACEABLE[o.type], p0 = this.itemPrice(dev); n = Math.min(n, def.slots - o.items.length - this.pendingHolder(uid), this.stockLeft(dev));
-    let k = n; while (k > 0 && !this.canAfford(Math.round(p0 * (1 - this.bulkDisc(k))) * k)) k--; if (k <= 0) return 0; // Großhandel (Fähigkeit)
-    this.stockUse(dev, k); this.orderAdd([{ k: 'dev', id: devId, n: k, holder: uid }], Math.round(p0 * (1 - this.bulkDisc(k))) * k); return k;
+    let k = n; while (k > 0 && !this.canAfford(p0 * k)) k--; if (k <= 0) return 0;
+    this.stockUse(dev, k); this.orderAdd([{ k: 'dev', id: devId, n: k, holder: uid }], p0 * k); return k;
   }
   // Paketaufschrift: „Grafikkarte“, „Tower-PC“, „3 Teile“
   parcelLabel(items) {
     const n = items.reduce((a, it) => a + (it.k === 'place' ? 1 : it.n || 1), 0), it = items[0];
     if (n !== 1 || !it) return `${n} Teile`;
-    if (it.k === 'book') return 'Buch';
     if (it.k === 'part') return { gpu: 'Grafikkarte', cpu: 'Prozessor', mobo: 'Mainboard', psu: 'Netzteil' }[PART[it.id]?.type] || 'Teil';
     const d = PLACEABLE[it.k === 'dev' ? it.id : it.type]; if (!d) return 'Paket';
     return d.id === 'tower' ? (it.ready ? 'Mining-PC' : 'PC-Gehäuse') : d.short || d.name.replace(/\s*\(.*\)/, '');
@@ -1013,7 +1014,6 @@ export class Game {
         res.dev += it.n - n; for (; n > 0; n--) { this.stockAdd({ type: it.id }); res.place++; } // Regal weg oder voll: einzeln aufstellen
         const d = PLACEABLE[it.id]; if (d.look !== 'fpga' && d.look !== 'usb') s.flags.boughtAsic = true; res.names.push(`${it.n}× ${d.name}`);
       } else if (it.k === 'place' && PLACEABLE[it.type]) { const { k, ...e } = it; this.stockAdd(e); res.place++; res.names.push(this.stockName(e)); }
-      else if (it.k === 'book' && BOOK[it.id]) { this.skBook(it.id); res.books = (res.books || 0) + 1; res.names.push(`Buch „${BOOK[it.id].title}“`); }
     }
     this.learned('parcel'); this.dayUpdate(true); for (const f of facs) if (f) this.emit('objects', f);
     this.emit('parcels'); this.emit('bag'); this.emit('unpacked'); return res;
@@ -1031,6 +1031,7 @@ export class Game {
     if (def.kind === 'rig') o.parts = e.parts ? JSON.parse(JSON.stringify(e.parts)) : Game.emptyParts();
     if (def.kind === 'rig' && e.kit) o.kit = JSON.parse(JSON.stringify(e.kit));
     if (def.kind === 'holder') o.items = (e.items || []).map((i) => ({ id: i.id, b: 0 }));
+    if (e.mods) o.mods = { ...e.mods }; // Robi mit Greifarm/Lötkopf
     this.rigNew(o, !!e.ready, facId);
     s.unpacked = s.unpacked.filter((x) => x !== e); s.fac[facId].objects.push(o);
     if (def.kind === 'device' && def.look !== 'fpga' && def.look !== 'usb') s.flags.boughtAsic = true;
@@ -1054,7 +1055,7 @@ export class Game {
       if (!it || typeof it !== 'object') return null;
       if (it.k === 'part') return PART[it.id] && it.n > 0 ? { k: 'part', id: it.id, n: Math.round(it.n) } : null;
       if (it.k === 'dev') return PLACEABLE[it.id] && it.n > 0 ? { k: 'dev', id: it.id, n: Math.round(it.n), holder: it.holder } : null;
-      if (it.k === 'book') return BOOK[it.id] ? { k: 'book', id: it.id } : null;
+      if (it.k === 'book') return null; // Bücher gibt es nicht mehr (Paket 18: nur Punkte)
       if (it.k === 'place' || !it.k) { const d = PLACEABLE[it.type]; if (!d) return null; const e = { ...it, k: 'place' }; if (d.kind === 'rig') { e.parts = okParts(e.parts) || Game.emptyParts(); if (e.kit) e.kit = okParts(e.kit); } else { delete e.parts; delete e.kit; } if (d.kind === 'holder') e.items = (e.items || []).filter((i) => i && PLACEABLE[i.id]); else delete e.items; return e; }
       return null;
     };
@@ -1099,7 +1100,7 @@ export class Game {
       if (o.os === null && this.skOn()) { r.status = 'noos'; r.note = 'Kein Betriebssystem – Installer starten'; return r; }
       const parts = this.partIds(o).map((id) => PART[id]);
       r.watt = 25 + parts.reduce((a, x) => a + (x.watt || 0), 0);
-      const cap = PART[p.psu].cap * this.psuCount(o);
+      const cap = this.psuCap(o); // mit Netzteil-Mod +15 %
       const tu = this.devTune(o, facId), rigPow = this.fx('rigPower') * tu.P; // Profil, Lüfterkurve (Fähigkeiten)
       // Netzteil zu schwach: Karten von hinten abschalten, bis es reicht – der Rest läuft weiter (sonst stünde der ganze PC)
       let gpus = p.gpus;
@@ -1112,7 +1113,7 @@ export class Game {
       if (o.broken) { r.status = 'broken'; r.watt = 0; return r; }
       r.watt = Math.round(r.watt * rigPow);
       const hash = {}; let vram = 99;
-      for (const id of gpus) { const g = PART[id]; for (const [a, h] of Object.entries(g.hash)) hash[a] = (hash[a] || 0) + h; vram = Math.min(vram, g.vram); }
+      for (const id of gpus) { const g = PART[id], bm = o.bios && BIOSMOD.cards.includes(id); for (const [a, h] of Object.entries(g.hash)) hash[a] = (hash[a] || 0) + h * (bm && a === 'ethash' ? BIOSMOD.H : 1); vram = Math.min(vram, g.vram); } // BIOS-Mod (Fähigkeit)
       const cpuH = PART[p.cpu].hash;
       // GPUs + CPU (CPU zählt bei SHA-256/CN/RX mit)
       for (const a of Object.keys(hash)) hash[a] *= tu.H;
@@ -1259,7 +1260,6 @@ export class Game {
   monolithHash(day = this.s.day) { return day < toDay('2014-03-01') ? 0 : BTC_HASH(Math.min(day, LAST_DATA_DAY)) * MONOLITH_SHARE(day) * (this.s.endless ? this.s.endless.BTC.h : 1) * this.fx('monolith'); }
   dailyProfit() { let rev = 0, cost = 0; for (const id of this.s.unlocked) { const sm = this.summary[id]; if (!sm) continue; if (!sm.tripped) { rev += sm.rev * sm.throttle; cost += Math.max(0, sm.watt / 1000 * 24 - this.solarKwh(id)) * sm.elec; } cost += FACILITY[id].rent / 30.4 * this.fx('rent', id); } cost += this.staffMonthly() / 30.4 + this.extraDaily(this.s.day, true); for (const md of this.s.mods || []) if (md.key === 'monthly' && this.s.day < md.until) cost += md.mult / 30.4; if (this.s.loan > 0) cost += this.s.loan * this.loanRate() / 365; return { rev, cost, net: rev - cost }; }
   techSalary(day = this.s.day) { return Math.round(2600 * Math.pow(1.03, (day - toDay('2014-01-01')) / 365)); }
-  techCoverage() { let n = 0; for (const id of this.s.unlocked) for (const o of this.s.fac[id].objects) { const def = PLACEABLE[o.type]; if (def.kind === 'holder') n += o.items.length; else if (def.kind !== 'decor' && def.kind !== 'cooling') n++; } return n ? Math.min(1, this.techCap() / n) : 1; }
 
   // Zusammenfassungen für alle Standorte neu berechnen
   dayUpdate(silent = false) {
@@ -1308,7 +1308,7 @@ export class Game {
     }
     s.lastNet = netOwn;
     // Defekte des Tages: höchstens eine Meldung
-    if (this.broke?.length) { const br = this.broke; this.broke = null; for (const fid of new Set(br.map((o) => this.facOf(o.uid)))) this.emit('objects', fid); this.toast(br.length === 1 ? `${PLACEABLE[br[0].type].name} ist kaputt!` : `${br.length} Geräte kaputt`, 'bad'); }
+    if (this.broke?.length) { const br = this.broke; this.broke = null; for (const fid of new Set(br.map((o) => this.facOf(o.uid)))) this.emit('objects', fid); const robi = br.some((o) => this.robiIn(this.facOf(o.uid)).some((b) => b.mods?.steck || b.mods?.loet)); this.toast(br.length === 1 ? `${PLACEABLE[br[0].type].name} ist kaputt!${robi ? ' Robi fährt hin.' : ''}` : `${br.length} Geräte kaputt${robi ? ' – Robi fährt hin' : ''}`, 'bad'); }
     // Coins gutschreiben & Auto-Verkauf
     let sold = 0, minedUSD = 0;
     s.stats.coins ||= {};
@@ -1340,8 +1340,6 @@ export class Game {
       if (s.cash < 0) this.dispoDay(day); // Dispo-Zins, ggf. Bankgespräch
     }
     if (s.cash >= 0 && s.flags.overSince) delete s.flags.overSince;
-    // Techniker reparieren
-    this.techRepairs(day);
     this.econDay(day);
     this.billsDay(day); // offene Rechnungen: automatisch zahlen, sobald das Konto reicht, sonst Mahnstufen
     this.deliverDue(day); // Online-Shop: gestrige Bestellungen liegen jetzt vor der Wohnungstür
@@ -1414,18 +1412,8 @@ export class Game {
       if (o.broken) return;
       const age = day - (o.bought || day);
       const p = 0.0009 * heatMul * (age > life ? 2.2 : 1) * (def.kind === 'rig' ? 1 + (o.parts.gpus.length * 0.15) : 1);
-      if (Math.random() < p) { o.broken = true; (this.broke ||= []).push(o); } // Meldung gesammelt am Tagesende (advanceDay)
+      if (Math.random() < p) { o.broken = true; if (def.kind === 'rig') o.defect = o.parts?.gpus?.length && Math.random() < 0.5 ? 'steck' : 'loet'; (this.broke ||= []).push(o); } // Meldung gesammelt am Tagesende (advanceDay); defect: welches Mini-Spiel
     }
-  }
-  techRepairs() {
-    const s = this.s; if (!s.staff.tech) return;
-    const cov = this.techCoverage();
-    let cost = 0, n = 0;
-    for (const id of s.unlocked) for (const o of s.fac[id].objects) {
-      if (o.broken && Math.random() < cov && this.canAfford(cost + this.repairCost(o) * 0.6)) { cost += this.repairCost(o) * 0.6; o.broken = false; n++; }
-      if (o.items) for (const it of o.items) if (it.b && Math.random() < cov && this.canAfford(cost + this.itemPrice(PLACEABLE[it.id]) * 0.05)) { cost += this.itemPrice(PLACEABLE[it.id]) * 0.05; it.b = 0; n++; }
-    }
-    if (n) { s.cash -= cost * this.staffFx().repair; this.emit('objects', s.current); }
   }
   exchangeCrash(loss, text) {
     loss = Math.min(1, loss * this.diff('exLoss')); // Schwierigkeit
@@ -1666,7 +1654,7 @@ export class Game {
   unlockAch(id) { const s = this.s; s.ach ||= {}; if (s.ach[id]) return false; s.ach[id] = s.day || 1; this.emit('achievement', id); return true; }
   relLv(k) { return this.s.rel?.[k] || 0; }
   chapter() { return CHAPTERS[Math.min(this.s.chapter, CHAPTERS.length - 1)]; }
-  // eod = Tagesabschluss: Ziele mit eod:true zählen nur dort (z. B. Techniker eingestellt und bezahlt)
+  // eod = Tagesabschluss: Ziele mit eod:true zählen nur dort
   checkGoals(eod = false) {
     const s = this.s, h = this.helpers();
     const ch = CHAPTERS[s.chapter]; if (!ch) return;
@@ -1742,26 +1730,23 @@ export class Game {
   }
   // Ereignis-Sperre (Netzbetreiber, Gemeinde Sogn): Tag, bis zu dem nicht ausgebaut werden darf, sonst 0
   powerWaitUntil(facId) { let u = 0; for (const md of this.s.mods || []) if (md.key === 'powerWait' && md.mult === 0 && (!md.fac || md.fac === facId) && this.s.day < md.until) u = Math.max(u, md.until); return u; }
-  hireTech(n) { if (!this.staffAllowed()) return false; if (n > 0 && !this.canAfford(n * this.techSalary())) return false; this.staffAdjust(n); this.dayUpdate(true); return true; }
 
   // ---------- Wirtschaft: Schwierigkeit, Ausbauten, Einmotten, Dispo & Bank, Kontingente, Personal ----------
   diff(key) { const d = DIFFICULTY[this.s?.diff] || DIFFICULTY.normal; return d[key] ?? 1; }
   initEcon(diff = 'normal') {
     const s = this.s; s.diff = DIFFICULTY[diff] ? diff : 'normal'; s.cash = DIFFICULTY[s.diff].cash;
-    s.staff = { tech: 0, list: [], pool: [], poolDay: 0, nextId: 1 }; s.stock = {};
+    s.staff = { list: [], pool: [], poolDay: 0, nextId: 1 }; s.stock = {};
     for (const f of Object.values(s.fac)) { f.up = {}; f.mothball = 0; }
   }
-  migrateEcon(s) { // alte Spielstände: Normal, Techniker bekommen Namen
-    s.diff ||= 'normal'; s.stock ||= {}; s.staff ||= { tech: 0 };
+  migrateEcon(s) { // alte Spielstände: Normal, Personal-Listen (Techniker gehen in robiMigrate)
+    s.diff ||= 'normal'; s.stock ||= {}; s.staff ||= {};
     const st = s.staff; st.list ||= []; st.pool ||= []; st.poolDay ||= 0; st.nextId ||= 1;
-    if (!st.list.length && st.tech > 0) for (let i = 0; i < st.tech; i++) st.list.push(this.makeStaff('tech', st, Math.max(0, s.day - 30), s.unlocked[s.unlocked.length - 1]));
-    st.tech = st.list.filter((p) => p.role === 'tech').length;
     for (const f of Object.values(s.fac)) { f.up ||= {}; f.mothball ||= 0; }
   }
   // Zusatzfaktoren für fx(): Schwierigkeit, Personal, Ausbauten, Einmotten
   fxExt(key, facId) {
     const s = this.s; if (!s) return 1;
-    if (key === 'fail') return this.diff('wear') * (s.staff?.list ? this.staffFx().fail : 1);
+    if (key === 'fail') return this.diff('wear');
     if (key === 'powerCost') return s.staff?.list && this.staffFx().elec ? 0.8 : 1;
     if (key === 'elec') return this.diff('elec') * (facId && s.fac?.[facId]?.up ? this.upFx(facId, 'elec') : 1) * this.peakFx('elec', facId); // Schwierigkeit, Ausbauten, Lastmanagement
     if (key === 'hash' && facId) return (s.fac?.[facId]?.up ? this.upFx(facId, 'hash') : 1) * this.peakFx('hash', facId);
@@ -1909,36 +1894,30 @@ export class Game {
     return true;
   }
 
-  // Personal (s.staff.list; s.staff.tech = Zahl der Techniker, für alte Stellen im Code)
+  // Personal (s.staff.list): Elektrik und Handel. Reparieren gibt es nur selbst, mit Robi oder als „Reparieren lassen“ – keine Techniker mehr
   staffAllowed() { return !!this.s.flags.gmbh || FACILITY[this.s.unlocked[this.s.unlocked.length - 1]].tier >= 3; }
   staffOf(role) { return (this.s.staff?.list || []).filter((p) => p.role === role); }
   roleName(p) { return ROLES[p.role]?.[p.g === 'f' ? 'f' : 'm'] || p.role; }
   staffSalary(p, day = this.s.day) { return Math.round(this.techSalary(day) * (ROLES[p.role]?.sal || 1)); }
-  staffMonthly(day = this.s.day) { const l = this.s.staff?.list; if (!l) return (this.s.staff?.tech || 0) * this.techSalary(day); let m = 0; for (const p of l) m += this.techSalary(day) * (ROLES[p.role]?.sal || 1); return m; }
+  staffMonthly(day = this.s.day) { const l = this.s.staff?.list; if (!l) return 0; let m = 0; for (const p of l) m += this.techSalary(day) * (ROLES[p.role]?.sal || 1); return m; }
   staffFx() {
     return this.cache.sfx ??= (() => {
-      const t = this.staffOf('tech'), n = Math.max(1, t.length), k = (tr) => t.filter((p) => p.trait === tr).length;
-      return { cap: t.reduce((a, p) => a + (p.trait === 'flink' ? 72 : 60), 0), fail: 1 - 0.2 * k('gruendlich') / n, repair: 1 - 0.15 * k('sparfuchs') / n, elec: this.staffOf('elec').length > 0, trader: this.staffOf('trader').length > 0 };
+      return { elec: this.staffOf('elec').length > 0, trader: this.staffOf('trader').length > 0 };
     })();
   }
-  techCap() { return this.s.staff?.list ? this.staffFx().cap : (this.s.staff?.tech || 0) * 60; }
-  syncStaff() { this.s.staff.tech = this.staffOf('tech').length; if (this.cache) delete this.cache.sfx; }
+  syncStaff() { if (this.cache) delete this.cache.sfx; }
   makeStaff(role, st, day, fac = null) {
     const used = new Set([...st.list, ...(st.pool || [])].map((p) => p.name)); let name = '', g = 'm';
     for (let k = 0; k < 60; k++) { const [fn, gg] = FIRST[Math.floor(Math.random() * FIRST.length)]; name = `${fn} ${LAST[Math.floor(Math.random() * LAST.length)]}`; g = gg; if (!used.has(name)) break; }
     const tk = Object.keys(TRAITS);
     return { id: st.nextId++, name, g, role, trait: tk[Math.floor(Math.random() * tk.length)], fac, since: day };
   }
-  // Drei Bewerbungen; neue Runde alle 30 Tage, nach einer Einstellung rückt jemand nach (Elektrik/Handel nur, solange die Rolle fehlt)
-  staffPool() { const st = this.s.staff; if (st.pool.length < 3 || this.s.day - st.poolDay >= 30) this.refreshPool(st.pool.length >= 3); return st.pool; }
+  // Bewerbungen: je fehlender Rolle (Elektrik, Handel) zwei; neue Runde alle 30 Tage, nach einer Einstellung fällt die Rolle weg
+  staffPool() { const st = this.s.staff; if (this.s.day - st.poolDay >= 30 || st.pool.some((p) => !ROLES[p.role] || this.staffOf(p.role).length)) this.refreshPool(this.s.day - st.poolDay >= 30); return st.pool; }
   refreshPool(all = true) {
     const s = this.s, st = s.staff; if (all) st.pool = []; st.poolDay = s.day;
-    st.pool = st.pool.filter((p) => p.role === 'tech' || !this.staffOf(p.role).length);
-    while (st.pool.length < 3) {
-      const roles = ['tech', 'tech']; for (const r of ['elec', 'trader']) if (!this.staffOf(r).length && !st.pool.some((p) => p.role === r)) roles.push(r);
-      const role = st.pool.some((p) => p.role === 'tech') ? roles[Math.floor(Math.random() * roles.length)] : 'tech';
-      st.pool.push(this.makeStaff(role, st, s.day, s.unlocked[s.unlocked.length - 1]));
-    }
+    st.pool = st.pool.filter((p) => ROLES[p.role] && !this.staffOf(p.role).length);
+    for (const r of STAFF_ROLES) { if (this.staffOf(r).length) continue; while (st.pool.filter((p) => p.role === r).length < 2) st.pool.push(this.makeStaff(r, st, s.day, s.unlocked[s.unlocked.length - 1])); }
   }
   hire(pid) {
     const s = this.s, st = s.staff, i = st.pool.findIndex((p) => p.id === pid); if (i < 0 || !this.staffAllowed()) return false;
@@ -1947,12 +1926,6 @@ export class Game {
     this.dayUpdate(true); this.emit('staff', p); return true;
   }
   fire(pid) { const st = this.s.staff, i = st.list.findIndex((p) => p.id === pid); if (i < 0) return false; st.list.splice(i, 1); this.syncStaff(); this.dayUpdate(true); this.emit('staff'); return true; }
-  staffAdjust(n) { // Sammel-Einstellung/-Kündigung von Technikern (ohne Auswahl)
-    const s = this.s, st = s.staff;
-    if (n > 0) for (let i = 0; i < n; i++) st.list.push(this.makeStaff('tech', st, s.day, s.unlocked[s.unlocked.length - 1]));
-    else for (let i = 0; i < -n; i++) { const t = st.list.map((p) => p.role).lastIndexOf('tech'); if (t < 0) break; st.list.splice(t, 1); }
-    this.syncStaff();
-  }
   // Händler: verkauft nur über dem 7-Tage-Schnitt, sonst bleiben die Coins auf der Börse liegen
   traderSell(c, want, p, day) {
     const s = this.s, lim = this.limitMode(); if (!(want > 0) || s.payoutCold || (!lim && (!s.staff?.list || !this.staffFx().trader))) return want; // Limit-Orders (Fähigkeit) wie der Händler

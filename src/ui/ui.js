@@ -1145,12 +1145,12 @@ export class UI {
     for (const c of biz) {
       const st = g.contactState(c.id), met = !!st?.met, on = !!st?.on, tier = g.contactTier(c.id), T = FEE_TIERS[tier], nx = FEE_TIERS[tier + 1], n = st?.n || 0;
       const badge = on ? '<span class="ct-b on">Freigeschaltet</span>' : met ? '<span class="ct-b off">Nicht gespeichert</span>' : '<span class="ct-b lock">Noch nicht kennengelernt</span>';
-      const tierLine = on ? `<div class="ct-tier"><b>${esc(T.label)}</b> · ${Math.round(T.fee * 100)}&nbsp;% Montage · ${n} ${n === 1 ? 'Auftrag' : 'Aufträge'}${nx ? `<br/><span>Noch ${nx.n - n} ${nx.n - n === 1 ? 'Auftrag' : 'Aufträge'} bis „${esc(nx.label)}“ (${Math.round(nx.fee * 100)}&nbsp;%)</span>` : ''}</div>` : '';
+      const tierLine = on && !c.wholesale ? `<div class="ct-tier"><b>${esc(T.label)}</b> · ${Math.round(T.fee * 100)}&nbsp;% Montage · ${n} ${n === 1 ? 'Auftrag' : 'Aufträge'}${nx ? `<br/><span>Noch ${nx.n - n} ${nx.n - n === 1 ? 'Auftrag' : 'Aufträge'} bis „${esc(nx.label)}“ (${Math.round(nx.fee * 100)}&nbsp;%)</span>` : ''}</div>` : '';
       const last = on ? [...s.messages].reverse().find((m) => m.from === c.name) : null;
       const card = h(`<div class="ct-card ${on ? 'on' : met ? 'met' : 'unknown'}"><div class="ct-av">${met ? faceSvg(c.id) : `<span class="ct-q">?</span>`}</div><div class="ct-main"><div class="ct-name"><b>${esc(met ? c.name : c.unknown)}</b>${met ? `<span class="ct-biz">${esc(c.biz)}</span>` : ''}${badge}</div>${met ? `<div class="ct-role">${esc(c.role)}</div>` : ''}<div class="ct-offer">${on ? 'Liefert' : 'Bietet'}: ${esc(c.offer)}</div>${tierLine}${last ? `<div class="ct-last">„${esc(last.text)}“</div>` : ''}${!met ? `<div class="ct-how">${LOCK_SVG}<span>${esc(c.meet(s, g, fmtDate))}</span></div>` : ''}<div class="ct-act"></div></div></div>`);
       const act = card.querySelector('.ct-act');
-      if (met && !on) { const b = h(`<button class="btn small primary">${esc(c.name)} anrufen</button>`); b.onclick = () => { this.callContact(c.id); this.phone('contacts'); }; act.append(b); act.append(h('<span class="ct-hint">Danach gibt’s fertig bestückte Geräte im Katalog.</span>')); }
-      if (on && g.has('build')) { const b = h('<button class="btn small">Zum Katalog</button>'); b.onclick = () => { this.closeModal(); this.cat = 'rigs'; this.toggleBuild(); }; act.append(b); }
+      if (met && !on) { const b = h(`<button class="btn small primary">${esc(c.name)} anrufen</button>`); b.onclick = () => { this.callContact(c.id); this.phone('contacts'); }; act.append(b); act.append(h(`<span class="ct-hint">${esc(c.callHint || 'Danach gibt’s fertig bestückte Geräte im Katalog.')}</span>`)); }
+      if (on && !c.wholesale && g.has('build')) { const b = h('<button class="btn small">Zum Katalog</button>'); b.onclick = () => { this.closeModal(); this.cat = 'rigs'; this.toggleBuild(); }; act.append(b); }
       if (!act.childElementCount) act.remove();
       ph.append(card);
     }
@@ -1317,7 +1317,7 @@ export class UI {
     const st = body.querySelector('.staff');
     const allowed = s.flags.gmbh;
     st.append(this.staffSec()); // Personal mit Namen, Rollen, Bewerbungen
-    const stHide = !allowed && !s.staff.tech;
+    const stHide = !allowed && !(s.staff.list || []).length;
     const p = g.dailyProfit();
     const loan = s.loan || 0, lim = g.loanLimit();
     const lb = h(`<div class="sec"><h4>Bankkredit</h4><div class="kv"><div class="k">Offener Kredit</div><div class="v ${loan ? 'neg' : ''}">${fmtUSD(loan)}</div><div class="k">Zinssatz</div><div class="v">${(g.loanRate() * 100).toFixed(1).replace('.', ',')} % p. a.</div><div class="k">Zinsen pro Tag</div><div class="v">${fmtUSD(loan * g.loanRate() / 365)}</div><div class="k">Weiterer Rahmen</div><div class="v">${fmtUSD(lim)}</div></div><div class="row"></div></div>`);
@@ -1377,18 +1377,18 @@ export class UI {
     }
     return box;
   }
-  // Personal: Teamkarten, drei Bewerbungen, Sammel-Einstellung
+  // Personal: Teamkarten und Bewerbungen (Elektrik, Handel) – Techniker gibt es nicht mehr, Reparieren macht Robi
   staffSec() {
     const g = this.g, s = g.s, list = s.staff.list || [], sec = h('<div class="staff2"></div>');
-    const cov = Math.round(g.techCoverage() * 100), pay = g.staffMonthly();
+    const pay = g.staffMonthly();
     sec.append(h(`<h4>Personal</h4>`));
-    sec.append(h(`<div class="kv"><div class="k">Team</div><div class="v">${list.length} ${list.length === 1 ? 'Person' : 'Leute'} · ${s.staff.tech} in der Technik</div><div class="k">Reparatur-Abdeckung</div><div class="v ${cov < 100 && s.staff.tech ? 'neg' : ''}">${cov} %</div><div class="k">Gehälter</div><div class="v">${fmtUSD(pay)}/Monat</div></div>`));
+    sec.append(h(`<div class="kv"><div class="k">Team</div><div class="v">${list.length} ${list.length === 1 ? 'Person' : 'Leute'}</div><div class="k">Reparieren</div><div class="v">selbst, mit Robi (Shop → Roboter) oder „Reparieren lassen“</div><div class="k">Gehälter</div><div class="v">${fmtUSD(pay)}/Monat</div></div>`));
     const card = (p, cand) => {
       const R = ROLES[p.role], T = TRAITS[p.trait], sal = g.staffSalary(p);
       const q = cand ? (QUOTES[p.trait] || [])[p.id % 2] : '';
       const el = h(`<div class="pcard ${cand ? 'cand' : ''} r-${p.role}"><div class="pc-top"><span class="pc-av">${esc(p.name.split(' ').map((x) => x[0]).join(''))}</span><div class="pc-n"><b>${esc(p.name)}</b><small>${esc(g.roleName(p))}${cand ? '' : ` · seit ${fmtDate(p.since)}`}</small></div></div>
         <div class="pc-tags"><span class="pc-tag">${esc(T?.name || '')}</span></div>
-        <div class="pc-eff">${esc(p.role === 'tech' ? T?.eff || '' : R.eff)}</div>${q ? `<div class="pc-q">${esc(q)}</div>` : ''}
+        <div class="pc-eff">${esc(R?.eff || '')}</div>${q ? `<div class="pc-q">${esc(q)}</div>` : ''}
         <div class="pc-f"><span>${fmtUSD(sal)}/Monat</span></div></div>`);
       const b = cand ? h('<button class="btn small good">Einstellen</button>') : h('<button class="btn small danger">Entlassen</button>');
       if (cand) { b.disabled = !g.canAfford(sal); b.onclick = () => { if (g.hire(p.id)) { this.toast(`${p.name} fängt bei Hashwerk an.`, 'good'); } else this.toast('Dafür reicht das Geld nicht.', 'bad'); this.reCompany(); }; }
@@ -1396,18 +1396,11 @@ export class UI {
       el.querySelector('.pc-f').append(b); return el;
     };
     if (list.length) {
-      const key = list.filter((p) => p.role !== 'tech'), techs = list.filter((p) => p.role === 'tech');
-      const shown = [...key, ...techs.slice(0, Math.max(0, 8 - key.length))];
-      const grid = h('<div class="pgrid"></div>'); for (const p of shown) grid.append(card(p, false));
-      const more = list.length - shown.length; if (more > 0) grid.append(h(`<div class="pcard more"><b>+ ${more}</b><small>weitere ${more === 1 ? 'Person' : 'Leute'} in der Technik</small></div>`));
+      const grid = h('<div class="pgrid"></div>'); for (const p of list) grid.append(card(p, false));
       sec.append(grid);
-    } else sec.append(h('<div class="pc-empty">Noch niemand angestellt. Techniker reparieren kaputte Geräte, ehe du es merkst.</div>'));
-    sec.append(h('<h4 class="pc-h2">Bewerbungen</h4>'));
-    const pool = h('<div class="pgrid"></div>'); for (const p of g.staffPool()) pool.append(card(p, true)); sec.append(pool);
-    const row = h('<div class="row"></div>');
-    const add = h(`<button class="btn small">+5 Techniker ohne Auswahl · ${fmtUSD(5 * g.techSalary())}/Monat</button>`); add.disabled = !g.canAfford(5 * g.techSalary()); add.onclick = () => { if (g.hireTech(5)) this.toast('Fünf neue Leute in der Technik.', 'good'); this.reCompany(); }; row.append(add);
-    if (s.staff.tech >= 5) { const rm = h('<button class="btn small danger">−5 Techniker</button>'); rm.onclick = () => { g.hireTech(-5); this.reCompany(); }; row.append(rm); }
-    sec.append(row);
+    } else sec.append(h('<div class="pc-empty">Noch niemand angestellt. Personal gibt es für Strom und Handel – kaputte Geräte repariert Robi (Shop → Roboter).</div>'));
+    const cands = g.staffPool(); sec.append(h('<h4 class="pc-h2">Bewerbungen</h4>'));
+    if (cands.length) { const pool = h('<div class="pgrid"></div>'); for (const p of cands) pool.append(card(p, true)); sec.append(pool); } else sec.append(h('<div class="pc-empty">Alle Stellen sind besetzt.</div>'));
     return sec;
   }
 

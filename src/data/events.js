@@ -20,6 +20,7 @@ import { FACILITY } from './world.js';
 import { PLACEABLE, PART } from './hardware.js';
 import { toDay, GPU_BOOM } from './history.js';
 import { CONTACT, FEE_TIERS } from './contacts.js';
+import { WHOLESALE } from './skills.js';
 
 const nf = (d) => new Intl.NumberFormat('de-DE', { maximumFractionDigits: d, minimumFractionDigits: 0 });
 export const usd = (v) => { const a = Math.abs(v), s = v < 0 ? '−' : ''; if (a >= 1e9) return `${s}${nf(2).format(a / 1e9)} Mrd. $`; if (a >= 1e6) return `${s}${nf(2).format(a / 1e6)} Mio. $`; if (a >= 100) return `${s}${nf(0).format(a)} $`; return `${s}${nf(2).format(a)} $`; };
@@ -204,6 +205,26 @@ const contactChoices = (id, yes, no, noReply) => [
 ];
 
 export const EVENTS = [
+  // ---------- Großhändler-Kontakt (Fähigkeit Nr. 29): Herr Lindqvist, dann ab und zu ein befristetes Sammelangebot (Game.wsMake/wsAccept in src/sim/skills.js) ----------
+  {
+    id: 'lindqvist', from: 'Herr Lindqvist', title: 'Ein Anruf aus Göteborg', when: { date: '2012-01-01', window: 9000 }, expire: 14, fallback: 0,
+    cond: (s, h, g) => g.contactDue('lindqvist'),
+    text: '„God dag, hier spricht Lindqvist von Nordic Mining Supply. Man hört von der Hashwerk GmbH! Ab und zu habe ich größere Posten Miner übrig – zum festen Preis, deutlich unter dem Einzelpreis, aber nur ein paar Tage lang. Darf ich mich dann bei Ihnen melden?“',
+    choices: [
+      { label: 'Nummer speichern', hint: 'Ab und zu ein Sammelangebot: fester Preis, eine Woche gültig, Lieferung per Spedition', fx: { do: (g) => g.meetContact('lindqvist', true), log: 'Herr Lindqvist (Nordic Mining Supply) kennengelernt – macht Sammelangebote' }, reply: `<b>Herr Lindqvist:</b> ${CONTACT.lindqvist.lines.hello}` },
+      { label: 'Kein Bedarf', hint: 'Später im Handy (H) unter Kontakte anrufen', fx: { do: (g) => g.meetContact('lindqvist', false), log: 'Herrn Lindqvists Angebot abgelehnt' }, reply: '<b>Herr Lindqvist:</b> Verstehe. Meine Nummer haben Sie ja, falls Sie es sich anders überlegen.' },
+    ],
+  },
+  {
+    id: 'lq_offer', from: 'Herr Lindqvist', chain: true, expire: WHOLESALE.days, fallback: 1, // kommt nicht über den Zufall, sondern alle 3–5 Wochen (Game.wsTimer)
+    title: (s, h, g) => { const o = g.wsOffer(); return o ? `Sammelangebot: ${o.n}× ${PLACEABLE[o.id].name}` : 'Sammelangebot'; },
+    cond: (s, h, g) => g.wsCan(),
+    text: (s, h, g) => { const o = g.wsOffer(); if (!o) return '„Der Posten ist leider schon weg.“'; const full = o.unit * o.n; return `„Ich habe einen Posten <b>${o.n}× ${PLACEABLE[o.id].name}</b> für <b>${usd(o.price)}</b> – einzeln wären das ${usd(full)}, Sie sparen ${usd(full - o.price)}. Nur diese Woche, dann geht er nach Kasachstan. Die Spedition kommt am Tag nach Ihrer Zusage: in freie Regale, der Rest zum Aufstellen.“`; },
+    choices: [
+      { label: 'Nehmen', cost: (g) => g.wsOffer()?.price || 0, need: (s, h, g) => !!g.wsOffer(), needText: 'Der Posten ist schon weg', hint: (g) => { const o = g.wsOffer(); return o ? `${Math.round((1 - o.price / (o.unit * o.n)) * 100)}\u00a0% unter Einzelpreis · ${o.n} Plätze in Regalen oder einzeln aufstellen · Lieferung morgen` : ''; }, fx: { do: (g) => g.wsAccept(), log: 'Sammelangebot von Herrn Lindqvist angenommen' }, reply: '<b>Herr Lindqvist:</b> Tack! Die Spedition kommt morgen früh.' },
+      { label: 'Diesmal nicht', fx: { do: (g) => g.wsDecline(), log: 'Sammelangebot von Herrn Lindqvist abgelehnt' }, reply: '<b>Herr Lindqvist:</b> Kein Problem. Der nächste Posten kommt bestimmt.' },
+    ],
+  },
   // ---------- Kontakte (src/data/contacts.js): fertig montierte Hardware gibt es erst über sie ----------
   {
     id: 'kemal', from: 'Deniz', title: 'Mein Cousin Kemal', when: { date: '2010-10-01', window: 9000 }, expire: 14, fallback: 0,

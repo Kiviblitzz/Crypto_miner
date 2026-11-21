@@ -1307,7 +1307,7 @@ export class World {
     const tier = this.def.tier;
     let want = 0;
     if (tier >= 2 && s.flags.gmbh) want = 1;
-    if (tier >= 3) want += Math.min(7, s.staff.tech);
+    if (tier >= 3) want += Math.min(2, s.staff?.list?.length || 0); // Personal (Elektrik, Handel) läuft durch die Halle
     if (tier === 2) want = Math.max(want, 1); // Deniz hilft in der Werkstatt mit (früher erst, wenn der Laden gerettet oder verloren war)
     // Familie: Papa in der Werkstatt, Opa im Keller (nach dem Starkstrom)
     const fam = [];
