@@ -42,6 +42,8 @@ export class Audio {
   powerOn() { if (!this.ctx || this.muted) return; const t = this.ctx.currentTime, o = this.ctx.createOscillator(), g = this.ctx.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(520, t + 0.45); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.16, t + 0.08); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.6); o.connect(g).connect(this.master); o.start(t); o.stop(t + 0.65); setTimeout(() => this.blip(1046, 0.08, 'triangle', 0.1), 420); }
   install() { if (!this.ctx || this.muted) return; this.blip(170, 0.09, 'triangle', 0.14); setTimeout(() => this.blip(880, 0.035, 'square', 0.035), 80); setTimeout(() => this.blip(1320, 0.05, 'sine', 0.04), 150); }
   tick() { if (!this.ctx || this.muted) return; const now = performance.now(); if (this.lastTick && now - this.lastTick < 900) return; this.lastTick = now; this.blip(2400 * (0.95 + Math.random() * 0.1), 0.025, 'sine', 0.03); }
+  clockTick() { this.blip(2300, 0.012, 'sine', 0.035); }
+  alarm() { [0, 150, 300, 640, 790, 940].forEach((d) => setTimeout(() => this.blip(1760, 0.07, 'square', 0.06), d)); }
   cash() { [1320, 1760, 2640].forEach((f, i) => setTimeout(() => this.blip(f, 0.12, 'triangle', 0.12), i * 70)); }
   bad() { this.blip(180, 0.25, 'sawtooth', 0.12); }
   fanfare() { [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => this.blip(f, i === 3 ? 0.5 : 0.15, 'triangle', 0.16), i * 130)); }

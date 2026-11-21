@@ -24,7 +24,7 @@ Zitate sind wörtlich (Tippfehler bleiben stehen), damit der Ton erhalten bleibt
 - **Keine Prozent-Boni:** „mining skill ist auch quatsch“. Kein „+2 % Ertrag pro Stufe“.
 - **Freischaltungen im Menü:** „das sollen skills sein in so nem menü, dass man dann fpga bedienen kann betriebssysteme installieren kann usw“
 - **Möglichst viele:** „so viel geben wie möglich“. Gewünscht sind z. B. Wasserkühlung, Betriebssystem installieren, Übertakten/Undervolten, FPGA und ASIC-Firmware, Löten und Reparieren, Builds direkt kaufen, mehrere PCs im Inventar.
-- **Lernen auf allen drei Wegen:** durch Tun (Punkte), über Kurse, Bücher und Forum, und von Leuten (Opa, Deniz, Jonas …). „einige sachen am anfang kriegt man über sein handy nachrichten“
+- **(veraltet, ersetzt am 21.11.: nur Punkte)** **Lernen auf allen drei Wegen:** durch Tun (Punkte), über Kurse, Bücher und Forum, und von Leuten (Opa, Deniz, Jonas …). „einige sachen am anfang kriegt man über sein handy nachrichten“
 - **Benutzen:** „teils echter handgriff aber bei zb irgendwie reperatur maybe so ein mini game mit löten oder stecken“
 
 ## Bedienung aus Spielersicht (der Vertreter prüft das immer)
@@ -38,7 +38,7 @@ Zitate sind wörtlich (Tippfehler bleiben stehen), damit der Ton erhalten bleibt
 - **Was er sehen will:** die spielbare Version als Artifact, das nach jeder Runde aktualisiert wird: https://claude.ai/artifact/RLtXTTQaYJExVNeNKcRBGq
 
 ## Antworten vom 20.11.2026 (Fragebogen und Nachrichten)
-- **Anlernen statt Menüflut:** „die menüs lernt man nicht das soll doch so angelernt sein … man wacht auf und dann steht da neue nachricht aufs handy und dann steht da drück H für handy“. Eingebaut: Lektionen, Handy auf H, Wärmebild auf I.
+- **(Start-Teil ersetzt am 21.11.: Brief statt Handy)** **Anlernen statt Menüflut:** „die menüs lernt man nicht das soll doch so angelernt sein … man wacht auf und dann steht da neue nachricht aufs handy und dann steht da drück H für handy“. Eingebaut: Lektionen, Handy auf H, Wärmebild auf I.
 - **Geld im Alltag:** „sowieso muss man miete und strom zahlen das so machen“. Miete und Strom werden monatlich fällig, auch in der Wohnung.
 - **Papas Laden:** „denk dir aber für das andere nochmal was aus“. Die Bankfrist mit 15.000 $ bis Ende 2013 wirkt sinnlos („15000 bis in 2 jahren ist ja garnichts“). Es braucht eine neue Idee.
 - **Tempo:** „anpassbar aber 1x echtzeit“. 1× = echte Zeit, schnellere Stufen zum Vorspulen.
@@ -61,10 +61,36 @@ Zitate sind wörtlich (Tippfehler bleiben stehen), damit der Ton erhalten bleibt
 - **Börse, Details (Vertreter):** Die Mini-Ansicht auf dem Monitor ist aus 2–3 m lesbar. Kaufen kommt erst mit Deniz' Nachricht, damit man 2010 nicht billig Coins kauft und das Mining egal wird. Zeiträume: 30 Tage und Alles, nach einem Jahr Spielzeit auch „1 Jahr“.
 - **Rechnungen, entschieden vom Vertreter (21.11.2026):** Mahnstufen bleiben (Erinnerung, zwei Mahnungen, nach 3 Wochen Strom aus); jede Mahnung ist eine klare Handy-Nachricht mit „Jetzt zahlen“ bzw. „Coins verkaufen“. Papa hilft immer (bis 5.000 $, alles aufs Darlehen), wird aber kühler, ab dem dritten Mal mit ehrlichem Satz. Die Strom-Nachzahlung bis März 2011 bleibt; ist sie für einen normalen Spieler nicht schaffbar, wird die Frist gestreckt, nie der Kurs. **Umziehen ist freiwillig, aber als Fortschritt angelegt:** Ab der Werkstatt bietet Papa das Zimmer über dem Laden an. Wer kündigt, zahlt keine Wohnungsmiete mehr; die PCs kommen mit Papas Lieferwagen als Kisten in die Werkstatt (nichts wird gelöscht). **Kein Job-Hinweis im Spiel**, denn „Man muss wirklich erstmal damit verdienen“. Der spätere Sieg (Juli 2021) ist okay, die Miete im Krypto-Winter gehört dazu.
 - **Fähigkeiten, entschieden vom Vertreter (21.11.2026):** Kein Großhandels-Rabatt in Prozent, stattdessen meldet sich der Großhändler Herr Lindqvist per Handy mit befristeten Sammelangeboten zu sichtbaren Preisen. Alte Spielstände bekommen statt eines Prozent-Übergangs einmalig Geld von Deniz („Hab deinen alten Kram verkauft“). Noch nicht gebaute Fähigkeiten erscheinen nicht im Baum; fertige, aber gesperrte dürfen grau sichtbar sein. Phase 2 in dieser Reihenfolge: Löt-Spiele (Fehlersuche durch Stecken, Chip-Kette, Netzteil-Mod), dann Tuning (Leistungsregler, BIOS-Mod, Dual-Mining). Die Techniker heißen „Reparaturdienst (extern)“ und lassen sich zentral abschalten.
+- **Techniker, entschieden vom Auftraggeber (21.11.2026, morgens):** „Nur noch Robi“. Es gibt keine Techniker und keinen externen Reparaturdienst mehr. Reparieren geht selbst (Mini-Spiel bzw. Routine) oder mit Robi; als Notknopf bleibt „Reparieren lassen“ zum vollen Preis beim Händler. Mehrere Robis mit Ladestation je Standort und Robi-Stufen (USB-Stick → Teile tauschen → Löten) sorgen dafür, dass große Hallen nicht nerven. Alte Stände: Die Techniker kündigen, Deniz besorgt einen Robi.
+- **Baum-UI wie in Upgrade-Spielen (21.11.2026):** „Bei dem skill tree sollst du dich an Ähnlichen erfolgreichen Spielen orientieren wie potatoes pls moon sweeper needle in a haystack“. Nachgefragt: „ich meine du sollst davon klauen wie der baum aufgebaut ist nicht wie das spiel an sich komplett ist. ich meine die UI“. Der Baum hat den Start in der Mitte und sternförmige Äste mit Farben, Nebel (sichtbar sind nur Gelerntes und direkte Nachbarn), Knoten mit großem Symbol und Tooltip statt Textkästen, leuchtende Linien und ein saftiges Freischalt-Feedback. Die Inhalte bleiben Handgriffe ohne Prozent-Boni.
+- **Shop auf dem PC (21.11.2026):** „Mach den shop auch auf den pc maybe“. Am PC-Monitor läuft ein Browser mit Reitern Shop | Börse (Kamera zoomt rein). B bzw. M öffnen dieselbe Seite als Fenster.
+- **Bildschirm-Texte kurz und knapp (21.11.2026):** „diese nachrihcten auf dem bildschrim sind auch komisch, dass ergibt keinen sinn dass die so riesig sind es soll alles immer kurz und knapp sein. und nicht so ai mässig overexplained“. Regeln:
+  - Die Ziel-Zeile hat höchstens 5–6 Wörter und keine Erklärung („Grafikkarte einbauen“, „Stärkeres Netzteil bestellen“). Ein Hindernis ersetzt die Zeile als nächstes Teilziel, statt angehängt zu werden.
+  - Das Wie steht nur dort, wo man das Ding anschaut (Inspektor, ein kurzer Satz), oder einmal im Handy. Keine Tasten-Ketten im HUD.
+  - Marker in der Welt haben 1–2 Wörter und sitzen nur am echten Ziel (Monitor, Tür, Paket), sonst steht ein schlichter Pfeil am Rand.
+  - Toasts sind eine kurze Zeile.
+  - Kein AI-Ton: nichts übererklären, keine Schachtelsätze. So schreiben, wie ein Kumpel kurz Bescheid sagt.
+  - Negative Beträge sind rot, positive grün.
+- **Erste Grafikkarte (21.11.2026):** „und vielleicht am anfang so machen, dass man nur eine schelchet gpu hat und nicht alle shcoin dass das passieren kann“. Am Anfang gibt es im Shop nur eine Einsteigerkarte (RHD 5770, läuft mit dem Startnetzteil). Drei Tage nach dem Einbau meldet sich Deniz, dann kommt die volle Auswahl. Die Daten der Karten bleiben echt; begrenzt wird nur das Angebot.
+- **Tempo, Esc, Schlafen (21.11.2026):** „esc in menüs schließt das menü nicht sondern pausiert. und mach es so, dass man nach und nach mit space die geschwindigkeit freischalten kann … und schlafen soll besser sein dass man auch sieht man hat geschlafen oder nur nachts oder so“.
+  - Die Leertaste schaltet das Tempo weiter. Die Stufen kommen nach und nach: erst 1×, mit der ersten Bestellung 60× und 1 h/s, mit der ersten Karte 6 h/s, später Tage pro Sekunde.
+  - Schlafen geht nur ab 20 Uhr, mit Schlafszene (Blende, Uhr, Morgenlicht, Wecker, kurze Morgen-Zeile).
+  - Esc schließt in jedem Fenster zuerst das Fenster; das ist automatisch getestet.
+- **Start ohne Handy, alles am PC (21.11.2026, ersetzt den früheren „drück H“-Start):** „am echten pc sollen die menüs sein die man da hat also nachrichten vielleicht auch und man kauft ein handy erst später. und die erste nachricht ist vielleicht ein brief von deniz oder so dass ich meine teile aus dem keller suchen soll und mach es so, dass da regale stehen und die pc sachen da drin stehen und nicht random auf ner waschmaschine“.
+  - Man wacht ohne Handy auf. Auf dem Tisch liegen ein Brief von Deniz (die Teile stehen im Keller im Regal) und Papas Umschlag mit 1.000 $.
+  - Nachrichten, Shop und Börse laufen als Programme am echten PC. Neue Nachrichten zeigt der PC an, man muss hingehen.
+  - Das Handy wird später gekauft (Deniz: „Hol dir mal ein Handy“), ab dann gilt H.
+  - Im Keller stehen die PC-Teile ordentlich im Regal.
+- **Nachrichten als Chats (21.11.2026):** „das ist aufjedenfall mega unübersichtlich mach da einzelne chats raus“.
+  - Es gibt eine Chat-Liste pro Person mit Ungelesen-Zahl; ein Klick öffnet den Verlauf (die neueste Nachricht unten).
+  - Paketdienst ist kein Chat. Die Nachrichten sind kurz wie im echten Messenger.
+- **Fähigkeiten nur mit Punkten (21.11.2026, ersetzt „Lernen auf allen drei Wegen“):** „fähigkeiten mit punkten das mit dem buch ist kacke“, „nur mit punkten also alles in dem menü nur mit punkten so sachen wie shop angebote über leute aber das soll auch nicht im baum auftauchen und der baum soll auch nicht wie ein zeitstrahl aufgebaut sein“.
+  - Es gibt einen Punktetopf aus eigener Arbeit, jeder Knoten hat einen Knopf „Freischalten“.
+  - Leute bringen Shop-Angebote außerhalb des Baums.
+  - Der Baum ist sternförmig mit Nebel und ohne Jahreszahlen.
 - **Arbeitsweise:** „der ideen typ soll mit dir quatschen und mit mir in einem andern chat so dass du nicht auf antworten warten musst“. Der Spieler-Vertreter läuft als eigener Chat, fragt den Auftraggeber dort und schickt die Ergebnisse an den Entwicklungs-Chat.
 
 ## Roadmap (später)
 - KI-Rechenzentrum: Mining-Hallen zu KI-Rechenzentren umbauen; dafür braucht man wieder GPUs (passt zu „GPU-Übertakten geht nur für GPUs“).
 
 ## Offene Fragen (für den nächsten Fragebogen)
-- **Techniker:** Auto-Reparatur zu 60 % neben dem Robo behalten? Vorläufig ja, morgen fragen.

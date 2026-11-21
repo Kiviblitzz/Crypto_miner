@@ -2081,3 +2081,21 @@ body.cine #hud > :not(#toasts) { opacity: 0; transition: opacity .6s; }
 .mg-c { width: 100%; aspect-ratio: 560 / 300; display: block; border-radius: var(--r-md); touch-action: none; cursor: pointer; }
 .mg-f { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 12px; color: var(--dim); }
 body[data-modal="skills"] :is(#st-cash, #st-profit, #st-wallet) { visibility: hidden; } /* Fähigkeiten-Baum: groß, das HUD würde den Titel verdecken */
+
+/* Inspektor: Teil im Lager passt nicht ans Netzteil – Grund und Abhilfe sichtbar */
+#inspector .rb-fix { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 2px 0 8px; padding: 8px 10px; border-radius: 10px; background: rgba(255,176,0,.08); box-shadow: inset 0 0 0 1px rgba(255,176,0,.3); font-size: 12.5px; line-height: 1.35; color: #ffd27a; }
+#inspector .rb-fix .btn { white-space: normal; text-align: left; }
+
+/* Schlafszene: Augen zu, Uhr, Morgenlicht */
+#sleepfx { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; background: #04060b; opacity: 0; transition: opacity .7s ease, background .9s ease; pointer-events: all; }
+#sleepfx.in { opacity: 1; }
+#sleepfx.morning { background: radial-gradient(circle at 72% 28%, #fff1cf 0%, #f4b860 38%, #6b4424 100%); }
+#sleepfx.out { opacity: 0; }
+#sleepfx .zz { font: 800 44px var(--font-fun, var(--font)); letter-spacing: .12em; color: #c9d4ff; animation: sl-zz 1.8s ease-in-out infinite; transition: opacity .3s; }
+#sleepfx .clk { position: absolute; bottom: 20%; left: 50%; width: 52px; height: 52px; margin-left: -26px; border: 3px solid #7f8fb8; border-radius: 50%; transition: opacity .3s; }
+#sleepfx .clk i { position: absolute; left: 50%; bottom: 50%; width: 3px; margin-left: -1.5px; border-radius: 2px; background: #c9d4ff; transform-origin: 50% 100%; }
+#sleepfx .clk i:first-child { height: 14px; animation: sl-spin 2.4s linear infinite; }
+#sleepfx .clk i:last-child { height: 20px; animation: sl-spin .2s linear infinite; }
+#sleepfx.morning .zz, #sleepfx.morning .clk { opacity: 0; }
+@keyframes sl-spin { to { transform: rotate(360deg); } }
+@keyframes sl-zz { 50% { transform: translateY(-8px); opacity: .55; } }

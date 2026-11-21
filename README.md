@@ -70,7 +70,7 @@ Ein-Datei-Version neu bauen: `npm run build:single`.
 * **Wärmebild (H):** zeigt Hitzequellen und Kühlbereiche wie die Overlays im Vorbild.
 * **Ego-Perspektive:** Du läufst selbst durch Zimmer, Keller und Hallen. Mit dem Fadenkreuz schaust
   du Geräte an und öffnest sie mit **E**. Du baust mit dem Tablet direkt vor dir, gehst durch Türen
-  zu anderen Standorten und benutzt Gegenstände: Am PC-Monitor öffnest du die Börse, im Bett schläfst du.
+  zu anderen Standorten und benutzt Gegenstände: Am PC-Monitor setzt du dich, die Kamera fährt an den Bildschirm, dort läuft ein Browser mit Shop und Börse; im Bett schläfst du.
   Dazu kommen eigene Hände, eine Taschenlampe, Schritte und Kollision.
 * **Handmodellierte 3D-Modelle (alle selbst gebaut, keine fremden Assets, keine Logos):**
   * Abgerundete und gefaste Kanten überall, gebogene und verdrehte Lüfterflügel.
@@ -91,12 +91,12 @@ Ein-Datei-Version neu bauen: `npm run build:single`.
 | Maus | Umsehen |
 | WASD / Pfeile | Laufen (Shift = rennen) |
 | E / Linksklick | Benutzen: Gerät öffnen, Tür, PC-Monitor, Bett … / beim Bauen: setzen |
-| B | Bauen (Katalog), danach steht das Teil vor dir |
+| B | Shop (Browser-Reiter, auch am PC-Monitor), danach steht das Teil vor dir bzw. kommt als Paket |
 | R | Beim Bauen drehen |
 | Rechtsklick / X | Bauen abbrechen |
 | Shift + Klick | Mehrfach bauen |
 | Entf (2×) | Angeschautes Gerät verkaufen |
-| M / P / C / T / L / K | Markt, Handy, Firma, Fähigkeiten (auch J), Rangliste, Karte (Imperium) |
+| M / P / C / T / L / K | Börse (Browser-Reiter), Handy, Firma, Fähigkeiten (auch J), Rangliste, Karte (Imperium) |
 | G | Ziel bezahlen (z. B. Papas Stromrechnung, Ladenschulden) |
 | H | Wärmebild |
 | F | Taschenlampe |
