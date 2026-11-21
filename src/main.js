@@ -105,7 +105,9 @@ function onKey(e) {
   if (world.cine) { e.preventDefault(); return; } // Aufwachen (World.wakeUp): keine Eingabe
   if (ui.mg) { e.preventDefault(); return; } // Mini-Spiel hat eigene Tasten (Esc bricht nur es ab)
   const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-  if (e.code === 'Space') { e.preventDefault(); ui.setSpeed(game.s.speed ? 0 : (ui.lastSpeed || 1)); return; }
+  if (ui.sleeping) { e.preventDefault(); return; } // Schlafszene
+  if (e.code === 'Space') { e.preventDefault(); ui.speedNext(); return; } // Leertaste: nächste freigeschaltete Tempo-Stufe
+  if (e.key === '0') { ui.setSpeed(game.s.speed ? 0 : (ui.lastSpeed || 1)); return; }
   if (['1', '2', '3', '4', '5', '6'].includes(e.key)) { ui.setSpeed(+e.key); return; }
   if (k === 'Escape') {
     if (ui.escLocal()) return; // erst das Offene: Mini-Spiel, Installer, Details im Fähigkeiten-Baum – dann Fenster, dann Pause
@@ -149,7 +151,7 @@ function loop(now) {
     world.camera.position.set(3.3, 1.6, 3.05);
     world.controls.target.set(2.35 + Math.sin(t) * 0.4, 1.0 + Math.sin(t * 0.7) * 0.1, 0.4 + Math.cos(t) * 0.25);
     s.frac = 0.83;
-  } else if (s.speed && document.getElementById('modal').classList.contains('hidden') && !ui.paused && !ui.mg && (s.flags.miningStarted || !s.feat)) { // Zeit steht, bis der erste PC läuft
+  } else if (s.speed && document.getElementById('modal').classList.contains('hidden') && !ui.paused && !ui.mg && !ui.sleeping && (s.flags.miningStarted || !s.feat)) { // Zeit steht, bis der erste PC läuft
     const slow = ui.showRun && performance.now() < (ui.slowUntil || 0); s.frac += dt / (slow ? Math.max(60, SEC_PER_DAY[s.speed]) : SEC_PER_DAY[s.speed]); // Einschalt-Moment kurz in Zeitlupe
     let n = 0;
     while (s.frac >= 1 && n < 4) { s.frac -= 1; game.advanceDay(); n++; }

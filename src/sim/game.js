@@ -328,12 +328,13 @@ export class Game {
     if (s.flags.tutor) { // Anlernen: Laufen/Benutzen, PC bauen, dann Börse und Shop gleich nach dem Einschalten, Schlafen, Paket, Einbau, Fähigkeiten
       if (this.has('phone') && !s.flags.miningStarted) { if (Object.keys(s.loose || {}).length) this.grant('walk'); else if (s.inv?.length) this.grant('pcbuild'); }
       if (s.flags.cpuStart && s.flags.miningStarted) { this.grant('market'); this.grant('build'); }
-      if (s.flags.gpuOrdered && !s.flags.boughtGpu && s.orders?.length) this.grant('sleep');
+      if (s.flags.gpuOrdered && !s.flags.boughtGpu && s.orders?.length) { this.grant('speed2'); this.grant('sleep'); } // erst Tempo (Leertaste), dann ab 20 Uhr schlafen
       if (!s.flags.boughtGpu && s.parcels?.length) this.grant('parcel');
       if (!s.flags.boughtGpu && s.flags.miningStarted && this.bagList('gpu').length) this.grant('install');
       if (s.flags.boughtGpu) { this.learned('install'); this.grant('skills'); }
     }
     if (s.flags.miningStarted && btc * this.price('BTC') >= 12) this.grant('market');
+    if (!s.flags.tutor && s.flags.miningStarted) this.grant('speed2'); // Tempo: sobald der PC läuft (im Anlernen: mit der ersten Bestellung, vor dem Schlafen)
     if (s.flags.boughtGpu) { this.grant('build'); this.grant('speed2'); this.grant('rigs'); } // gleich weitere Mining-PCs bauen
     if (s.flags.boughtGpu && !s.flags.gpuMore) { s.flags.gpuDay ??= s.day; if (s.day >= s.flags.gpuDay + 3 || s.chapter >= 1) { s.flags.gpuMore = true; if (s.chapter < 1) this.pushMsg({ from: 'Deniz', text: 'Läuft die Karte? Dann wird’s jetzt richtig was: Im Shop gibt’s auch die dicken. Aber guck aufs Netzteil.' }); } }
     if (s.flags.cpuStart && s.flags.miningStarted) this.grant('build'); // CPU-Start: der Shop ist sofort da – die erste Grafikkarte bestellt man dort

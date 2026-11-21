@@ -18,7 +18,7 @@ import { BILL_STAGE, billText, monthName, PAPA_HELP } from '../data/bills.js';
 const $ = (s) => document.querySelector(s);
 const h = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const SPEEDS = [{ l: 'II', v: 0, t: 'Pause (Leertaste)' }, { l: '1×', v: 1, t: 'Echtzeit – eine Sekunde ist eine Sekunde (Taste 1)' }, { l: '60×', v: 2, t: '1 Minute pro Sekunde (Taste 2)' }, { l: '1 h/s', v: 3, t: '1 Stunde pro Sekunde – ein Tag in 24 s (Taste 3)' }, { l: '6 h/s', v: 4, t: '6 Stunden pro Sekunde – ein Tag in 4 s (Taste 4)' }, { l: '2 T/s', v: 5, t: '2 Tage pro Sekunde (Taste 5)' }, { l: '8 T/s', v: 6, t: '8 Tage pro Sekunde (Taste 6)' }];
+const SPEEDS = [{ l: 'II', v: 0, t: 'Pause (Taste 0)' }, { l: '1×', v: 1, t: 'Echtzeit – eine Sekunde ist eine Sekunde (Taste 1)' }, { l: '60×', v: 2, t: '1 Minute pro Sekunde (Taste 2)' }, { l: '1 h/s', v: 3, t: '1 Stunde pro Sekunde – ein Tag in 24 s (Taste 3)' }, { l: '6 h/s', v: 4, t: '6 Stunden pro Sekunde – ein Tag in 4 s (Taste 4)' }, { l: '2 T/s', v: 5, t: '2 Tage pro Sekunde (Taste 5)' }, { l: '8 T/s', v: 6, t: '8 Tage pro Sekunde (Taste 6)' }];
 const pctDE = (x) => (x * 100).toPrecision(3).replace('.', ',');
 
 const PART_ICON = {
@@ -93,6 +93,7 @@ export class UI {
     world.onIncome = () => { this.bumpWallet(); this.audio?.tick?.(); };
     world.onLamp = (on) => { if (on) this.lampHint?.remove(); this.toast(on ? 'Taschenlampe an' : 'Taschenlampe aus', 'info', 1500); this.keysHint(); };
     world.onPause = () => this.pause(true);
+    world.onUiEsc = () => { if (this.mg || this.stickyModal()) return; if (this.escLocal?.()) return; this.resume(); };
     world.onCanvasClickInUI = () => this.resume();
     world.onPlaced = (o, p) => { const again = this.placedAgain(o, p); this.pauseHint(this.g.facOf(o.uid) || this.g.s.current); return again; }; // true = gleich noch einen setzen (Rigs, Miner, Regale)
     world.onModeChange = (m) => { document.body.dataset.mode = m; this.dock(); };
@@ -185,7 +186,10 @@ export class UI {
     el.style.display = this.g.s.flags?.tutor && !this.g.has('speed2') ? 'none' : ''; // Anlernen: Tempo-Knöpfe erst mit dem Zeitraffer
     this.setSpeed(this.g.s.speed ?? 0);
   }
-  speedOk(v) { const g = this.g; return v <= 1 || (v <= 4 && g.has('speed2')) || (v >= 5 && g.has('speed3')); } // Zeitraffer: Minuten bis 6 Std/s, schneller vorspulen: Tage pro Sekunde
+  // Tempo-Stufen kommen nach und nach: erst nur Echtzeit, mit dem laufenden PC 60× und 1 h/s, mit der ersten Grafikkarte 6 h/s, später Tage pro Sekunde
+  speedMax() { const g = this.g, s = g.s; if (!s.feat || g.has('speed3')) return 6; if (!g.has('speed2')) return 1; return s.flags.boughtGpu ? 4 : 3; }
+  speedOk(v) { return v <= this.speedMax(); }
+  speedNext() { const s = this.g.s, max = this.speedMax(); if (max <= 1) return; this.setSpeed(!s.speed || s.speed >= max ? (s.speed >= max ? 1 : 2) : s.speed + 1); this.toast(`Tempo: ${SPEEDS.find((x) => x.v === this.g.s.speed)?.l}`, 'info', 1200); }
   setSpeed(v) { if (!this.speedOk(v)) { this.toast('Noch nicht freigeschaltet.', 'info', 1800); return; } this.g.s.speed = v; if (v) this.lastSpeed = v; this.g.s.paused = v === 0; if (v >= 2) this.g.learned?.('speed2'); if (v >= 5) this.g.learned?.('speed3'); [...$('#speed').children].forEach((b, i) => b.classList.toggle('on', SPEEDS[i].v === v)); }
   top() {
     const g = this.g, s = g.s;
@@ -574,14 +578,29 @@ export class UI {
     else if (p.action === 'ranking') this.ranking();
     else if (p.action === 'sleep') {
       const s = this.g.s;
-      if (s.feat && !s.flags.miningStarted) { this.toast('Erst den PC bauen, dann schlafen.', 'info', 2500); return; }
-      const vf = this.w.visFrac ?? s.frac;
-      // jederzeit hinlegen: bis zum nächsten Morgen (nachts nach Mitternacht: bis 7 Uhr)
-      this.fade(); const steps = vf >= 0.29 ? 1 : 0;
-      for (let i = 0; i < steps; i++) this.g.advanceDay();
-      s.frac = 0.29; this.w.visFrac = 0.29;
-      this.g.learned?.('sleep'); this.toast(s.parcels?.length ? 'Guten Morgen! Vor deiner Wohnungstür liegt ein Paket.' : 'Guten Morgen!', 'good', 3000);
+      if (s.feat && !s.flags.miningStarted) { this.toast('Erst den PC bauen.', 'info', 2500); return; }
+      const hr = (this.w.visFrac ?? s.frac) * 24;
+      if (hr >= 5 && hr < 20) { this.toast(this.speedMax() > 1 ? 'Noch nicht müde. Ab 20 Uhr – <kbd>Leertaste</kbd> spult vor.' : 'Noch nicht müde. Ab 20 Uhr.', 'info', 2600); return; }
+      this.sleepScene(hr >= 20); // nach Mitternacht: bis 7 Uhr am selben Tag
     }
+  }
+  // Schlafen: Augen zu, Uhr tickt, Morgenlicht und Wecker; die Zeit steht währenddessen (main.js)
+  sleepScene(nextDay) {
+    if (this.sleeping) return; this.sleeping = true; const g = this.g, s = g.s;
+    const btc = () => { const w = s.wallet.BTC || { ex: 0, cold: 0 }; return w.ex + w.cold + (this.pendingBtc?.() || 0); }, b0 = btc();
+    const fx = h('<div id="sleepfx"><div class="zz">Zzz</div><div class="clk"><i></i><i></i></div></div>'); document.body.append(fx);
+    requestAnimationFrame(() => fx.classList.add('in'));
+    let n = 0; const tk = setInterval(() => { this.audio?.clockTick?.(); if (++n >= 8) clearInterval(tk); }, 280);
+    setTimeout(() => {
+      if (nextDay) g.advanceDay(); s.frac = 0.29; this.w.visFrac = 0.29; g.learned?.('sleep');
+      const mined = btc() - b0, day = new Date(s.day * 864e5).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+      fx.classList.add('morning'); this.audio?.alarm?.();
+      setTimeout(() => {
+        fx.classList.add('out'); setTimeout(() => { fx.remove(); this.sleeping = false; }, 900);
+        this.toast(`Guten Morgen – ${esc(day)}${mined >= 0.005 ? ` · nachts geschürft: ₿ ${fmtCoin(mined)}` : ''}`, 'good', 4200);
+        if (s.parcels?.length) this.toast('Paket vor der Tür.', 'info', 4200);
+      }, 1100);
+    }, 2500);
   }
   // Was kann man am Monitor? 'both' (Shop und Börse), 'shop', 'market' oder '' – der Shop nur am PC-Monitor in der Wohnung
   monitorUse(p) {
@@ -933,7 +952,7 @@ export class UI {
   goalHint(go) {
     const g = this.g, s0 = g.s;
     if (go.id === 'gpuorder') return g.has('build') ? 'Am <b>Monitor</b> <kbd>E</kbd> oder <kbd>B</kbd>: Shop → Teile → Grafikkarten. Lieferung morgen früh vor deine Wohnungstür.' : '';
-    if (go.id === 'gpu') { const bag = g.bagList('gpu'), pc0 = g.facObjects('kinder').find((x) => x.type === 'tower' && x.parts); if (bag.length) { const fits = !pc0 || bag.some((b) => !g.psuWhy(pc0, b.id)); return fits ? 'Die Karte liegt im Lager: PC anschauen, <kbd>E</kbd> → Grafikkarte 1 → einbauen.' : 'Die Karte braucht mehr Strom, als dein Netzteil liefert: PC anschauen, <kbd>E</kbd> → Grafikkarte 1 → „Netzteil bestellen“, dann einbauen.'; } if (s0.parcels?.length) return 'Das Paket liegt vor deiner Wohnungstür – hingehen und <kbd>E</kbd>.'; if (s0.orders?.length) return 'Bestellt – morgen früh liegt das Paket vor der Tür. Leg dich ins Bett (<kbd>E</kbd>) und schlaf bis morgen.'; return ''; }
+    if (go.id === 'gpu') { const bag = g.bagList('gpu'), pc0 = g.facObjects('kinder').find((x) => x.type === 'tower' && x.parts); if (bag.length) { const fits = !pc0 || bag.some((b) => !g.psuWhy(pc0, b.id)); return fits ? 'Die Karte liegt im Lager: PC anschauen, <kbd>E</kbd> → Grafikkarte 1 → einbauen.' : 'Die Karte braucht mehr Strom, als dein Netzteil liefert: PC anschauen, <kbd>E</kbd> → Grafikkarte 1 → „Netzteil bestellen“, dann einbauen.'; } if (s0.parcels?.length) return 'Das Paket liegt vor deiner Wohnungstür – hingehen und <kbd>E</kbd>.'; if (s0.orders?.length) return 'Bis morgen schlafen (ab 20 Uhr).'; return ''; }
     const site = { rig2: 'kinder', openrig: 'keller' }[go.id]; if (!site || !g.has('rigs') || !g.s.unlocked.includes(site)) return '';
     if (g.facObjects(site).some((o) => g.osNeed?.(o) && g.pcReady(o))) return 'Der neue Rig braucht noch ein Betriebssystem: anschauen, <kbd>E</kbd> → System → Installer.'; // Fähigkeiten: ohne System schürft er nicht
     if (g.kitsOpen(site).length) return g.s.current === site ? 'Bausatz steht – anschauen, <kbd>E</kbd> und die Teile aus dem Lager einbauen.' : `Dein Bausatz wartet ${site === 'kinder' ? 'in der Wohnung' : 'im Keller'} aufs Einbauen.`;
@@ -963,7 +982,7 @@ export class UI {
       else if (!g.has('market')) t = this.inspUid ? 'Dein PC schürft jetzt Bitcoin. Schließ das Fenster mit <kbd>E</kbd> und lass ihn ein paar Tage arbeiten.' : 'Dein PC schürft Bitcoin. Lass ihn ein paar Tage arbeiten, bis sich etwas angesammelt hat …';
       else if (!(s.stats.sold > 0)) t = this.modalKind === 'market' ? 'Klick auf <b>Alles verkaufen</b>.' : `Du hast ${fmtCoin(btc)} BTC. Geh zum <b>PC-Monitor</b> auf dem Schreibtisch und drück <kbd>E</kbd>, um sie zu verkaufen.`;
       else if (!s.flags.boughtGpu) t = this.inspUid ? 'Klick auf den <b>freien GPU-Slot</b> und kauf eine zweite Grafikkarte.' : 'Mehr Grafikkarten = mehr Bitcoin. Schau deinen PC an (<kbd>E</kbd>) und bau eine zweite Karte ein.';
-      else if (!s.goals.earn) t = 'Lass den PC arbeiten (Tempo mit <kbd>1</kbd>–<kbd>4</kbd>) und verkauf regelmäßig am Monitor. Ziel: 1.000 $ verdient.';
+      else if (!s.goals.earn) t = 'Laufen lassen, am Monitor verkaufen.';
     }
     if (!t) {
       const ch = CHAPTERS[s.chapter], go = ch && ch.goals.find((x) => !s.goals[x.id] && x.action);

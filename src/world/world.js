@@ -95,6 +95,7 @@ export class World {
       const locked = document.pointerLockElement === canvas;
       this.player.locked = locked; if (locked) { this.player.lockAt = performance.now(); this.lockFailed = false; }
       if (!locked && this.mode === 'play' && !this.expectUnlock) { this.cancelPlacement(); this.onPause?.(); }
+      else if (!locked && this.mode === 'ui' && !this.expectUnlock) this.onUiEsc?.(); // Fenster offen, aber die Maus war noch gefangen: Chromes Esc gibt nur die Maus frei – dann schließt dieses Esc das Fenster
       this.expectUnlock = false;
       // Wettlauf: die Maus wurde erst eingefangen, nachdem schon ein Fenster aufging – sofort wieder freigeben
       if (locked && (this.mode !== 'play' || this.paused)) { this.expectUnlock = true; document.exitPointerLock(); }
@@ -883,7 +884,7 @@ export class World {
     this.mode = m;
     this.player.enabled = m === 'play';
     this.controls.enabled = m === 'map';
-    if (m === 'play') this.requestLock();
+    if (m === 'play') { clearTimeout(this.lockT); this.lockT = setTimeout(() => { if (this.mode === 'play' && !this.paused) this.requestLock(); }, 0); } // erst nach dem laufenden Tastendruck: öffnet der gleich ein Fenster (resume → openUI), wird die Maus gar nicht erst eingefangen
     else if (document.pointerLockElement) { this.expectUnlock = true; document.exitPointerLock(); }
     if (this.looseGroup) { this.looseGroup.visible = m !== 'title' && !!this.room?.looseSpots; this.glow.enabled = m !== 'title' && this.glow.selectedObjects.length > 0; }
     if (m !== 'play') { this.aim = null; this.onAim?.(null); if (!this.selected) this.selBox.visible = false; this.popups?.forEach((p) => (p.visible = false)); }
@@ -893,7 +894,7 @@ export class World {
     if (this.touchMode || this.mode !== 'play' || document.pointerLockElement === this.canvas) return;
     // NotAllowed/Abort (z. B. zu kurz nach dem Verlassen, keine Nutzergeste) ist nur vorübergehend – nächster Klick versucht es erneut
     const fail = (err) => { if (err?.name !== 'NotAllowedError' && err?.name !== 'AbortError') this.lockFailed = true; this.onLockChange?.(false); };
-    const plain = () => { try { const r = this.canvas.requestPointerLock(); this.lockPromise = !!(r && r.catch); if (this.lockPromise) r.catch(fail); } catch (e) { this.lockFailed = true; } };
+    const plain = () => { if (this.mode !== 'play') return; try { const r = this.canvas.requestPointerLock(); this.lockPromise = !!(r && r.catch); if (this.lockPromise) r.catch(fail); } catch (e) { this.lockFailed = true; } };
     // Rohe Mausbewegung (ohne Beschleunigung) vermeidet Sprünge beim schnellen Drehen; ältere Browser fallen zurück
     if (this.noRawMouse) { plain(); return; }
     try { const r = this.canvas.requestPointerLock({ unadjustedMovement: true }); this.lockPromise = !!(r && r.catch); if (this.lockPromise) r.catch((err) => { if (err?.name === 'NotSupportedError') { this.noRawMouse = true; plain(); } else fail(err); }); } catch (e) { this.noRawMouse = true; plain(); }
