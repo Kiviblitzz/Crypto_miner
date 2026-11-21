@@ -94,3 +94,9 @@ Zitate sind wörtlich (Tippfehler bleiben stehen), damit der Ton erhalten bleibt
 - KI-Rechenzentrum: Mining-Hallen zu KI-Rechenzentren umbauen; dafür braucht man wieder GPUs (passt zu „GPU-Übertakten geht nur für GPUs“).
 
 ## Offene Fragen (für den nächsten Fragebogen)
+
+## Paket 19 – Ziel: Steam Early Access (21.11.2026)
+- **Zitat:** „Mach mit dem Entwickler das Spiel jetzt so fertig, das es unter einer early Access auf steam gehen könnte“
+- **Neues Ziel:** Steam Early Access. Reihenfolge laut Vertreter: A Technik (Desktop-Build Windows x64 zuerst, Steamworks optional mit App-ID-Platzhalter, robuste Speicherstände mit mindestens 3 Plätzen und Autosave-Rotation als Dateien, komplette Einstellungen inkl. Tasten neu belegen, Absturzschutz mit Log, stabile 60 fps), B Inhalt und Politur (ganzes Spiel bleibt drin, Politur-Schwerpunkt auf den ersten 3–5 Stunden; großer Playtest bis Kapitel 3; Hauptmenü mit Early-Access-Hinweis, Feedback-Knopf und Versionsnummer; lizenzfreie Musik; 20–30 Erfolge), C Rechtliches (keine heiklen echten Markennamen, Herkunft der Kursdaten prüfen, Lizenzen in CREDITS, „Spiel, keine Anlageberatung.“), D Store-Material im Ordner `steam/`.
+- **Vorläufig:** Texte so bauen, dass Englisch nachrüstbar ist (noch nicht übersetzen). Kein Controller/Steam Deck, keine Cloud-Speicher. „Schwer“ mit Umzug einen Monat später ist okay.
+
