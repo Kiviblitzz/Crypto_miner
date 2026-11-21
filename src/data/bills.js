@@ -30,7 +30,7 @@ export const siteIn = (ids) => list(ids.map((id) => IN[id] || FACILITY[id]?.shor
 export const PAPA_LOAN_MSG = (amt) => `Willkommen in der eigenen Bude, Kind! Ich hab dir ${usd(amt)} überwiesen – für die ersten Monate: Miete, Strom und was man so braucht. Die Kaution hab ich übernommen, die schenk ich dir zum Einzug. Die ${usd(amt)} zahlst du zurück, wenn du kannst. Keine Eile, keine Zinsen. Papa`;
 export const PAPA_THANKS = ['Eine Rate? Kind, das hätte es nicht gebraucht. Aber es freut mich. Mama sagt, ich grinse.', 'Schon wieder was zurück? Ich leg das alles in die Dose für schlechte Zeiten. Für deine, nicht für meine.', 'Danke, Kind. Ich hab’s Mama gezeigt. Sie hat gesagt: „Siehste.“'];
 export const PAPA_DONE = 'Alles zurück, auf den Cent. Ich hab’s dreimal nachgerechnet. Weißt du, was? Ich bin stolz auf dich. Nicht wegen des Geldes. Weil du Wort hältst.';
-export const PAPA_HELP = ['Herr Krause hat bei uns angerufen. Ich hab’s ausgelegt und schreib’s zum Umzugsgeld. Kein Drama, Kind – aber das muss sich tragen.', 'Schon wieder? Ich leg’s aus, klar. Aber setz dich mal hin und rechne, was dich der Monat kostet. Bitte.'];
+export const PAPA_HELP = ['Herr Krause hat bei uns angerufen. Ich hab’s ausgelegt und schreib’s zum Umzugsgeld. Kein Drama, Kind – aber das muss sich tragen.', 'Schon wieder? Ich leg’s aus, klar. Aber setz dich mal hin und rechne, was dich der Monat kostet. Bitte.', 'Ich leg’s noch mal aus. Aber Kind, so geht das nicht ewig. Wenn die Kisten mehr kosten als sie bringen, dann mach welche aus. Das schreib ich auch dazu.'];
 
 // Text der Mahnung zur aktuellen Stufe
 export function billText(s, g) {
