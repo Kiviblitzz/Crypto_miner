@@ -1940,7 +1940,7 @@ body.cine #hud > :not(#toasts) { opacity: 0; transition: opacity .6s; }
 /* =====================================================================
    Fähigkeiten 2.0 – ein großer Baum (Taste T), Handgriffe im Inspektor, Mini-Spiel
    ===================================================================== */
-.modal-card.skt-card { width: min(1500px, 98vw); height: min(900px, 94vh); max-height: 94vh; padding: 10px 12px 10px; display: flex; flex-direction: column; overflow: hidden; }
+.modal-card.skt-card { width: min(1500px, 98vw); height: min(900px, 94vh, calc(100vh - 100px)); max-height: calc(100vh - 100px); padding: 10px 12px 10px; display: flex; flex-direction: column; overflow: hidden; }
 .modal-card.skt-card > .modal-x { display: none; }
 .skt-card .modal-body { flex: 1; min-height: 0; display: flex; }
 .skt { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }

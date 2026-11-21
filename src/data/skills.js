@@ -62,7 +62,7 @@ export const BIOSMOD = { cards: ['rs470', 'rs480', 'rs570', 'rs580'], H: 1.18, r
 export const PLIMIT = { min: 60, max: 120, exp: 0.7, fail: 2.5 }; // Leistungsziel (Nr. 33): Hash ∝ Leistung^0,7, über 100 % mehr Verschleiß
 // Großhändler-Kontakt (Nr. 29, Herr Lindqvist): befristete Sammelangebote mit sichtbarem Preis statt verstecktem Mengenrabatt
 //   n: Stückzahl nach Standort-Stufe, disc: Preis als Anteil von Einzelpreis × Menge, every: Tage bis zum nächsten Angebot, days: gültig
-export const WHOLESALE = { n: { 2: 16, 3: 48, 4: 96, 5: 200 }, min: 8, disc: [0.84, 0.9], days: 7, budget: 1.25 };
+export const WHOLESALE = { n: { 2: 16, 3: 48, 4: 96, 5: 200 }, min: 8, disc: [0.84, 0.9], days: 7, budget: 1.25, every: [21, 35] }; // every: Tage bis zum nächsten Anruf
 // Robi (Nr. 46–48): Ladestation je Robi, versorgt ihren Standort. Stufe 1 USB-Stick, 2 mit Greifarm (Teile tauschen), 3 mit Lötkopf (löten).
 //   jobs: Fahrten am Tag je Stufe (mehr Robis = mehr Fahrten), mods: Nachrüstung im Inspektor (after: erst das andere Modul)
 export const ROBO = { jobs: [12, 24, 40], mods: { steck: { skill: 'robo_steck', price: 8000, name: 'Greifarm' }, loet: { skill: 'robo_loet', price: 40000, name: 'Lötkopf', after: 'steck' } } };

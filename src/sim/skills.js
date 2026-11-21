@@ -9,6 +9,7 @@ import { SKILLS, SKILL, SKILL_CAT, POTS, XP_POT, EP_DAY_CAP, ptsFor, epFor, TEAC
 import { PLACEABLE, PART } from '../data/hardware.js';
 import { FACILITY, UPGRADES } from '../data/world.js';
 import { toDay } from '../data/history.js';
+import { EVENT } from '../data/events.js';
 
 const potOf = (id) => SKILL_CAT[SKILL[id]?.cat]?.pot || 'w';
 const isRig = (o) => PLACEABLE[o?.type]?.kind === 'rig' && !!o.parts;
@@ -157,7 +158,7 @@ export const SKILL_METHODS = {
     this.skDue();
     for (const id of s.unlocked) if (s.fac[id]?.skript && this.knows('skript')) this.autoProfiles(id);
     this.robotDay(day);
-    this.wsDay(day);
+    this.wsDay(day); this.wsTimer(day);
     this.limitDay(day);
     if (day % 7 === 0 || !s.sk.openChecked) { s.sk.openChecked = 1; const neu = []; for (const k of SKILLS) if (!s.sk.open[k.id] && !this.knows(k.id) && this.skillState(k.id).st === 'open') { s.sk.open[k.id] = day; neu.push(k.id); } if (neu.length) this.emit('skillopen', neu); }
   },
@@ -380,6 +381,13 @@ export const SKILL_METHODS = {
     return { key, id: best.id, n, unit, price: Math.floor(raw / step) * step, fac, day: s.day };
   },
   wsCan() { return this.contactOn('lindqvist') && !!this.wsMake(); },
+  // Alle 3–5 Wochen ruft er an (unabhängig von den Zufalls-Ereignissen), wenn gerade keine andere Entscheidung offen ist
+  wsTimer(day = this.s.day) {
+    const s = this.s; if (!this.contactOn('lindqvist') || !s.flags.miningStarted) return; s.ws ||= { deliv: [] };
+    if (!s.ws.next) { s.ws.next = day + 14; return; } if (day < s.ws.next || s.ev?.open) return;
+    s.ws.next = day + WHOLESALE.every[0] + Math.floor(Math.random() * (WHOLESALE.every[1] - WHOLESALE.every[0] + 1));
+    if (this.wsMake()) { const last = s.ev.last; this.openEvent(EVENT.lq_offer, 'lq_offer:' + day); s.ev.last = last; } // bremst die Zufalls-Ereignisse nicht
+  },
   // Das offene Angebot (einmal je Ereignis ausgewürfelt, Text, Kosten und Lieferung zeigen dieselben Zahlen)
   wsOffer() { const s = this.s, o = s.ev?.open; if (o?.id !== 'lq_offer') return null; s.ws ||= { deliv: [] }; if (s.ws.cur?.key !== o.key) s.ws.cur = this.wsMake(o.key); return s.ws.cur; },
   wsAccept() { // den Preis zieht chooseEvent ab (choice.cost)

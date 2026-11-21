@@ -40,7 +40,7 @@ export function playMinigame(ui, opt = {}) {
       const dt = Math.min(0.05, (now - last) / 1000); last = now;
       const out = G.draw(now, dt) || {};
       infoEl.innerHTML = out.info || ''; progEl.textContent = out.prog || ''; statEl.textContent = out.stat || '';
-      if (st.msg && now - st.msgT < 2200) { ctx.fillStyle = 'rgba(10,12,16,.78)'; ctx.fillRect(20, H - 46, W - 40, 32); ctx.fillStyle = st.phase === 'fail' ? '#ff8a7a' : '#ffe2a8'; ctx.font = '700 15px system-ui'; ctx.textAlign = 'center'; ctx.fillText(st.msg, W / 2, H - 24); }
+      if (st.msg && now - st.msgT < 2200) { const y = out.msgTop ? 2 : H - 46; ctx.fillStyle = 'rgba(10,12,16,.82)'; ctx.fillRect(20, y, W - 40, 30); ctx.fillStyle = st.phase === 'fail' ? '#ff8a7a' : '#ffe2a8'; ctx.font = '700 15px system-ui'; ctx.textAlign = 'center'; ctx.fillText(st.msg, W / 2, y + 21); } // msgTop: unten liegen Knöpfe
       if (st.phase === 'win') { ctx.fillStyle = 'rgba(10,30,18,.6)'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#7cf0a8'; ctx.font = '800 30px system-ui'; ctx.textAlign = 'center'; ctx.fillText(st.winMsg || (st.miss ? 'Repariert!' : 'Repariert – alles sauber!'), W / 2, H / 2); }
       if (st.phase === 'fail') { ctx.fillStyle = 'rgba(40,10,10,.6)'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#ff8a7a'; ctx.font = '800 26px system-ui'; ctx.textAlign = 'center'; ctx.fillText('Das wird so nichts …', W / 2, H / 2); }
       raf = requestAnimationFrame(draw);
@@ -97,7 +97,7 @@ function solder(A, { joints, label, done, zone, heatT, maxMiss }) {
 }
 const solderCfg = (easy) => ({ zone: easy ? [0.52, 0.84] : [0.6, 0.8], heatT: easy ? 1.9 : 1.5, maxMiss: easy ? 3 : 2 });
 const hold = (e) => (e.key === ' ' || e.key === 'Enter') && !e.repeat;
-const missTxt = (st, max, easy, tip) => (st.miss ? `${st.miss} ${st.miss === 1 ? 'Fehlversuch' : 'Fehlversuche'} · höchstens ${max}` : easy ? 'Mit Übung: breiter grüner Bereich' : tip);
+const missTxt = (st, max, easy, tip, easyTxt = 'Mit Übung: breiter grüner Bereich') => (st.miss ? `${st.miss} ${st.miss === 1 ? 'Fehlversuch' : 'Fehlversuche'} · höchstens ${max}` : easy ? easyTxt : tip);
 
 // ---------- Spiele ----------
 const GAMES = {
@@ -182,7 +182,7 @@ const GAMES = {
           box(ctx, x0 + (x1 - x0) * 0.5 - 40, y + 26, 80, 34, '#2a3442', '#6c7586'); txt(ctx, st.step ? 'PCIe 8-Pin' : 'Steckplatz', x0 + (x1 - x0) * 0.5, y + 48, '#cfd6e0', '600 13px system-ui');
           const px = x0 + (x1 - x0) * st.pos; box(ctx, px - 16, y - 46, 32, 34, '#c9a14a', '#5a4a2a'); txt(ctx, st.step ? '⚡' : '▮▮', px, y - 24, '#2a2a2a', '700 14px system-ui');
           txt(ctx, `${st.step + 1} von 2`, 280, 60, '#ffe2a8');
-          return { info: 'Neues Teil einstecken: drücken (<kbd>Leertaste</kbd>, Klick oder Finger), wenn der Stecker über dem <b style="color:#3ddc84">grünen Bereich</b> steht.', prog: 'Schritt 2 von 2 · Einstecken', stat: missTxt(st, maxMiss, easy, 'Tipp: Die Fähigkeit „Fehlersuche“ macht es leichter') };
+          return { info: 'Neues Teil einstecken: drücken (<kbd>Leertaste</kbd>, Klick oder Finger), wenn der Stecker über dem <b style="color:#3ddc84">grünen Bereich</b> steht.', prog: 'Schritt 2 von 2 · Einstecken', stat: missTxt(st, maxMiss, easy, 'Tipp: Die Fähigkeit „Fehlersuche“ macht es leichter', 'Mit Übung: breiterer grüner Bereich') };
         }
         for (let i = 0; i < n; i++) {
           const x = sx(i), on = st.plug[i], sel = st.sel === i;
@@ -196,7 +196,7 @@ const GAMES = {
         }
         box(ctx, BOOT.x, BOOT.y, BOOT.w, BOOT.h, st.boots >= maxBoots ? '#222830' : '#1f3b5a', '#5d8fc4'); txt(ctx, `Test-Boot (${maxBoots - st.boots})`, BOOT.x + BOOT.w / 2, BOOT.y + 28, '#e8edf4', '700 15px system-ui');
         const L = st.last; box(ctx, 190, 236, 350, 44, '#0e1218', '#3b4252'); txt(ctx, L ? (L.ok ? `Letzter Boot: läuft (${L.on} gesteckt)` : 'Letzter Boot: kein Bild') : 'Noch nicht gebootet: alle gesteckt, kein Bild', 365, 264, L ? (L.ok ? '#7cf0a8' : '#ff8a7a') : '#b7c0cc', '600 14px system-ui');
-        return { info: `Der Rig startet nicht. <b>Karte antippen</b> = abziehen/stecken (<kbd>1</kbd>–<kbd>${n}</kbd>), <b>Test-Boot</b> (<kbd>B</kbd>) zeigt, ob das kaputte Teil noch steckt. Dann <b>tauschen</b> (<kbd>⇧</kbd>+Zahl).${easy ? ' Gelbe Dioden: verdächtig.' : ''}`, prog: 'Schritt 1 von 2 · Fehler suchen', stat: missTxt(st, maxMiss, easy, 'Halbe-halbe abziehen – so reichen wenige Test-Boots') };
+        return { info: `Der Rig startet nicht. <b>Karte antippen</b> = abziehen/stecken (<kbd>1</kbd>–<kbd>${n}</kbd>), <b>Test-Boot</b> (<kbd>B</kbd>) zeigt, ob das kaputte Teil noch steckt. Dann <b>tauschen</b> (<kbd>⇧</kbd>+Zahl).${easy ? ' Gelbe Dioden: verdächtig.' : ''}`, msgTop: true, prog: 'Schritt 1 von 2 · Fehler suchen', stat: missTxt(st, maxMiss, easy, 'Halbe-halbe abziehen – so reichen wenige Test-Boots', 'Mit Übung: gelbe Dioden zeigen die Verdächtigen') };
       },
     };
   },
@@ -236,7 +236,7 @@ const GAMES = {
         txt(ctx, 'Signal →', 52, 40, '#ffe2a8', '600 12px system-ui', 'left');
         box(ctx, 20, 240, 340, 42, '#0e1218', '#3b4252'); txt(ctx, `Messpunkte: ${maxMeas - st.nMeas} von ${maxMeas} übrig`, 190, 266, '#b7c0cc', '600 14px system-ui');
         box(ctx, SWAP.x, SWAP.y, SWAP.w, SWAP.h, '#3a1e1e', '#8a4a4a'); txt(ctx, `U${st.sel + 1} tauschen`, SWAP.x + SWAP.w / 2, SWAP.y + 27, '#ffb4a8', '700 15px system-ui');
-        return { info: 'Das Signal läuft von <b>U1</b> bis <b>U16</b>. Chip <b>antippen</b> = messen (<kbd>←</kbd><kbd>→</kbd> + <kbd>Leertaste</kbd>). Der <b>erste Chip ohne Signal</b> ist hin – den tauschen (<kbd>T</kbd>).', prog: 'Schritt 1 von 2 · Kette messen', stat: missTxt(st, maxMiss, easy, 'In der Mitte anfangen spart Messpunkte') };
+        return { info: 'Das Signal läuft von <b>U1</b> bis <b>U16</b>. Chip <b>antippen</b> = messen (<kbd>←</kbd><kbd>→</kbd> + <kbd>Leertaste</kbd>). Der <b>erste Chip ohne Signal</b> ist hin – den tauschen (<kbd>T</kbd>).', msgTop: true, prog: 'Schritt 1 von 2 · Kette messen', stat: missTxt(st, maxMiss, easy, 'In der Mitte anfangen spart Messpunkte', 'In der Mitte anfangen spart Messpunkte') };
       },
     };
   },

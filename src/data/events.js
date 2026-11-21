@@ -216,7 +216,7 @@ export const EVENTS = [
     ],
   },
   {
-    id: 'lq_offer', from: 'Herr Lindqvist', when: { from: '2012-01-01', chance: 0.6, repeat: 30 }, expire: WHOLESALE.days, fallback: 1,
+    id: 'lq_offer', from: 'Herr Lindqvist', chain: true, expire: WHOLESALE.days, fallback: 1, // kommt nicht über den Zufall, sondern alle 3–5 Wochen (Game.wsTimer)
     title: (s, h, g) => { const o = g.wsOffer(); return o ? `Sammelangebot: ${o.n}× ${PLACEABLE[o.id].name}` : 'Sammelangebot'; },
     cond: (s, h, g) => g.wsCan(),
     text: (s, h, g) => { const o = g.wsOffer(); if (!o) return '„Der Posten ist leider schon weg.“'; const full = o.unit * o.n; return `„Ich habe einen Posten <b>${o.n}× ${PLACEABLE[o.id].name}</b> für <b>${usd(o.price)}</b> – einzeln wären das ${usd(full)}, Sie sparen ${usd(full - o.price)}. Nur diese Woche, dann geht er nach Kasachstan. Die Spedition kommt am Tag nach Ihrer Zusage: in freie Regale, der Rest zum Aufstellen.“`; },
