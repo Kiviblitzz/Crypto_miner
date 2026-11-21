@@ -8,6 +8,7 @@ let html = readFileSync(join(dist, 'index.html'), 'utf8');
 const esc = (s) => s.replace(/<\/script/gi, '<\\/script');
 
 html = html.replace(/<script type="module" crossorigin src="\.?\/?([^"]+)"><\/script>/g, (_, src) => `<script type="module">${esc(readFileSync(join(dist, src), 'utf8'))}</script>`);
+html = html.replace(/<script src="\.?\/?(boot-guard\.js)"><\/script>/, (_, src) => `<script>${esc(readFileSync(join(dist, src), 'utf8'))}</script>`); // Startschutz (public/boot-guard.js)
 html = html.replace(/<link rel="stylesheet" crossorigin href="\.?\/?([^"]+)">/g, (_, href) => `<style>${readFileSync(join(dist, href), 'utf8')}</style>`);
 // Modul-Script ans Ende des Bodys, damit das DOM bereits existiert
 const m = html.match(/<script type="module">[\s\S]*?<\/script>/);

@@ -84,14 +84,17 @@ export class Game {
   }
 
   // ---------- Speichern / Laden ----------
-  save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(this.s)); return true; } catch (e) { return false; } }
-  hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; } }
-  saveInfo() { try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); return s ? { day: s.day, cash: s.cash, sites: s.unlocked.length } : null; } catch (e) { return null; } }
-  load() {
+  // Mit this.store (src/sim/saves.js, im Spiel über main.js): Plätze, Autosave-Rotation, Prüfsumme. Ohne (Node-Tests): der alte Einzelstand in localStorage.
+  // why: Anlass fürs Autosave (month = Monatswechsel, gedrosselt; ngplus = Neues Spiel+ bleibt auf seinem Platz)
+  save(why) { if (this.store) return this.store.save(this, why); try { localStorage.setItem(SAVE_KEY, JSON.stringify(this.s)); return true; } catch (e) { return false; } }
+  hasSave() { if (this.store) return this.store.hasAny(); try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; } }
+  saveInfo() { if (this.store) { const e = this.store.latest(); return e ? { day: e.day, cash: e.cash, site: e.site } : null; } try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); return s ? { day: s.day, cash: s.cash, sites: s.unlocked.length } : null; } catch (e) { return null; } }
+  // src: Zustand oder JSON-Text (SaveStore.loadInto); ohne: der alte Einzelstand aus localStorage
+  load(src) {
     const prev = { s: this.s, cache: this.cache, summary: this.summary }; // bei Fehler zurück zum laufenden Spiel
     try {
-      const raw = localStorage.getItem(SAVE_KEY); if (!raw) return false;
-      const s = JSON.parse(raw); if (!s || s.version !== 1) return false;
+      const raw = src ?? localStorage.getItem(SAVE_KEY); if (!raw) return false;
+      const s = typeof raw === 'string' ? JSON.parse(raw) : raw; if (!s || s.version !== 1) return false;
       s.fac ||= {}; s.wallet ||= {}; s.autoSell ||= {}; s.lastNet ||= {};
       s.futureHW = Array.isArray(s.futureHW) ? s.futureHW.filter((it) => it?.id && it.hash > 0 && it.watt > 0) : []; this.registerFutureHW(s.futureHW); // Zukunfts-Miner vor dem Aussortieren unbekannter Geräte eintragen
       for (const f of FACILITIES) s.fac[f.id] ||= { power: 0, tripped: false, temp: 21, objects: [] };
@@ -1415,7 +1418,7 @@ export class Game {
       s.stats.history.push({ d: day, c: Math.round(s.cash), n: Math.round(this.netWorthFast()), h: this.algoHashFrom(netOwn) });
       if (s.stats.history.length > 1200) s.stats.history.splice(0, s.stats.history.length - 1200);
     }
-    if (d.getUTCDate() === 1) { this.save(); this.emit('autosave'); }
+    if (d.getUTCDate() === 1) { this.save('month'); this.emit('autosave'); }
     this.dayUpdate();
     this.checkMilestones();
   }

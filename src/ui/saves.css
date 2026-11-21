@@ -1,0 +1,59 @@
+/* Spielstände (src/ui/saves.js) und Fehlerfenster (src/ui/crash.js) – im Stil der Pause-Karte */
+.sv-back { position: fixed; inset: 0; z-index: 45; display: grid; place-items: center; padding: 16px; background: rgba(22,16,12,.42); backdrop-filter: blur(2px); }
+.sv-back.sv-ask { z-index: 46; background: rgba(14,10,8,.45); }
+.sv-card { width: min(560px, 100%); max-height: min(660px, calc(100vh - 32px)); overflow: auto; background: rgba(40,28,20,.97); border-radius: 24px; padding: 20px 22px 18px; box-shadow: 0 24px 60px rgba(0,0,0,.5); color: #fff6e6; font-family: var(--font); animation: svIn .18s cubic-bezier(.2,.7,.2,1); }
+@keyframes svIn { from { transform: translateY(8px) scale(.98); opacity: 0; } to { transform: none; opacity: 1; } }
+.sv-h { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.sv-h h3, .sv-ask h3 { margin: 0; flex: 1; font: 600 24px/1.15 var(--font-fun); color: #fff8ec; }
+.sv-x { width: 36px; height: 36px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer; color: #fff6e6; background: rgba(255,255,255,.1); }
+.sv-x:hover { background: rgba(255,255,255,.2); }
+.sv-sec { margin: 14px 2px 6px; font: 700 12px var(--font); letter-spacing: .8px; text-transform: uppercase; color: rgba(255,244,230,.5); }
+.sv-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 14px; margin-top: 6px; border-radius: 16px; background: rgba(255,255,255,.07); border: 1px solid transparent; transition: background .12s, transform .12s; }
+.sv-row.pick { cursor: pointer; }
+.sv-row.pick:hover { background: rgba(255,255,255,.14); transform: translateY(-1px); }
+.sv-row.cur { border-color: rgba(255,194,58,.55); }
+.sv-row.sv-free { background: none; border: 1px dashed rgba(255,244,230,.22); }
+.sv-row.sv-free .sv-i { color: rgba(255,244,230,.55); }
+.sv-row.bad { background: rgba(140,40,32,.28); border-color: rgba(255,95,86,.45); }
+.sv-main { flex: 1; min-width: 0; }
+.sv-t { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.sv-t b { font: 600 17px/1.2 var(--font-fun); color: #fff8ec; }
+.sv-tag { font: 700 11px/1 var(--font); padding: 4px 8px; border-radius: 999px; background: #ffc23a; color: #3a2300; }
+.sv-tag.dim { background: rgba(255,255,255,.12); color: rgba(255,244,230,.75); }
+.sv-tag.bad { background: #ff5f56; color: #2a0705; }
+.sv-i { margin-top: 3px; font: 600 14px/1.3 var(--font); color: rgba(255,248,236,.9); }
+.sv-d { font: 500 12px/1.3 var(--font); color: rgba(255,244,230,.55); }
+.sv-act { display: flex; gap: 6px; flex: none; }
+.sv-act .btn { display: inline-flex; align-items: center; gap: 5px; }
+.sv-act .btn.del { background: rgba(255,255,255,.1); }
+.sv-act .btn.del span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.sv-act .btn.del:hover { background: #7a2c35; }
+.sv-msg { margin: 6px 0 2px; padding: 8px 12px; border-radius: 12px; background: rgba(255,95,86,.18); color: #ffd9d6; font: 600 14px var(--font); }
+.sv-foot { margin: 12px 2px 0; font: 500 12px var(--font); color: rgba(255,244,230,.5); }
+.sv-ask .sv-card { width: min(400px, 100%); text-align: center; padding: 22px 22px 20px; }
+.sv-ask p { white-space: pre-line; margin: 8px 0 16px; font: 500 14px/1.4 var(--font); color: rgba(255,244,230,.75); }
+.sv-btns { display: flex; gap: 10px; justify-content: center; }
+.sv-btns .btn { min-width: 128px; padding: 11px 18px; }
+body:has(#pause:not(.hidden)) #toasts { z-index: 36; }
+
+/* Pause: Speichern | Laden in einer Zeile */
+.pause-sv { display: flex; gap: 10px; width: 100%; }
+#pause .pause-card .pause-sv .btn { flex: 1; min-width: 0; min-height: 52px; padding: 6px 14px 6px 7px !important; gap: 10px; font: 600 17px/1.1 var(--font-fun) !important; }
+#pause .pause-card .pause-sv .btn .bi { width: 36px; height: 36px; }
+
+/* Speicher-Symbol (kurz, in der Ecke) */
+#svicon { position: fixed; right: 18px; bottom: 60px; z-index: 30; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; color: #3a2300; background: #ffc23a; box-shadow: 0 3px 0 #a66313, 0 6px 14px rgba(0,0,0,.3); opacity: 0; transform: scale(.7); transition: opacity .25s, transform .25s; pointer-events: none; }
+#svicon.on { opacity: 1; transform: scale(1); }
+body[data-mode="title"] #svicon { display: none; }
+
+/* Fehlerfenster */
+#crash { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 16px; background: rgba(14,10,8,.62); backdrop-filter: blur(2px); }
+#crash.hidden { display: none; }
+#crash .cr-card { width: min(440px, 100%); background: rgba(40,28,20,.98); border-radius: 24px; padding: 24px 24px 20px; box-shadow: 0 24px 60px rgba(0,0,0,.55); color: #fff6e6; text-align: center; font-family: var(--font); }
+#crash h3 { margin: 0 0 4px; font: 600 26px/1.15 var(--font-fun); color: #fff8ec; }
+#crash .cr-sub { margin: 0; font: 600 16px/1.35 var(--font); color: rgba(255,248,236,.9); }
+#crash .cr-halt { margin: 10px 0 0; font: 600 14px/1.35 var(--font); color: #ffb3ad; }
+#crash .cr-det { margin: 12px 0 0; font: 500 12px/1.35 ui-monospace, monospace; color: rgba(255,244,230,.45); word-break: break-word; }
+#crash .cr-btns { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; }
+#crash .cr-btns .btn { width: 100%; padding: 12px 18px; }
+#crash .cr-btns .btn.hidden { display: none; }
