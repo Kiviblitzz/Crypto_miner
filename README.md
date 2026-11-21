@@ -61,7 +61,7 @@ Ein-Datei-Version neu bauen: `npm run build:single`.
 * **Story:** Papas Elektronikladen retten, Opa Heinz legt Starkstrom, Kumpel Deniz wird CTO,
   Rivale Viktor Kral (MONOLITH Hash AG) muss überholt werden. Nachrichten aufs Handy, News-Ticker.
 * **Imperium-Ansicht (🗺️):** alle Standorte nebeneinander als Dioramen – vom Kinderzimmer bis zur Fjordhalle.
-* **Technik (🔬):** 10 Technologien wie Undervolting, eigene ASIC-Firmware, eigener Coin per ICO (2017, Erlös in Ethereum), Immersionskühlung, Abwärme-Verkauf.
+* **Fähigkeiten (T):** ein großer Baum von 2010 bis zum Endspiel. Wissen schaltet Handgriffe frei statt Prozent-Boni: Betriebssystem installieren (Windows-Lizenz oder Linux), USB-Image, BIOS-Profile Eco/Turbo, ASIC-Takt, Firmware flashen, Autotuning, Wartung, Löten (Mini-Spiel bei Reparaturen), Wasserkühlung, FPGA-Bitstream, Limit-Orders, Großhandel und Robi, der Bastelroboter. Lernen durch Tun (Punkte), im Forum, aus Büchern (Paket), in Kursen oder bei Leuten.
 * **Wetter & Welt:** echte Hitzewellen (2015–2025) heizen die Räume auf, Schnee im Winter, Polarlicht am Fjord, im Dezember ein Weihnachtsbaum.
 * **Solaranlagen (☀️):** pro Standort ausbaubar, saisonaler Ertrag wie in Deutschland, als Modulfeld in 3D.
 * **Bankkredit:** schneller wachsen mit historischen Zinsen – mit dem Risiko von 2022.
@@ -96,7 +96,7 @@ Ein-Datei-Version neu bauen: `npm run build:single`.
 | Rechtsklick / X | Bauen abbrechen |
 | Shift + Klick | Mehrfach bauen |
 | Entf (2×) | Angeschautes Gerät verkaufen |
-| M / P / C / T / L / K | Markt, Handy, Firma, Technik, Rangliste, Karte (Imperium) |
+| M / P / C / T / L / K | Markt, Handy, Firma, Fähigkeiten (auch J), Rangliste, Karte (Imperium) |
 | G | Ziel bezahlen (z. B. Papas Stromrechnung, Ladenschulden) |
 | H | Wärmebild |
 | F | Taschenlampe |

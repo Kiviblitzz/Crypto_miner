@@ -1,8 +1,10 @@
 // DOM-Oberfläche: Topbar, Standorte, Baumenü, Inspektor, Ziele, Dock, Modals (Markt, Handy, Firma, Rangliste, Menü)
 import { COINS, COIN, ALGO_LABEL } from '../data/coins.js';
 import { PLACEABLE, PART, CATEGORIES, PLACEABLES, PARTS } from '../data/hardware.js';
-import { FACILITIES, FACILITY, CHAPTERS, TECHS, FEATURES, MESSAGES, yearTitle, FAMILY_MOOD, moodTier, FULL_TALK } from '../data/world.js';
-import { fmtUSD, fmtNum, fmtCoin, fmtHash, fmtDate, fmtWatt, SKILL_XP, SKILL_PCT, TRADE_FEES, BUILD_FEE } from '../sim/game.js';
+import { FACILITIES, FACILITY, CHAPTERS, FEATURES, MESSAGES, yearTitle, FAMILY_MOOD, moodTier, FULL_TALK } from '../data/world.js';
+import { fmtUSD, fmtNum, fmtCoin, fmtHash, fmtDate, fmtWatt, BUILD_FEE } from '../sim/game.js';
+import { skillsMenu, skRefresh, skCloseDetail, osWizard, osAbort, deviceSecs, repairRow, skillCard, pointCard, POT_SVG } from './skills.js'; // Fähigkeiten 2.0 (Taste T)
+import { POTS, SKILL } from '../data/skills.js';
 import { toDay, BTC_HASH, inHeatwave, HALVINGS, BTC_REWARD } from '../data/history.js';
 import { EVENT, REL_PERK } from '../data/events.js';
 import { ACH, ACHIEVEMENTS } from '../data/achievements.js';
@@ -25,14 +27,8 @@ const PART_ICON = {
       gpu: '<rect x="2" y="6" width="20" height="11" rx="2.5"/><circle cx="9" cy="11.5" r="3"/><circle cx="16.5" cy="11.5" r="2"/><path d="M5 17v3M8.5 17v3"/>',
       psu: '<rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="10" cy="12" r="4"/><path d="M10 9.5v5M7.5 12h5M17.5 9v6"/>' };
 const PNAME = { mobo: 'Mainboard', cpu: 'Prozessor', gpu: 'Grafikkarte', psu: 'Netzteil' };
-const SKILL = {
-  hw: { name: 'Schrauben', learn: 'Teile einbauen, Geräte aufstellen', short: 'Einbauen', icon: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5a1.8 1.8 0 0 0 2.5 2.5l5.8-5.8a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>', now: (lv) => (lv > 1 ? `−${SKILL_PCT * (lv - 1)} % auf Hardware` : 'Noch kein Bonus'), next: (lv) => `−${SKILL_PCT * lv} % auf Hardware` },
-  mining: { name: 'Mining', learn: 'Jeder Tag, an dem dein PC schürft', short: 'Schürfen', icon: '<path d="M3.5 9.5C7.5 4.5 13.5 3.2 19.5 5.5" stroke-width="2.4"/><path d="M11.2 6.2 18.8 20" stroke-width="2.2"/><circle cx="11.2" cy="6.2" r="1.3" fill="currentColor"/>', now: (lv) => (lv > 1 ? `+${SKILL_PCT * (lv - 1)} % Mining-Ertrag` : 'Noch kein Bonus'), next: (lv) => `+${SKILL_PCT * lv} % Mining-Ertrag` },
-  trade: { name: 'Handel', learn: 'Coins verkaufen', short: 'Verkaufen', icon: '<circle cx="9" cy="9" r="5.5"/><path d="M14.6 8.8a5.5 5.5 0 1 1-5.8 5.8"/><path d="M9 6.8v4.4M7.2 9h3.6"/>', now: (lv) => `${((TRADE_FEES[lv - 1] ?? 0.005) * 100).toLocaleString('de-DE')} % Börsengebühr`, next: (lv) => `${TRADE_FEES[lv] != null ? (TRADE_FEES[lv] * 100).toLocaleString('de-DE') : '–'} % Börsengebühr` },
-};
-const skillSvg = (k, size = 22) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${SKILL[k].icon}</svg>`;
+const potSvg = (k, size = 22) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${POT_SVG[k] || POT_SVG.w}</svg>`; // Erfahrungstöpfe (Werkstatt, Rechner, Geschäft)
 const partSvg = (t, size = 22) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${PART_ICON[t]}</svg>`;
-const TECH_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5a1.8 1.8 0 0 0 2.5 2.5l5.8-5.8a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg>';
 const ACH_SVG = {
   got: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3.5h8l-1.2 5.2M8 3.5l1.2 5.2"/><circle cx="12" cy="14.5" r="5.5" fill="currentColor" fill-opacity=".18"/><path d="M12 11.8l.9 1.8 2 .3-1.45 1.4.35 2-1.8-.95-1.8.95.35-2-1.45-1.4 2-.3z" fill="currentColor"/></svg>',
   lock: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="10.5" width="13" height="9.5" rx="2.2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg>',
@@ -91,6 +87,9 @@ export class UI {
     world.onLoose = (t) => { this.w.pickupFx(t); if (!this.g.s.loose?.[t]) return; this.toast(`${PNAME[t]} in der Tasche`, 'good', 2200); if (!this.g.pickUp(t)) return; this.lastPick = { t, at: performance.now() }; setTimeout(() => this.goals(), 1300); this.audio?.install?.(); this.goals(); };
     world.onKeep = (id) => this.pickKeep(id);
     game.on('xp', (k, n, lv) => this.xpPop(k, n, lv));
+    game.on('skill', (id) => { if (this.w.focus || this.installing) { this.lvQ = ['sk', id]; return; } setTimeout(() => skillCard(this, id), 700); this.dock(); }); // „Gelernt …“
+    game.on('skillopen', (ids) => { if (!this.g.has('skills')) return; this.toast(`<b>Neu lernbar:</b> ${ids.slice(0, 3).map((id) => esc(SKILL[id]?.name || id)).join(', ')}${ids.length > 3 ? ' …' : ''} – <kbd>T</kbd>`, 'good', 6000); this.dock(); });
+    game.on('skills', () => { skRefresh(this); this.dock(); });
     world.onIncome = () => { this.bumpWallet(); this.audio?.tick?.(); };
     world.onLamp = (on) => { if (on) this.lampHint?.remove(); this.toast(on ? 'Taschenlampe an' : 'Taschenlampe aus', 'info', 1500); this.keysHint(); };
     world.onPause = () => this.pause(true);
@@ -171,7 +170,6 @@ export class UI {
   onDay() {
     if (this.g.s.ev?.open) this.tryEvent();
     this.sites(); this.goals(); this.keysHint();
-    for (const t of TECHS) if (!t.hidden && toDay(t.date) === this.g.s.day) { this.toast(`Neue Technologie verfügbar: <b>${esc(t.name)}</b>`, 'good', 7000); this.dock(); }
     if (this.g.s.day % 7 === 0) this.dock();
     if (this.g.s.day - this.lastBuildDay >= 7) this.build(true); else this.buildPrices();
     if (this.inspUid) this.inspectStats();
@@ -340,7 +338,7 @@ export class UI {
     if (!force && el.childElementCount) return;
     this.lastBuildDay = g.s.day;
     el.innerHTML = '';
-    const hwLv = g.skillLv ? g.skillLv('hw') : 1; const head = h(`<div class="bhead"><h2>Shop${hwLv > 1 ? `<span class="disc">Schrauben −${SKILL_PCT * (hwLv - 1)} %</span>` : ''}${pm ? '<span class="bsub">Online-Shop · Lieferung morgen vor deine Wohnungstür</span>' : ''}</h2><button class="modal-x" title="Schließen (B)">✕</button></div>`); head.querySelector('button').onclick = () => this.resume(); head.lastElementChild.before(this.capStrip(fac)); el.append(head);
+    const head = h(`<div class="bhead"><h2>Shop${pm ? '<span class="bsub">Online-Shop · Lieferung morgen vor deine Wohnungstür</span>' : ''}</h2><button class="modal-x" title="Schließen (B)">✕</button></div>`); head.querySelector('button').onclick = () => this.resume(); head.lastElementChild.before(this.capStrip(fac)); el.append(head);
     const cats = h('<div class="cats"></div>');
     const catOk = (c) => (c.id === 'parts' ? (g.has('rigs') || !!g.s.flags.cpuStart) && PARTS.some((p) => g.available(p)) : (c.id !== 'rigs' || g.has('rigs')) && g.shopList(c.id, fac).length > 0); // CPU-Start: Teile (Grafikkarten) gleich von Anfang an
     if (!CATEGORIES.some((c) => c.id === this.cat && catOk(c))) this.cat = (CATEGORIES.find(catOk) || CATEGORIES[0]).id;
@@ -355,6 +353,8 @@ export class UI {
     el.style.setProperty('--cols', list.querySelector('.unpack, .shipbar') ? 3 : Math.max(1, Math.min(3, items.length))); // Lieferstatus/Ausgepacktes brauchen die volle Breite
     if (!items.length) list.append(h('<div class="empty">Noch nichts da.</div>'));
     for (const it of items) {
+      const lk = g.skillLock(it); // Fähigkeit fehlt (z. B. Milchkiste: Riser und Open-Frame, FPGA, Roboter)
+      if (lk) { const c = h(`<div class="item dis sk-locked"><div class="t"><span>${esc(it.name)}</span><span class="p">${this.money(g.itemPrice(it))}</span></div><div class="s">${esc(it.desc || '')}</div><div class="sk-lock"><span>${esc(lk)}</span></div><button class="btn small">Im Fähigkeiten-Baum ansehen</button></div>`); try { const url = this.w.thumbnail(it.id); if (url) c.prepend(h(`<div class="thumb"><img alt="" src="${url}"/></div>`)); } catch (e) { /* ohne Vorschau */ } c.querySelector('button').onclick = (e) => { e.stopPropagation(); this.resume(); this.skills(it.skill); }; list.append(c); continue; }
       if (it.kind === 'rig') { list.append(this.rigCard(it, fac)); continue; }
       const price = g.itemPrice(it); const isNew = g.s.day - it.releaseDay < 120;
       let s = esc(it.desc || '');
@@ -461,6 +461,7 @@ export class UI {
     this.w.focusObject?.(null); this.pickType = null; this.showRun = false; this.w.ghostPart?.(null);
     const hadLv = !!this.lvQ;
     if (this.lvQ) { const [k, lv] = this.lvQ; this.lvQ = null; this.lvBusy = true; setTimeout(() => this.levelUp(k, lv), 2600); }
+    this.osWiz = null; // Installer bricht mit dem Schließen des Inspektors ab
     this.flushMsgs?.(hadLv ? 7200 : 3000);
     if (this.w.mode === 'ui' || this.w.mode === 'play') this.w.setMode('play');
   }
@@ -474,6 +475,7 @@ export class UI {
   resetSession() {
     this.marketCoin = 'BTC'; this.trade = null; this.lastSpeed = null; this.evSnooze = null; this.delArmed = null;
     clearTimeout(this.featT); this.featQ = []; this.msgQ = []; this.xpQ = []; this.lvQ = null; this.lvBusy = false; $('#featcards').innerHTML = '';
+    this.osWiz = null; this.mg?.cancel(); this.skView = null; // Fähigkeiten: Installer, Mini-Spiel, Baum-Ansicht
     clearTimeout(this.instT); this.installing = false; this.afterSnap = null; this.showRun = false; this.pickType = null; this.rate = 0; this.rateDay = null;
     this.visiting = null; this.walkGoal = null; this.lampHinted = false; this.idea0 = null; this.ideaRead = null; this.ideaSteps0 = 0; this.steps = 0; this.ringOff = null; document.body.classList.remove('visiting', 'show-build', 'show-goals');
     if (this.w.heatMode) this.w.toggleHeat(false);
@@ -557,7 +559,7 @@ export class UI {
       let line = '';
       if (a && a.units.length) { const rev = a.units.reduce((x, u) => x + u.rev, 0) * sm.throttle; const cost = a.watt / 1000 * 24 * sm.elec; line = `${a.units.filter((u) => u.h).map((u) => fmtHash(u.h * sm.throttle, u.algo)).join(' · ') || 'pausiert'} · <span class="${rev - cost >= 0 ? 'pos' : 'neg'}">${rev - cost >= 0 ? '+' : ''}${fmtUSD(rev - cost)}/Tag</span>`; }
       else if (def.kind === 'cooling') line = `kühlt ${fmtWatt(def.cool)}`;
-      const st = a?.psuOff && a.status === 'ok' ? `Netzteil zu schwach – ${a.psuOff === 1 ? '1 Karte' : a.psuOff + ' Karten'} aus` : { broken: 'Defekt – reparieren', partial: 'Teilweise defekt', psu: 'Netzteil zu schwach', incomplete: 'Teile fehlen – bestücken', empty: '➕ Leer – Geräte einsetzen', idle: { heat: 'pausiert (zu heiß)', event: 'gedrosselt (Ereignis)', loss: 'pausiert (kaum rentabel)' }[a?.limit] || 'pausiert (unrentabel)', full: 'pausiert (Anschluss voll)', off: '⏻ aus' }[a?.status];
+      const st = a?.psuOff && a.status === 'ok' ? `Netzteil zu schwach – ${a.psuOff === 1 ? '1 Karte' : a.psuOff + ' Karten'} aus` : { broken: 'Defekt – reparieren', partial: 'Teilweise defekt', psu: 'Netzteil zu schwach', incomplete: 'Teile fehlen – bestücken', noos: 'Kein Betriebssystem – installieren', nobit: 'Bitstream fehlt – laden', empty: '➕ Leer – Geräte einsetzen', idle: { heat: 'pausiert (zu heiß)', event: 'gedrosselt (Ereignis)', loss: 'pausiert (kaum rentabel)' }[a?.limit] || 'pausiert (unrentabel)', full: 'pausiert (Anschluss voll)', off: '⏻ aus' }[a?.status];
       const build = o.type === 'tower' && o.parts && !this.g.s.flags.miningStarted, first = this.g.isFirstPc(o), need = first ? this.g.firstNeed().length : 4, miss = build ? (first ? this.g.firstMissing(o) : this.g.pcMissing(o)).length : 0;
       html = build ? `<kbd>E</kbd>${miss ? 'Teile einbauen' : 'PC einschalten'}<div class="st">${need - miss} von ${need} Teilen eingebaut</div>` : `<kbd>E</kbd>${esc(o.type === 'tower' ? (this.g.facObjects('kinder').find((x) => x.type === 'tower')?.uid === o.uid ? 'Dein PC' : 'Mining-PC') : (def.short || def.name.replace(/[-‑]Gehäuse|\s*\(.*\)/g, '')))}${st ? `<div class="st">${st}</div>` : line ? `<div class="ln">${line}</div>` : ''}`;
     }
@@ -568,7 +570,7 @@ export class UI {
     if (p.action === 'shop') { if (this.g.has('build')) this.openShop(); else this.toast('Bau erst deinen PC zusammen.', 'info', 3000); return; }
     if (p.action === 'market') { const mon = this.monitorUse(p); if (mon === 'both') { this.monitorPick(); return; } if (mon === 'shop') { this.openShop(); return; } if (!this.g.has('market')) { this.toast(this.g.s.flags.miningStarted ? 'Noch nichts zu verkaufen – lass den PC arbeiten.' : 'Bau erst deinen PC zusammen.', 'info', 3000); return; } this.market(); }
     else if (p.action === 'company') this.company();
-    else if (p.action === 'techs') this.techs();
+    else if (p.action === 'techs') this.skills(); // Opas Werkbank: der Fähigkeiten-Baum
     else if (p.action === 'ranking') this.ranking();
     else if (p.action === 'sleep') {
       const s = this.g.s;
@@ -630,7 +632,7 @@ export class UI {
     this.inspUid = uid;
     if (!uid) { el.classList.add('hidden'); this.pickType = null; this.showRun = false; this.w.focusObject?.(null); this.w.ghostPart?.(null); return; }
     const o = this.g.findObj(uid); if (!o) { el.classList.add('hidden'); this.inspUid = null; return; }
-    el.classList.remove('hidden');
+    el.classList.toggle('hidden', !!this.mg); // Mini-Spiel ersetzt den Inspektor, bis es vorbei ist
     const def = PLACEABLE[o.type], g = this.g;
     this.w.focusObject?.(o.type === 'tower' && o.parts && g.s.chapter === 0 ? uid : null);
     const firstPc = o.type === 'tower' && g.facObjects('kinder').find((x) => x.type === 'tower')?.uid === uid; // nur der allererste PC heißt „Dein PC“
@@ -639,6 +641,7 @@ export class UI {
     this.inspectStats();
     const c = $('#insp-ctrl');
     if (def.kind === 'rig' && o.parts && o.type === 'tower' && g.s.chapter === 0 && (!g.s.flags.miningStarted || this.showRun)) { c.append(this.pcBuild(o)); return; }
+    if (this.osWiz?.uid === uid) { osWizard(this, o, c); return; } // Betriebssystem-Installer (Esc bricht nur ihn ab)
     if ((def.kind === 'rig' || def.kind === 'device' || def.kind === 'holder') && g.has('coins')) {
       const a = g.summary[g.facOf(uid)]?.per.get(uid);
       const sec = h(`<div class="sec"><h4>Coin</h4></div>`);
@@ -652,11 +655,11 @@ export class UI {
       ms.value = o.mode || 'auto'; ms.onchange = () => { o.mode = ms.value; g.dayUpdate(true); this.w.updateStatus(); this.inspectStats(); };
       sec.append(ms); c.append(sec);
     }
+    c.append(deviceSecs(this, o)); // Fähigkeiten: System, Tuning, Firmware, Wartung, Wasserkühlung, Bitstream, Robi
     if (def.kind === 'rig') c.append(this.rigBuild(o));
     if (def.kind === 'holder') c.append(this.holderUI(o));
     const row = h('<div class="row sec"></div>');
-    const st = g.summary[g.facOf(uid)]?.per.get(uid);
-    if (o.broken || (o.items && o.items.some((i) => i.b))) { const rc = g.repairCost(o); const b = h(`<button class="btn good">Reparieren (${fmtUSD(rc)})</button>`); b.onclick = () => { if (!g.repair(uid)) this.toast('Nicht genug Geld.', 'bad'); else this.inspect(uid); }; row.append(b); }
+    repairRow(this, o, row); // selbst (Mini-Spiel) · Routine · reparieren lassen
     if (!g.has('build')) { if (row.childElementCount) c.append(row); return; }
     const ks = def.kind === 'rig' && o.parts ? this.kitSec(o) : null;
     if (g.slotKind(def) && (def.kind !== 'rig' || g.has('rigs')) && !g.cloneBlocked(o.kit && !g.pcReady(o) ? { ...o, parts: o.kit } : o)) { // weitere PCs erst ab „Mehr PCs“ (nach der ersten Grafikkarte)
@@ -744,7 +747,7 @@ export class UI {
     const g = this.g, def = PLACEABLE[o.type], facId = g.facOf(uid), sm = g.summary[facId]; if (!sm) return;
     const a = sm.per.get(uid) || g.analyze(o);
     const badge = $('#insp-badge');
-    const st = sm.tripped ? ['bad', 'Kein Strom'] : a.status === 'broken' ? ['bad', 'Defekt'] : a.status === 'partial' ? ['warn', 'Teilweise defekt'] : a.status === 'psu' ? ['bad', 'Netzteil zu schwach'] : a.status === 'incomplete' ? ['warn', 'Unvollständig'] : a.status === 'empty' ? ['idle', 'Leer'] : a.status === 'idle' ? ['idle', PAUSE_LABEL[a.limit] || 'Pausiert (unrentabel)'] : a.status === 'full' ? ['idle', 'Pausiert (Anschluss voll)'] : a.status === 'off' ? ['idle', 'Aus'] : def.kind === 'decor' ? ['idle', 'Deko'] : a.psuOff ? ['warn', `${a.psuOff === 1 ? '1 Karte' : a.psuOff + ' Karten'} aus`] : ['ok', sm.throttle < 1 ? 'Läuft (gedrosselt)' : 'Läuft'];
+    const st = sm.tripped ? ['bad', 'Kein Strom'] : a.status === 'broken' ? ['bad', 'Defekt'] : a.status === 'partial' ? ['warn', 'Teilweise defekt'] : a.status === 'psu' ? ['bad', 'Netzteil zu schwach'] : a.status === 'incomplete' ? ['warn', 'Unvollständig'] : a.status === 'noos' ? ['warn', 'Kein Betriebssystem'] : a.status === 'nobit' ? ['warn', 'Bitstream fehlt'] : a.status === 'empty' ? ['idle', 'Leer'] : a.status === 'idle' ? ['idle', PAUSE_LABEL[a.limit] || 'Pausiert (unrentabel)'] : a.status === 'full' ? ['idle', 'Pausiert (Anschluss voll)'] : a.status === 'off' ? ['idle', 'Aus'] : def.kind === 'decor' ? ['idle', 'Deko'] : a.psuOff ? ['warn', `${a.psuOff === 1 ? '1 Karte' : a.psuOff + ' Karten'} aus`] : ['ok', sm.throttle < 1 ? 'Läuft (gedrosselt)' : 'Läuft'];
     if (this.showRun && g.s.flags.miningStarted && o.type === 'tower') { if (badge) badge.innerHTML = `<span class="badge ok"><i></i>Läuft</span>`; const se = $('#insp-stats'); if (se) se.innerHTML = ''; return; }
     if (!g.s.flags.miningStarted && def.kind === 'rig' && o.parts) { const need = g.isFirstPc(o) ? g.firstNeed().length : 4, n = need - (g.isFirstPc(o) ? g.firstMissing(o) : g.pcMissing(o)).length; if (badge) badge.innerHTML = `<span class="badge ${n === need ? 'ok' : 'idle'}"><i></i>${n} / ${need} Teile</span>`; const se = $('#insp-stats'); if (se) se.innerHTML = ''; return; }
     if (badge) badge.innerHTML = `<span class="badge ${st[0]}"><i></i>${st[1]}</span>`;
@@ -932,6 +935,7 @@ export class UI {
     if (go.id === 'gpuorder') return g.has('build') ? 'Am <b>Monitor</b> <kbd>E</kbd> oder <kbd>B</kbd>: Shop → Teile → Grafikkarten. Lieferung morgen früh vor deine Wohnungstür.' : '';
     if (go.id === 'gpu') { const inBag = g.bagList('gpu').length; if (inBag) return 'Die Karte liegt im Lager: PC anschauen, <kbd>E</kbd> → Grafikkarte 1 → einbauen.'; if (s0.parcels?.length) return 'Das Paket liegt vor deiner Wohnungstür – hingehen und <kbd>E</kbd>.'; if (s0.orders?.length) return 'Bestellt – morgen früh liegt das Paket vor der Tür. Leg dich ins Bett (<kbd>E</kbd>) und schlaf bis morgen.'; return ''; }
     const site = { rig2: 'kinder', openrig: 'keller' }[go.id]; if (!site || !g.has('rigs') || !g.s.unlocked.includes(site)) return '';
+    if (g.facObjects(site).some((o) => g.osNeed?.(o) && g.pcReady(o))) return 'Der neue Rig braucht noch ein Betriebssystem: anschauen, <kbd>E</kbd> → System → Installer.'; // Fähigkeiten: ohne System schürft er nicht
     if (g.kitsOpen(site).length) return g.s.current === site ? 'Bausatz steht – anschauen, <kbd>E</kbd> und die Teile aus dem Lager einbauen.' : `Dein Bausatz wartet ${site === 'kinder' ? 'in der Wohnung' : 'im Keller'} aufs Einbauen.`;
     const t = go.id === 'rig2' ? 'tower' : 'crate', nm = t === 'tower' ? 'Tower' : 'Milchkiste';
     if (g.parcelMode()) return g.readyOk(t) ? `<kbd>B</kbd> → Rigs → ${nm}: „Fertig bestellen“ oder als Bausatz. Morgen früh vor der Tür, dann oben im Shop „Aufstellen“.` : `<kbd>B</kbd> → Rigs → ${nm}: „Bausatz bestellen“. Morgen auspacken, aufstellen, selbst einbauen.`;
@@ -989,14 +993,14 @@ export class UI {
   dock() {
     const el = $('#dock'), g = this.g;
     const unread = g.s.messages.filter((m) => !m.read).length + (g.s.ev?.open ? 1 : 0);
-    const techN = TECHS.filter((t) => !t.hidden && !(g.s.techs || {})[t.id] && g.techAvailable(t) && g.s.cash >= t.cost).length;
+    const skN = g.has('skills') && g.s.sk ? g.skillsOpenN() : 0; // Fähigkeiten, die man gerade auf einem Weg lernen kann
     el.innerHTML = '';
     const btns = [
       ['', 'Shop', 'B', () => this.toggleBuild()], ['', 'Börse', 'M', () => this.market()], ['', 'Handy', 'H', () => this.phone(), unread], ['', 'Firma', 'C', () => this.company()],
-      ['', 'Technik', 'T', () => this.techs(), techN], ['', 'Logbuch', 'L', () => this.ranking(), this.achNew || 0], ['', 'Fähigkeiten', 'J', () => this.skills()], ['', this.w.empire ? 'Zurück' : 'Karte', 'K', () => this.toggleMap()], ['', 'Menü', 'ESC', () => this.menu()],
+      ['', 'Fähigkeiten', 'T', () => this.skills(), skN], ['', 'Logbuch', 'L', () => this.ranking(), this.achNew || 0], ['', this.w.empire ? 'Zurück' : 'Karte', 'K', () => this.toggleMap()], ['', 'Menü', 'ESC', () => this.menu()],
     ];
-    const need = { B: 'build', M: 'market', H: 'phone', C: 'company', T: 'techs', L: 'ranking', K: 'map', J: 'skills' };
-    const act = document.body.classList.contains('show-build') ? 'B' : this.w.empire ? 'K' : ({ market: 'M', phone: 'H', intro: 'H', company: 'C', techs: 'T', ranking: 'L', menu: 'ESC', skills: 'J' })[this.modalKind] || (this.paused ? 'ESC' : null);
+    const need = { B: 'build', M: 'market', H: 'phone', C: 'company', T: 'skills', L: 'ranking', K: 'map' };
+    const act = document.body.classList.contains('show-build') ? 'B' : this.w.empire ? 'K' : ({ market: 'M', phone: 'H', intro: 'H', company: 'C', skills: 'T', ranking: 'L', menu: 'ESC' })[this.modalKind] || (this.paused ? 'ESC' : null);
     const les = g.lesson(), lf = les && (les === 'bills' ? 'phone' : FEATURES[les]?.by || les); // Anlernen: der Knopf der laufenden Lektion leuchtet (Monatsabrechnung: das Handy)
     for (const [ic, l, key, fn, b] of btns.filter((x) => !need[x[2]] || g.has(need[x[2]]))) { const e = h(`<button class="${act === key ? 'on' : ''} ${lf && need[key] === lf ? 'learn' : ''}" title="${l} (${key})">${ic}${l}<span class="key">${key}</span>${b ? `<span class="bdg">${b}</span>` : ''}</button>`); e.onclick = () => { if (this.stickyModal()) return; fn(); }; el.append(e); }
   }
@@ -1092,7 +1096,7 @@ export class UI {
     const wrap = h('<div class="mk-wrap"></div>'); det.replaceWith(wrap); wrap.append(det);
     const tk = h('<div class="ticket"></div>'); wrap.append(tk);
     this.trade ||= { mode: 'sell', unit: 'BTC' };
-    const T = this.trade, fee = g.s.skills ? g.tradeFee() : 0.005, feeTxt = (fee * 100).toLocaleString('de-DE');
+    const T = this.trade, fee = g.tradeFee(), feeTxt = (fee * 100).toLocaleString('de-DE');
     const pend = c.id === 'BTC' && !s.payoutCold ? this.pendingBtc() : 0, have = w.ex + pend;
     const num = (str) => { str = String(str || '').trim().replace(/\s/g, ''); if (str.includes(',')) str = str.replace(/\./g, '').replace(',', '.'); else if (/^\d{1,3}(\.\d{3})+$/.test(str)) str = str.replace(/\./g, ''); const v = parseFloat(str); return Number.isFinite(v) && v > 0 ? v : 0; };
     const fmtIn = (v, unit) => (v > 0 ? v.toLocaleString('de-DE', { maximumFractionDigits: unit === 'BTC' ? (v < 1 ? 6 : 4) : 2, useGrouping: false }) : '');
@@ -1104,7 +1108,7 @@ export class UI {
       <div class="tk-sum"><div><span>Kurs</span><b>${fmtUSD(p)}</b></div><div><span>Menge</span><b class="q">–</b></div><div><span>Gebühr (${feeTxt} %)</span><b class="f">–</b></div><div class="tot"><span class="tl">${T.mode === 'sell' ? 'Du bekommst' : 'Du zahlst'}</span><b class="t">–</b></div></div>
       <div class="tk-msg"></div>
       <button class="btn primary big wide tk-go" disabled>${T.mode === 'sell' ? 'Verkaufen' : 'Kaufen'}</button>
-      <div class="tk-note">Gebühr ${feeTxt} % · deine Fähigkeit Handel senkt sie</div>`;
+      <div class="tk-note">Sofortverkauf ${feeTxt} % Gebühr${g.knows('limit') ? ` · Limit-Order ${(g.tradeFee(true) * 100).toLocaleString('de-DE')} %` : ' · mit „Limit-Orders“ (T) nur 0,5 %'}</div>`;
     const inp = tk.querySelector('input[type=text]'), rng = tk.querySelector('.tk-range'), go = tk.querySelector('.tk-go'), msg = tk.querySelector('.tk-msg');
     // Obergrenze in der gewählten Einheit
     const maxIn = () => (T.mode === 'sell' ? (T.unit === 'BTC' ? have : have * p) : (T.unit === 'BTC' ? Math.max(0, s.cash) * (1 - fee) / p : Math.max(0, s.cash)));
@@ -1152,6 +1156,8 @@ export class UI {
     r3.querySelector('input').oninput = (e) => { s.autoSell[c.id] = e.target.value / 100; r3.querySelector('#as-v').textContent = e.target.value + ' %'; };
     const all = h('<button class="btn small" style="margin-top:6px">Für alle</button>'); all.onclick = () => { for (const k of COINS) s.autoSell[k.id] = s.autoSell[c.id]; this.toast('Übernommen', 'good', 1500); }; r3.append(all);
     if (g.has('autosell')) det.append(r3);
+    if (g.knows('limit') && g.has('autosell')) { const lc = h(`<label class="lim-auto"><input type="checkbox" ${s.autoLimit ? 'checked' : ''}/> Auto-Verkauf als Limit-Order: nur über dem 7-Tage-Schnitt, 0,5 % Gebühr</label>`); lc.querySelector('input').onchange = (e) => { s.autoLimit = e.target.checked; this.toast(s.autoLimit ? 'Auto-Verkauf wartet jetzt auf gute Kurse.' : 'Auto-Verkauf verkauft wieder sofort.', 'info', 2500); }; r3.append(lc); }
+    if (g.knows('limit')) this.limitBox(det, c, p); // Limit-Orders (Fähigkeit Nr. 16)
     this.openModal(body, '', 'market');
   }
   chart(cv, id, range, mini = false) {
@@ -1421,7 +1427,8 @@ export class UI {
           r.append(h(`<span class="fx-ok">${u.days ? 'bis ' + fmtDate(f.up[u.id] + u.days) : u.monthly > 0 ? `${fmtUSD(u.monthly)}/Monat` : 'Gebaut'}</span>`));
           if (u.cancel) { const b = h('<button class="btn small">Kündigen</button>'); b.onclick = () => { g.cancelUpgrade(fid, u.id); this.toast(`${u.name} gekündigt`, 'info'); this.reCompany(); }; r.append(b); }
         } else {
-          const need = Math.max(u.cost || 0, u.monthly > 0 ? u.monthly : 0);
+          const need = Math.max(u.cost || 0, u.monthly > 0 ? u.monthly : 0), lk = g.upLock(fid, u);
+          if (lk) { r.classList.add('lock'); r.append(h(`<span class="fx-lock">${esc(lk)}</span>`)); box.append(r); continue; } // Fähigkeit oder Datum fehlt
           const b = h(`<button class="btn small">${was ? 'Erneuern' : u.cost ? 'Kaufen' : 'Buchen'} · ${price}</button>`); b.disabled = !g.canAfford(need);
           b.onclick = () => { if (g.buyUpgrade(fid, u.id)) { this.audio?.cash?.(); this.toast(`${u.name}: ${u.eff}`, 'good'); } else this.toast('Nicht genug Geld.', 'bad'); this.reCompany(); };
           r.append(b);
@@ -1429,6 +1436,7 @@ export class UI {
         box.append(r);
       }
     }
+    if (g.knows('lastman') && FACILITY[fid].tier >= 2) { const on = !!f.peak; const r = h(`<div class="fx-row ${on ? 'on' : ''}"><div class="fx-t"><b>Lastmanagement</b><small>Bei Preisspitzen abschalten: Strom ×0,85, läuft 92 % der Zeit</small></div><button class="btn small ${on ? '' : 'primary'}">${on ? 'Ausschalten' : 'Einschalten'}</button></div>`); r.querySelector('button').onclick = () => { g.peakToggle(fid); this.reCompany(); }; box.append(r); }
     if (g.canMothball(fid)) {
       const keep = g.upgrades(fid).some((u) => u.keepRent && g.upActive(fid, u));
       const rentTxt = FACILITY[fid].rent ? (keep ? 'Miete bleibt (Mietvertrag)' : 'Miete 30 %') : 'keine Miete';
@@ -1496,20 +1504,17 @@ export class UI {
   // Finale: mehrseitige Abschluss-Sequenz (src/ui/finale.js)
   ending() { showFinale(this, 'won'); }
 
-  techs() {
-    this.g.learned?.('techs');
-    const g = this.g, s = g.s;
-    const bench = Math.max(...s.unlocked.map((id) => FACILITY[id].tier)) <= 1;
-    const body = h(`<div><h2>${bench ? 'Opas Werkbank' : 'Technik'}</h2>${bench ? '<p class="tech-note">Opa Heinz tüftelt mit dir an Verbesserungen. Größere Ideen brauchen größere Standorte.</p>' : ''}<div class="cards"></div></div>`);
-    const cards = body.querySelector('.cards');
-    for (const t of TECHS) {
-      const own = (s.techs || {})[t.id], av = g.techAvailable(t); if (t.hidden && !own) continue; // versteckt (z. B. ICO, jetzt ein Ereignis) – nur zeigen, wenn schon gekauft
-      const c = h(`<div class="card ${!av && !own ? 'lock' : ''}"><h3><span class="tech-ic">${TECH_SVG}</span>${esc(t.name)}</h3><div class="sub">${own ? `Erforscht am ${fmtDate(own)}` : av ? `Kosten: <b style="color:#ffb000">${fmtUSD(t.cost)}</b>` : `ab ${fmtDate(toDay(t.date))}${t.minTier ? ` · braucht Standort „${FACILITIES.find((f) => f.tier === t.minTier).name}"` : ''}`}</div><div style="font-size:13px">${esc(t.desc)}</div></div>`);
-      if (!own && av) { const b = h(`<button class="btn primary small" style="margin-top:8px">Erforschen</button>`); b.disabled = s.cash < t.cost; b.onclick = () => { if (g.buyTech(t.id)) { this.audio?.fanfare(); this.toast(`${esc(t.name)} erforscht!`, 'good'); this.techs(); this.dock(); } }; c.append(b); }
-      cards.append(c);
-    }
-    this.openModal(body, '', 'techs');
+  // Limit-Order: „Verkaufe X, sobald der Kurs ≥ Y steht“ – die Coins sind bis dahin reserviert
+  limitBox(det, c, p) {
+    const g = this.g, s = g.s, w = s.wallet[c.id], mine = (s.limits || []).filter((l) => l.coin === c.id);
+    const box = h(`<div class="sec lim"><h4>Limit-Order</h4><div class="lim-row"><input class="lim-n" type="text" inputmode="decimal" placeholder="Menge ${c.id}"/><span>zu</span><input class="lim-p" type="text" inputmode="decimal" value="${Math.ceil(p * 1.1)}"/><span>$</span><button class="btn small primary">Setzen · 0,5 %</button></div><div class="lim-list"></div></div>`);
+    const num = (v) => { const x = parseFloat(String(v).replace(/\./g, '').replace(',', '.')); return Number.isFinite(x) ? x : 0; };
+    box.querySelector('button').onclick = () => { const n = Math.min(num(box.querySelector('.lim-n').value) || w.ex, w.ex), lp = num(box.querySelector('.lim-p').value); if (!(n > 0) || !(lp > 0)) { this.toast('Menge und Preis eingeben.', 'info', 2500); return; } if (!g.limitAdd(c.id, n, lp)) { this.toast('So viel liegt nicht auf der Börse.', 'bad', 2500); return; } this.toast(`Limit-Order: ${fmtCoin(n)} ${c.id} zu ${fmtUSD(lp)}`, 'good', 3000); this.market(); };
+    const list = box.querySelector('.lim-list'); if (!mine.length) list.append(h('<div class="lim-e">Keine offenen Aufträge.</div>'));
+    for (const l of mine) { const r = h(`<div class="lim-o"><span>${fmtCoin(l.n)} ${c.id} ab ${fmtUSD(l.p)}</span><button class="btn small">Streichen</button></div>`); r.querySelector('button').onclick = () => { g.limitCancel(l.id); this.market(); }; list.append(r); }
+    det.append(box);
   }
+  techs() { this.skills(); } // Technik ist in den Fähigkeiten aufgegangen (Taste T)
 
   ranking(tab = this.logTab || 'rank') {
     this.g.learned?.('ranking');
@@ -1735,7 +1740,7 @@ export class UI {
     let line = '';
     if (a && a.units.length) { const rev = a.units.reduce((x, u) => x + u.rev, 0) * sm.throttle; const cost = a.watt / 1000 * 24 * sm.elec; line = `${fmtWatt(a.watt)} · <span class="${rev - cost >= 0 ? 'pos' : 'neg'}">${fmtUSD(rev - cost)}/Tag</span>`; }
     else if (def.kind === 'cooling') line = `kühlt ${fmtWatt(def.cool)}`;
-    if (a?.status && a.status !== 'ok') line += `<br/><span class="neg">${{ broken: 'Defekt', partial: 'Teilweise defekt', psu: 'Netzteil überlastet', incomplete: 'Unvollständig', empty: 'Leer', idle: 'Pausiert (unrentabel)', full: 'Anschluss voll', off: 'Aus' }[a.status] || ''}</span>`;
+    if (a?.status && a.status !== 'ok') line += `<br/><span class="neg">${{ broken: 'Defekt', partial: 'Teilweise defekt', psu: 'Netzteil überlastet', incomplete: 'Unvollständig', noos: 'Kein Betriebssystem', nobit: 'Bitstream fehlt', empty: 'Leer', idle: 'Pausiert (unrentabel)', full: 'Anschluss voll', off: 'Aus' }[a.status] || ''}</span>`;
     if (o.items) line += `<br/>${o.items.length}/${def.slots} belegt`;
     el.innerHTML = `<b>${esc(def.name)}</b><br/>${line}`;
     el.style.left = pos[0] + 'px'; el.style.top = pos[1] + 'px';
@@ -1743,29 +1748,17 @@ export class UI {
   // Erfahrung: kleine Einblendung, beim Stufenaufstieg eine große Karte
   flushXp() { const q = this.xpQ || []; this.xpQ = []; q.forEach(([k, n, lv]) => this.xpPop(k, n, lv)); }
   xpPop(k, n, lv) {
-    if (this.installing && k === 'hw') { (this.xpQ ||= []).push([k, n, lv]); return; }
+    if (this.installing && k === 'w') { (this.xpQ ||= []).push([k, n, lv]); return; }
     const box = $('#xpbox') || (() => { const b = h('<div id="xpbox"></div>'); document.body.append(b); return b; })();
-    const el = h(`<div class="xp"><span class="xi">${skillSvg(k, 16)}</span>+${n} EP ${SKILL[k].name}</div>`); box.append(el); setTimeout(() => el.remove(), 2400);
-    if (lv) { if (this.w.focus) this.lvQ = [k, lv]; else setTimeout(() => this.levelUp(k, lv), 900); }
+    const el = h(`<div class="xp"><span class="xi">${potSvg(k, 16)}</span>+${n} ${POTS[k]?.long || 'Erfahrung'}</div>`); box.append(el); setTimeout(() => el.remove(), 2400);
+    if (lv) { if (this.w.focus) this.lvQ = ['pt', k]; else setTimeout(() => this.levelUp('pt', k), 900); }
     this.dock();
   }
-  levelUp(k, lv) {
-    document.getElementById('lvup')?.remove(); this.audio?.fanfare?.(); this.lvBusy = true; clearTimeout(this.lvBT); this.lvBT = setTimeout(() => { this.lvBusy = false; }, 3900);
-    if (this.modalKind === 'skills') { this.skills(); const card = document.querySelector(`.sk[data-skill="${k}"]`); if (card) { card.classList.add('lvl'); setTimeout(() => card.classList.remove('lvl'), 2200); } return; }
-    const el = h(`<div id="lvup"><div class="lv-ic">${skillSvg(k, 34)}</div><div class="lv-t1">Neue Stufe</div><div class="lv-t2">${SKILL[k].name} · Stufe ${lv}</div><div class="lv-t3">${SKILL[k].now(lv)}</div></div>`);
-    document.body.append(el); setTimeout(() => el.classList.add('out'), 3400); setTimeout(() => el.remove(), 3900);
-  }
-  skills() {
-    this.g.learned?.('skills');
-    const g = this.g, s = g.s; if (!s.skills) return;
-    const body = h(`<div class="skills"><h2>Fähigkeiten</h2><div class="sk-list"></div></div>`);
-    const list = body.querySelector('.sk-list');
-    for (const k of ['hw', 'mining', 'trade']) {
-      const x = s.skills[k] || 0, lv = g.skillLv(k), lo = SKILL_XP[lv - 1], hi = SKILL_XP[lv], pc = hi ? Math.round(((x - lo) / (hi - lo)) * 100) : 100;
-      list.append(h(`<div class="sk" data-skill="${k}"><div class="sk-ic">${skillSvg(k, 26)}</div><div class="sk-main"><div class="sk-top"><b>${SKILL[k].name}</b><span class="sk-lv">Stufe ${lv}</span></div><div class="sk-bar"><div style="width:${pc}%"></div></div><div class="sk-row"><span class="sk-now">${lv > 1 ? '<em>Aktiv</em>' : ''}${SKILL[k].now(lv)}</span><span class="sk-ep">${hi ? `${x - lo} / ${hi - lo} EP` : 'Höchste Stufe'}</span></div>${hi ? `<div class="sk-next"><em>Stufe ${lv + 1}</em>${SKILL[k].next(lv)}</div>` : ''}<div class="sk-learn"><span>EP durch ${SKILL[k].short}</span></div></div></div>`));
-    }
-    this.openModal(body, 'narrow', 'skills');
-  }
+  // Große Karte: Fähigkeitspunkt frei (pt) oder gelernt (sk) – wartet, solange der Spieler gerade etwas fokussiert
+  levelUp(kind, v) { if (kind === 'sk') skillCard(this, v); else pointCard(this, v); }
+  skills(sel) { if (!this.g.has('skills') && this.g.s.flags?.tutor) { this.toast('Noch nicht freigeschaltet.', 'info', 1800); return; } skillsMenu(this, sel); }
+  // Esc zuerst für das, was gerade offen ist: Mini-Spiel, Installer, Details im Baum (main.js) – true = erledigt
+  escLocal() { if (this.mg) { this.mg.cancel(); return true; } if (this.osWiz) return osAbort(this); return skCloseDetail(this); }
   milestone(title, sub, kicker = 'Meilenstein') {
     if (performance.now() < (this.msBusy || 0)) { (this.msQ ||= []).push([title, sub, kicker]); this.msPump(); return; } // nacheinander statt übereinander
     this.msBusy = performance.now() + 3200;

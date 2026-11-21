@@ -304,7 +304,7 @@ export const KEEPSAKES = [
   {
     id: 'radio', fac: 'keller', spot: [0.34, 0.0, 4.855, Math.PI / 2], label: 'Altes Röhrenradio', name: 'Opas Röhrenradio, 1962',
     text: 'Hinter dem Heizkessel, unter einer Decke im Gerümpel vom Vormieter: ein Holzradio mit Stoffbespannung. Innen klebt ein Zettel in Opas Schrift: <b>„Mein erstes. Gebaut 1962, für Lisbeth. Rauscht nie.“</b> Du drehst am Knopf – und es knistert tatsächlich.',
-    gain: 'Opa +1 · +40 EP Schrauben', reward: { rel: { opa: 1 }, xp: { hw: 40 }, msg: { from: 'Opa Heinz', text: 'Das Radio! Das hab ich 1971 dem alten Krause geliehen, als ich in deinem Haus die Leitungen gezogen hab – und nie zurückgekriegt. Behalt es, Junge. Und dreh ab und zu Kurzwelle.' } },
+    gain: 'Opa +1 · +40 Werkstatt-Erfahrung', reward: { rel: { opa: 1 }, xp: { hw: 40 }, msg: { from: 'Opa Heinz', text: 'Das Radio! Das hab ich 1971 dem alten Krause geliehen, als ich in deinem Haus die Leitungen gezogen hab – und nie zurückgekriegt. Behalt es, Junge. Und dreh ab und zu Kurzwelle.' } },
   },
   {
     id: 'loetkolben', fac: 'werkstatt', spot: [2.42, 0.0, 0.5, 0.35], label: 'Alter Lötkolben', name: 'Papas erster Lötkolben',
@@ -314,7 +314,7 @@ export const KEEPSAKES = [
   {
     id: 'pruefer', fac: 'halle', spot: [18.32, 0.0, 10.78, 0.9], label: 'Alter Spannungsprüfer', name: 'Opas Spannungsprüfer',
     text: 'Am Fuß des hintersten Stahlträgers, halb unter Kabelbindern: ein gelber Spannungsprüfer, zerkratzt und verstaubt. Auf dem Griff steht <b>„H. Brandt, Elektromeister“</b>. Opa hat 1974 die Hauptverteilung dieser Halle angeschlossen – und offenbar etwas vergessen.',
-    gain: 'Opa +1 · +80 EP Schrauben', reward: { rel: { opa: 1 }, xp: { hw: 80 }, msg: { from: 'Opa Heinz', text: 'Mein Prüfer! Den hab ich 1974 wochenlang gesucht. Ich hatte sogar deinen Vater im Verdacht. Sag ihm bitte nichts.' } },
+    gain: 'Opa +1 · +80 Werkstatt-Erfahrung', reward: { rel: { opa: 1 }, xp: { hw: 80 }, msg: { from: 'Opa Heinz', text: 'Mein Prüfer! Den hab ich 1974 wochenlang gesucht. Ich hatte sogar deinen Vater im Verdacht. Sag ihm bitte nichts.' } },
   },
   {
     id: 'usbstick', fac: 'rz', spot: [6.4, 0.0, 4.78, 0.6], label: 'Alter USB-Stick', name: '„BTC 2011 – NICHT LÖSCHEN“',

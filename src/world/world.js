@@ -28,7 +28,7 @@ import { buildHouse, HOUSE_OFF, parcelModel } from './house.js';
 // Raumlicht-Profile je Aufenthaltsort (Himmel, Sonne, Mond, Umgebung); fließend überblendet, unabhängig von der geladenen Szene
 const AMB = { room: { hemi: 1, sun: 1, moon: 1, env: 1 }, dusty: { hemi: 0.22, sun: 0.25, moon: 0.4, env: 0.2 }, hall: { hemi: 0.3, sun: 0.6, moon: 0.3, env: 0.32 } };
 const ROOM_LIGHTS = 3, TOWER_LIGHTS = 4; // feste Lichtzahl in Wohnung und Keller: beim nahtlosen Wechsel werden keine Shader neu übersetzt
-import { objectModel, rigPartModel, loosePartModel, releaseModel } from './models.js';
+import { objectModel, rigPartModel, loosePartModel, releaseModel, buildRobiBot } from './models.js';
 import { keepsakeModel } from './models.js';
 import { keepsakesAt } from '../data/story.js';
 import { nightMats, nightGround } from './rooms.js';
@@ -183,6 +183,7 @@ export class World {
     game.on('objects', (fac) => { if (fac === this.facId) this.syncObjects(); });
     game.layoutOf = (id) => this.roomLayout(id); // freie Flecken für Umzüge (Game.freeSpot) – Möbel, Türen, Startpunkt
     game.on('loose', () => this.syncLoose());
+    game.on('robo', (fac, bot, target) => this.roboJob(fac, bot, target)); // Robi fährt zum Gerät (Fähigkeiten: Roboter)
     game.on('keep', () => this.syncKeep()); game.on('objects', () => this.syncKeep());
     game.on('update', () => this.spawnIncome());
   }
@@ -527,6 +528,7 @@ export class World {
       if (!e) { e = this.makeEntry(o, oldSp); this.entries.set(o.uid, e); this.objGroup.add(e.group); }
       e.group.position.set(o.x, 0, o.z); e.group.rotation.y = -o.rot * Math.PI / 2;
       e.obj = o;
+      if (o.type === 'robi' && !e.bot) { e.bot = buildRobiBot(); e.bot.position.set(0.24, 0, 0); e.bot.traverse((m) => { m.userData.uid = o.uid; }); e.group.add(e.bot); }
     }
     for (const [uid, e] of this.entries) if (!seen.has(uid)) { this.objGroup.remove(e.group); disposeTree(e.group); this.entries.delete(uid); if (this.selected === uid) this.select(null); }
     // Deko, die es im alten Kinderzimmer noch nicht gab: weglassen, wo ein Gerät aus einem alten Spielstand steht
@@ -541,7 +543,7 @@ export class World {
       let icon = null;
       if (sm.tripped && def.kind !== 'decor') icon = 'power';
       else if (a?.status === 'broken' || a?.status === 'partial') icon = 'broken';
-      else if (a?.status === 'incomplete' || a?.status === 'psu' || a?.psuOff) icon = 'warn';
+      else if (a?.status === 'incomplete' || a?.status === 'psu' || a?.status === 'noos' || a?.status === 'nobit' || a?.psuOff) icon = 'warn'; // noos/nobit: Betriebssystem bzw. Bitstream fehlt (Fähigkeiten)
       else if (a?.status === 'empty') icon = 'empty';
       else if (e.obj.type === 'tower' && e.obj.parts && !this.game.s.flags.miningStarted) icon = null; // dafür gibt es den Zielhinweis am Objekt
       else if (a?.status === 'off' && e.obj.parts && !this.game.pcReady(e.obj)) icon = 'empty';
@@ -1337,8 +1339,23 @@ export class World {
   }
 
   // ---------- Pro Frame ----------
+  // Robi: Auftrag merken (höchstens drei in der Schlange – im Zeitraffer fährt er nicht jeden Handgriff einzeln vor)
+  roboJob(fac, bot, target) { if (fac !== this.facId) return; const e = this.entries.get(bot); if (!e?.bot || !this.entries.get(target)) return; (e.botQ ||= []); if (e.botQ.length < 3) e.botQ.push(target); }
+  // Fahrt: raus aus der Garage, zum Gerät, kurz arbeiten, zurück (kein Teleport; Phase 2: Weg um Hindernisse herum)
+  updateRobots(dt) {
+    for (const e of this.entries.values()) {
+      if (!e.bot) continue; const b = e.bot;
+      if (!e.botJob && e.botQ?.length) { const t = this.entries.get(e.botQ.shift()); if (t) { const v = new THREE.Vector3(t.group.position.x, 0, t.group.position.z); e.group.updateMatrixWorld(true); e.group.worldToLocal(v); v.y = 0; const home = new THREE.Vector3(0.24, 0, 0), d = v.clone().sub(home); const len = d.length(); if (len > 0.6) v.copy(home).addScaledVector(d, (len - 0.5) / len); e.botJob = { ph: 'out', home, to: v, t: 0 }; } }
+      const j = e.botJob; if (!j) continue;
+      const goal = j.ph === 'back' ? j.home : j.to, d = goal.clone().sub(b.position); d.y = 0; const dist = d.length();
+      if (j.ph === 'work') { j.t += dt; b.position.y = Math.abs(Math.sin(j.t * 9)) * 0.015; if (j.t > 1.3) { j.ph = 'back'; b.position.y = 0; } continue; }
+      if (dist > 0.02) { b.rotation.y = Math.atan2(d.x, d.z); b.position.addScaledVector(d.normalize(), Math.min(dist, dt * 0.9)); continue; }
+      if (j.ph === 'out') { j.ph = 'work'; j.t = 0; } else { e.botJob = null; b.rotation.y = 0; }
+    }
+  }
   update() {
     const dt = Math.min(0.05, this.clock.getDelta()); this.t += dt;
+    this.updateRobots(dt);
     const s = this.game.s;
     // Kamera / Spieler
     if (this.mode === 'map') {
