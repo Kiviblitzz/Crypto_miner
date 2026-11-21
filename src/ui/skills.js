@@ -17,7 +17,10 @@ const sv = (tag, a = {}) => { const e = document.createElementNS(NS, tag); for (
 const LANES = [['sof', '#38c8ff'], ['tun', '#ff8a3d'], ['rep', '#ffb000'], ['sch', '#8fd16b'], ['kst', '#4fd6c8'], ['ges', '#c58cff']];
 const CAT_COLOR = Object.fromEntries(LANES);
 const AT = { grosshandel: '2014-03-01', einarbeiten: '2014-03-01', robo_usb: '2015-09-01', robo_steck: '2016-06-01', robo_loet: '2017-03-01', windows: '2010-11-01', wartung: '2010-10-20', loeten: '2010-11-15', serie: '2012-06-01', lager: '2011-06-01', elektrik: '2011-03-01', stecken: '2011-03-01', abluft: '2010-11-20', gpuminer: '2010-10-25', boerse: '2010-11-01' }; // Platz im Zeitstrahl für Knoten ohne Datum
-const YW = 132, NW = 150, NH = 46, ROWH = 58, X0 = 2010.6, PADL = 96, PADT = 46;
+const NW = 150, NH = 46, ROWH = 58, PADL = 96, PADT = 46;
+// Zeitachse: die ersten Jahre breiter (dort liegen die meisten Fähigkeiten), später enger
+const SEG = [[2010.6, 2013, 250], [2013, 2017, 150], [2017, 2031, 105]];
+const xs = (t) => { let x = 0; for (const [a, b, w] of SEG) { if (t <= a) break; x += (Math.min(t, b) - a) * w; } return PADL + x; };
 const yearOf = (iso) => { const d = new Date(iso + (iso.length <= 7 ? '-01' : '')); return d.getUTCFullYear() + d.getUTCMonth() / 12 + (d.getUTCDate() - 1) / 365; };
 const dayYear = (day) => { const d = new Date(day * 864e5); return d.getUTCFullYear() + d.getUTCMonth() / 12 + (d.getUTCDate() - 1) / 365; };
 const lines2 = (t) => { if (t.length <= 20) return [t]; const w = t.split(' '); let a = ''; while (w.length && (a + ' ' + w[0]).trim().length <= 20) a = (a + ' ' + w.shift()).trim(); let b = w.join(' '); if (b.length > 21) b = b.slice(0, 20) + '…'; return a ? [a, b] : [t.slice(0, 20), t.slice(20, 40)]; };
@@ -30,10 +33,10 @@ const ICON = {
 
 // ---------- Layout: x nach Zeit, y nach Ast (mehrere Reihen je Ast, ohne Überlappung) ----------
 function layout() {
-  const pos = {}, when = {};
+  const pos = {}, X = {};
   const base = (k) => yearOf(k.from || AT[k.id] || '2010-10-15');
   const order = [...SKILLS].sort((a, b) => base(a) - base(b));
-  const xOf = (k) => { if (pos[k.id]) return pos[k.id].x; let t = base(k); for (const n of k.needs || []) if (SKILL[n]) t = Math.max(t, (when[n] ?? base(SKILL[n])) + 0.62); when[k.id] = t; return PADL + (t - X0) * YW; };
+  const xOf = (k) => { if (X[k.id] != null) return X[k.id]; let x = xs(base(k)); for (const n of k.needs || []) if (SKILL[n]) x = Math.max(x, xOf(SKILL[n]) + NW + 26); return (X[k.id] = x); }; // rechts von allen Voraussetzungen
   const lanes = []; let y = PADT;
   for (const [cat, color] of LANES) {
     const rows = []; const list = order.filter((k) => k.cat === cat).map((k) => ({ k, x: xOf(k) })).sort((a, b) => a.x - b.x);
@@ -44,6 +47,7 @@ function layout() {
   return { pos, lanes, W: maxX, H: y + 10 };
 }
 let LAYOUT = null;
+export const skLayout = () => (LAYOUT ||= layout()); // für Tests
 
 export function skillsMenu(ui, sel = undefined) {
   const g = ui.g; g.learned?.('skills');
@@ -57,7 +61,7 @@ export function skillsMenu(ui, sel = undefined) {
   const svg = sv('svg', { class: 'skt-svg', width: '100%', height: '100%' }), root = sv('g'); svg.append(root); view.append(svg);
   drawTree(ui, root);
   const vw = () => view.clientWidth || 900, vh = () => view.clientHeight || 500;
-  if (v.tx == null) { const tx0 = PADL + (dayYear(g.s.day) - X0) * YW; v.k = Math.max(0.55, Math.min(1, vh() / LAYOUT.H)); v.tx = Math.min(0, vw() * 0.3 - tx0 * v.k); v.ty = Math.max(0, (vh() - LAYOUT.H * v.k) / 2); }
+  if (v.tx == null) { const tx0 = xs(dayYear(g.s.day)); v.k = 0.82; v.tx = Math.min(0, vw() * 0.22 - tx0 * v.k); v.ty = 0; } // lesbar starten, „Heute“ links; herauszoomen geht mit Rad/Pinch
   const clamp = () => { const k = v.k; v.tx = Math.min(80, Math.max(vw() - LAYOUT.W * k - 80, v.tx)); v.ty = Math.min(60, Math.max(Math.min(0, vh() - LAYOUT.H * k - 60), v.ty)); };
   const apply = () => { clamp(); root.setAttribute('transform', `translate(${v.tx.toFixed(1)},${v.ty.toFixed(1)}) scale(${v.k.toFixed(3)})`); };
   const zoomAt = (px, py, f) => { const k1 = Math.max(0.35, Math.min(1.8, v.k * f)); v.tx = px - ((px - v.tx) * k1) / v.k; v.ty = py - ((py - v.ty) * k1) / v.k; v.k = k1; apply(); };
@@ -101,8 +105,8 @@ function drawTree(ui, root) {
   root.append(defs);
   // Äste als Bänder, Jahre als Raster, „Heute“
   for (const l of lanes) { root.append(sv('rect', { x: 0, y: l.y - 8, width: W, height: l.h - 6, rx: 14, fill: l.color, 'fill-opacity': 0.045 })); const t = sv('text', { x: 14, y: l.y + 12, class: 'skt-lane', fill: l.color }); t.textContent = SKILL_CAT[l.cat].name; root.append(t); }
-  for (let y = 2011; y <= 2025; y++) { const x = PADL + (y - X0) * YW; if (x > W) break; root.append(sv('line', { x1: x, y1: 24, x2: x, y2: H, class: 'skt-yl' })); const t = sv('text', { x: x + 4, y: 18, class: 'skt-year' }); t.textContent = y; root.append(t); }
-  const tx = PADL + (dayYear(g.s.day) - X0) * YW; root.append(sv('line', { x1: tx, y1: 22, x2: tx, y2: H, class: 'skt-now' })); const nt = sv('text', { x: tx + 5, y: 34, class: 'skt-nowt' }); nt.textContent = 'Heute'; root.append(nt);
+  for (let y = 2011; y <= 2026; y++) { const x = xs(y); if (x > W) break; root.append(sv('line', { x1: x, y1: 24, x2: x, y2: H, class: 'skt-yl' })); const t = sv('text', { x: x + 4, y: 18, class: 'skt-year' }); t.textContent = y; root.append(t); }
+  const tx = xs(dayYear(g.s.day)); root.append(sv('line', { x1: tx, y1: 22, x2: tx, y2: H, class: 'skt-now' })); const nt = sv('text', { x: tx + 5, y: 34, class: 'skt-nowt' }); nt.textContent = 'Heute'; root.append(nt);
   // Kanten (Voraussetzungen, auch quer zwischen den Ästen)
   const st = {}; for (const k of SKILLS) st[k.id] = g.skillState(k.id).st;
   const eg = sv('g', { class: 'skt-edges' }); root.append(eg);

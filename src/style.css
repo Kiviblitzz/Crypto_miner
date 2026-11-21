@@ -2028,3 +2028,4 @@ body.cine #hud > :not(#toasts) { opacity: 0; transition: opacity .6s; }
 .mg-i { font-size: 13.5px; color: var(--text2); margin: 8px 0 10px; min-height: 20px; }
 .mg-c { width: 100%; aspect-ratio: 560 / 300; display: block; border-radius: var(--r-md); touch-action: none; cursor: pointer; }
 .mg-f { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 12px; color: var(--dim); }
+body[data-modal="skills"] :is(#st-cash, #st-profit, #st-wallet) { visibility: hidden; } /* Fähigkeiten-Baum: groß, das HUD würde den Titel verdecken */
