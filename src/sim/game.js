@@ -1051,7 +1051,7 @@ export class Game {
     if (def.kind === 'rig') {
       const p = o.parts;
       if (!p.mobo || !p.cpu || !p.psu) { r.status = 'incomplete'; r.note = 'Mainboard, CPU und Netzteil nötig'; return r; }
-      if (o.os === null && this.skOn()) { r.status = 'noos'; r.note = 'Kein Betriebssystem – im Inspektor installieren'; return r; }
+      if (o.os === null && this.skOn()) { r.status = 'noos'; r.note = 'Kein Betriebssystem – Installer starten'; return r; }
       const parts = this.partIds(o).map((id) => PART[id]);
       r.watt = 25 + parts.reduce((a, x) => a + (x.watt || 0), 0);
       const cap = PART[p.psu].cap * this.psuCount(o);
@@ -1077,7 +1077,7 @@ export class Game {
       r.heat = r.watt * (o.wk ? 0.3 : 1); // Wasserkühlung: 70 % der Wärme über den Radiator nach draußen
     } else if (def.kind === 'device') {
       if (o.broken) { r.status = 'broken'; return r; }
-      if (this.bitNeed(o)) { r.status = 'nobit'; r.note = 'Bitstream fehlt – im Inspektor laden'; return r; }
+      if (this.bitNeed(o)) { r.status = 'nobit'; r.note = 'Bitstream fehlt – Board anschauen und laden'; return r; }
       const tu = this.devTune(o, facId), ap = this.fx('asicPower') * tu.P, ah = this.fx('asicHash') * tu.H; // Firmware und Profil
       r.watt = def.watt * ap; r.heat = r.watt;
       r.units.push({ hash: { [def.algo]: def.hash * ah }, vram: def.vram || 99, w: r.watt });
