@@ -20,7 +20,7 @@ const halving = (s) => HALVINGS.some((d) => s.day >= d - 21 && s.day <= d + 10);
 const recent = (s, id, n = 45) => (s.ev?.log || []).some((l) => l.id === id && s.day - l.d <= n);
 const rel = (s, k) => s.rel?.[k] || 0;
 const winter = (s) => [12, 1, 2].includes(month(s));
-const lost = (s) => !!s.flags?.shopLost && !s.flags.shopBack; // Laden verloren (Ereignis „ladenzu“), nicht zurückgekauft
+const lost = (s) => !!s.flags?.shopLost && !s.flags.shopBack; // Laden verloren (nur alte Spielstände: früheres Ereignis „ladenzu“), nicht zurückgekauft
 const L = (a, b) => (s) => (lost(s) ? b : a); // Zeile mit Variante ohne Laden
 const broken = (s, fac) => (s.fac[fac]?.objects || []).some((o) => o.broken || o.items?.some((i) => i.b));
 
@@ -112,7 +112,7 @@ export const TALK = [
     'Die Werkstatt ist jetzt deine. Ich komm nur noch zum Kaffee. Und zum Gucken. Und manchmal zum Reparieren.',
     'Deine Halle, dein Rechenzentrum, und trotzdem kommst du zu mir an die Werkbank. Das freut mich mehr, als ich sage.',
     'Ein Kunde wollte wissen, ob ich der Vater vom Hashwerk-Brandt bin. Ich hab zweimal Ja gesagt. Damit er es auch versteht.',
-    L('Der Laden läuft wieder. Nicht toll, aber ehrlich. Ich glaube, die Leute kommen auch, um nach dir zu fragen.', 'Manchmal steh ich vorne am alten Schaufenster. Herr Öztürk verkauft da jetzt Fahrräder. Ist auch was Ehrliches.'),
+    L('Der Laden läuft. Nicht toll, aber ehrlich. Ich glaube, die Leute kommen auch, um nach dir zu fragen.', 'Manchmal steh ich vorne am alten Schaufenster. Herr Öztürk verkauft da jetzt Fahrräder. Ist auch was Ehrliches.'),
   ] },
   { who: 'papa', ch: [5, 6], lines: [
     'Norwegen … Ich war mit deiner Mutter mal dort, lange her. Es hat zwei Wochen geregnet, und wir waren trotzdem glücklich.',
@@ -304,7 +304,7 @@ export const KEEPSAKES = [
   {
     id: 'radio', fac: 'keller', spot: [0.34, 0.0, 4.855, Math.PI / 2], label: 'Altes Röhrenradio', name: 'Opas Röhrenradio, 1962',
     text: 'Hinter dem Heizkessel, unter einer Decke im Gerümpel vom Vormieter: ein Holzradio mit Stoffbespannung. Innen klebt ein Zettel in Opas Schrift: <b>„Mein erstes. Gebaut 1962, für Lisbeth. Rauscht nie.“</b> Du drehst am Knopf – und es knistert tatsächlich.',
-    gain: 'Opa +1 · +40 EP Schrauben', reward: { rel: { opa: 1 }, xp: { hw: 40 }, msg: { from: 'Opa Heinz', text: 'Das Radio! Das hab ich 1971 dem alten Krause geliehen, als ich in deinem Haus die Leitungen gezogen hab – und nie zurückgekriegt. Behalt es, Junge. Und dreh ab und zu Kurzwelle.' } },
+    gain: 'Opa +1 · +40 Werkstatt-Erfahrung', reward: { rel: { opa: 1 }, xp: { hw: 40 }, msg: { from: 'Opa Heinz', text: 'Das Radio! Das hab ich 1971 dem alten Krause geliehen, als ich in deinem Haus die Leitungen gezogen hab – und nie zurückgekriegt. Behalt es, Junge. Und dreh ab und zu Kurzwelle.' } },
   },
   {
     id: 'loetkolben', fac: 'werkstatt', spot: [2.42, 0.0, 0.5, 0.35], label: 'Alter Lötkolben', name: 'Papas erster Lötkolben',
@@ -314,7 +314,7 @@ export const KEEPSAKES = [
   {
     id: 'pruefer', fac: 'halle', spot: [18.32, 0.0, 10.78, 0.9], label: 'Alter Spannungsprüfer', name: 'Opas Spannungsprüfer',
     text: 'Am Fuß des hintersten Stahlträgers, halb unter Kabelbindern: ein gelber Spannungsprüfer, zerkratzt und verstaubt. Auf dem Griff steht <b>„H. Brandt, Elektromeister“</b>. Opa hat 1974 die Hauptverteilung dieser Halle angeschlossen – und offenbar etwas vergessen.',
-    gain: 'Opa +1 · +80 EP Schrauben', reward: { rel: { opa: 1 }, xp: { hw: 80 }, msg: { from: 'Opa Heinz', text: 'Mein Prüfer! Den hab ich 1974 wochenlang gesucht. Ich hatte sogar deinen Vater im Verdacht. Sag ihm bitte nichts.' } },
+    gain: 'Opa +1 · +80 Werkstatt-Erfahrung', reward: { rel: { opa: 1 }, xp: { hw: 80 }, msg: { from: 'Opa Heinz', text: 'Mein Prüfer! Den hab ich 1974 wochenlang gesucht. Ich hatte sogar deinen Vater im Verdacht. Sag ihm bitte nichts.' } },
   },
   {
     id: 'usbstick', fac: 'rz', spot: [6.4, 0.0, 4.78, 0.6], label: 'Alter USB-Stick', name: '„BTC 2011 – NICHT LÖSCHEN“',

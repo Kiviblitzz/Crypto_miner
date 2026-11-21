@@ -19,6 +19,7 @@ const SYM = { BTC: '₿' };
 const ICON = {
   sell: '<svg viewBox="0 0 24 24" width="1.1em" height="1.1em" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v13M6.5 11.5 12 17l5.5-5.5"/><path d="M5 20.5h14"/></svg>',
   buy: '<svg viewBox="0 0 24 24" width="1.1em" height="1.1em" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V7M6.5 12.5 12 7l5.5 5.5"/><path d="M5 3.5h14"/></svg>',
+  limit: '<svg viewBox="0 0 24 24" width="1.1em" height="1.1em" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 17.5 9 12l4 3.5 7.5-8"/><path d="M3.5 6.5h17" stroke-dasharray="2.2 2.6"/></svg>',
   shop: '<svg viewBox="0 0 24 24" width="1.15em" height="1.15em" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2.4l2.3 10.6a1.6 1.6 0 0 0 1.6 1.3h7.6a1.6 1.6 0 0 0 1.6-1.2L20.4 8H6.4"/><circle cx="10" cy="19.6" r="1.4" fill="currentColor"/><circle cx="17" cy="19.6" r="1.4" fill="currentColor"/></svg>',
   back: '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
   wait: '<svg viewBox="0 0 24 24" width="1.4em" height="1.4em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
@@ -45,7 +46,7 @@ export class Market {
   constructor(ui) {
     this.ui = ui; this.g = ui.g; this.w = ui.w;
     this.where = null; // 'modal' (Fenster) | 'pc' (auf dem Monitor in der Wohnung)
-    this.el = null; this.k = { sell: 1, buy: 0.25 }; this.hov = null;
+    this.el = null; this.k = { sell: 1, buy: 0.25, limit: 1 }; this.up = 0.1; this.hov = null;
     window.addEventListener('resize', () => { if (this.where === 'pc') this.relayout(); });
   }
   get atMonitor() { return this.where === 'pc'; }
@@ -114,7 +115,7 @@ export class Market {
     return COINS.filter((c) => c.id === 'BTC' || (s.day >= c.start && (g.has('buycoins') || has(c))));
   }
   coin() { return COIN[this.ui.marketCoin] || COIN.BTC; }
-  fee() { return this.g.s.skills ? this.g.tradeFee() : 0.005; }
+  fee(limit = false) { return this.g.tradeFee(limit); } // Sofortverkauf 1,5 %, Limit-Order 0,5 % (sim/skills.js)
   // Bestand: Börse + Cold-Wallet + heute schon Geschürftes (wie im HUD)
   hold(id) {
     const s = this.g.s, w = s.wallet[id] || { ex: 0, cold: 0 }, pend = id === 'BTC' ? this.ui.pendingBtc?.() || 0 : 0, cold = !!s.payoutCold;
@@ -169,18 +170,20 @@ export class Market {
   // Knöpfe, Betragsauswahl oder Hinweis – alles im selben Kasten (gleiche Höhe, nichts springt)
   renderAct() {
     const el = this.el; if (!el) return;
-    const g = this.g, s = g.s, ui = this.ui, c = this.coin(), p = g.price(c.id), box = el.querySelector('.mkp-act'), fee = this.fee();
-    const hd = this.hold(c.id), sellV = hd.ex * p * (1 - fee), canSell = sellV >= 0.01, canBuy = g.has('buycoins') && s.cash >= 0.01 && p > 0;
-    const T = ui.trade && ui.trade.open && ((ui.trade.mode === 'sell' && canSell) || (ui.trade.mode === 'buy' && canBuy)) ? ui.trade : null;
+    const g = this.g, s = g.s, ui = this.ui, c = this.coin(), p = g.price(c.id), box = el.querySelector('.mkp-act');
+    const hd = this.hold(c.id), sellV = hd.ex * p * (1 - this.fee()), canSell = sellV >= 0.01, canBuy = g.has('buycoins') && s.cash >= 0.01 && p > 0, canLim = canSell && this.limitOk();
+    const ok = { sell: canSell, buy: canBuy, limit: canLim }, T = ui.trade && ui.trade.open && ok[ui.trade.mode] ? ui.trade : null;
     box.innerHTML = ''; box.className = 'mkp-act';
-    if (T) { // Betragsauswahl: 25 % · 50 % · Alles, Vorschau, Bestätigen
-      const sell = T.mode === 'sell', k = this.k[T.mode];
-      const usd = sell ? hd.ex * k * p * (1 - fee) : Math.max(0, s.cash) * k, got = sell ? hd.ex * k : (usd * (1 - fee)) / p;
-      box.classList.add('mkp-pick');
-      box.innerHTML = `<div class="mkp-q"><span>${sell ? 'Wie viel verkaufen?' : 'Wie viel kaufen?'}</span><div class="mkp-chips">${[[0.25, '25 %'], [0.5, '50 %'], [1, 'Alles']].map(([v, l]) => `<button data-k="${v}" class="${v === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>`
-        + `<div class="mkp-prev"><b>${sell ? approx(usd) : `≈ ${fmtCoin(got)} ${c.id}`}</b><small>${sell ? `für ${fmtCoin(got)} ${c.id}` : `für ${money(usd)}`}</small></div>`
-        + `<div class="mkp-go"><button class="mkp-ok ${sell ? 'sell' : 'buy'}">${sell ? 'Verkaufen' : 'Kaufen'}</button><button class="mkp-no">Zurück</button></div>`;
-      box.querySelectorAll('.mkp-chips button').forEach((b) => (b.onclick = () => { this.k[T.mode] = +b.dataset.k; this.renderAct(); }));
+    if (T) { // Betragsauswahl: 25 % · 50 % · Alles (bei Limit-Orders dazu der Kurs), Vorschau nach Gebühr, Bestätigen
+      const mode = T.mode, k = this.k[mode], chips = (key, list, cur) => `<div class="mkp-chips" data-g="${key}">${list.map(([v, l]) => `<button data-v="${v}" class="${v === cur ? 'on' : ''}">${l}</button>`).join('')}</div>`;
+      const AM = [[0.25, '25 %'], [0.5, '50 %'], [1, 'Alles']];
+      let q, prev, go;
+      if (mode === 'buy') { const usd = Math.max(0, s.cash) * k, got = (usd * (1 - this.fee())) / p; q = `<span>Wie viel kaufen?</span>${chips('k', AM, k)}`; prev = `<b>≈ ${fmtCoin(got)} ${c.id}</b><small>nach Gebühr · für ${money(usd)}</small>`; go = 'Kaufen'; }
+      else if (mode === 'limit') { const lp = this.limitPrice(p), n = hd.ex * k, usd = n * lp * (1 - this.fee(true)); q = `<span>Wie viel?</span>${chips('k', AM, k)}<span>ab Kurs</span>${chips('up', [[0.05, '+5 %'], [0.1, '+10 %'], [0.25, '+25 %']], this.up)}`; prev = `<b>${approx(usd)} <i>nach Gebühr</i></b><small>${fmtCoin(n)} ${c.id}, sobald ${c.id} ${fmtUSD(lp)} erreicht</small>`; go = 'Auftrag setzen'; }
+      else { const n = hd.ex * k, usd = n * p * (1 - this.fee()); q = `<span>Wie viel verkaufen?</span>${chips('k', AM, k)}`; prev = `<b>${approx(usd)} <i>nach Gebühr</i></b><small>für ${fmtCoin(n)} ${c.id}</small>`; go = 'Verkaufen'; }
+      box.classList.add('mkp-pick'); if (mode === 'limit') box.classList.add('mkp-lim');
+      box.innerHTML = `<div class="mkp-q">${q}</div><div class="mkp-prev">${prev}</div><div class="mkp-go"><button class="mkp-ok ${mode === 'buy' ? 'buy' : 'sell'}">${go}</button><button class="mkp-no">Zurück</button></div>`;
+      box.querySelectorAll('.mkp-chips button').forEach((b) => (b.onclick = () => { if (b.parentNode.dataset.g === 'up') this.up = +b.dataset.v; else this.k[mode] = +b.dataset.v; this.renderAct(); }));
       box.querySelector('.mkp-ok').onclick = () => this.confirm();
       box.querySelector('.mkp-no').onclick = () => this.closePicker();
       return;
@@ -193,6 +196,7 @@ export class Market {
       box.classList.add('mkp-msg'); box.innerHTML = `${ICON.wait}<p>${t}</p>`; return;
     }
     if (canSell) { const b = h(`<button class="mkp-big sell">${ICON.sell}<span>Verkaufen</span></button>`); b.onclick = () => this.openPicker('sell'); box.append(b); }
+    if (canLim) { const b = h(`<button class="mkp-big buy">${ICON.limit}<span>Limit-Order</span></button>`); b.onclick = () => this.openPicker('limit'); box.append(b); } // nur mit der Fähigkeit „Limit-Orders“
     if (canBuy) { const b = h(`<button class="mkp-big buy">${ICON.buy}<span>Kaufen</span></button>`); b.onclick = () => this.openPicker('buy'); box.append(b); }
   }
   // Freigeschaltete Extras: Cold-Wallet und Auto-Verkauf, klein unten
@@ -210,19 +214,29 @@ export class Market {
       const row = h(`<div class="mkp-opt"><span>Auto-Verkauf <b class="v">${v} %</b></span><input type="range" min="0" max="100" step="5" value="${v}"/>${this.coins().length > 1 ? '<button>Für alle Coins</button>' : ''}</div>`);
       row.querySelector('input').oninput = (e) => { s.autoSell[c.id] = e.target.value / 100; row.querySelector('.v').textContent = `${e.target.value} %`; ui.rate = 0; };
       const all = row.querySelector('button'); if (all) all.onclick = () => { for (const k of COINS) s.autoSell[k.id] = s.autoSell[c.id]; ui.toast('Für alle Coins übernommen', 'good', 1500); };
+      if (this.limitOk()) { const lc = h(`<label><input type="checkbox" ${s.autoLimit ? 'checked' : ''}/>nur über dem 7-Tage-Schnitt</label>`); lc.querySelector('input').onchange = (e) => { s.autoLimit = e.target.checked; ui.toast(s.autoLimit ? 'Auto-Verkauf wartet jetzt auf gute Kurse.' : 'Auto-Verkauf verkauft wieder sofort.', 'info', 2500); }; row.append(lc); }
       box.append(row);
+    }
+    // offene Limit-Orders (Fähigkeit „Limit-Orders“): reservierte Coins, jederzeit streichbar
+    for (const l of this.limitOk() ? (s.limits || []).filter((x) => x.coin === c.id) : []) {
+      const row = h(`<div class="mkp-opt"><span>Limit-Order <b>${fmtCoin(l.n)} ${c.id} ab ${fmtUSD(l.p)}</b></span><button>Streichen</button></div>`);
+      row.querySelector('button').onclick = () => { g.limitCancel(l.id); this.render(); }; box.append(row);
     }
     box.classList.toggle('hidden', !box.children.length);
   }
+  // Limit-Orders gibt es nur mit der Fähigkeit (sim/skills.js); Zielkurs = heutiger Kurs + 5/10/25 %, gerundet
+  limitOk() { return !!this.g.knows?.('limit') && typeof this.g.limitAdd === 'function'; }
+  limitPrice(p) { const v = p * (1 + (this.up || 0.1)), e = Math.pow(10, Math.floor(Math.log10(v)) - 2); return Math.ceil(v / e) * e; }
   openPicker(mode) { this.ui.trade = { mode, open: true }; this.renderAct(); }
   closePicker(silent = false) { if (this.ui.trade) this.ui.trade.open = false; if (!silent) this.renderAct(); }
   confirm() {
     const g = this.g, s = g.s, ui = this.ui, T = ui.trade, c = this.coin(); if (!T) return;
     const k = this.k[T.mode];
-    if (T.mode === 'sell') {
+    if (T.mode === 'sell' || T.mode === 'limit') {
       const pd = this.hold(c.id).pend; if (c.id === 'BTC' && pd > 0 && !s.payoutCold) g.creditPending('BTC', pd); // heute Geschürftes mitverkaufen
-      const n = s.wallet[c.id].ex * k, u = g.sell(c.id, k); if (!u) return;
-      ui.audio?.cash?.(); ui.flashCash?.(u); ui.toast(`${fmtCoin(n)} ${c.id} verkauft · +${money(u)}`, 'good', 3200);
+      const n = s.wallet[c.id].ex * k;
+      if (T.mode === 'limit') { const lp = this.limitPrice(g.price(c.id)); if (!g.limitAdd(c.id, n, lp)) { ui.toast('Der Auftrag ging nicht durch.', 'bad', 2500); return; } ui.toast(`Limit-Order: ${fmtCoin(n)} ${c.id}, sobald der Kurs ${fmtUSD(lp)} erreicht`, 'good', 3600); }
+      else { const u = g.sell(c.id, k); if (!u) return; ui.audio?.cash?.(); ui.flashCash?.(u); ui.toast(`${fmtCoin(n)} ${c.id} verkauft · +${money(u)}`, 'good', 3200); }
     } else {
       const fee = this.fee(), usd = Math.max(0, s.cash) * k, u = g.buy(c.id, k >= 1 ? s.cash : usd); if (!u) { ui.toast('Kauf ging nicht.', 'bad'); return; }
       ui.audio?.cash?.(); ui.toast(`${fmtCoin((u * (1 - fee)) / g.price(c.id))} ${c.id} gekauft · −${money(u)}`, 'good', 3200);

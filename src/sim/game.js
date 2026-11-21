@@ -1,25 +1,27 @@
 // Spielzustand + tägliche Simulation (Mining, Strom, Hitze, Defekte, Markt, Story)
 import { COINS, COIN } from '../data/coins.js';
 import { PLACEABLE, PART, PLACEABLES, PARTS, GPUS } from '../data/hardware.js';
-import { FACILITIES, FACILITY, CHAPTERS, MESSAGES, NEWS, START_DAY, TECHS } from '../data/world.js';
+import { FACILITIES, FACILITY, CHAPTERS, MESSAGES, NEWS, START_DAY, TECHS } from '../data/world.js'; // TECHS: nur noch für alte Spielstände
 import { EVENTS, EVENT, REL_PERK } from '../data/events.js';
 import { ACHIEVEMENTS } from '../data/achievements.js';
 import { UPGRADES, DIFFICULTY, FULL_TALK, FEATURES } from '../data/world.js';
 import { ROLES, TRAITS, FIRST, LAST } from '../data/staff.js';
 import { BANK_EVENTS } from '../data/events_bank.js';
+import { BILL_EVENTS, BILL_GRACE, LANDLORD, SUPPLIER, PAPA_LOAN_MSG, PAPA_THANKS, PAPA_DONE, monthName } from '../data/bills.js';
 import { CONTACT, CONTACTS, READY_BY, FEE_TIERS } from '../data/contacts.js';
 import { FUTURE, futureModel, ENDLESS_GOALS, EGOAL, ENDLESS_NEWS } from '../data/endless.js';
 import { BTC_HASH, POWER_HOUSEHOLD, GPU_BOOM, MONOLITH_SHARE, DAG_AET, DAG_AEC, seasonOffset, noise, toDay, BTC_PRICE, curve, HALVINGS, BTC_REWARD } from '../data/history.js';
-export const SKILL_XP = [0, 150, 500, 1200, 2500, 4500, 7500, 12000, 18000, 26000]; // Erfahrung für Stufe 1–10
-export const SKILL_PCT = 2; // Schrauben: −2 % Hardwarepreis, Mining: +2 % Ertrag je Stufe über 1
-export const TRADE_FEES = [0.04, 0.035, 0.03, 0.025, 0.02, 0.016, 0.013, 0.01, 0.0075, 0.005]; // Börsengebühr je Handel-Stufe
-for (const e of BANK_EVENTS) if (!EVENT[e.id]) { EVENTS.push(e); EVENT[e.id] = e; } // Bankgespräch (nur über Game.dispoDay)
+import { SKILL_METHODS, migrateSkills, skEmpty } from './skills.js'; // Fähigkeiten 2.0: Handgriffe statt Prozent-Boni
+import { BOOK, XP_POT } from '../data/skills.js';
+for (const e of [...BANK_EVENTS, ...BILL_EVENTS]) if (!EVENT[e.id]) { EVENTS.push(e); EVENT[e.id] = e; } // Bankgespräch (Game.dispoDay), Mahnung (Game.billsDay)
 
 const LAST_DATA_DAY = BTC_PRICE.lastDay;
 const FREE_POWER_END = toDay('2011-03-01'); // bis dahin steckt der Strom der Wohnung in der Pauschale der Warmmiete – dann sieht Herr Krause die Abrechnung
 export const SAVE_KEY = 'hashwerk-save-v1';
 const DEFAULT_AUTOSELL = 0.8;
 const LESSON_DAYS = 5; // Anlernen: so viele Spieltage hat eine Lektion, ehe die nächste kommt
+const monthDays = (day) => { const d = new Date(day * 864e5); return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate(); }; // Tage im Monat des Tages
+const round2 = (v) => Math.round(v * 100) / 100;
 export const BUILD_FEE = 0.1; // Montageaufschlag für fertig montierte PCs/Rigs (Neukunde; Stammkunden zahlen weniger: FEE_TIERS in contacts.js)
 
 const RELEASES = [...PLACEABLES, ...PARTS].filter((it) => it.releaseDay > START_DAY && (it.kind === 'device' || it.kind === 'rig' || it.type));
@@ -57,19 +59,22 @@ export class Game {
     this.registerFutureHW([]);
     for (const c of COINS) s.autoSell[c.id] = 0;
     this.initProgress(s);
-    for (const id of ['m0', 'm0b']) { const m = MESSAGES.find((x) => x.id === id); if (m) s.messages.push({ id, day: START_DAY, from: m.from, text: m.text, read: true }); } // Start-Nachrichten (Anlernen: ungelesen, startTutor)
     this.s = s;
     this.cache = {};
     this.initEcon(diff);
+    // Startgeld = Papas Umzugsdarlehen: ohne Frist und Zinsen, zurückzahlen über Papas Kontakt im Handy (repayPapa). Miete und Strom kommen monatlich (s.bills)
+    s.papaLoan = { total: s.cash, left: s.cash, paid: 0, since: START_DAY, last: 0 }; s.bills = { acc: null, open: null, hist: [] };
+    s.messages.push({ id: 'm0p', day: START_DAY, from: 'Papa', text: PAPA_LOAN_MSG(s.cash), read: true });
+    for (const id of ['m0', 'm0b']) { const m = MESSAGES.find((x) => x.id === id); if (m) s.messages.push({ id, day: START_DAY, from: m.from, text: m.text, read: true }); } // Deniz' Bitcoin-Idee (Anlernen: erst nach kurzer Zeit, denizIdea)
     // Start: leeres Gehäuse – den ersten Mining-PC baut der Spieler selbst zusammen.
     // Im Keller liegen nur die billigsten Teile (ohne Grafikkarte): erst CPU-Mining, die erste Grafikkarte bestellt man im Shop
     s.loose = { mobo: 'h55', cpu: 'cel33', psu: 'psu400' }; s.looseN = 3; s.inv = [];
     s.flags.cpuStart = 1; s.flags.parcels = 1; // Paket-Modus: Bestelltes kommt am nächsten Morgen vor die Wohnungstür (bis zur Werkstatt)
     s.orders = []; s.parcels = []; s.unpacked = []; s.nextParcel = 0;
-    s.skills = { hw: 0, mining: 0, trade: 0 };
+    s.sk = skEmpty(); for (const id of ['bauen', 'cpustart']) { s.sk.known[id] = START_DAY; s.sk.src[id] = 'msg'; } // Deniz am ersten Tag (m0)
     s.keep = {}; s.talk = { last: {}, week: {}, joy: {}, got: {}, seen: {}, line: {} }; // Fundstücke, Gespräche (src/data/story.js)
     const pc = this.addObject('kinder', 'tower', 1.75, 0.75, 0, { mobo: null, cpu: null, psu: null, gpus: [] }, true);
-    pc.mode = 'off'; // Einschalten erst, wenn alle Teile drin sind
+    pc.mode = 'off'; pc.os = 'xp'; // Einschalten erst, wenn alle Teile drin sind; auf der alten Platte ist noch Papas Windows XP
     while (s.newsIdx < NEWS.length && NEWS[s.newsIdx].day < s.day) s.newsIdx++;
     this.dayUpdate(true);
   }
@@ -112,9 +117,10 @@ export class Game {
       if (!Number.isFinite(s.cash)) s.cash = 0;
       for (const c of COINS) { s.wallet[c.id] ||= { ex: 0, cold: 0 }; if (s.autoSell[c.id] == null) s.autoSell[c.id] = DEFAULT_AUTOSELL; }
       s.ev ||= { done: {}, open: null, log: [], later: [], last: 0 }; s.ev.done ||= {}; s.ev.log ||= []; s.ev.later ||= [];
-      s.skills ||= { hw: 0, mining: 0, trade: 0 };
       s.rel ||= { papa: 0, mama: 0, opa: 0, deniz: 0 }; s.mods ||= []; s.ach ||= {}; s.flags ||= {};
-      if (!s.flags.tempo6) { s.speed = { 0: 0, 1: 4, 2: 4, 3: 5, 4: 6 }[s.speed] ?? 4; s.flags.tempo6 = true; } // Tempo neu: 1 = Echtzeit; alte Stufen auf die passenden neuen s.stats ||= { minedUSD: 0, sold: 0, spentHW: 0, elec: 0, history: [] };
+      if (!s.flags.tempo6) { s.speed = { 0: 0, 1: 4, 2: 4, 3: 5, 4: 6 }[s.speed] ?? 4; s.flags.tempo6 = true; } // Tempo neu: 1 = Echtzeit; alte Stufen auf die passenden neuen
+      s.stats ||= { minedUSD: 0, sold: 0, spentHW: 0, elec: 0, history: [] }; s.stats.history ||= [];
+      this.migrateBills(s); // Monatsabrechnung, Papas Darlehen, entfallene Bankfrist
       s.futureHW ||= []; s.netEff ||= 1; s.egoals ||= { done: {}, st: {}, cur: null }; s.egoals.done ||= {}; s.egoals.st ||= {}; s.fin ||= {}; s.ngPlus ||= 0; s.enews ||= {};
       s.keep ||= {}; s.talk ||= { last: {}, week: {}, joy: {}, got: {}, seen: {}, line: {} };
       this.initProgress(s);
@@ -123,6 +129,7 @@ export class Game {
       const oldFull = !s.full; s.full ||= {};
       s.bag ||= {}; for (const id of Object.keys(s.bag)) if (!PART[id] || !(s.bag[id] > 0)) delete s.bag[id]; if (s.lastBuild && !PLACEABLE[s.lastBuild.type]) s.lastBuild = null;
       this.migrateParcels(s); // Bestellungen, Pakete, Bestand „zum Aufstellen“ (alte Stände: leer, Paket-Modus aus)
+      migrateSkills(s); // Fähigkeiten 2.0: alte EP → Punkte, Techniken → Fähigkeiten/Ausbauten, Geräte mit Betriebssystem (src/sim/skills.js)
       s.since ||= {}; const oldContacts = !s.contacts || typeof s.contacts !== 'object'; if (oldContacts) s.contacts = {};
       for (const id of Object.keys(s.contacts)) { const c = s.contacts[id]; if (!CONTACT[id] || !c || typeof c !== 'object') delete s.contacts[id]; else { c.met = +c.met || 0; c.on = +c.on || 0; c.n = Math.max(0, +c.n || 0); } }
       if (oldContacts) this.migrateContacts(s); // alte Stände: Kontakte, die man nach dem Spielstand schon hätte, still freischalten
@@ -137,9 +144,9 @@ export class Game {
   }
 
   // ---------- Technologien ----------
-  fx(key, facId = null) { let m = 1; const u = this.s.techs || {}; for (const t of TECHS) if (u[t.id] && t.fx[key]) m *= t.fx[key];
-    m *= this.fxExt(key, facId);
-    for (const md of this.s.mods || []) if (md.key === key && (!md.fac || md.fac === facId) && this.s.day < md.until) m *= md.mult; if (key === 'rev' && this.s.skills) m *= 1 + (SKILL_PCT / 100) * (this.skillLv('mining') - 1); return m * this.relFx(key, facId) * (key === 'rev' || key === 'monolith' ? this.diff(key) : 1); }
+  // Faktoren aus Ereignissen (s.mods), Schwierigkeit, Personal, Ausbauten, Beziehungen. Techniken und Fähigkeiten wirken nur noch über Handgriffe am Gerät (src/sim/skills.js)
+  fx(key, facId = null) { let m = this.fxExt(key, facId);
+    for (const md of this.s.mods || []) if (md.key === key && (!md.fac || md.fac === facId) && this.s.day < md.until) m *= md.mult; return m * this.relFx(key, facId) * (key === 'rev' || key === 'monolith' ? this.diff(key) : 1); }
   // Beziehungen ab Stufe 3 wirken (Texte: REL_PERK in events.js; Opa: siehe powerCost)
   relFx(key, facId) {
     const r = this.s.rel; if (!r) return 1;
@@ -150,9 +157,7 @@ export class Game {
     return 1;
   }
   techAvailable(t) { return this.s.day >= toDay(t.date) && (!t.minTier || Math.max(...this.s.unlocked.map((id) => FACILITY[id].tier)) >= t.minTier); }
-  buyTech(id) { const t = TECHS.find((x) => x.id === id); if (!t || (this.s.techs ||= {})[id] || !this.techAvailable(t) || !this.canAfford(t.cost)) return false; this.s.cash -= t.cost; this.s.techs[id] = this.s.day;
-    if (id === 'ico') { const usd = Math.min(30e6, 600000 + this.netWorthFast() * 0.25); const p = this.price('ETH') || 1; this.s.wallet.ETH.ex += usd / p; this.toast(`ICO ausverkauft: ${fmtUSD(usd)} in Ethereum`, 'good', 9000); }
-    this.dayUpdate(true); return true; }
+  buyTech() { return false; } // Techniken (TECHS) sind in den Fähigkeiten aufgegangen (Taste T, data/skills.js TECH_MAP) – bleibt für alte Aufrufer
 
   // ---------- Markt ----------
   price(id, day = this.s.day) {
@@ -234,7 +239,6 @@ export class Game {
       const ratio = Math.min(2.6, Math.max(0.06, Math.pow(h1 / h0, 0.55)));
       p *= ratio * Math.max(0.35, 1 - 0.1 * years);
     } else p *= Math.pow(1.02, Math.max(0, (day - toDay('2010-01-01')) / 365));
-    if (this.s?.skills) p *= 1 - (SKILL_PCT / 100) * (this.skillLv('hw') - 1);
     if (this.s?.mods?.length) p *= this.fx('price') * this.fx('price:' + (item.kind === 'device' ? 'asic' : item.type || item.kind));
     if (item.stock?.mult && day < toDay(item.stock.until)) p *= item.stock.mult; // Graumarkt-Aufschlag während des Kontingents
     p *= this.diff('hw');
@@ -281,10 +285,20 @@ export class Game {
   // Die nächste Lektion kommt, sobald die laufende benutzt wurde (learned, z. B. Handy geöffnet) – oder nach LESSON_DAYS Spieltagen
   // (vor dem ersten Mining steht die Zeit: dann wartet die Lektion). Bots, Tests und alte Spielstände (ohne tutor): alles sofort wie bisher.
   startTutor() {
-    const s = this.s; s.flags.tutor = 1; s.feat = {}; s.learn = { cur: null, q: [], day: s.day, done: {} };
+    const s = this.s; s.flags.tutor = 1; s.flags.sk2 = 1; s.feat = {}; /* sk2: Betriebssystem, Bitstream und Shop-Sperren der Fähigkeiten */ s.learn = { cur: null, q: [], day: s.day, done: {} };
     s.frac = 0.3; // Aufwachen am Morgen
-    for (const m of s.messages) if (m.id === 'm0' || m.id === 'm0b') m.read = false;
+    s.messages = s.messages.filter((m) => m.id !== 'm0' && m.id !== 'm0b'); s.flags.idea = 0; delete s.goals.settle; // erst Papas Nachricht, Deniz schreibt kurz danach (denizIdea)
+    for (const m of s.messages) if (m.id === 'm0p') m.read = false;
     this.dayUpdate(true);
+  }
+  // Anlernen: Deniz' Nachricht mit der Bitcoin-Idee – die Oberfläche ruft sie nach kurzer Zeit (oder ein paar Schritten) nach Papas Nachricht,
+  // spätestens kommt sie beim ersten aufgehobenen Teil. Ohne Anlernen (Bots, Tests, alte Stände) liegen die Nachrichten schon beim Start im Handy.
+  ideaPending() { const s = this.s; return !!s.flags?.tutor && !s.flags.idea && !s.flags.miningStarted; }
+  denizIdea() {
+    const s = this.s; if (!this.ideaPending()) return false;
+    s.flags.idea = s.day || 1;
+    for (const id of ['m0', 'm0b']) { const m = MESSAGES.find((x) => x.id === id); if (!m || s.messages.some((x) => x.id === id)) continue; const x = { id, day: s.day, from: m.from, text: m.text, read: false }; s.messages.push(x); this.emit('message', x); }
+    this.emit('idea'); this.checkGoals(); this.emit('refresh'); return true;
   }
   lesson() { return this.s.flags?.tutor ? this.s.learn?.cur || null : null; }
   tutorTick() {
@@ -326,9 +340,10 @@ export class Game {
     if (s.chapter >= 1 && s.day >= toDay('2011-10-07')) this.grant('coins');
     if (s.chapter >= 1 && s.day >= toDay('2011-06-20')) this.grant('cold');
     if (s.unlocked.length >= 2) this.grant('map');
-    if (s.chapter >= 2) { this.grant('techs'); this.grant('ranking'); this.grant('loan'); this.grant('buycoins'); this.grant('coins'); this.grant('cold'); this.grant('heat'); }
-    if (s.chapter >= 1) { this.grant('techs'); this.grant('ranking'); } // Opas Werkbank und das Logbuch schon im Keller
+    if (s.chapter >= 2) { this.grant('skills'); this.grant('ranking'); this.grant('loan'); this.grant('buycoins'); this.grant('coins'); this.grant('cold'); this.grant('heat'); }
+    if (s.chapter >= 1) { this.grant('skills'); this.grant('ranking'); } // Fähigkeiten (Opas Werkbank) und das Logbuch schon im Keller
     this.tutorTick(); // Anlernen: abgelaufene Lektion beenden, nächste einführen
+    this.skDue(); // Fähigkeiten: Grundlagen per Handy, Pflicht-Auswege
   }
   startMining(uid) { const o = this.findObj(uid); if (!o || (o.parts && !(this.isFirstPc(o) ? this.firstReady(o) : this.pcReady(o)))) return false; o.mode = 'auto'; const first = !this.s.flags.miningStarted; this.learned('pcbuild'); if (first) { this.s.mineDay0 = this.s.day; this.s.mineFrac0 = this.s.frac || 0; } this.s.flags.miningStarted = true; this.s.flags.seenPc = true; if (first) this.addXp('mining', 40); this.checkGoals(); this.dayUpdate(true); this.emit('objects', this.facOf(uid)); return true; }
   // Zentraler Geld-Check: nur kaufen, was wirklich bezahlt werden kann (kein Kauf bei Minus-Konto)
@@ -336,11 +351,12 @@ export class Game {
   addObject(facId, type, x, z, rot, parts, free = false) {
     const def = PLACEABLE[type];
     if (!free && this.stockLeft(def) < 1) return null; // Kontingent erschöpft
+    if (!free && this.skillLock(def)) return null; // z. B. FPGA erst mit der Fähigkeit
     if (!free && !this.slotOk(facId, def)) return null; // alle Stellplätze belegt
     const o = { uid: this.s.nextUid++, type, x, z, rot, coin: 'auto', broken: false, bought: this.s.day };
     if (def.kind === 'rig') o.parts = parts || { mobo: null, cpu: null, psu: null, gpus: [] };
     if (def.kind === 'holder') o.items = [];
-    if (!free) { const p = this.itemPrice(def); if (!this.canAfford(p)) return null; this.s.cash -= p; this.s.stats.spentHW += p; if (this.s.skills) this.addXp('hw', 10); }
+    if (!free) { const p = this.itemPrice(def); if (!this.canAfford(p)) return null; this.s.cash -= p; this.s.stats.spentHW += p; this.addXp('hw', 10); this.rigNew(o, false, facId); }
     if (!free) this.stockUse(def, 1);
     this.s.fac[facId].objects.push(o);
     if (def.kind === 'device' && def.look !== 'fpga' && def.look !== 'usb') this.s.flags.boughtAsic = true;
@@ -420,16 +436,11 @@ export class Game {
   isFirstPc(o) { return !!o && o.uid === 1 && o.type === 'tower'; } // der allererste PC (Tutorial) – bleibt in der Wohnung
   partIds(o) { const p = o.parts; return [p.mobo, p.cpu, p.psu, ...p.gpus].filter(Boolean); }
   // ---------- Fähigkeiten: lernen durch Tun ----------
-  skillLv(k) { const x = this.s.skills?.[k] || 0; return SKILL_XP.filter((t) => x >= t).length; }
-  addXp(k, n, quiet = false) {
-    const s = this.s; if (!s.skills) return; const before = this.skillLv(k); s.skills[k] = (s.skills[k] || 0) + Math.round(n);
-    if (!s.flags?.tutor || s.flags.boughtGpu) this.grant('skills'); // Anlernen: Fähigkeiten erst nach der ersten Grafikkarte
-    const after = this.skillLv(k); if (!quiet || after > before) this.emit('xp', k, Math.round(n), after > before ? after : 0);
-  }
+  // Alte Schlüssel (hw, mining, trade) → Erfahrungstöpfe Werkstatt, Rechner, Geschäft (Ereignisse, Bonusziele, Fundstücke rufen weiter addXp)
+  addXp(k, n, quiet = false) { return this.addEp(XP_POT[k] || k, n, quiet); }
   creditPending(coin, n) { const s = this.s; if (!(n > 0)) return; s.wallet[coin].ex += n; const n0 = s.accr?.day === s.day && s.accr.coin === coin ? s.accr.n || 0 : 0; s.accr = { day: s.day, f: s.frac, coin, n: n0 + n }; } // n: heute schon gutgeschrieben
-  tradeFee() { return Math.max(0, (TRADE_FEES[this.skillLv('trade') - 1] ?? 0.005) - (this.s.staff?.list && this.staffFx().trader ? 0.005 : 0)); }
   // ---------- Herumliegende Teile ----------
-  pickUp(type) { const s = this.s; if (!s.loose?.[type]) return false; s.inv.push(type); s.invIds = { ...(s.invIds || {}), [type]: s.loose[type] }; delete s.loose[type]; this.learned('walk'); this.checkGoals(); this.checkFeatures(); this.emit('loose'); return true; }
+  pickUp(type) { const s = this.s; if (!s.loose?.[type]) return false; if (this.ideaPending()) this.denizIdea(); s.inv.push(type); s.invIds = { ...(s.invIds || {}), [type]: s.loose[type] }; delete s.loose[type]; this.learned('walk'); this.checkGoals(); this.checkFeatures(); this.emit('loose'); return true; }
   installLoose(uid, type) {
     const s = this.s, o = this.findObj(uid); if (!o?.parts || !s.inv?.includes(type)) return false;
     if ((type === 'cpu' || type === 'gpu') && !o.parts.mobo) return false;
@@ -529,13 +540,15 @@ export class Game {
     if (!this.cloneStockOk(src)) return null; // Kontingent erschöpft
     const def = PLACEABLE[src.type];
     if (!this.slotOk(facId, def)) return null; // alle Stellplätze belegt
+    if (this.skillLock(def)) return null;
     const o = { uid: this.s.nextUid++, type: src.type, x, z, rot, coin: src.coin, broken: false, bought: this.s.day };
+    if (src.prof && !kit) o.prof = src.prof;
     if (src.parts) o.parts = kit ? { mobo: null, cpu: null, psu: null, gpus: [] } : JSON.parse(JSON.stringify(src.parts));
     if (kit) { const np = this.psuCount(src); for (const id of this.partIds(src)) { const n = id === src.parts.psu ? np : 1; this.bagAdd(id, n); this.freshAdd(id, n); } o.kit = JSON.parse(JSON.stringify(src.parts)); }
     if (src.items) o.items = src.items.map((i) => ({ id: i.id, b: 0 }));
     this.s.cash -= cost; this.s.stats.spentHW += cost; this.cloneStockOk(src, true);
     if (def.kind === 'device' && def.look !== 'fpga' && def.look !== 'usb') this.s.flags.boughtAsic = true;
-    if (this.s.skills) this.addXp('hw', 10, true);
+    this.addXp('hw', 10, true); this.rigNew(o, rig && !kit, facId);
     this.s.fac[facId].objects.push(o); if (rig && !kit) this.contactOrder(src.type); this.dayUpdate(true); this.capWarn(facId); this.emit('objects', facId); if (kit) this.emit('bag'); return o;
   }
   // ---------- Schnell bauen & Stellplätze (Kern-Kreislauf: mehr Geräte → Standort voll → größerer Standort) ----------
@@ -612,13 +625,13 @@ export class Game {
   buildBlocked(cfg) { const items = [PLACEABLE[cfg.type], ...[cfg.mobo, cfg.cpu, cfg.psu, cfg.n > 0 ? cfg.gpu : null].filter(Boolean).map((id) => PART[id])]; const it = items.find((x) => !x || !this.available(x)); return it ? it.name || 'Teil' : null; }
   // Build platzieren: fertig montiert (Teile drin, +10 %) oder als Bausatz (leeres Gehäuse, Teile ins Lager)
   placeBuild(cfg, facId, x, z, rot, ready = true) {
-    const def = PLACEABLE[cfg.type]; if (def?.kind !== 'rig' || this.buildBlocked(cfg) || !this.slotOk(facId, def)) return null;
+    const def = PLACEABLE[cfg.type]; if (def?.kind !== 'rig' || this.buildBlocked(cfg) || !this.slotOk(facId, def) || this.skillLock(def)) return null;
     if (ready && !this.readyOk(cfg.type)) return null; // fertig montiert erst über einen Kontakt (Kemal, Jonas)
     const st = this.buildStats(cfg, facId, ready); if (!st.ok) return null; // auch als Bausatz nur mit passendem Netzteil
     if (!this.canAfford(st.price)) return null;
     const o = { uid: this.s.nextUid++, type: cfg.type, x, z, rot, coin: 'auto', broken: false, bought: this.s.day, parts: ready ? JSON.parse(JSON.stringify(st.parts)) : { mobo: null, cpu: null, psu: null, gpus: [] } };
     if (!ready) { const p = st.parts; for (const id of [p.mobo, p.cpu, ...p.gpus]) if (id) { this.bagAdd(id, 1); this.freshAdd(id, 1); } if (p.psu) { this.bagAdd(p.psu, st.np); this.freshAdd(p.psu, st.np); } o.kit = JSON.parse(JSON.stringify(p)); } // kit: welche Teile zu diesem Bausatz gehören (Serien-Einbau)
-    this.s.cash -= st.price; this.s.stats.spentHW += st.price; if (this.s.skills) this.addXp('hw', 10, true);
+    this.s.cash -= st.price; this.s.stats.spentHW += st.price; this.addXp('hw', 10, true); this.rigNew(o, ready, facId);
     this.s.lastBuild = { type: cfg.type, mobo: cfg.mobo, cpu: cfg.cpu, psu: cfg.psu, gpu: cfg.gpu, n: st.n, ready };
     this.s.fac[facId].objects.push(o); if (ready) this.contactOrder(cfg.type); this.dayUpdate(true); this.capWarn(facId); this.emit('objects', facId); if (!ready) this.emit('bag'); return o;
   }
@@ -672,7 +685,7 @@ export class Game {
   buyPart(id, n = 1) {
     const it = PART[id]; if (!it || !this.available(it)) return 0; const p = this.itemPrice(it); let k = 0;
     while (k < n && this.canAfford(p)) { this.s.cash -= p; this.s.stats.spentHW += p; this.bagAdd(id, 1); this.freshAdd(id, 1); k++; }
-    if (k) { if (this.s.skills) this.addXp('hw', 3 * k, true); this.emit('bag'); }
+    if (k) { this.addXp('hw', 3 * k, true); this.emit('bag'); }
     return k;
   }
   sellPart(id, n = 1) { const k = Math.min(n, this.bagN(id)); if (k <= 0) return 0; const v = this.partResale(id) * k; this.s.cash += v; this.bagAdd(id, -k); if ((this.s.fresh?.[id] || 0) > this.bagN(id)) this.freshAdd(id, this.bagN(id) - this.s.fresh[id]); this.emit('bag'); return v; }
@@ -738,7 +751,7 @@ export class Game {
     this.bagAdd(id, -n); const fresh = (this.s.fresh?.[id] || 0) > 0; if (fresh) this.freshAdd(id, -n);
     if (o.kit && this.pcReady(o) && !this.kitPlan(o).length) { delete o.kit; this.s.stats.kits = (this.s.stats.kits || 0) + 1; } // Bausatz fertig (auch Teil für Teil eingebaut)
     if (!this.s.flags.miningStarted && o.type === 'tower' && (this.isFirstPc(o) ? this.firstReady(o) : this.pcReady(o))) this.s.flags.pcBuilt = true;
-    if (this.s.skills && fresh) this.addXp('hw', 15);
+    if (fresh) this.addXp('hw', 15);
     this.dayUpdate(true); if (it.type === 'gpu') this.capWarn(this.facOf(uid)); this.emit('objects', this.facOf(uid)); this.emit('bag'); return true;
   }
   // ---------- Bausätze in Serie einbauen ----------
@@ -805,12 +818,12 @@ export class Game {
   holderAdd(uid, devId, n = 1) {
     const o = this.findObj(uid); if (!o || !o.items) return 0;
     const def = PLACEABLE[o.type], dev = PLACEABLE[devId]; if (!dev) return 0;
-    const price = this.itemPrice(dev);
+    const p0 = this.itemPrice(dev);
     let added = 0;
-    n = Math.min(n, this.stockLeft(dev)); // Kontingent
-    while (added < n && o.items.length < def.slots && this.canAfford(price)) {
-      o.items.push({ id: devId, b: 0 }); this.s.cash -= price; this.s.stats.spentHW += price; added++;
-    }
+    n = Math.min(n, this.stockLeft(dev), def.slots - o.items.length); // Kontingent, freie Plätze
+    let k = n; while (k > 0 && !this.canAfford(Math.round(p0 * (1 - this.bulkDisc(k))) * k)) k--; // Großhandel (Fähigkeit): ab 10 Stück günstiger
+    const price = Math.round(p0 * (1 - this.bulkDisc(k)));
+    while (added < k) { o.items.push({ id: devId, b: 0 }); this.s.cash -= price; this.s.stats.spentHW += price; added++; }
     this.stockUse(dev, added);
     if (added) { if (dev.look !== 'fpga' && dev.look !== 'usb') this.s.flags.boughtAsic = true; this.dayUpdate(true); this.capWarn(this.facOf(uid)); this.emit('objects', this.facOf(uid)); }
     return added;
@@ -874,13 +887,14 @@ export class Game {
   orderPart(id, n = 1) {
     const it = PART[id]; if (!it || !this.available(it) || !(n >= 1)) return 0; const p = this.itemPrice(it);
     let k = 0; while (k < n && this.canAfford(p * (k + 1))) k++; if (!k) return 0;
-    this.orderAdd([{ k: 'part', id, n: k }], p * k); if (this.s.skills) this.addXp('hw', 3 * k, true);
+    this.orderAdd([{ k: 'part', id, n: k }], p * k); this.addXp('hw', 3 * k, true);
     return k;
   }
   // Warum geht die Bestellung nicht? '' = geht (für Geräte, Halter, Kühlung, Deko, leere Gehäuse)
   orderWhy(def) {
     if (!def || !this.available(def)) return 'Nicht mehr im Handel';
     if (this.stockLeft(def) < 1) return `Kontingent: ${this.stockText()}`;
+    const lk = this.skillLock(def); if (lk) return lk;
     if (!this.orderRoomOk(def)) return this.pendingSlots() ? 'Kein Platz mehr – Bestelltes und Ausgepacktes belegt schon alle freien Plätze' : 'Kein Platz mehr – Zeit für einen größeren Standort';
     if (!this.canAfford(this.itemPrice(def))) return 'Nicht genug Geld';
     return '';
@@ -892,7 +906,7 @@ export class Game {
   }
   // Rig bestellen: fertig montiert (über den Kontakt) oder als Bausatz (Gehäuse + Teile, Einbauplan o.kit) – wie placeBuild
   orderBuild(cfg, facId = this.s.current, ready = true) {
-    const def = PLACEABLE[cfg.type]; if (def?.kind !== 'rig' || this.buildBlocked(cfg) || !this.orderRoomOk(def)) return null;
+    const def = PLACEABLE[cfg.type]; if (def?.kind !== 'rig' || this.buildBlocked(cfg) || !this.orderRoomOk(def) || this.skillLock(def)) return null;
     if (ready && !this.readyOk(cfg.type)) return null;
     const st = this.buildStats(cfg, facId, ready); if (!st.ok || !this.canAfford(st.price)) return null;
     const p = st.parts, items = [];
@@ -925,7 +939,7 @@ export class Game {
   orderPlan(uid, id, idx = null) {
     const o = this.findObj(uid), pl = this.buyPlan(o, id, idx); if (!pl || pl.why || !this.canAfford(pl.total)) return null;
     const items = [{ k: 'part', id, n: pl.n }]; if (pl.psu) items.push({ k: 'part', id: pl.psu, n: pl.np });
-    this.orderAdd(items, pl.total); if (this.s.skills) this.addXp('hw', 3 * (pl.n + pl.np), true);
+    this.orderAdd(items, pl.total); this.addXp('hw', 3 * (pl.n + pl.np), true);
     return pl;
   }
   // „Basis-Teile kaufen“ als Bestellung: dieselbe Wahl wie quickBase (Mainboard mit den meisten Plätzen, günstigste CPU, passendes Netzteil)
@@ -940,7 +954,7 @@ export class Game {
     }
     return { items: out, total: out.reduce((a, x) => a + pr(PART[x.id]) * x.n, 0) };
   }
-  orderBase(uid) { const pl = this.basePlan(this.findObj(uid)); if (!pl || !pl.items.length || !this.canAfford(pl.total)) return null; this.orderAdd(pl.items.map((x) => ({ k: 'part', ...x })), pl.total); if (this.s.skills) this.addXp('hw', 3 * pl.items.length, true); return pl; }
+  orderBase(uid) { const pl = this.basePlan(this.findObj(uid)); if (!pl || !pl.items.length || !this.canAfford(pl.total)) return null; this.orderAdd(pl.items.map((x) => ({ k: 'part', ...x })), pl.total); this.addXp('hw', 3 * pl.items.length, true); return pl; }
   // „Freie Plätze füllen“ als Bestellung: so viele Karten, wie Steckplätze, Netzteile im Handel und Geld hergeben (wie fillGpus)
   fillPlan(o, gpuId) {
     const gp = PART[gpuId], p = o?.parts; if (!gp || !p?.mobo) return null;
@@ -953,18 +967,19 @@ export class Game {
     }
     return null;
   }
-  orderFill(uid, gpuId) { const pl = this.fillPlan(this.findObj(uid), gpuId); if (!pl) return null; const items = [{ k: 'part', id: gpuId, n: pl.k }]; if (pl.psu) items.push({ k: 'part', id: pl.psu, n: pl.np }); this.orderAdd(items, pl.total); if (this.s.skills) this.addXp('hw', 3 * pl.k, true); return pl; }
+  orderFill(uid, gpuId) { const pl = this.fillPlan(this.findObj(uid), gpuId); if (!pl) return null; const items = [{ k: 'part', id: gpuId, n: pl.k }]; if (pl.psu) items.push({ k: 'part', id: pl.psu, n: pl.np }); this.orderAdd(items, pl.total); this.addXp('hw', 3 * pl.k, true); return pl; }
   // Geräte für ein Regal bestellen (wie holderAdd) – beim Aufheben kommen sie gleich hinein
   orderHolder(uid, devId, n = 1) {
     const o = this.findObj(uid), dev = PLACEABLE[devId]; if (!o?.items || !dev || !this.available(dev)) return 0;
-    const def = PLACEABLE[o.type], price = this.itemPrice(dev); n = Math.min(n, def.slots - o.items.length - this.pendingHolder(uid), this.stockLeft(dev));
-    let k = 0; while (k < n && this.canAfford(price * (k + 1))) k++; if (k <= 0) return 0;
-    this.stockUse(dev, k); this.orderAdd([{ k: 'dev', id: devId, n: k, holder: uid }], price * k); return k;
+    const def = PLACEABLE[o.type], p0 = this.itemPrice(dev); n = Math.min(n, def.slots - o.items.length - this.pendingHolder(uid), this.stockLeft(dev));
+    let k = n; while (k > 0 && !this.canAfford(Math.round(p0 * (1 - this.bulkDisc(k))) * k)) k--; if (k <= 0) return 0; // Großhandel (Fähigkeit)
+    this.stockUse(dev, k); this.orderAdd([{ k: 'dev', id: devId, n: k, holder: uid }], Math.round(p0 * (1 - this.bulkDisc(k))) * k); return k;
   }
   // Paketaufschrift: „Grafikkarte“, „Tower-PC“, „3 Teile“
   parcelLabel(items) {
     const n = items.reduce((a, it) => a + (it.k === 'place' ? 1 : it.n || 1), 0), it = items[0];
     if (n !== 1 || !it) return `${n} Teile`;
+    if (it.k === 'book') return 'Buch';
     if (it.k === 'part') return { gpu: 'Grafikkarte', cpu: 'Prozessor', mobo: 'Mainboard', psu: 'Netzteil' }[PART[it.id]?.type] || 'Teil';
     const d = PLACEABLE[it.k === 'dev' ? it.id : it.type]; if (!d) return 'Paket';
     return d.id === 'tower' ? (it.ready ? 'Mining-PC' : 'PC-Gehäuse') : d.short || d.name.replace(/\s*\(.*\)/, '');
@@ -993,6 +1008,7 @@ export class Game {
         res.dev += it.n - n; for (; n > 0; n--) { this.stockAdd({ type: it.id }); res.place++; } // Regal weg oder voll: einzeln aufstellen
         const d = PLACEABLE[it.id]; if (d.look !== 'fpga' && d.look !== 'usb') s.flags.boughtAsic = true; res.names.push(`${it.n}× ${d.name}`);
       } else if (it.k === 'place' && PLACEABLE[it.type]) { const { k, ...e } = it; this.stockAdd(e); res.place++; res.names.push(this.stockName(e)); }
+      else if (it.k === 'book' && BOOK[it.id]) { this.skBook(it.id); res.books = (res.books || 0) + 1; res.names.push(`Buch „${BOOK[it.id].title}“`); }
     }
     this.learned('parcel'); this.dayUpdate(true); for (const f of facs) if (f) this.emit('objects', f);
     this.emit('parcels'); this.emit('bag'); this.emit('unpacked'); return res;
@@ -1010,9 +1026,10 @@ export class Game {
     if (def.kind === 'rig') o.parts = e.parts ? JSON.parse(JSON.stringify(e.parts)) : Game.emptyParts();
     if (def.kind === 'rig' && e.kit) o.kit = JSON.parse(JSON.stringify(e.kit));
     if (def.kind === 'holder') o.items = (e.items || []).map((i) => ({ id: i.id, b: 0 }));
+    this.rigNew(o, !!e.ready, facId);
     s.unpacked = s.unpacked.filter((x) => x !== e); s.fac[facId].objects.push(o);
     if (def.kind === 'device' && def.look !== 'fpga' && def.look !== 'usb') s.flags.boughtAsic = true;
-    if (s.skills) this.addXp('hw', 10);
+    this.addXp('hw', 10);
     this.dayUpdate(true); this.capWarn(facId); this.emit('objects', facId); this.emit('unpacked'); return o;
   }
   // Wiederverkaufswert von allem, was bestellt, unterwegs oder ausgepackt ist (zählt zum Vermögen)
@@ -1032,6 +1049,7 @@ export class Game {
       if (!it || typeof it !== 'object') return null;
       if (it.k === 'part') return PART[it.id] && it.n > 0 ? { k: 'part', id: it.id, n: Math.round(it.n) } : null;
       if (it.k === 'dev') return PLACEABLE[it.id] && it.n > 0 ? { k: 'dev', id: it.id, n: Math.round(it.n), holder: it.holder } : null;
+      if (it.k === 'book') return BOOK[it.id] ? { k: 'book', id: it.id } : null;
       if (it.k === 'place' || !it.k) { const d = PLACEABLE[it.type]; if (!d) return null; const e = { ...it, k: 'place' }; if (d.kind === 'rig') { e.parts = okParts(e.parts) || Game.emptyParts(); if (e.kit) e.kit = okParts(e.kit); } else { delete e.parts; delete e.kit; } if (d.kind === 'holder') e.items = (e.items || []).filter((i) => i && PLACEABLE[i.id]); else delete e.items; return e; }
       return null;
     };
@@ -1042,19 +1060,42 @@ export class Game {
     s.nextParcel = Math.max(+s.nextParcel || 0, s.parcels.length + s.unpacked.length);
   }
 
+  // Alte Spielstände: Monatsabrechnung statt täglicher Abbuchung (Aufgelaufenes beginnt mit dem Laden), Wohnung und Keller bleiben mietfrei wie bisher,
+  // kein Darlehen (das Startgeld war eigenes Geld). Bankfrist entfallen: angezahlte Raten für Papas Laden kommen zurück (Laden gerettet oder verloren:
+  // Flags bleiben, wie sie sind), offene Entscheidungen zu entfallenen Ereignissen (bankdruck, ladenzu, ladenrueck) werden verworfen.
+  migrateBills(s) {
+    const old = !s.bills || typeof s.bills !== 'object';
+    if (old) s.bills = { acc: null, open: null, hist: [] };
+    const b = s.bills; b.hist = Array.isArray(b.hist) ? b.hist.filter((x) => x && typeof x === 'object' && Array.isArray(x.items)) : [];
+    if (b.acc && (typeof b.acc !== 'object' || !b.acc.fac || !b.acc.other)) b.acc = null;
+    if (b.open && !(b.open.amt >= 0)) b.open = null;
+    if (b.open) { const o = b.open; o.fee = +o.fee || 0; o.stage = Math.max(0, Math.min(3, o.stage | 0)); o.sites = (o.sites || []).filter((id) => FACILITY[id]); o.months ||= []; o.who ||= []; if (!Number.isFinite(o.due)) o.due = s.day + BILL_GRACE; }
+    for (const [id, f] of Object.entries(s.fac || {})) if (f?.cut && !b.open?.sites?.includes(id)) delete f.cut; // Sperre ohne offene Rechnung: aufheben
+    if (!s.papaLoan || typeof s.papaLoan !== 'object') { s.papaLoan = { total: 0, left: 0, paid: 0, since: s.day || START_DAY, last: 0 }; if (old) s.flags.freeFlat = 1; }
+    const L = s.papaLoan; for (const k of ['total', 'left', 'paid']) L[k] = Math.max(0, +L[k] || 0);
+    const paid = +s.flags.debtPaid || 0;
+    if (paid > 0 && !s.flags.debt && !s.flags.shopLost && !s.flags.debtRefund) { // angezahlt, aber weder gerettet noch verloren: Papa überweist zurück
+      s.cash = (Number.isFinite(s.cash) ? s.cash : 0) + paid; s.flags.debtRefund = s.day || 1;
+      s.messages.push({ id: 'mDebtRefund', day: s.day, from: 'Papa', text: `Die Bank und ich haben uns geeinigt, der Laden ist aus dem Gröbsten raus. Deine ${fmtUSD(paid)} hab ich dir zurücküberwiesen. Danke, Kind – das vergess ich dir nie.`, read: false });
+    }
+    if (s.ev?.open && !EVENT[s.ev.open.id]) s.ev.open = null;
+    if (s.flags.tutor && s.flags.idea === undefined) s.flags.idea = s.messages.some((m) => m.id === 'm0') ? 1 : 0; // Anlernen von früher: Deniz hat schon geschrieben
+  }
+
   // ---------- Geräte-Analyse ----------
   // Liefert pro Objekt: {watt, units:[{hash, vram, coin, rev, algo}], cool, heat, status}
-  analyze(o, day = this.s.day, elec = null) {
+  analyze(o, day = this.s.day, elec = null, facId = null) {
     const def = PLACEABLE[o.type];
     if (o.mode === 'off' && def.kind !== 'decor') return { watt: 0, cool: 0, heat: 0, units: [], status: 'off', note: 'Ausgeschaltet' };
     const r = { watt: 0, cool: 0, heat: 0, units: [], status: 'ok', note: '' };
     if (def.kind === 'rig') {
       const p = o.parts;
       if (!p.mobo || !p.cpu || !p.psu) { r.status = 'incomplete'; r.note = 'Mainboard, CPU und Netzteil nötig'; return r; }
+      if (o.os === null && this.skOn()) { r.status = 'noos'; r.note = 'Kein Betriebssystem – Installer starten'; return r; }
       const parts = this.partIds(o).map((id) => PART[id]);
       r.watt = 25 + parts.reduce((a, x) => a + (x.watt || 0), 0);
       const cap = PART[p.psu].cap * this.psuCount(o);
-      const rigPow = this.fx('rigPower');
+      const tu = this.devTune(o, facId), rigPow = this.fx('rigPower') * tu.P; // Profil, Lüfterkurve (Fähigkeiten)
       // Netzteil zu schwach: Karten von hinten abschalten, bis es reicht – der Rest läuft weiter (sonst stünde der ganze PC)
       let gpus = p.gpus;
       if (r.watt > cap) {
@@ -1069,21 +1110,24 @@ export class Game {
       for (const id of gpus) { const g = PART[id]; for (const [a, h] of Object.entries(g.hash)) hash[a] = (hash[a] || 0) + h; vram = Math.min(vram, g.vram); }
       const cpuH = PART[p.cpu].hash;
       // GPUs + CPU (CPU zählt bei SHA-256/CN/RX mit)
+      for (const a of Object.keys(hash)) hash[a] *= tu.H;
       for (const [a, h] of Object.entries(cpuH)) hash[a] = (hash[a] || 0) + h;
       if (!gpus.length) vram = 99;
       r.units.push({ hash, vram, w: r.watt });
-      r.heat = r.watt;
+      r.heat = r.watt * (o.wk ? 0.3 : 1); // Wasserkühlung: 70 % der Wärme über den Radiator nach draußen
     } else if (def.kind === 'device') {
       if (o.broken) { r.status = 'broken'; return r; }
-      const ap = this.fx('asicPower'), ah = this.fx('asicHash');
+      if (this.bitNeed(o)) { r.status = 'nobit'; r.note = 'Bitstream fehlt – Board anschauen und laden'; return r; }
+      const tu = this.devTune(o, facId), ap = this.fx('asicPower') * tu.P, ah = this.fx('asicHash') * tu.H; // Firmware und Profil
       r.watt = def.watt * ap; r.heat = r.watt;
       r.units.push({ hash: { [def.algo]: def.hash * ah }, vram: def.vram || 99, w: r.watt });
     } else if (def.kind === 'holder') {
       let broken = 0;
       const groups = {};
       for (const it of o.items) { if (it.b) { broken++; continue; } (groups[it.id] ||= 0); groups[it.id]++; }
+      const tu = this.devTune(o, facId);
       for (const [id, n] of Object.entries(groups)) {
-        const d = PLACEABLE[id]; const ap = this.fx('asicPower'), ah = this.fx('asicHash');
+        const d = PLACEABLE[id], fp = d.look === 'fpga' ? { P: 1, H: 1 } : tu; const ap = this.fx('asicPower') * fp.P, ah = this.fx('asicHash') * fp.H;
         r.watt += d.watt * n * ap;
         r.units.push({ hash: { [d.algo]: d.hash * n * ah }, vram: d.vram || 99, w: d.watt * n * ap, n });
       }
@@ -1093,7 +1137,7 @@ export class Game {
       if (!o.items.length) { r.status = 'empty'; r.note = 'Leer – Geräte einsetzen'; }
     } else if (def.kind === 'cooling') {
       r.watt = def.watt; r.cool = def.cool * this.fx('cool'); r.heat = def.watt;
-    }
+    } else if (def.kind === 'robot') { r.watt = def.watt || 0; r.heat = r.watt; } // Roboter an der Ladestation
     // Coin-Wahl
     for (const u of r.units) {
       const coin = o.coin === 'auto' ? this.bestCoin(u.hash, u.vram, day) : o.coin;
@@ -1124,7 +1168,7 @@ export class Game {
     let watt = 0, heat = 0, cool = fd.baseCool * this.fx('cool', facId), rev = 0; const per = new Map(); const hashByAlgo = {};
     const elecP = this.elecPrice(facId, day);
     let coolCap = 0, coolW = 0; const coolers = [];
-    for (const o of f.objects) per.set(o.uid, f.mothball ? { watt: 0, cool: 0, heat: 0, units: [], status: 'off', note: 'Eingemottet' } : this.analyze(o, day, elecP));
+    for (const o of f.objects) per.set(o.uid, f.mothball || f.cut ? { watt: 0, cool: 0, heat: 0, units: [], status: 'off', note: f.cut ? 'Strom abgestellt – Rechnung offen' : 'Eingemottet' } : this.analyze(o, day, elecP, facId));
     this.autoLimit(facId, per, elecP, day);
     for (const o of f.objects) {
       const a = per.get(o.uid);
@@ -1205,7 +1249,8 @@ export class Game {
   algoHash(algo) { let h = 0; for (const id of this.s.unlocked) { const sm = this.summary[id]; if (sm && !sm.tripped) h += (sm.hashByAlgo[algo] || 0) * sm.throttle; } return h; }
   walletValue() { let v = 0; for (const c of COINS) { const w = this.s.wallet[c.id]; v += (w.ex + w.cold) * this.price(c.id); } return v; }
   hardwareValue() { let v = this.bagValue() + this.pendingValue(); for (const f of Object.values(this.s.fac)) for (const o of f.objects) v += this.objectValue(o); return v; }
-  netWorth() { return this.s.cash + this.walletValue() + this.hardwareValue() - (this.s.loan || 0); }
+  netWorth() { return this.s.cash + this.walletValue() + this.hardwareValue() - (this.s.loan || 0) - this.privateDebt(); }
+  privateDebt() { return this.papaLeft() + this.owed() + this.billAccrued(); } // Papas Darlehen, offene und aufgelaufene Rechnungen zählen als Schuld
   monolithHash(day = this.s.day) { return day < toDay('2014-03-01') ? 0 : BTC_HASH(Math.min(day, LAST_DATA_DAY)) * MONOLITH_SHARE(day) * (this.s.endless ? this.s.endless.BTC.h : 1) * this.fx('monolith'); }
   dailyProfit() { let rev = 0, cost = 0; for (const id of this.s.unlocked) { const sm = this.summary[id]; if (!sm) continue; if (!sm.tripped) { rev += sm.rev * sm.throttle; cost += Math.max(0, sm.watt / 1000 * 24 - this.solarKwh(id)) * sm.elec; } cost += FACILITY[id].rent / 30.4 * this.fx('rent', id); } cost += this.staffMonthly() / 30.4 + this.extraDaily(this.s.day, true); for (const md of this.s.mods || []) if (md.key === 'monthly' && this.s.day < md.until) cost += md.mult / 30.4; if (this.s.loan > 0) cost += this.s.loan * this.loanRate() / 365; return { rev, cost, net: rev - cost }; }
   techSalary(day = this.s.day) { return Math.round(2600 * Math.pow(1.03, (day - toDay('2014-01-01')) / 365)); }
@@ -1213,6 +1258,7 @@ export class Game {
 
   // Zusammenfassungen für alle Standorte neu berechnen
   dayUpdate(silent = false) {
+    if (this.s.bills?.open && !this.billBusy) { this.billBusy = true; try { this.billAutoPay(); } finally { this.billBusy = false; } } // offene Rechnung: zahlen, sobald das Konto reicht (nach Verkäufen, Krediten …)
     this.summary = {};
     for (const id of this.s.unlocked) this.summary[id] = this.facSummary(id);
     if (this.s.feat) { this.checkFull(); this.checkFeatures(); this.checkGoals(); }
@@ -1231,7 +1277,7 @@ export class Game {
     const D = day - 1, minedByCoin = {}, f0 = s.mineDay0 === D ? s.mineFrac0 || 0 : 0, startK = Math.max(0, 1 - f0);
     // Vorab gutgeschrieben wurde nur der behaltene Anteil eines Coins (s.accr.coin) – Auto-Verkauf und andere Coins laufen voll weiter
     const accrC = s.accr?.day === D ? s.accr.coin || 'BTC' : null, keepK = (c) => (c === accrC && startK > 0 ? Math.max(0, 1 - Math.max(f0, s.accr.f || 0)) / startK : 1);
-    let elecCost = 0;
+    let elecCost = 0; const elecBy = {}; // Strom je Standort: läuft über den Monat auf, abgebucht wird am 1. (issueBill)
     const netOwn = {}, perH = {}, coinPerH = (c) => (perH[c] ??= COIN[c].emission(day) * this.fx('rev') / (this.netHash(c, day) + (s.lastNet[c] || 0))); // je Coin einmal pro Tag
     for (const id of s.unlocked) {
       const f = s.fac[id], sm = this.facSummary(id, day);
@@ -1240,7 +1286,7 @@ export class Game {
       if (sm.tripped && !wasTripped) { this.toast(`Sicherung raus! ${(sm.watt / 1000).toFixed(1)} von ${sm.capKw} kW`, 'bad', 9000); s.flags.everTripped = true; }
       if (!sm.tripped && wasTripped) this.toast(`Strom in „${FACILITY[id].name}" wieder da`, 'good');
       if (sm.tripped) continue;
-      elecCost += Math.max(0, (sm.watt / 1000) * 24 - this.solarKwh(id, day)) * sm.elec;
+      const kwh = Math.max(0, (sm.watt / 1000) * 24 - this.solarKwh(id, day)), ec = kwh * sm.elec; elecCost += ec; elecBy[id] = [ec, kwh, sm.elec];
       for (const o of f.objects) {
         const a = sm.per.get(o.uid);
         for (const u of a.units) {
@@ -1252,7 +1298,7 @@ export class Game {
           if (c === 'LTC' && day >= COIN.DOGE.mergedFrom) { const w = (u.h * sm.throttle) / (this.netHash('DOGE', day) + (s.lastNet.DOGE || 0)) * COIN.DOGE.emission(day); minedByCoin.DOGE = (minedByCoin.DOGE || 0) + w; netOwn.DOGE = (netOwn.DOGE || 0) + u.h * sm.throttle; }
         }
         // Defekte (nur laufende Geräte verschleißen)
-        if (a.watt > 0) this.wear(o, sm.temp, day);
+        if (a.watt > 0) this.wear(o, sm.temp, day, id);
       }
     }
     s.lastNet = netOwn;
@@ -1264,31 +1310,37 @@ export class Game {
     for (const [c, n] of Object.entries(minedByCoin)) {
       const p = this.price(c, day); minedUSD += n * p; s.stats.coins[c] = (s.stats.coins[c] || 0) + n;
       const sell = this.traderSell(c, n * s.autoSell[c], p, day);
-      sold += sell * p * (s.skills ? 1 - this.tradeFee() : 1);
+      sold += sell * p * (1 - this.tradeFee(this.limitMode()));
       const keep = c === accrC && s.accr.n != null ? Math.max(0, n - sell - s.accr.n) : (n - sell) * keepK(c); // vorab Gutgeschriebenes abziehen
       if (s.payoutCold) s.wallet[c].cold += keep; else s.wallet[c].ex += keep;
     }
-    s.cash += sold - elecCost;
+    s.cash += sold;
     s.stats.minedUSD += minedUSD; s.stats.sold += sold; s.stats.elec += elecCost;
-    if (minedUSD > 0 && s.skills) this.addXp('mining', 6, true);
-    // Fixkosten
+    // Monatskosten laufen über den Monat auf (Miete und Strom je Standort, Gehälter, Ausbauten, laufende Verträge) und kommen am 1. als Monatsabrechnung
+    const A = this.billAcc(D), md0 = monthDays(D), fac = (id) => (A.fac[id] ||= { rent: 0, elec: 0, kwh: 0 });
+    for (const [id, [ec, kwh, el]] of Object.entries(elecBy)) { const f = fac(id); f.elec += ec; f.kwh += kwh; if (!(el > 0)) f.pausch = 1; } // pausch: Strom steckt in der Warmmiete
     let fixed = 0;
-    for (const id of s.unlocked) fixed += FACILITY[id].rent / 30.4 * this.fx('rent', id);
-    for (const md of s.mods) if (md.key === 'monthly' && day < md.until) fixed += md.mult / 30.4; // laufende Kosten/Erträge aus Ereignissen (negativ = Einnahme)
-    fixed += this.staffMonthly(day) / 30.4 + this.extraDaily(day); // Personal, Ausbauten, Umschuldung
-    if (s.loan > 0) fixed += (s.loan * this.loanRate(day)) / 365;
-    s.cash -= fixed;
+    for (const id of s.unlocked) { const r = (FACILITY[id].rent * this.fx('rent', id)) / md0; if (r) { fac(id).rent += r; fixed += r; } }
+    for (const md of s.mods) if (md.key === 'monthly' && day < md.until) { const v = md.mult / md0; A.other[v < 0 ? 'income' : 'deals'] = (A.other[v < 0 ? 'income' : 'deals'] || 0) + v; fixed += v; } // laufende Kosten/Erträge aus Ereignissen (negativ = Einnahme)
+    { const st = this.staffMonthly(day) / md0, up = this.upMonthly() / md0; if (st) A.other.staff = (A.other.staff || 0) + st; if (up) A.other.ups = (A.other.ups || 0) + up; fixed += st + up; } // Personal, Ausbauten
+    // Bank: Zinsen (Kredit, Umschuldung) gehen weiter täglich vom Konto
+    const bank = (s.loanHi > 0 ? Math.min(s.loanHi, s.loan || 0) * this.hiRate(day) / 365 : 0) + (s.loan > 0 ? (s.loan * this.loanRate(day)) / 365 : 0);
+    s.cash -= bank; fixed += bank;
     if (!Number.isFinite(s.cash)) s.cash = 0;
+    if (new Date(day * 86400000).getUTCDate() === 1) this.issueBill(D); // Monatserster: Abrechnung des Vormonats
     if (s.cash < 0) {
       // Automatisch Coins von der Börse verkaufen, um das Minus auszugleichen
-      let need = -s.cash + 50; const fk = 1 - (s.skills ? this.tradeFee() : 0.005);
+      let need = -s.cash + 50; const fk = 1 - this.tradeFee();
       for (const c of COINS) { const w = s.wallet[c.id], p = this.price(c.id, day); if (need <= 0 || !p || w.ex <= 0) continue; const n = Math.min(w.ex, need / (p * fk)); w.ex -= n; s.cash += n * p * fk; need -= n * p * fk; }
       if (s.cash < 0) this.dispoDay(day); // Dispo-Zins, ggf. Bankgespräch
     }
+    if (s.cash >= 0 && s.flags.overSince) delete s.flags.overSince;
     // Techniker reparieren
     this.techRepairs(day);
     this.econDay(day);
+    this.billsDay(day); // offene Rechnungen: automatisch zahlen, sobald das Konto reicht, sonst Mahnstufen
     this.deliverDue(day); // Online-Shop: gestrige Bestellungen liegen jetzt vor der Wohnungstür
+    this.skDay(day); // Fähigkeiten: Lernen, Lehrstunden, Skript-Profile, Roboter, Limit-Orders
     // News & Ereignisse
     while (s.newsIdx < NEWS.length && NEWS[s.newsIdx].day <= day) {
       const n = NEWS[s.newsIdx++];
@@ -1343,15 +1395,15 @@ export class Game {
     }
   }
   algoHashFrom(netOwn) { return netOwn.BTC || 0; }
-  netWorthFast() { return this.s.cash + this.walletValue() + this.hardwareValue() - (this.s.loan || 0); }
+  netWorthFast() { return this.s.cash + this.walletValue() + this.hardwareValue() - (this.s.loan || 0) - this.privateDebt(); }
 
-  wear(o, temp, day) {
+  wear(o, temp, day, facId = null) {
     if (this.s.chapter === 0 && this.s.feat) return; // in der ersten Wohnung geht nichts kaputt
-    const def = PLACEABLE[o.type];
-    const heatMul = (temp < 30 ? 1 : temp < 38 ? 1 + (temp - 30) / 8 : 2 + (temp - 38) * 0.5) * this.fx('fail');
+    const def = PLACEABLE[o.type], wm = this.wearMul(o, facId, day); // Profil, Wartung, Staubfilter/Immersion am Standort (Fähigkeiten)
+    const heatMul = (temp < 30 ? 1 : temp < 38 ? 1 + (temp - 30) / 8 : 2 + (temp - 38) * 0.5) * this.fx('fail') * wm;
     const life = (def.life || 6) * 365;
     if (def.kind === 'holder') {
-      const base = def.selfCooled ? 0.0004 * this.fx('fail') : 0.0007 * heatMul;
+      const base = def.selfCooled ? 0.0004 * this.fx('fail') * wm : 0.0007 * heatMul;
       for (const it of o.items) { if (it.b) continue; if (Math.random() < base) it.b = 1; }
     } else if (def.kind === 'rig' || def.kind === 'device') {
       if (o.broken) return;
@@ -1597,7 +1649,7 @@ export class Game {
     for (const m of fx.mod || []) s.mods.push({ key: m.key, mult: m.mult, fac: m.fac || null, until: m.days ? s.day + m.days : 1e9, src: m.src || null });
     for (const f of [].concat(fx.flag || [])) s.flags[f] = s.day || 1;
     for (const a of [].concat(fx.ach || [])) this.unlockAch(a);
-    for (const [k, n] of Object.entries(fx.xp || {})) if (s.skills) this.addXp(k, n);
+    for (const [k, n] of Object.entries(fx.xp || {})) this.addXp(k, n);
     for (const n of [].concat(fx.next || [])) s.ev.later.push({ id: n.id, day: s.day + (n.inDays || 1) });
     if (fx.msg) { const m = { id: 'ev' + s.day + Math.random().toString(36).slice(2, 6), day: s.day, from: fx.msg.from, text: fx.msg.text, read: false }; s.messages.push(m); this.emit('message', m); }
     if (fx.stat) for (const [k, n] of Object.entries(fx.stat)) s.stats[k] = (s.stats[k] || 0) + n;
@@ -1638,11 +1690,11 @@ export class Game {
   payLeft(g) { const a = g?.action; return a ? Math.max(0, a.cost - this.payPaid(g)) : 0; }
   payFunds() { return Math.max(0, this.s.cash) + this.coinFunds(); } // Bargeld + verkaufbare Coins (Börse und Cold-Wallet, nach Gebühr)
   canPayGoal(g, amt = this.payLeft(g)) { return amt > 0 && (this.canAfford(amt) || this.s.cash + this.coinFunds() >= amt); }
-  exchangeValue() { const fk = 1 - (this.s.skills ? this.tradeFee() : 0.005); let v = 0; for (const c of COINS) { const w = this.s.wallet[c.id]; if (w && w.ex > 0) v += w.ex * this.price(c.id) * fk; } return v; }
-  coinFunds() { const fk = 1 - (this.s.skills ? this.tradeFee() : 0.005); let v = 0; for (const c of COINS) { const w = this.s.wallet[c.id]; if (w) v += (Math.max(0, w.ex) + Math.max(0, w.cold)) * this.price(c.id) * fk; } return v; }
+  exchangeValue() { const fk = 1 - this.tradeFee(); let v = 0; for (const c of COINS) { const w = this.s.wallet[c.id]; if (w && w.ex > 0) v += w.ex * this.price(c.id) * fk; } return v; }
+  coinFunds() { const fk = 1 - this.tradeFee(); let v = 0; for (const c of COINS) { const w = this.s.wallet[c.id]; if (w) v += (Math.max(0, w.ex) + Math.max(0, w.cold)) * this.price(c.id) * fk; } return v; }
   // Fehlendes Geld aus Coins holen: erst von der Börse, dann aus der Cold-Wallet
   raiseCash(amt) {
-    const s = this.s, fk = 1 - (s.skills ? this.tradeFee() : 0.005); let need = amt - s.cash + 0.01;
+    const s = this.s, fk = 1 - this.tradeFee(); let need = amt - s.cash + 0.01;
     for (const k of ['ex', 'cold']) for (const c of COINS) { const w = s.wallet[c.id], p = this.price(c.id); if (need <= 0 || !p || !(w[k] > 0)) continue; const n = Math.min(w[k], need / (p * fk)); w[k] -= n; s.cash += n * p * fk; s.stats.sold += n * p * fk; need -= n * p * fk; }
   }
   // part = true: eine Rate (action.part) statt des ganzen Rests
@@ -1705,10 +1757,12 @@ export class Game {
     const s = this.s; if (!s) return 1;
     if (key === 'fail') return this.diff('wear') * (s.staff?.list ? this.staffFx().fail : 1);
     if (key === 'powerCost') return s.staff?.list && this.staffFx().elec ? 0.8 : 1;
-    if (key === 'elec') return this.diff('elec') * (facId && s.fac?.[facId]?.up ? this.upFx(facId, 'elec') : 1); // Schwierigkeit: Strompreis
+    if (key === 'elec') return this.diff('elec') * (facId && s.fac?.[facId]?.up ? this.upFx(facId, 'elec') : 1) * this.peakFx('elec', facId); // Schwierigkeit, Ausbauten, Lastmanagement
+    if (key === 'hash' && facId) return (s.fac?.[facId]?.up ? this.upFx(facId, 'hash') : 1) * this.peakFx('hash', facId);
     if (!facId || !s.fac?.[facId]?.up) return 1;
     let m = this.upFx(facId, key);
-    if (key === 'rent' && this.rentProbe !== facId && !this.facInUse(facId)) return 0; // ohne Mining-Geräte: der Mietvertrag ruht, bis das erste Gerät drinsteht
+    if (key === 'rent' && (facId === 'kinder' || facId === 'keller') && s.flags?.freeFlat) return 0; // alte Spielstände: Wohnung und Keller bleiben mietfrei wie bisher
+    if (key === 'rent' && facId !== 'kinder' && this.rentProbe !== facId && !this.facInUse(facId)) return 0; // ohne Mining-Geräte: der Mietvertrag ruht, bis das erste Gerät drinsteht (die Wohnung nicht – hier wohnst du)
     if (key === 'rent' && s.fac[facId].mothball && !(UPGRADES[facId] || []).some((u) => u.keepRent && this.upActive(facId, u))) m *= s.fac[facId].noRent ? 0 : 0.3;
     return m;
   }
@@ -1721,7 +1775,7 @@ export class Game {
   upMonthly() { let m = 0; for (const id of this.s.unlocked) for (const u of UPGRADES[id] || []) if (u.monthly && this.upActive(id, u)) m += u.monthly; return m; }
   buyUpgrade(facId, id) {
     const s = this.s, u = this.upgrades(facId).find((x) => x.id === id), f = s.fac[facId];
-    if (!u || !f || !s.unlocked.includes(facId) || this.upActive(facId, u) || this.upObsolete(facId, u)) return false;
+    if (!u || !f || !s.unlocked.includes(facId) || this.upActive(facId, u) || this.upObsolete(facId, u) || this.upLock(facId, u)) return false;
     const c = u.cost || 0; if (!this.canAfford(Math.max(c, u.monthly > 0 ? u.monthly : 0))) return false;
     s.cash -= c; (f.up ||= {})[id] = s.day || 1; if (u.rel) this.applyFx({ rel: u.rel });
     this.dayUpdate(true); this.emit('upgrade', facId, id); return true;
@@ -1765,19 +1819,21 @@ export class Game {
   }
   dispoDay(day) {
     const s = this.s; s.cash -= -s.cash * this.dispoRate() / 365;
-    const lim = this.dispoLimit(), over = -s.cash > lim;
+    const lim = this.dispoLimit(), over = this.owed() - s.cash > lim; // offene Rechnungen zählen mit
     if (!s.flags.warnedNeg || day - s.flags.warnedNeg > 30) { s.flags.warnedNeg = day; this.toast(over ? `Dispo überzogen: ${fmtUSD(s.cash)} bei ${fmtUSD(lim)} Rahmen!` : `Konto im Minus: Dispo ${fmtUSD(-s.cash)} von ${fmtUSD(lim)} (${fmtNum(this.dispoRate() * 100, 0)} % Zinsen)`, 'bad', 8000); }
-    if (over && s.ev && !s.ev.open && day - (s.flags.bankTalk || -99) >= 14) { s.flags.bankTalk = day; this.openEvent(EVENT.bank, 'bank:' + day); }
+    if (over) s.flags.overSince ||= day; else delete s.flags.overSince;
+    // Bankgespräch erst nach einer Woche über dem Rahmen: Miete und Strom kommen am Monatsersten auf einen Schlag, die Einnahmen täglich – keine Pleite am Ersten
+    if (over && day - s.flags.overSince >= 7 && s.ev && !s.ev.open && day - (s.flags.bankTalk || -99) >= 14) { s.flags.bankTalk = day; this.openEvent(EVENT.bank, 'bank:' + day); }
   }
   bankSaleList() { // älteste Geräte zuerst; die Wohnung bleibt, Kühlung und Deko auch
     const all = [];
     for (const id of this.s.unlocked) { if (id === 'kinder') continue; for (const o of this.s.fac[id].objects) { const k = PLACEABLE[o.type].kind; if (k !== 'decor' && k !== 'cooling') all.push(o); } }
     return all.sort((a, b) => (a.bought || 0) - (b.bought || 0) || a.uid - b.uid);
   }
-  bankSalePreview() { const need = -this.s.cash; let v = 0; for (const o of this.bankSaleList()) { if (v >= need) break; v += this.objectValue(o); } return v; }
+  bankSalePreview() { const need = this.owed() - this.s.cash; let v = 0; for (const o of this.bankSaleList()) { if (v >= need) break; v += this.objectValue(o); } return v; }
   bankFireSale() {
     let n = 0, v = 0;
-    for (const o of this.bankSaleList()) { if (this.s.cash >= 0) break; v += this.objectValue(o); this.removeObject(o.uid); n++; }
+    for (const o of this.bankSaleList()) { if (this.s.cash >= this.owed()) break; v += this.objectValue(o); this.removeObject(o.uid); n++; } // offene Rechnungen zahlt dayUpdate, sobald es reicht
     if (n) this.toast(`Notverkauf: ${n} Gerät(e) für ${fmtUSD(v)} abgegeben.`, 'info', 7000);
     return v;
   }
@@ -1792,10 +1848,11 @@ export class Game {
   }
   savingPossible() { const s = this.s; return (s.staff?.list?.length || 0) + s.unlocked.filter((id) => this.canMothball(id) && !s.fac[id].mothball && (s.fac[id].objects.length || FACILITY[id].rent)).length + s.mods.filter((md) => md.key === 'monthly' && md.mult > 0 && md.until > s.day).length > 0; }
   // Insolvenz: nur wenn nichts mehr hilft – Schulden weg, Kasse 0, Mietverträge eingemotteter Standorte ruhen bis zum Wiederanfahren
-  insolvencyOk() { const s = this.s; return s.cash < -this.dispoLimit() && this.bankSalePreview() <= 0 && this.coldValue() < 1 && !this.reschedOk() && !!s.flags.opaBank && !this.savingPossible(); }
+  insolvencyOk() { const s = this.s; return s.cash - this.owed() < -this.dispoLimit() && this.bankSalePreview() <= 0 && this.coldValue() < 1 && !this.reschedOk() && !!s.flags.opaBank && !this.savingPossible(); }
   bankInsolvency() {
-    const s = this.s; const debt = Math.max(0, -s.cash) + (s.loan || 0);
+    const s = this.s; const debt = Math.max(0, -s.cash) + (s.loan || 0) + this.owed();
     s.cash = 0; s.loan = 0; s.loanHi = 0; s.flags.insolvent = (s.flags.insolvent || 0) + 1;
+    if (s.bills?.open) { for (const id of s.bills.open.sites || []) if (s.fac[id]) delete s.fac[id].cut; s.bills.open = null; for (const b of s.bills.hist) if (b.st === 'open') b.st = 'insolv'; } // offene Rechnungen gehen in die Insolvenz
     for (const id of s.unlocked) if (s.fac[id].mothball) s.fac[id].noRent = 1;
     for (const c of COINS) s.wallet[c.id].ex = 0;
     this.toast(`Insolvenz: ${fmtUSD(debt)} Schulden gestrichen. Neuanfang mit leerer Kasse.`, 'bad', 9000);
@@ -1803,7 +1860,7 @@ export class Game {
   }
   coldValue() { let v = 0; for (const c of COINS) v += (this.s.wallet[c.id]?.cold || 0) * this.price(c.id); return v; }
   bankColdSale() { // Cold-Wallet anzapfen: so viel verkaufen, bis das Konto wieder 1.000 $ im Plus ist (wertvollste Coins zuerst)
-    const s = this.s; let need = Math.max(0, -s.cash) + 1000, got = 0;
+    const s = this.s; let need = Math.max(0, this.owed() - s.cash) + 1000, got = 0;
     for (const c of [...COINS].sort((a, b) => (s.wallet[b.id].cold * this.price(b.id)) - (s.wallet[a.id].cold * this.price(a.id)))) {
       const w = s.wallet[c.id], p = this.price(c.id) * (1 - this.tradeFee()); if (need <= 0 || !p || !(w.cold > 0)) continue;
       const n = Math.min(w.cold, need / p); w.cold -= n; s.cash += n * p; s.stats.sold += n * p; got += n * p; need -= n * p;
@@ -1814,13 +1871,13 @@ export class Game {
   bankAuto() { // ohne Antwort: Geräte, dann Cold-Wallet, dann Sparprogramm – hilft das alles nicht mehr: Opa, zuletzt Insolvenz (keine Endlos-Schulden)
     if (this.bankFireSale()) return 'Notverkauf alter Geräte'; if (this.bankColdSale()) return 'Cold-Wallet angezapft';
     if (this.savingPossible()) { this.bankSaving(); return 'Sparprogramm (eingemottet, Personal entlassen)'; }
-    const s = this.s; if (s.cash >= -this.dispoLimit()) return 'Aufschub';
+    const s = this.s; if (s.cash - this.owed() >= -this.dispoLimit()) return 'Aufschub';
     if (!s.flags.opaBank) { this.applyFx({ cash: 5000, flag: 'opaBank', rel: { opa: 1 } }); this.toast('Opa Heinz springt ein: 5.000 $ fürs Konto.', 'info', 8000); return 'Opa springt ein'; }
     if (this.bankSalePreview() <= 0 && this.coldValue() < 1) { this.bankInsolvency(); this.applyFx({ rel: { papa: -1 } }); return 'Insolvenz'; }
     return 'Aufschub';
   }
-  reschedOk() { const s = this.s, amt = Math.max(0, -s.cash) + 1000; return (s.loan || 0) + amt <= Math.max(20000, this.hardwareValue() * 0.8 + this.walletValue() * 0.5); }
-  bankReschedule() { const s = this.s, amt = Math.ceil((Math.max(0, -s.cash) + 1000) / 100) * 100; s.loan = (s.loan || 0) + amt; s.loanHi = (s.loanHi || 0) + amt; s.cash += amt; return amt; }
+  reschedOk() { const s = this.s, amt = Math.max(0, this.owed() - s.cash) + 1000; return (s.loan || 0) + amt <= Math.max(20000, this.hardwareValue() * 0.8 + this.walletValue() * 0.5); }
+  bankReschedule() { const s = this.s, amt = Math.ceil((Math.max(0, this.owed() - s.cash) + 1000) / 100) * 100; s.loan = (s.loan || 0) + amt; s.loanHi = (s.loanHi || 0) + amt; s.cash += amt; return amt; }
 
   // Kontingente (stock in hardware.js): n Stück pro Kalendermonat bis zum Datum
   firmValue() { return this.s.cash + this.hardwareValue() - (this.s.loan || 0); } // Firmenwert: Kasse + Hardware − Kredit (ohne Coins)
@@ -1892,19 +1949,19 @@ export class Game {
   }
   // Händler: verkauft nur über dem 7-Tage-Schnitt, sonst bleiben die Coins auf der Börse liegen
   traderSell(c, want, p, day) {
-    const s = this.s; if (!(want > 0) || s.payoutCold || !s.staff?.list || !this.staffFx().trader) return want;
+    const s = this.s, lim = this.limitMode(); if (!(want > 0) || s.payoutCold || (!lim && (!s.staff?.list || !this.staffFx().trader))) return want; // Limit-Orders (Fähigkeit) wie der Händler
     let avg = 0; for (let k = 1; k <= 7; k++) avg += this.price(c, day - k); avg /= 7;
     const hold = (s.trHold ||= {});
     if (p < avg) { hold[c] = (hold[c] || 0) + want; return 0; }
     const w = s.wallet[c], extra = Math.min(hold[c] || 0, w.ex); hold[c] = 0;
-    if (extra > 0) { w.ex -= extra; const usd = extra * p * (1 - this.tradeFee()); s.cash += usd; s.stats.sold += usd; }
+    if (extra > 0) { w.ex -= extra; const usd = extra * p * (1 - this.tradeFee(lim)); s.cash += usd; s.stats.sold += usd; }
     return want;
   }
   // Täglich: auslaufende Verträge, Elektrikerin warnt vor der Sicherung
   econDay(day) {
     const s = this.s;
     if (new Date(day * 86400000).getUTCDate() === 1 && s.loan > 0) { const r = this.loanPayment(); s.loan -= r; s.cash -= r; if (s.loanHi) s.loanHi = Math.min(s.loanHi, s.loan); }
-    if (day === FREE_POWER_END && !s.flags.papa1 && s.flags.miningStarted) this.applyFx({ msg: { from: 'Herr Krause', text: 'Ich hab die Nebenkostenabrechnung gesehen. Die Strompauschale in der Warmmiete war für einen Kühlschrank gedacht, nicht für ein Rechenzentrum. Ab März zahlen Sie Ihren Strom nach Zähler.' } });
+    if (day === FREE_POWER_END && !s.flags.papa1 && s.flags.miningStarted) this.applyFx({ msg: { from: 'Herr Krause', text: 'Ich hab die Nebenkostenabrechnung gesehen. Die Strompauschale in der Warmmiete war für einen Kühlschrank gedacht, nicht für ein Rechenzentrum. Ab März zahlen Sie Ihren Strom nach Zähler – steht dann auf Ihrer Monatsabrechnung.' } });
     for (const id of s.unlocked) for (const u of UPGRADES[id] || []) { const d = s.fac[id].up?.[u.id]; if (d && u.days && day - d === u.days) this.toast(`${u.name} (${FACILITY[id].short}) ist ausgelaufen.`, 'info', 7000); }
     if (s.staff?.list && this.staffFx().elec) {
       for (const id of s.unlocked) {
@@ -1912,6 +1969,112 @@ export class Game {
         if (this.facSummary(id, day + 3).tripped) { f.tripWarn = day; const p = this.staffOf('elec')[0]; this.toast(`${p.name}: ${FACILITY[id].name} – in drei Tagen fliegt dort die Sicherung, wenn wir nichts ändern.`, 'bad', 9000); }
       }
     }
+  }
+
+  // ---------- Monatsabrechnung: Miete und Strom je Standort, Gehälter, Ausbauten, Verträge – abgebucht am Monatsersten (Texte: data/bills.js) ----------
+  // s.bills = { acc: { m: 'JJJJ-MM', fac: { id: { rent, elec, kwh, pausch } }, other: { staff, ups, deals, income } }, open: offene Rechnung | null, hist: [Abrechnungen] }
+  // open = { amt, fee, since, stage (0 Erinnerung … 3 gesperrt), due (Frist), sites, months, who, ask }
+  billAcc(day = this.s.day) {
+    const b = (this.s.bills ||= { acc: null, open: null, hist: [] }), m = this.monthKey(day);
+    if (!b.acc) b.acc = { m, fac: {}, other: {} }; else if (b.acc.m !== m) b.acc.m = m; // Sprung über einen Monat (Tests, Laden): Aufgelaufenes kommt mit der nächsten Abrechnung
+    return b.acc;
+  }
+  billAccrued() { const A = this.s.bills?.acc; if (!A) return 0; let v = 0; for (const x of Object.values(A.fac)) v += x.rent + x.elec; for (const x of Object.values(A.other)) v += x; return v; }
+  nextBillDay(day = this.s.day) { return this.stockNext(day); } // der nächste Monatserste
+  // Laufende Monatskosten bei heutiger Last (Firma, Handy): je Standort Miete und Strom, dazu Gehälter, Ausbauten, laufende Verträge
+  monthlyCosts() {
+    const s = this.s, rows = []; let total = 0;
+    for (const id of s.unlocked) {
+      const sm = this.summary?.[id], rent = FACILITY[id].rent * this.fx('rent', id), kwh = sm && !sm.tripped ? Math.max(0, (sm.watt / 1000) * 24 - this.solarKwh(id)) * 30.4 : 0, elec = kwh * (sm?.elec || 0);
+      rows.push({ fac: id, rent, elec, kwh, pausch: kwh > 0 && !(sm.elec > 0), cut: !!s.fac[id]?.cut }); total += rent + elec;
+    }
+    const other = { staff: this.staffMonthly(), ups: this.upMonthly(), deals: 0, income: 0 };
+    for (const md of s.mods || []) if (md.key === 'monthly' && s.day < md.until) other[md.mult < 0 ? 'income' : 'deals'] += md.mult;
+    for (const v of Object.values(other)) total += v;
+    return { rows, other, total };
+  }
+  // Was am nächsten Ersten etwa abgebucht wird: bisher aufgelaufen + der Rest des Monats bei heutiger Last
+  billEstimate() { const s = this.s, n = Math.max(0, this.nextBillDay() - s.day); return this.billAccrued() + (this.monthlyCosts().total / monthDays(s.day)) * n; }
+  owed() { const o = this.s.bills?.open; return o ? o.amt + o.fee : 0; } // offene Rechnungen samt Gebühren
+  dispoOk() { return this.has('loan') && this.s.chapter >= 2; } // Lastschrift über den Dispo erst mit der Firma (Kapitel 3, Bankkredit) – vorher wird gemahnt
+  billPayable(x) { const s = this.s; return x <= 0 || s.cash >= x - 1e-9 || (this.dispoOk() && s.cash - x >= -this.dispoLimit()); }
+  // Monatserster: Aufgelaufenes des Vormonats (D) als Abrechnung buchen und abbuchen – reicht es nicht, bleibt sie offen (Mahnung)
+  issueBill(D = this.s.day - 1) {
+    const s = this.s, b = s.bills, A = b?.acc; if (!A) return null; b.acc = null;
+    const items = [];
+    for (const f of FACILITIES) { const x = A.fac[f.id]; if (!x) continue; const rent = round2(x.rent), elec = round2(x.elec); if (rent < 0.01 && elec < 0.01 && !x.pausch) continue; items.push({ fac: f.id, rent, elec, kwh: Math.round(x.kwh), pausch: x.pausch ? 1 : 0 }); }
+    const other = {}; for (const [k, v] of Object.entries(A.other)) if (Math.abs(v) >= 0.01) other[k] = round2(v);
+    if (!items.length && !Object.keys(other).length) return null;
+    const total = round2(items.reduce((a, it) => a + it.rent + it.elec, 0) + Object.values(other).reduce((a, v) => a + v, 0));
+    const bill = { m: A.m || this.monthKey(D), day: s.day, items, other, total, st: 'ok' };
+    b.hist.unshift(bill); if (b.hist.length > 24) b.hist.length = 24;
+    if (total <= 0) { s.cash -= total; bill.st = 'gut'; } else this.chargeBill(bill); // Gutschrift (z. B. Lachszucht, KI-Mieter)
+    s.stats.bills = (s.stats.bills || 0) + 1;
+    if (s.stats.bills === 1 && bill.st !== 'open') this.pushMsg({ from: 'Lindentaler Bank', text: `Ihr Kontoauszug: Die Monatsabrechnung für ${monthName(bill.m)} ist abgebucht – ${fmtUSD(total)}. Miete und Strom kommen ab jetzt an jedem Monatsersten. Alle Posten finden Sie im Handy unter „Konto“.` });
+    this.grant('bills'); this.emit('bill', bill); return bill;
+  }
+  chargeBill(bill) {
+    const s = this.s, amt = bill.total;
+    if (!s.bills.open && this.billPayable(amt)) { s.cash -= amt; bill.st = s.cash < 0 ? 'dispo' : 'ok'; return true; }
+    const o = (s.bills.open ||= { amt: 0, fee: 0, since: s.day, stage: 0, due: s.day + BILL_GRACE, sites: [], months: [], who: [] });
+    o.amt = round2(o.amt + amt); if (!o.months.includes(bill.m)) o.months.push(bill.m);
+    for (const it of bill.items) {
+      if (!(it.rent > 0 || it.elec > 0)) continue; if (!o.sites.includes(it.fac)) o.sites.push(it.fac);
+      for (const n of [it.rent > 0 && LANDLORD[it.fac], it.elec > 0 && SUPPLIER(it.fac)]) if (n && !o.who.includes(n)) o.who.push(n);
+    }
+    bill.st = 'open'; o.ask = 1; s.stats.billsOpen = (s.stats.billsOpen || 0) + 1;
+    this.toast(`Monatsabrechnung ${monthName(bill.m)}: ${fmtUSD(amt)} – dein Konto reicht nicht. Die Rechnung ist offen.`, 'bad', 8000);
+    return false;
+  }
+  // Täglich: offene Rechnung bezahlen, sobald das Konto reicht – sonst nach jeder Frist die nächste Mahnstufe (Gebühr), zuletzt Strom aus
+  billsDay(day = this.s.day) {
+    const s = this.s, o = s.bills?.open; if (!o) return;
+    if (this.billAutoPay()) return;
+    if (day >= o.due) {
+      if (o.stage < 3) {
+        o.stage++; o.fee = round2(o.fee + Math.max(o.stage === 3 ? 30 : 5, Math.round(o.amt * 0.02))); o.due = day + (o.stage >= 3 ? 30 : BILL_GRACE); o.ask = 1;
+        if (o.stage === 3) { for (const id of o.sites) if (s.fac[id]) s.fac[id].cut = day; s.stats.cuts = (s.stats.cuts || 0) + 1; this.toast(`Strom abgestellt: ${o.sites.map((id) => FACILITY[id].short).join(', ')} – bis die offene Rechnung bezahlt ist.`, 'bad', 10000); this.dayUpdate(true); for (const id of o.sites) this.emit('objects', id); }
+        else this.toast(`${o.stage === 1 ? '2. Mahnung' : 'Letzte Mahnung'}: ${fmtUSD(o.amt + o.fee)} offen, Frist bis ${fmtDate(o.due)}.`, 'bad', 8000);
+      } else { o.due = day + 30; o.ask = 1; } // gesperrt: einmal im Monat erinnern
+    }
+    if (o.ask && s.ev) { // Mahnung zeigen: läuft schon eine, gilt sie weiter (Text zeigt die neue Stufe), sonst sobald keine andere Entscheidung offen ist
+      if (s.ev.open?.id === 'mahnung') { s.ev.open.until = day + (EVENT.mahnung.expire || 7); o.ask = 0; this.emit('event', EVENT.mahnung); }
+      else if (!s.ev.open) { o.ask = 0; this.openEvent(EVENT.mahnung, 'mahnung:' + day); }
+    }
+  }
+  billAutoPay() { const o = this.s.bills?.open; if (!o || !this.billPayable(o.amt + o.fee)) return false; this.payOpen(); return true; }
+  billCoinOk() { return !!this.s.bills?.open && Math.max(0, this.s.cash) + this.coinFunds() >= this.owed() - 1e-6; }
+  // Offenes bezahlen (coins: was fehlt, aus Coins verkaufen – erst Börse, dann Cold-Wallet; mit einem Dollar Luft, damit nicht 0,01 $ übrig bleiben)
+  payBills(coins = false) { if (!this.s.bills?.open) return false; const amt = this.owed(); if (coins && !this.billPayable(amt)) this.raiseCash(Math.ceil(amt) + 1); if (!this.billPayable(amt)) return false; this.payOpen(); return true; }
+  payOpen() {
+    const s = this.s, o = s.bills.open, amt = o.amt + o.fee; s.cash -= amt; s.bills.open = null; s.bills.lastWho = o.who?.[0] || '';
+    for (const b of s.bills.hist) if (b.st === 'open') { b.st = 'paid'; b.paidDay = s.day || 1; }
+    if (s.ev?.open?.id === 'mahnung') s.ev.open = null; // Mahnung erledigt
+    const cut = (o.sites || []).filter((id) => s.fac[id]?.cut); for (const id of cut) delete s.fac[id].cut;
+    s.stats.billFees = (s.stats.billFees || 0) + o.fee;
+    this.toast(`Offene Rechnung bezahlt: ${fmtUSD(amt)}${cut.length ? `. Der Strom ist wieder da (${cut.map((id) => FACILITY[id].short).join(', ')})` : ''}.`, 'good', 6000);
+    this.dayUpdate(true); for (const id of cut) this.emit('objects', id); this.emit('bill', null); return amt;
+  }
+  bankTalk() { const s = this.s; s.flags.bankTalk = s.day; this.openEvent(EVENT.bank, 'bank:' + s.day); } // Mahnung → Bankgespräch (Herr Albers)
+
+  // ---------- Papas Umzugsdarlehen (s.papaLoan = { total, left, paid, since, last, n, help, done }): ohne Frist und Zinsen ----------
+  papaLeft() { return Math.max(0, this.s.papaLoan?.left || 0); }
+  repayPapa(usd) {
+    const s = this.s, L = s.papaLoan; if (!L || !(L.left > 0)) return 0;
+    const amt = round2(Math.min(+usd || 0, L.left, Math.max(0, s.cash))); if (!(amt >= 0.01)) return 0;
+    s.cash -= amt; L.left = round2(L.left - amt); L.paid = round2((L.paid || 0) + amt); L.last = s.day || 1; L.n = (L.n || 0) + 1;
+    if (L.left < 0.01) { L.left = 0; L.done = s.day || 1; this.applyFx({ rel: { papa: 1 } }); this.pushMsg({ from: 'Papa', text: PAPA_DONE }); this.logStory('papaLoan', `Papas Umzugsdarlehen zurückgezahlt (${fmtUSD(L.total)})`); this.unlockAch('payback'); }
+    else if (L.n === 1 || L.n % 3 === 0) this.pushMsg({ from: 'Papa', text: PAPA_THANKS[Math.floor(L.n / 3) % PAPA_THANKS.length] });
+    this.dayUpdate(true); this.emit('papaLoan'); return amt;
+  }
+  papaHelpWhy() { const s = this.s; if (!s.bills?.open) return 'Es ist nichts offen'; if (s.chapter > 2) return 'Dafür ist Hashwerk längst zu groß – Papa hat so viel nicht'; if (this.owed() > 5000) return 'So viel hat Papa nicht'; if ((s.rel?.papa || 0) <= -3) return 'Papa geht nicht ans Telefon'; return ''; }
+  papaHelpOk() { return !this.papaHelpWhy(); }
+  // Papa legt die offene Rechnung aus und schreibt sie zum Umzugsdarlehen (ab dem zweiten Mal: Papa −1)
+  papaHelp() {
+    if (!this.papaHelpOk()) return false; const s = this.s, amt = round2(this.owed());
+    const L = (s.papaLoan ||= { total: 0, left: 0, paid: 0, since: s.day, last: 0 }); L.total = round2(L.total + amt); L.left = round2(L.left + amt); L.help = (L.help || 0) + 1; L.since = s.day || 1; delete L.done;
+    if (L.help > 1) this.applyFx({ rel: { papa: -1 } });
+    s.cash += amt; this.payOpen(); this.emit('papaLoan'); return true;
   }
 
   // ---------- Fortschritt: Bonusziele, Jahreswerte, Statistiken für Erfolge ----------
@@ -2002,13 +2165,13 @@ export class Game {
   // ---------- Wallet ----------
   sell(coin, frac) {
     const w = this.s.wallet[coin]; const n = w.ex * frac; if (n <= 0) return 0;
-    const usd = n * this.price(coin) * (1 - (this.s.skills ? this.tradeFee() : 0.005)); w.ex -= n; this.s.cash += usd; this.s.stats.sold += usd; if (this.s.skills && usd >= 1) this.addXp('trade', Math.min(75, Math.max(2, usd / 10))); this.dayUpdate(true); return usd; // EP nach Volumen, nicht pro Klick
+    const usd = n * this.price(coin) * (1 - this.tradeFee()); w.ex -= n; this.s.cash += usd; this.s.stats.sold += usd; if (usd >= 1) this.addXp('trade', Math.min(75, Math.max(2, usd / 10))); this.dayUpdate(true); return usd; // EP nach Volumen, nicht pro Klick
   }
   buy(coin, usd) {
     if (!this.has('buycoins')) return 0;
     usd = Math.min(+usd || 0, this.s.cash); if (!(usd > 0) || !this.canAfford(usd)) return 0;
     const p = this.price(coin); if (!p) return 0;
-    const fee = this.s.skills ? this.tradeFee() : 0.005; this.s.wallet[coin].ex += (usd * (1 - fee)) / p; this.s.cash -= usd; if (this.s.skills && usd >= 1) this.addXp('trade', Math.min(50, Math.max(2, usd / 10))); this.dayUpdate(true); return usd;
+    const fee = this.tradeFee(); this.s.wallet[coin].ex += (usd * (1 - fee)) / p; this.s.cash -= usd; if (usd >= 1) this.addXp('trade', Math.min(50, Math.max(2, usd / 10))); this.dayUpdate(true); return usd;
   }
   transfer(coin, toCold) {
     const w = this.s.wallet[coin];
@@ -2019,6 +2182,8 @@ export class Game {
   toast(text, kind = 'info', ms = 5000) { this.emit('toast', text, kind, ms); }
   sellAll() { let u = 0; for (const c of COINS) u += this.sell(c.id, 1); return u; }
 }
+
+Object.assign(Game.prototype, SKILL_METHODS); // Fähigkeiten 2.0 (src/sim/skills.js)
 
 // ---------- Formatierung ----------
 const nf = (d) => new Intl.NumberFormat('de-DE', { maximumFractionDigits: d, minimumFractionDigits: d });

@@ -5,13 +5,13 @@ export const FACILITIES = [
   {
     id: 'kinder', tier: 0, name: 'Einzimmerwohnung', short: 'Wohnung', place: 'Lindental, Altbau-Hinterhaus, Hochparterre', w: 4, d: 3.5, h: 2.6, // ID bleibt 'kinder' (Spielstände)
     power: [{ kw: 1.8, label: 'Altbau-Sicherung' }, { kw: 3.6, cost: 250, label: 'Eigener Stromkreis' }],
-    elec: 'household', elecMult: 1.0, rent: 0, cost: 0, baseCool: 600, ambient: 0, grid: 0.5, slots: 6, move: 0, // move: Umzugskosten je Gerät (Game.moveFee)
+    elec: 'household', elecMult: 1.0, rent: 260, cost: 0, baseCool: 600, ambient: 0, grid: 0.5, slots: 6, move: 0, // move: Umzugskosten je Gerät (Game.moveFee); rent: Warmmiete (bis März 2011 mit Strompauschale), läuft immer – hier wohnst du
     style: 'bedroom', desc: 'Deine erste eigene Bude: ein Zimmer, Kochnische, feuchte Ecke, die Tapete löst sich. Bett, Schreibtisch, ein altes Poster – und ein PC.',
   },
   {
     id: 'keller', tier: 1, name: 'Hobbykeller', short: 'Keller', place: 'Lindental, Keller deines Hauses', w: 7, d: 5, h: 2.4,
     power: [{ kw: 4.5, label: 'Hausanschluss' }, { kw: 11, cost: 1500, label: 'Starkstrom 16 A' }, { kw: 22, cost: 4000, label: 'Starkstrom 32 A' }],
-    elec: 'household', elecMult: 0.6, rent: 0, cost: 0, baseCool: 1600, ambient: -3, grid: 0.5, slots: 16, move: 0, // eigener Zähler am alten Heizstrom-Tarif des Hauses; Wohnung ↔ Keller: selbst runtertragen
+    elec: 'household', elecMult: 0.6, rent: 50, cost: 0, baseCool: 1600, ambient: -3, grid: 0.5, slots: 16, move: 0, // eigener Zähler am alten Heizstrom-Tarif des Hauses; Wohnung ↔ Keller: selbst runtertragen; Miete: 50 $ an Herrn Krause (und zu Weihnachten ein Kasten Bier)
     style: 'basement', desc: 'Der alte Hobbyraum im Keller deines Hauses: kühl, ein bisschen muffig, nebenan rumpelt die Waschküche. Perfekt für die ersten Open-Frame-Rigs.',
   },
   {
@@ -48,8 +48,9 @@ const devices = (s, g) => (g?.deviceCount ? g.deviceCount() : 0);
 export const CHAPTERS = [
   {
     title: 'Kapitel 1 – Die erste Bude', unlock: 'keller', minDate: '2011-01-01', site: 'kinder', // volle Wohnung: Herr Krause gibt den Hobbyraum im Keller sofort frei, sonst über die Feiertage
-    intro: 'Oktober 2010. Du bist 19 und gerade in deine erste eigene Bude gezogen: ein Zimmer im Hinterhaus, feucht, die Tapete löst sich. Papas Laden steckt in Schulden. Du hast ein leeres PC-Gehäuse, ein paar alte Teile und eine Idee.',
+    intro: 'Oktober 2010. Du bist 19 und gerade in deine erste eigene Bude gezogen: ein Zimmer im Hinterhaus, feucht, die Tapete löst sich. Papa hat dir das Geld für den Umzug geliehen. Einen Plan hast du noch nicht – nur ein leeres PC-Gehäuse, das seit dem Umzug in der Ecke steht.',
     goals: [
+      { id: 'settle', text: 'Schau dich in deiner neuen Bude um', doneText: '', check: (s) => !s.flags.tutor || !!s.flags.idea || !!s.flags.miningStarted }, // Anlernen: erst Papas Nachricht, nach kurzer Zeit schreibt Deniz von Bitcoin (Game.denizIdea)
       { id: 'collect', text: 'Such die PC-Teile im Keller', doneText: 'Alle Teile gefunden! Bring sie hoch zu deinem\u00a0PC.', check: (s) => s.flags.miningStarted || !s.loose || !Object.keys(s.loose).length, progress: (s) => [(s.looseN || 4) - Object.keys(s.loose || {}).length, s.looseN || 4, 'parts'] }, // looseN: 3 Startteile (CPU-Start), alte Stände 4
       { id: 'pcbuild', text: 'Bau die Teile in deinen PC ein', doneText: '', check: (s) => s.flags.miningStarted || !!s.flags.pcBuilt, progress: (s) => { const pc = s.fac.kinder.objects.find((o) => o.type === 'tower'); const p = pc?.parts || {}, need = s.flags.cpuStart ? [p.mobo, p.cpu, p.psu] : [p.mobo, p.cpu, p.gpus?.length, p.psu]; return [need.filter(Boolean).length, need.length, 'parts']; } },
       { id: 'look', text: 'Schalte deinen PC ein', doneText: 'Dein PC läuft – erst mal nur mit dem Prozessor. Das geht langsam.', check: (s) => s.flags.miningStarted },
@@ -70,18 +71,17 @@ export const CHAPTERS = [
   },
   {
     title: 'Kapitel 2 – Der Hobbykeller', unlock: 'werkstatt', minDate: '2012-06-01', site: 'keller', // voller Keller: die Werkstatt sofort (Papa redet mit Herrn Öztürk), sonst ab Juni 2012
-    intro: 'Das Gerümpel vom Vormieter ist raus, Papa hat den Sperrmüll gefahren. Herr Krause überlässt dir den alten Hobbyraum im Keller – solange die Waschküche nebenan weiterläuft.',
+    intro: 'Das Gerümpel vom Vormieter ist raus, Papa hat den Sperrmüll gefahren. Herr Krause überlässt dir den alten Hobbyraum im Keller – für 50 $ im Monat und einen Kasten Bier zu Weihnachten. Und solange die Waschküche nebenan weiterläuft.',
     goals: [
-      { id: 'openrig', text: 'Bau dein erstes Rig im Keller', check: (s, h) => h.rigsAt('keller') > 0 }, // mit mindestens 1 GPU
+      { id: 'openrig', text: 'Bau dein erstes Rig im Keller', orDate: '2013-03-01', check: (s, h, g) => h.rigsAt('keller') > 0 || (s.unlocked.includes('keller') && (s.fac.keller?.objects || []).some((o) => !o.parts && g.slotLive(o))) }, // Rig mit mindestens 1 GPU – oder ein Miner (FPGA, ASIC) im Keller; spätestens im März 2013 auch so (früher half dort die Bankfrist: nicht für immer im Keller festhängen)
       // Ausbauten kennenlernen: Opas Nachtstromzähler (UPGRADES.keller nightmeter, −30 % Strom im Keller) – Knopf im Ziel oder Firma (C) → Ausbauten
       { id: 'night', text: 'Lass Opa den alten Nachtstromzähler anklemmen (Firma → Ausbauten, 400 $)', orDate: '2011-10-01', open: 'company', doneText: 'Nachtstrom! Im Keller kostet der Strom jetzt 30 % weniger. In der Firma (C) gibt es weitere Ausbauten.', check: (s) => !!s.fac.keller?.up?.nightmeter }, // open: Knopf im Ziel-Panel öffnet die Firma; orDate: kein Muss (sonst ab Oktober 2011)
-      { id: 'debt', text: 'Rette Papas Laden – Frist der Bank: Ende 2013', action: { label: '15.000 $ überweisen', cost: 15000, flag: 'debt', part: 1000 }, check: (s) => s.flags.debt || !!s.flags.shopLost }, // part: in Raten zu 1.000 $ (s.flags.debtPaid); nach der Frist: Ereignis „ladenzu“ (events.js)
+      // Abschlussziel: Papa vermietet dir die Werkstatt (450 $ im Monat), wenn sich das trägt – 30 $ Gewinn am Tag nach Strom und Miete (Tagesabschluss); spätestens ab März 2013 auch so
+      { id: 'earn2', text: 'Mach 30 $ Gewinn am Tag – dann vermietet dir Papa die Werkstatt', orDate: '2013-03-01', eod: true, doneText: 'Läuft! 30 $ Gewinn am Tag – Papa hält dir die Werkstatt frei.', check: (s, h, g) => g.dailyProfit().net >= 30, progress: (s, h, g) => [g.dailyProfit().net, 30, 'usd'] },
       { id: 'fill2', text: 'Fülle den Keller', orDate: true, skip: true, doneText: 'Der Keller ist voll!', check: (s) => !!s.full?.keller, progress: (s, h) => [h.fill('keller'), 1, 'fill', 'keller'] }, // orDate: ab minDate auch ohne vollen Keller erledigt
     ],
     waitText: 'Papas Untermieter Zweirad Öztürk zieht erst im Juni 2012 aus der Werkstatt aus.',
     bonus: [
-      // Bezug zu m1 („bis Ende 2013“): wer zwei Jahre früher zahlt, macht Papa sehr froh
-      { id: 'b2early', until: '2011-12-31', text: 'Rette den Laden noch 2011 – zwei Jahre vor der Frist der Bank', check: (s) => !!s.flags.debt && s.day <= toDay('2011-12-31'), reward: { rel: { papa: 2 }, ach: 'deadline' } },
       { id: 'b2fuse', streak: 60, text: '60 Tage am Stück ohne rausgeflogene Sicherung – mit mindestens 3 kW im Keller', check: (s, h, g) => s.unlocked.includes('keller') && !s.fac.keller.tripped && (g.summary?.keller?.watt || 0) >= 3000, reward: { rel: { opa: 1 }, text: 'Opa: „Sauber verkabelt, Junge.“' } },
       { id: 'b2ltc', text: 'Schürfe 50.000 Litecoin', check: (s) => (s.stats.coins?.LTC || 0) >= 5e4, progress: (s) => [s.stats.coins?.LTC || 0, 5e4, 'coin'], reward: { rel: { deniz: 1 }, xp: { mining: 60 }, text: 'Deniz hatte den richtigen Riecher' } },
       { id: 'b2cold', text: 'Leg 100 Bitcoin in die Cold-Wallet', check: (s) => s.wallet.BTC.cold >= 100, progress: (s) => [s.wallet.BTC.cold, 100, 'coin'], reward: { rel: { mama: 1 }, text: 'Mama: „Endlich legst du mal was zurück.“' } },
@@ -89,8 +89,8 @@ export const CHAPTERS = [
   },
   {
     title: 'Kapitel 3 – Die Werkstatt', unlock: 'halle', minDate: '2015-06-01', site: 'werkstatt', // nicht mitten in den Hashpreis-Absturz 2014: wer im Sommer 2014 eine Halle füllt, verliert alles
-    intro: 'Elektro Brandt ist gerettet, und Zweirad Öztürk ist ausgezogen. Papa drückt dir den Schlüssel zur Werkstatt hinterm Laden in die Hand.',
-    introLost: 'Elektro Brandt gibt es nicht mehr. Herr Öztürk hat das Haus ersteigert und vermietet dir die Werkstatt hinterm alten Laden. Papa trägt die erste Kiste hinein.', // nach „ladenzu“
+    intro: 'Zweirad Öztürk ist ausgezogen. Papa drückt dir den Schlüssel zur Werkstatt hinterm Laden in die Hand: „450 $ im Monat, wie bei jedem anderen auch. Der Kaffee geht aufs Haus.“',
+    introLost: 'Elektro Brandt gibt es nicht mehr. Herr Öztürk hat das Haus ersteigert und vermietet dir die Werkstatt hinterm alten Laden. Papa trägt die erste Kiste hinein.', // nur alte Spielstände (früheres Ereignis „ladenzu“)
     goals: [
       { id: 'asic', text: 'Kauf deinen ersten ASIC-Miner', check: (s) => s.flags.boughtAsic },
       { id: 'miners20', text: 'Betreibe 20 ASIC-Miner', check: (s, h) => h.asics() >= 20, progress: (s, h) => [h.asics(), 20, 'n'] }, // einzeln oder im Regal; FPGAs zählen nicht (2012 viel zu teuer für ihren Ertrag)
@@ -153,7 +153,7 @@ export const CHAPTERS = [
       { id: 'b6mw60', text: 'Bau die Fjordhalle auf 60 MW aus', check: (s) => s.fac.fjord.power >= 1, reward: { rel: { papa: 1 }, text: 'Papa fliegt zum ersten Mal nach Norwegen' } },
       { id: 'b6eff', text: 'Bring deine SHA-256-Flotte unter 30 J/TH (ab 100 PH/s)', check: (s, h, g) => h.algoHash('sha256') >= 1e17 && g.fleetJTH() <= 30, progress: (s, h, g) => [g.fleetJTH(), 30, 'jth'], reward: { rel: { deniz: 1 }, text: 'Deniz: „Das ist Weltspitze.“' } },
       { id: 'b6full', text: 'Fülle die Fjordhalle mit Containern', check: (s) => !!s.full?.fjord, progress: (s, h) => [h.fill('fjord'), 1, 'fill', 'fjord'], reward: { rel: { deniz: 1 }, text: 'Deniz: „Mehr Fjord gibt es nicht.“' } },
-      { id: 'b6heat', text: 'Lass die Abwärme ganz Sogn heizen', check: (s) => !!s.techs?.heatsale, reward: { rel: { mama: 1 }, text: 'Mama: „Ein ganzes Dorf warm – das ist mein Kind!“' } },
+      { id: 'b6heat', text: 'Lass die Abwärme ganz Sogn heizen (Ausbau „Fernwärme Sogn“)', check: (s) => !!s.techs?.heatsale || !!s.fac.fjord?.up?.fernwaerme, reward: { rel: { mama: 1 }, text: 'Mama: „Ein ganzes Dorf warm – das ist mein Kind!“' } },
     ],
   },
 ];
@@ -168,7 +168,7 @@ export const FULL_TALK = {
 };
 // Jahresrückblick (1. Januar): Titel je Jahr, danach Endlos-Titel
 export const YEAR_TITLES = {
-  2010: 'Ein PC und eine Idee', 2011: 'Milchkisten und 30 Dollar', 2012: 'Das erste Halving', 2013: 'ASIC-Goldrausch', 2014: 'Die GoxBank-Pleite',
+  2010: 'Eine Bude und ein leeres Gehäuse', 2011: 'Milchkisten und 30 Dollar', 2012: 'Das erste Halving', 2013: 'ASIC-Goldrausch', 2014: 'Die GoxBank-Pleite',
   2015: 'Der lange Winter', 2016: 'Effizienz oder Ende', 2017: 'Das Krypto-Fieber', 2018: 'Die Eiszeit', 2019: 'Tauwetter', 2020: 'Lockdown und Halving',
   2021: 'China schaltet ab', 2022: 'Merge, Energiekrise, FXT', 2023: 'Durchatmen', 2024: 'Fonds und das vierte Halving', 2025: '126.000 Dollar', 2026: 'Im Heute angekommen',
 };
@@ -190,22 +190,25 @@ export const moodTier = (v) => (v <= -2 ? 0 : v < 0 ? 1 : v === 0 ? 2 : v <= 2 ?
 export const MESSAGES = [
   { id: 'm0', date: '2010-10-01', from: 'Deniz', text: 'Ey, meine alte Grafikkarte schürft jetzt Bitcoin – Internetgeld, das Computer selbst herstellen!' },
   { id: 'm0b', date: '2010-10-01', from: 'Deniz', text: 'Im Keller von deinem Haus steht doch noch der ganze Krempel vom Vormieter. Da waren alte PC-Teile dabei, hast du erzählt – Mainboard, Prozessor, Netzteil. Geh runter und such sie zusammen! Dein leeres Gehäuse steht ja schon da.' },
-  { id: 'm1', date: '2010-10-04', from: 'Papa', text: 'Die Bank will 15.000 $ bis Ende 2013. Sonst ist der Laden weg. Nicht dein Problem, Kind.' },
   { id: 'm2', date: '2010-10-09', from: 'Deniz', text: 'Tipp: Crimson-Karten minen viel schneller als Verdant. Die RHD 5870 ist gerade der Hit.' },
   { id: 'm3', cond: (s, h) => h.maxTemp() > 32, from: 'Mama', text: 'Ich hab dir vorhin die Wäsche vor die Tür gestellt. Warum ist es bei dir so warm? Und was brummt da?' },
   { id: 'm4', date: '2010-11-06', from: 'Deniz', text: '0,39 $ pro Bitcoin!! Ich glaub, ich spinne.' },
-  { id: 'm5', cond: (s) => s.flags.papa1, from: 'Herr Krause', text: 'Die Nachzahlung ist da. Respekt. Den alten Hobbyraum im Keller können Sie haben – das Gerümpel vom Vormieter räumen wir zusammen raus. Strom zahlen Sie ab jetzt nach Zähler.' },
+  { id: 'm5', cond: (s) => s.flags.papa1, from: 'Herr Krause', text: 'Die Nachzahlung ist da. Respekt. Den alten Hobbyraum im Keller können Sie haben – 50 $ im Monat, und zu Weihnachten einen Kasten Bier. Das Gerümpel vom Vormieter räumen wir zusammen raus. Strom zahlen Sie ab jetzt nach Zähler, das steht dann auf Ihrer Monatsabrechnung.' },
   { id: 'm6', date: '2011-04-10', from: 'Deniz', text: 'Die Leute bauen jetzt Rigs in Milchkisten. Sieht wild aus, läuft aber.' },
   { id: 'm8', date: '2011-06-20', from: 'Deniz', text: 'GoxBank wurde gehackt! Lass nicht alles auf der Börse liegen.' },
   { id: 'm9', cond: (s, h) => h.facilityTripped(), from: 'Opa Heinz', text: 'Sicherung raus? Ich leg dir einen eigenen Stromkreis. Kostet aber.' },
   { id: 'm10', date: '2011-07-15', from: 'Deniz', text: 'Es gibt jetzt FPGA-Boards. Wenig Strom, viel Leistung. Aber teuer.' },
   { id: 'm11', date: '2011-10-08', from: 'Deniz', text: 'Neuer Coin: Litecoin. Da sind Grafikkarten richtig stark. Stell mal um!' },
+  // Werkstatt: Papa vermietet sie dir, sobald Zweirad Öztürk auszieht (Kapitel-2-Ziel earn2). m12/m12b: nur alte Spielstände (Laden gerettet)
+  { id: 'm12x', cond: (s) => s.chapter === 1 && !!s.goals.openrig && !s.flags.debt && !s.flags.shopLost && s.day >= toDay('2012-06-01') && !s.messages.some((m) => m.id === 'm12w'), from: 'Papa', text: 'Zweirad Öztürk ist ausgezogen, die Werkstatt hinterm Laden steht leer. Willst du sie haben? 450 $ Miete im Monat, wie jeder andere auch. Zeig mir vorher, dass sich das trägt: 30 $ Gewinn am Tag.' },
+  { id: 'm12w', cond: (s) => s.chapter === 1 && !!s.goals.openrig && !s.flags.debt && !s.flags.shopLost && s.day < toDay('2012-06-01'), from: 'Papa', text: 'Zweirad Öztürk zieht im Juni 2012 aus der Werkstatt hinterm Laden aus. Willst du sie haben? 450 $ Miete im Monat, wie jeder andere auch. Zeig mir vorher, dass sich das trägt: 30 $ Gewinn am Tag. Und wenn du dich öfter blicken lässt, reden wir noch mal über die Miete.' },
   { id: 'm12', cond: (s) => s.flags.debt && s.day < toDay('2012-06-01'), from: 'Papa', text: 'Der Laden ist gerettet! Wenn Zweirad Öztürk im Juni 2012 auszieht, gehört die Werkstatt hinten dir. Wird’s dir im Keller vorher zu eng, red ich mit ihm.' },
   { id: 'm12b', cond: (s) => s.flags.debt && s.day >= toDay('2012-06-01') && !s.messages.some((m) => m.id === 'm12'), from: 'Papa', text: 'Der Laden ist gerettet! Zweirad Öztürk ist schon ausgezogen – die Werkstatt hinten gehört dir.' },
   { id: 'm13', date: '2012-11-28', from: 'Deniz', text: 'Halving! Nur noch 25 BTC pro Block. Unsere Erträge halbieren sich.' },
   { id: 'm14', date: '2013-02-01', from: 'Deniz', text: 'Die ersten ASICs sind da. Eine Kiste schafft so viel wie 100 Grafikkarten.' },
   { id: 'm15', date: '2013-11-29', from: 'Mama', text: 'Im Fernsehen reden sie über Bitcoin. Über 1.000 Dollar! Ist das dein Ding?' },
-  { id: 'm15b', cond: (s) => !s.flags.debt && s.day >= toDay('2013-10-20') && s.day < toDay('2014-01-01'), from: 'Papa', text: 'Die Bank hat geschrieben: Wenn bis Silvester keine 15.000 $ da sind, wird der Laden versteigert. Ich weiß, ich hab gesagt, das ist nicht dein Problem …' },
+  // Papas Umzugsdarlehen (s.papaLoan, Game.repayPapa): nach zwei Jahren ohne Rate erinnert Mama sanft – keine Strafe
+  { id: 'mLoan', cond: (s) => s.papaLoan?.left > 0 && s.day - Math.max(s.papaLoan.since || 0, s.papaLoan.last || 0) >= 730, from: 'Mama', text: 'Schatz, Papa würde das nie sagen. Aber gestern hat er ganz nebenbei dein Umzugsgeld von damals erwähnt. Kein Druck, wirklich! Eine kleine Rate würde ihn nur sehr freuen. Geht im Handy unter Kontakte bei Papa.' },
   { id: 'm16', date: '2014-02-10', from: 'Deniz', text: 'GoxBank zahlt nichts mehr aus. Hol deine Coins in die Cold-Wallet!' },
   { id: 'm17', cond: (s) => s.day >= toDay('2014-03-12') && s.day <= toDay('2014-05-31') && (s.flags.gmbh || s.unlocked.includes('werkstatt')), from: 'Viktor Kral', text: 'Viktor Kral, MONOLITH Hash AG. Wir kaufen kleine Betriebe. Denken Sie drüber nach.' },
   { id: 'm18', cond: (s) => s.flags.gmbh, from: 'Deniz', text: 'Hashwerk GmbH! Ich kündige und steig ein. CTO? Sag ja.' },
@@ -308,7 +311,7 @@ export const NEWS = [
 
 export const START_DAY = toDay('2010-10-01');
 
-// Technologien (wie die Forschung im Vorbild): einmal kaufen, wirken dauerhaft
+// Alte Technologien (bis 11/2026 Taste T): sind in den Fähigkeiten aufgegangen (data/skills.js TECH_MAP). Bleiben nur für alte Spielstände und die Migration.
 export const TECHS = [
   { id: 'undervolt', name: 'Undervolting-Guide', icon: '🪫', date: '2010-12-01', cost: 300, desc: 'GPU-Rigs brauchen 12 % weniger Strom bei gleicher Leistung.', fx: { rigPower: 0.88 } },
   { id: 'pool', name: 'Eigener Pool-Server', icon: '🖧', date: '2011-06-01', cost: 2500, desc: 'Keine Poolgebühren mehr: +2 % Ertrag auf alles.', fx: { rev: 1.02 } },
@@ -328,6 +331,7 @@ export const TECHS = [
 const centsDay = (s, g) => { const r = g.dailyProfit().rev; return r >= 1 ? `${r.toLocaleString('de-DE', { maximumFractionDigits: 2 })} $` : `${Math.max(1, Math.round(r * 100))} Cent`; };
 export const FEATURES = {
   phone: { title: 'Handy', key: 'H', text: 'Neue Nachricht! Drück <kbd>H</kbd> für dein Handy.' },
+  bills: { title: 'Monatsabrechnung', key: 'H', by: 'konto', text: 'Am 1. jedes Monats werden Miete und Strom abgebucht. Was wann fällig ist: Handy (<kbd>H</kbd>) → Konto.' },
   walk: { title: 'Laufen & Benutzen', key: 'E', pseudo: true, text: '<kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> laufen, mit der Maus umsehen. <kbd>E</kbd> benutzt, was du anschaust: Türen, Teile, deinen PC.', stale: (s) => !!s.flags.miningStarted || !Object.keys(s.loose || {}).length },
   pcbuild: { title: 'PC zusammenbauen', key: 'E', pseudo: true, text: 'Alle Teile in der Tasche! Zurück in die Wohnung: PC anschauen, <kbd>E</kbd> – Teile einbauen und einschalten.', stale: (s) => !!s.flags.miningStarted },
   market: { title: 'Börse', key: 'M', by: 'market', text: 'Am <b>Monitor</b> (<kbd>E</kbd>) oder mit <kbd>M</kbd>: Was sind deine Bitcoin wert? Hier verkaufst du sie auch.', from: 'Deniz', msg: 'Dein PC schürft! Am Monitor siehst du an der Börse, was deine Bitcoin wert sind. Oder drück einfach M.' },
@@ -335,7 +339,7 @@ export const FEATURES = {
   sleep: { title: 'Schlafen', key: 'E', pseudo: true, text: 'Morgen früh kommt das Paket. Leg dich ins <b>Bett</b> (<kbd>E</kbd>) und schlaf bis morgen – oder lass die Zeit laufen.', from: 'Deniz', msg: 'Bestellt? Sehr gut. Jetzt heißt es warten – leg dich hin, morgen früh steht das Paket vor deiner Tür.', stale: (s) => !s.orders?.length || !!s.flags.boughtGpu },
   parcel: { title: 'Paket abholen', key: 'E', pseudo: true, text: 'Vor deiner <b>Wohnungstür</b> liegt ein Paket. Hingehen und <kbd>E</kbd>.', stale: (s) => !s.parcels?.length },
   install: { title: 'Lager & Einbau', key: 'E', pseudo: true, text: 'Ausgepackte Teile liegen im <b>Lager</b>. PC anschauen, <kbd>E</kbd> → Grafikkarte einbauen.', from: 'Deniz', msg: 'Die Karte ist da? Dann rein damit: PC anschauen, E drücken, Grafikkarte einbauen. Und nicht an die goldenen Kontakte fassen!', stale: (s) => !!s.flags.boughtGpu },
-  skills: { title: 'Fähigkeiten', key: 'J', by: 'skills', text: 'Was du tust, lernst du. <kbd>J</kbd> zeigt deine Fähigkeiten.', from: 'Opa Heinz', msg: 'Selbst eingebaut? So lernt man das, Junge. Jeder Handgriff macht dich besser – was du schon kannst, siehst du mit J.' },
+  skills: { title: 'Fähigkeiten', key: 'T', by: 'skills', text: '<kbd>T</kbd> zeigt deinen Fähigkeiten-Baum: was du kannst, was du als Nächstes lernst – durch Tun, aus Büchern, im Forum oder bei Leuten.', from: 'Opa Heinz', msg: 'Selbst eingebaut? Sauber, Junge. Wer schraubt, lernt was. Drück mal T: Da siehst du, was du schon kannst und was du als Nächstes lernen kannst – aus Büchern, im Forum oder bei mir.' },
   speed2: { title: 'Zeitraffer', key: '2', by: 'speed2', text: '<kbd>1</kbd> Echtzeit · <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd> schneller · <kbd>Leertaste</kbd> Pause.', from: 'Deniz', msg: 'Jetzt heißt es: laufen lassen. Mit 2, 3 und 4 spulst du vor – bei der 4 ist ein Tag in 4 Sekunden rum. Leertaste hält an.' },
   heat: { title: 'Wärmebild', key: 'I', by: 'heat', text: '<kbd>I</kbd> zeigt im Wärmebild, wo es zu heiß wird.', from: 'Deniz', msg: 'Bei dir wird’s warm! Mit I siehst du im Wärmebild, wo die Hitze steht. Lüfter gibt’s im Shop unter Kühlung.' },
   rigs: { title: 'Mehr PCs', key: 'B', by: 'build', text: 'Shop (<kbd>B</kbd>) → Rigs: als Bausatz bestellen und selbst einbauen. Teile gibt es auch einzeln. Fertig bestückt liefern dir später Kontakte.', from: 'Deniz', msg: 'Ein PC ist gut, zwei sind besser. Im Shop unter „Rigs“ gibt’s Gehäuse als Bausatz – Teile rein, fertig.' },
@@ -345,7 +349,6 @@ export const FEATURES = {
   coins: { title: 'Mehr Coins', key: 'E', by: 'inspect', text: 'Schau ein Gerät an (<kbd>E</kbd>): Dort wählst du, was es schürft.', from: 'Deniz', msg: 'Es gibt jetzt mehr als Bitcoin! Schau dir deine Rechner an (E) – dort stellst du ein, welchen Coin sie schürfen.' },
   cold: { title: 'Cold-Wallet', key: 'M', by: 'market', text: 'Sicher vor Börsenpleiten. Findest du in der Börse (<kbd>M</kbd>).', from: 'Deniz', msg: 'Lass nicht alles auf der Börse liegen! In der Börse kannst du deine Coins jetzt in eine Cold-Wallet legen – da kommt kein Hacker ran.' },
   map: { title: 'Karte', key: 'K', by: 'map', text: '<kbd>K</kbd> zeigt alle Standorte.', from: 'Papa', msg: 'Der Hobbyraum im Keller ist frei! Auf der Karte (K) siehst du alle deine Standorte auf einen Blick.' },
-  techs: { title: 'Technik', key: 'T', by: 'techs', text: '<kbd>T</kbd>: An Opas Werkbank Verbesserungen austüfteln.', from: 'Opa Heinz', msg: 'Komm mal an meine Werkbank (T). Ich hab da ein paar Ideen, wie deine Kisten weniger Strom fressen.' },
   ranking: { title: 'Logbuch', key: 'L', by: 'ranking', text: '<kbd>L</kbd>: Rangliste, Erfolge und Chronik.', from: 'Deniz', msg: 'Ich hab dir ein Logbuch angelegt: Rangliste, Erfolge, Chronik. Drück L.' },
   loan: { title: 'Bankkredit', key: 'C', by: 'company', text: 'Die Bank leiht dir Geld. Mit Zinsen. Steht in der Firma (<kbd>C</kbd>).', from: 'Papa', msg: 'Mein Bankberater sagt, dir würden sie jetzt Geld leihen. Mit Zinsen, natürlich. Steht in der Firmenübersicht (C).' },
   buycoins: { title: 'Coins kaufen', key: 'M', by: 'market', text: 'In der Börse (<kbd>M</kbd>) kannst du jetzt auch kaufen.', from: 'Deniz', msg: 'An der Börse kannst du jetzt auch kaufen. Günstig rein, teuer raus – theoretisch.' },
@@ -369,30 +372,39 @@ export const UPGRADES = {
   werkstatt: [
     { id: 'doorvent', name: 'Rolltor-Lüftung', cost: 1500, fx: { coolMul: 1.25 }, eff: 'Kühlung ×1,25', desc: 'Lamellen im Rolltor und ein Abluftgebläse unterm Dach.' },
     { id: 'alarm', name: 'Alarmanlage', cost: 900, secure: true, eff: 'Diebstahlschutz', desc: 'Bewegungsmelder und eine Sirene, die halb Lindental weckt.' },
+    { id: 'dustmat', name: 'Staubfilter-Matten', cost: 1500, from: '2012-06-01', fx: { fail: 0.8 }, eff: 'Ausfälle ×0,8', desc: 'Filtermatten vor jedem Lufteinlass. Einmal im Monat ausklopfen, fertig.' },
     { id: 'buyshop', name: 'Werkstatt von Papa kaufen', cost: 45000, fx: { rent: 0 }, rel: { papa: 1 }, eff: 'Keine Miete mehr · Papa freut sich', desc: 'Papa verkauft dir die Werkstatt. Das Geld steckt er in den Laden.', lost: { name: 'Werkstatt von Herrn Öztürk kaufen', rel: null, eff: 'Keine Miete mehr', desc: 'Herr Öztürk verkauft dir die Werkstatt hinterm alten Laden. Papa hilft beim Umschreiben der Schilder.' } },
   ],
   halle: [
     { id: 'lease5', name: '5-Jahres-Mietvertrag', cost: 4000, days: 1826, keepRent: true, obsoleteBy: 'buyhall', fx: { rent: 0.75 }, eff: 'Miete −25 % für 5 Jahre', desc: 'Lange Bindung, kleinere Miete. Einmotten spart dann aber keine Miete mehr.' },
     { id: 'guard', name: 'Wachdienst', monthly: 1200, cancel: true, secure: true, eff: 'Diebstahlschutz', desc: 'Nachts fährt ein Wachmann zweimal ums Gelände. Monatlich kündbar.' },
     { id: 'roofvent', name: 'Dachventilatoren', cost: 25000, fx: { coolMul: 1.3 }, eff: 'Kühlung ×1,3', desc: 'Sechs große Ventilatoren im Hallendach ziehen die Hitze ab.' },
+    { id: 'dustmat', name: 'Staubfilter-Matten', cost: 6000, from: '2012-06-01', fx: { fail: 0.8 }, eff: 'Ausfälle ×0,8', desc: 'Filtermatten vor den Hallentoren und Racks.' },
+    { id: 'aisle', name: 'Kalt-/Warmgang-Einhausung', cost: 90000, from: '2017-06-01', fx: { coolMul: 1.35 }, eff: 'Kühlung ×1,35', desc: 'Plexiglas-Türen und Dachplatten trennen kalte und warme Luft zwischen den Rack-Reihen.' },
     { id: 'buyhall', name: 'Halle kaufen', cost: 240000, fx: { rent: 0 }, eff: 'Keine Miete mehr', desc: 'Der Vermieter will in Rente. Die Halle gehört dann dir.' },
   ],
   rz: [
     { id: 'diesel', name: 'Notstromdiesel', cost: 400000, ups: true, fx: { cap: 1.1 }, eff: 'USV · +10 % Anschluss', desc: 'Ein Diesel im Hof fängt Stromausfälle ab und deckt Lastspitzen.' },
     { id: 'green', name: 'Ökostrom-Vertrag', cost: 250000, fx: { elec: 0.88 }, eff: 'Strom −12 %', desc: 'Zehn Jahre Windstrom aus der Nordsee zum Festpreis.' },
+    { id: 'dustmat', name: 'Staubfilter-Matten', cost: 30000, from: '2012-06-01', fx: { fail: 0.8 }, eff: 'Ausfälle ×0,8', desc: 'Feinstaubfilter in der ganzen Klimaanlage.' },
+    { id: 'aisle', name: 'Kalt-/Warmgang-Einhausung', cost: 160000, from: '2017-06-01', fx: { coolMul: 1.35 }, eff: 'Kühlung ×1,35', desc: 'Der Doppelboden bekommt endlich dichte Kaltgänge.' },
+    { id: 'immersion', name: 'Immersionsbecken', cost: 1200000, skill: 'immersion', imm: true, fx: { fail: 0.7 }, eff: 'Ausfälle ×0,7 · Turbo +12 %', desc: 'Die Miner baden in Kühlflüssigkeit. Mit Turbo takten sie höher, ohne sich kaputtzuheizen.' },
     { id: 'buyrz', name: 'Rechenzentrum kaufen', cost: 3600000, fx: { rent: 0 }, eff: 'Keine Miete mehr', desc: 'Der Betreiber zieht nach Amsterdam und verkauft das Gebäude.' },
   ],
   fjord: [
     { id: 'icechim', name: 'Eiskamin', cost: 1500000, fx: { coolMul: 1.2, hash: 1.03 }, eff: 'Kühlung ×1,2 · +3 % Hashrate', desc: 'Ein Schacht saugt Gletscherluft an. Die Miner takten etwas höher.' },
     { id: 'salmon', name: 'Lachszucht mit Abwärme', cost: 2500000, monthly: -60000, eff: '+60.000 $/Monat', desc: 'Die Abwärme hält die Becken der Lachszucht nebenan warm. Die zahlt dafür.' },
+    { id: 'dustmat', name: 'Staubfilter-Matten', cost: 60000, from: '2012-06-01', fx: { fail: 0.8 }, eff: 'Ausfälle ×0,8', desc: 'Filter vor jedem Container – der Fjordwind bringt Salz und Sand.' },
+    { id: 'immersion', name: 'Immersionsbecken', cost: 2500000, skill: 'immersion', imm: true, fx: { fail: 0.7 }, eff: 'Ausfälle ×0,7 · Turbo +12 %', desc: 'Tauchbecken für die Container-Miner. Mit Turbo takten sie höher, ohne sich kaputtzuheizen.' },
+    { id: 'fernwaerme', name: 'Fernwärme Sogn', cost: 3000000, from: '2022-01-01', skill: 'abwaerme', fx: { elec: 0.8 }, eff: 'Strom −20 % · das Dorf heizt mit', desc: 'Wärmetauscher und eine Leitung ins Dorf: Schwimmbad, Schule und Fischfabrik heizen mit deiner Abwärme.' },
     { id: 'buyfjord', name: 'Fjordhalle kaufen', cost: 9600000, fx: { rent: 0 }, eff: 'Keine Miete mehr', desc: 'Die Gemeinde Sogn verkauft dir die Halle samt Kai.' },
     { id: 'hydro', name: 'Anteil am Wasserkraftwerk', cost: 30000000, fx: { elec: 0.6 }, eff: 'Strom −40 % in der Fjordhalle', desc: 'Ein Drittel des Kraftwerks gehört dann Hashwerk. Strom fast zum Selbstkostenpreis.' },
   ],
 };
 
-// Schwierigkeitsgrade (Faktoren über Game.diff(key))
+// Schwierigkeitsgrade (Faktoren über Game.diff(key)); cash: Papas Umzugsdarlehen = Startgeld (s.papaLoan)
 export const DIFFICULTY = {
-  easy: { name: 'Gemütlich', desc: 'Mehr Startgeld, weniger Pech, günstigere Hardware, billigerer Strom, 10 % mehr Ertrag und ein langsamerer Rivale.', cash: 500, wear: 0.5, dispo: 0.5, exLoss: 0.5, badEvents: 0.6, hw: 0.9, elec: 0.85, rev: 1.1, monolith: 0.8, tips: 1 },
-  normal: { name: 'Normal', desc: 'So, wie die Geschichte gedacht ist.', cash: 300, wear: 1, dispo: 1, exLoss: 1, badEvents: 1, hw: 1, tips: 1 },
-  hard: { name: 'Historiker', desc: 'Mehr Verschleiß, teurer Dispo, 10 % teurerer Strom, öfter Pech, keine Tipps.', cash: 300, wear: 1.3, dispo: 1.5, exLoss: 1, badEvents: 1.3, hw: 1, elec: 1.1, tips: 0 },
+  easy: { name: 'Gemütlich', desc: 'Papa leiht dir mehr, weniger Pech, günstigere Hardware, billigerer Strom, 10 % mehr Ertrag und ein langsamerer Rivale.', cash: 1200, wear: 0.5, dispo: 0.5, exLoss: 0.5, badEvents: 0.6, hw: 0.9, elec: 0.85, rev: 1.1, monolith: 0.8, tips: 1 },
+  normal: { name: 'Normal', desc: 'So, wie die Geschichte gedacht ist.', cash: 1000, wear: 1, dispo: 1, exLoss: 1, badEvents: 1, hw: 1, tips: 1 },
+  hard: { name: 'Historiker', desc: 'Mehr Verschleiß, teurer Dispo, 10 % teurerer Strom, öfter Pech, keine Tipps.', cash: 1000, wear: 1.3, dispo: 1.5, exLoss: 1, badEvents: 1.3, hw: 1, elec: 1.1, tips: 0 },
 };

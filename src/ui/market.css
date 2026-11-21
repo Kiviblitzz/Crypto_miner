@@ -85,6 +85,10 @@ body.at-monitor #toasts { top: 16px !important; bottom: auto !important; } /* Me
 .mkp-prev { display: flex; flex-direction: column; align-items: flex-end; margin-left: auto; min-width: 0; }
 .mkp-prev b { font: 700 1.45em/1.1 var(--font-fun); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .mkp-prev small { font: 600 .82em var(--font); color: var(--mk-dim); white-space: nowrap; }
+.mkp-prev b i { font: 600 .55em var(--font); font-style: normal; color: var(--mk-dim); margin-left: .2em; }
+.mkp-act.mkp-lim .mkp-chips button { min-width: 3.6em; padding: .5em .7em; }
+.mkp-act.mkp-lim .mkp-q { gap: .6em; }
+.mkp-act.mkp-lim .mkp-prev small { white-space: normal; text-align: right; max-width: 15em; }
 .mkp-go { display: flex; align-items: center; gap: .5em; }
 .mkp-ok { height: 2.9em; padding: 0 1.6em; border-radius: 999px; font: 700 1.1em var(--font-fun) !important; white-space: nowrap; }
 .mkp-ok:hover { filter: brightness(1.08); }
