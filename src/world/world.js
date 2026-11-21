@@ -37,8 +37,9 @@ import { M, mat } from './materials.js';
 import { FACILITY } from '../data/world.js';
 import { PLACEABLE, PART } from '../data/hardware.js';
 import { fmtHash, fmtUSD, fmtDate, fmtCoin } from '../sim/game.js';
+import { MonitorOverlay, monitorPose, drawPcScreen } from './monitor.js';
 
-const tmpV = new THREE.Vector3();
+const tmpV = new THREE.Vector3(), tmpM = new THREE.Matrix4();
 
 // Teilbaum freigeben (GPU-Speicher): Geometrien, Materialien, Texturen – außer geteilten aus Caches (userData.shared);
 // Modell-Vorlagen werden nur abgemeldet (releaseModel)
@@ -73,7 +74,7 @@ export class World {
   constructor(canvas, game) {
     this.game = game; this.canvas = canvas;
     const r = this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: false });
-    r.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+    r.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
     r.toneMapping = THREE.NeutralToneMapping; r.toneMappingExposure = 0.98;
     r.outputColorSpace = THREE.SRGBColorSpace;
@@ -92,9 +93,10 @@ export class World {
     this.mode = 'title';
     this.touchMode = window.matchMedia?.('(pointer: coarse)').matches || false;
     document.addEventListener('pointerlockchange', () => {
-      const locked = document.pointerLockElement === canvas;
+      const locked = document.pointerLockElement === canvas, wasLocked = !!this.player.locked; // nur ein echter Wechsel zählt (manche Browser melden auch Freigaben ohne vorherigen Fang)
       this.player.locked = locked; if (locked) { this.player.lockAt = performance.now(); this.lockFailed = false; }
-      if (!locked && this.mode === 'play' && !this.expectUnlock) { this.cancelPlacement(); this.onPause?.(); }
+      if (!locked && wasLocked && this.mode === 'play' && !this.expectUnlock) { this.cancelPlacement(); this.onPause?.(); }
+      else if (!locked && wasLocked && this.mode === 'ui' && !this.expectUnlock) this.onUiEsc?.(); // Fenster offen, aber die Maus war noch gefangen: Chromes Esc gibt nur die Maus frei – dann schließt dieses Esc das Fenster
       this.expectUnlock = false;
       // Wettlauf: die Maus wurde erst eingefangen, nachdem schon ein Fenster aufging – sofort wieder freigeben
       if (locked && (this.mode !== 'play' || this.paused)) { this.expectUnlock = true; document.exitPointerLock(); }
@@ -158,7 +160,7 @@ export class World {
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
     this.grade = new ShaderPass(GradeShader); this.composer.addPass(this.grade);
-    this.quality = 'high';
+    this.quality = 'high'; this.initGfx(); // Grafikstufe: automatisch bzw. gemerkt
 
     // Feste Lichter: Glimmen in laufenden Tower-PCs (Pool statt Licht pro Gerät) und das Licht der Nahansicht
     this.towerLights = []; for (let i = 0; i < TOWER_LIGHTS; i++) { const l = new THREE.PointLight(0xffa860, 0, 0.7, 2); this.scene.add(l); this.towerLights.push(l); }
@@ -188,17 +190,53 @@ export class World {
     game.on('update', () => this.spawnIncome());
   }
 
+  // Grafikstufen: hoch (alle Effekte), mittel (ohne Umgebungsverdeckung und Bloom, kleinere Schatten, Pixel 1:1), niedrig (ohne Nachbearbeitung und Schatten)
   setQuality(q) {
     this.quality = q;
-    const r = this.renderer;
-    r.shadowMap.enabled = q !== 'low';
-    r.setPixelRatio(q === 'low' ? 1 : Math.min(window.devicePixelRatio, 1.75));
+    const r = this.renderer, hi = q === 'high', lo = q === 'low';
+    r.shadowMap.enabled = !lo; r.shadowMap.type = hi ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+    const ms = hi ? 2048 : 1024; if (this.sun.shadow.mapSize.x !== ms) { this.sun.shadow.mapSize.set(ms, ms); this.sun.shadow.map?.dispose(); this.sun.shadow.map = null; }
+    r.setPixelRatio(hi ? Math.min(window.devicePixelRatio, 1.5) : Math.min(window.devicePixelRatio, 1));
     this.composer.setPixelRatio(r.getPixelRatio());
-    this.bloom.enabled = q === 'high';
-    if (this.gtao) this.gtao.enabled = q === 'high' && (this.def?.tier ?? 0) <= 2;
-    document.body.classList.toggle('lowfx', q === 'low');
+    for (const rt of [this.composer.renderTarget1, this.composer.renderTarget2]) { const n = hi ? 4 : 2; if (rt && rt.samples !== n) { rt.samples = n; rt.dispose(); } }
+    this.bloom.enabled = hi;
+    if (this.gtao) this.gtao.enabled = hi && (this.def?.tier ?? 0) <= 2;
+    document.body.classList.toggle('lowfx', lo);
     this.scene.traverse((o) => { if (o.material) o.material.needsUpdate = true; });
     this.resize();
+  }
+  // Einstellung pro Gerät: 'auto' (Standard) oder eine feste Stufe. Automatisch: ohne Grafikkarte (Software-Rendering) gleich niedrig,
+  // sonst wird die Bildrate gemessen und bei Ruckeln eine Stufe heruntergeschaltet; die gefundene Stufe gilt auch beim nächsten Start
+  gfxLoad() { try { return JSON.parse(localStorage.getItem('hashwerk_gfx') || '{}'); } catch (e) { return {}; } }
+  gfxSave() { try { localStorage.setItem('hashwerk_gfx', JSON.stringify(this.gfx)); } catch (e) { /* egal */ } }
+  softGL() {
+    try { const gl = this.renderer.getContext(), ext = gl.getExtension('WEBGL_debug_renderer_info'); const n = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)); this.glName = n; this.glSoft = /swiftshader|llvmpipe|softpipe|software|basic render/i.test(n); this.glInfo = n.replace(/^ANGLE \((.*)\)$/, '$1').replace(/\s*\(0x[0-9a-f]+\)/gi, '').replace(/,\s*(D3D|Vulkan|OpenGL)[^,]*$/i, '').slice(0, 80); return this.glSoft; } catch (e) { return false; }
+  }
+  initGfx() {
+    this.gfx = this.gfxLoad(); const mode = this.gfx.mode || 'auto';
+    // Automatisierte Tests (Playwright) laufen bewusst in voller Qualität
+    const auto = mode === 'auto' && !navigator.webdriver;
+    let q = mode === 'auto' ? (this.gfx.auto || 'high') : mode;
+    const soft = this.softGL(); if (auto && soft) q = 'low';
+    this.fpsMon = auto ? { t0: 0, n: 0, bad: 0, skipUntil: performance.now() + 5000 } : null;
+    if (q !== this.quality) this.setQuality(q);
+  }
+  setGfxMode(mode) {
+    this.gfx ||= {}; this.gfx.mode = mode; if (mode !== 'auto') this.setQuality(mode); else { this.setQuality(this.gfx.auto || 'high'); this.fpsMon = { t0: 0, n: 0, bad: 0, skipUntil: performance.now() + 3000 }; }
+    this.gfxSave();
+  }
+  // Bildrate messen (nur wenn das Fenster aktiv ist und gerade nichts lädt); zweimal hintereinander unter 40 Bildern pro Sekunde: eine Stufe runter
+  fpsTick(now) {
+    const m = this.fpsMon; if (!m) return;
+    if (now < m.skipUntil || document.hidden || !document.hasFocus() || this.throttled) { m.t0 = 0; return; }
+    if (!m.t0) { m.t0 = now; m.n = 0; return; }
+    m.n++; const el = now - m.t0; if (el < 3000) return;
+    const fps = (m.n * 1000) / el; m.t0 = 0; this.fpsNow = fps;
+    if (fps >= 40) { m.bad = 0; return; }
+    if (++m.bad < 2) return; m.bad = 0;
+    const next = this.quality === 'high' ? 'medium' : this.quality === 'medium' ? 'low' : null; if (!next) { this.fpsMon = null; return; }
+    this.setQuality(next); this.gfx.auto = next; this.gfxSave(); m.skipUntil = now + 3000;
+    this.onGfxAuto?.(next);
   }
 
   resize() {
@@ -211,6 +249,7 @@ export class World {
   // opt.pose: Spielerpose in Haus-Koordinaten (nahtloser Wechsel Wohnung ↔ Keller), opt.at: 'haustuer' (Ankunft von woanders)
   loadFacility(id, opt = {}) {
     const t0 = performance.now();
+    if (this.fpsMon) this.fpsMon.skipUntil = t0 + 2500; // Shader übersetzen und Aufbau verfälschen die Messung
     this.cancelPlacement(); this.select(null); this.onHover?.(null);
     if (this.room) { this.scene.remove(this.room.root); this.scene.remove(this.outside); if (!this.room.cached) { disposeTree(this.room.root); disposeTree(this.outside); } }
     // Geräte: Wohnung und Keller behalten ihre Modelle (Wechsel auf der Treppe baut nichts neu), sonst freigeben
@@ -749,15 +788,22 @@ export class World {
     const e = this.entries.get(uid); if (e) e.spinK = 0;
     this.bootPending = true; this.screensDirty = true; this.pulse(uid); const e2 = this.entries.get(uid), bb = e2?.group.userData.bbox; if (e2 && !this.focus) this.coinBurst(new THREE.Vector3(e2.group.position.x, (bb ? bb.max.y : 0.5) + 0.1, e2.group.position.z), 6);
   }
-  // Kamera zum Monitor (Miner bootet)
-  focusMonitor() {
-    const pr = this.room?.props?.find((p) => p.action === 'market'); if (!pr) return;
+  // Kamera zum Monitor (Miner bootet). opt.page: Börse auf dem Monitor (Market.atPc) – Bildschirm füllt die Sicht, die Seite liegt als HTML darauf
+  focusMonitor(opt = null) {
+    const pr = this.room?.props?.find((p) => p.action === 'market'); if (!pr) return null;
+    if (opt?.page) {
+      const P = monitorPose(this, opt.top || 0); if (!P) return null;
+      this.focus = { pos: P.pos, q: P.q, look: P.look, page: true, sc: P.sc, seat: P.seat, light: P.look.clone().add(new THREE.Vector3(0.3, 0.25, 0.45)) }; this.focusUid = null;
+      if (!this.focusLight) { this.focusLight = new THREE.PointLight(0xfff2df, 0, 0.75, 1.6); this.scene.add(this.focusLight); }
+      return P;
+    }
     const pos = new THREE.Vector3(pr.c[0] + 0.18, pr.c[1] + 0.05, pr.c[2] + 0.62), look = new THREE.Vector3(pr.c[0] + 0.05, pr.c[1], pr.c[2]);
     const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(pos, look, new THREE.Vector3(0, 1, 0)));
     this.focus = { pos, q, light: new THREE.Vector3(pr.c[0] + 0.4, pr.c[1] + 0.15, pr.c[2] + 0.5) }; this.focusUid = null;
     if (this.bootPending) { this.bootT = this.t; this.bootPending = false; this.screensDirty = true; }
     if (!this.focusLight) { this.focusLight = new THREE.PointLight(0xfff2df, 0, 0.75, 1.6); this.scene.add(this.focusLight); }
   }
+  monitorPage(el, tick) { (this.monOverlay ||= new MonitorOverlay(this)).attach(el, tick); }
   select(uid) {
     this.selected = uid; this.refreshSelBox();
     this.onSelect?.(uid);
@@ -846,7 +892,7 @@ export class World {
     this.mode = m;
     this.player.enabled = m === 'play';
     this.controls.enabled = m === 'map';
-    if (m === 'play') this.requestLock();
+    if (m === 'play') { clearTimeout(this.lockT); this.lockT = setTimeout(() => { if (this.mode === 'play' && !this.paused) this.requestLock(); }, 0); } // erst nach dem laufenden Tastendruck: öffnet der gleich ein Fenster (resume → openUI), wird die Maus gar nicht erst eingefangen
     else if (document.pointerLockElement) { this.expectUnlock = true; document.exitPointerLock(); }
     if (this.looseGroup) { this.looseGroup.visible = m !== 'title' && !!this.room?.looseSpots; this.glow.enabled = m !== 'title' && this.glow.selectedObjects.length > 0; }
     if (m !== 'play') { this.aim = null; this.onAim?.(null); if (!this.selected) this.selBox.visible = false; this.popups?.forEach((p) => (p.visible = false)); }
@@ -856,7 +902,7 @@ export class World {
     if (this.touchMode || this.mode !== 'play' || document.pointerLockElement === this.canvas) return;
     // NotAllowed/Abort (z. B. zu kurz nach dem Verlassen, keine Nutzergeste) ist nur vorübergehend – nächster Klick versucht es erneut
     const fail = (err) => { if (err?.name !== 'NotAllowedError' && err?.name !== 'AbortError') this.lockFailed = true; this.onLockChange?.(false); };
-    const plain = () => { try { const r = this.canvas.requestPointerLock(); this.lockPromise = !!(r && r.catch); if (this.lockPromise) r.catch(fail); } catch (e) { this.lockFailed = true; } };
+    const plain = () => { if (this.mode !== 'play') return; try { const r = this.canvas.requestPointerLock(); this.lockPromise = !!(r && r.catch); if (this.lockPromise) r.catch(fail); } catch (e) { this.lockFailed = true; } };
     // Rohe Mausbewegung (ohne Beschleunigung) vermeidet Sprünge beim schnellen Drehen; ältere Browser fallen zurück
     if (this.noRawMouse) { plain(); return; }
     try { const r = this.canvas.requestPointerLock({ unadjustedMovement: true }); this.lockPromise = !!(r && r.catch); if (this.lockPromise) r.catch((err) => { if (err?.name === 'NotSupportedError') { this.noRawMouse = true; plain(); } else fail(err); }); } catch (e) { this.noRawMouse = true; plain(); }
@@ -1366,23 +1412,33 @@ export class World {
     } else if (this.cine) {
       this.updateCine(dt);
     } else {
-      if (this.mode === 'play' && !this.paused) {
+      if (this.mode === 'play' && !this.paused && !(this.fc?.seat && this.focusK > 0)) { // vom Monitor-Stuhl erst aufstehen, dann laufen
         const scale = this.def.tier >= 3 ? 1.6 : 1;
         this.player.update(dt, (x, z, r) => this.collides(x, z, r), scale, this.hoff ? (x, z, y) => this.groundAt(x, z, y) : null);
         if (this.hoff) { this.doorAssist(dt); this.player.apply(); this.checkHouseSwitch(); }
         if (this.placing) this.updatePlacement(); else this.updateAim();
       } else this.player.apply();
       // Weiche Fahrt zur Nahansicht und zurück
-      this.focusK = Math.max(0, Math.min(1, (this.focusK || 0) + (this.focus && this.mode === 'ui' ? dt : -dt) / 0.6));
+      this.focusK = Math.max(0, Math.min(1, (this.focusK || 0) + (this.focus && this.mode === 'ui' ? dt : -dt) / (this.focus?.seat || this.fc?.seat ? 0.9 : 0.6))); // mit Hinsetzen 0,9 s
       if (this.focusK > 0 && (this.focus || this.fc)) {
         const f = this.focus, k = this.focusK * this.focusK * (3 - 2 * this.focusK);
-        if (f) { if (!this.fc) this.fc = { pos: f.pos.clone(), q: f.q.clone(), light: f.light.clone() }; const a = 1 - Math.exp(-dt * 3.2); this.fc.pos.lerp(f.pos, a); this.fc.q.slerp(f.q, a); this.fc.light.lerp(f.light, a); }
-        this.camera.position.lerp(this.fc.pos, k); this.camera.quaternion.slerp(this.fc.q, k);
+        if (f) { if (!this.fc) this.fc = { pos: f.pos.clone(), q: f.q.clone(), light: f.light.clone() }; const a = 1 - Math.exp(-dt * 3.2); this.fc.pos.lerp(f.pos, a); this.fc.q.slerp(f.q, a); this.fc.light.lerp(f.light, a); this.fc.page = !!f.page; this.fc.sc = f.sc; this.fc.look = f.look ? (this.fc.look || f.look.clone()).lerp(f.look, a) : null; this.fc.seat = f.seat ? (this.fc.seat || f.seat.clone()).copy(f.seat) : null; }
+        if (this.fc.seat && this.fc.look) { // Monitor mit Stuhl: erst hinsetzen (Sitzhöhe, näher an den Tisch), dann an den Bildschirm – zurück genauso andersherum
+          const K = this.focusK, A = 0.45, ss = (x) => x * x * (3 - 2 * x), u = ss(Math.min(1, K / A)), v = ss(Math.max(0, (K - A) / (1 - A)));
+          this._fq ||= new THREE.Quaternion();
+          if (K < A) { this.camera.position.lerp(this.fc.seat, u); this._fq.setFromRotationMatrix(tmpM.lookAt(this.camera.position, this.fc.look, this.camera.up)); this.camera.quaternion.slerp(this._fq, u); }
+          else { this.camera.position.copy(this.fc.seat).lerp(this.fc.pos, v); this.camera.quaternion.setFromRotationMatrix(tmpM.lookAt(this.camera.position, this.fc.look, this.camera.up)); }
+        } else {
+          this.camera.position.lerp(this.fc.pos, k);
+          if (this.fc.look) { this._fq ||= new THREE.Quaternion(); this._fq.setFromRotationMatrix(tmpM.lookAt(this.camera.position, this.fc.look, this.camera.up)); this.camera.quaternion.slerp(this._fq, Math.min(1, k * 1.8)); } // Monitor: Bildschirm bleibt während der Fahrt mittig und ganz im Bild
+          else this.camera.quaternion.slerp(this.fc.q, k);
+        }
         if (this.focusLight) { this.focusLight.position.copy(this.fc.light); this.focusLight.intensity = 1.9 * k; }
         if (this.outline && !this.outline.pulsePeriod) this.outline.edgeStrength = 1.15 - 0.7 * k;
       } else { this.fc = null; if (this.focusLight) this.focusLight.intensity = 0; if (this.outline) this.outline.edgeStrength = 1.15; }
     }
     this.vm.update(dt, { moving: this.player.moving && this.mode === 'play', bob: this.player.bob, placing: !!this.placing, visible: (this.mode === 'play' || this.mode === 'ui') && !this.cine, uiOpen: this.mode === 'ui' });
+    this.monOverlay?.update(); // Börsen-Seite auf dem Monitor folgt der Kamera
     this.updateHouseDoors(dt); this.updateZone(dt); this.updateParcels(dt);
     // Tag/Nacht
     // Optik-Uhr: Licht folgt der Spielzeit gedämpft (höchstens ein Tag pro 90 s) – kein Flackern bei hohem Tempo
@@ -1402,7 +1458,12 @@ export class World {
     const blink = (Math.sin(this.t * 7) > 0.2) ? 3.5 : 0.6, blink2 = (Math.sin(this.t * 5.3 + 1) > -0.3) ? 3 : 0.4;
     M.ledGreen().emissiveIntensity = blink; M.ledGreen2().emissiveIntensity = blink2; M.ledAmber().emissiveIntensity = blink2 * 0.9;
     M.rgb().emissive.setHSL(0.07 + 0.05 * Math.sin(this.t * 0.6), 0.95, 0.55); { let on = false; for (const e of this.entries.values()) if (e.running) { on = true; break; } const tgt = on && this.mode !== 'title' ? 2.2 : this.mode === 'title' ? 0.6 : 0.15; M.rgb().emissiveIntensity += (tgt - M.rgb().emissiveIntensity) * Math.min(1, dt * 3); }
-    // Rendern
+    // Rendern: ist das Fenster nicht aktiv (z. B. der Chat daneben), reichen wenige Bilder pro Sekunde; hinter Menüs reichen 30
+    const now = performance.now(); this.fpsTick(now);
+    const menu = !!document.body.dataset.modal || document.body.classList.contains('show-build') || !document.getElementById('modal')?.classList.contains('hidden');
+    const drive = this.focusK > 0 && this.focusK < 1; // Kamerafahrt zum Monitor: voll flüssig, sonst hinkt die Seite darauf hinterher
+    const minMs = !document.hasFocus() ? 140 : menu && !drive ? 30 : 0; this.throttled = minMs > 0;
+    if (minMs && now - (this.lastDraw || 0) < minMs) return; this.lastDraw = now;
     if (this.quality === 'low') { const r = this.renderer; r.render(this.scene, this.camera); if (this.vm.root.visible) { r.autoClear = false; r.clearDepth(); r.render(this.vm.scene, this.camera); r.autoClear = true; } } else this.composer.render();
   }
 
@@ -1452,27 +1513,7 @@ export class World {
     if (!this.room) return;
     for (const sc of this.room.screens) {
       const g = sc.canvas.getContext('2d'), W = sc.canvas.width, H = sc.canvas.height;
-      if (sc.kind === 'pc') {
-        // Mining-Konsole auf dem Monitor im Kinderzimmer – mit echten Werten
-        const s = this.game.s, sm = this.game.summary[this.facId];
-        if (s.feat && !s.flags.miningStarted) { g.fillStyle = '#050403'; g.fillRect(0, 0, W, H); g.fillStyle = '#3a2a18'; g.beginPath(); g.arc(W - 18, H - 16, 4, 0, 7); g.fill(); sc.tex.needsUpdate = true; continue; }
-        g.fillStyle = '#140b04'; g.fillRect(0, 0, W, H); g.font = 'bold 26px monospace'; g.fillStyle = '#ffb347';
-        g.fillText('miner v0.3 – ' + fmtDate(s.day), 14, 34);
-        g.font = '21px monospace';
-        const lines = [];
-        if (this.bootT != null && this.t - this.bootT < 5.5) {
-          const pc = this.game.facObjects(this.facId).find((o) => o.type === 'tower'), gpu = pc?.parts?.gpus?.[0], a = pc && sm?.per.get(pc.uid);
-          const boot = ['Starte Miner ...', gpu ? `GPU gefunden: ${PART[gpu].name}` : `Keine GPU – rechne mit der CPU (${PART[pc?.parts?.cpu]?.name || 'CPU'})`, 'Verbinde mit dem Bitcoin-Netz ...', `Schürfe! ${a?.units?.[0]?.h ? fmtHash(a.units[0].h, 'sha256') : ''}`];
-          g.font = 'bold 24px monospace'; boot.slice(0, 1 + Math.floor((this.t - this.bootT) / 1.1)).forEach((l, k) => g.fillText(l, 14, 80 + k * 36, W - 28));
-          sc.tex.needsUpdate = true; continue;
-        }
-        let i = 0;
-        for (const o of this.game.facObjects(this.facId)) { const a = sm?.per.get(o.uid); if (!a || !a.units.length) continue; const u = a.units[0]; lines.push(`RIG${i++}: ${u.h ? fmtHash(u.h, u.algo) : 'idle'} ${u.coin || ''}`); if (lines.length >= 4) break; }
-        lines.push(`BTC ${fmtUSD(this.game.price('BTC'))}  T ${sm ? sm.temp.toFixed(1).replace('.', ',') : '--'} °C`);
-        lines.push(`> ${Math.floor(this.t * 2) % 2 ? '_' : ' '}`);
-        lines.forEach((l, k) => g.fillText(l, 14, 76 + k * 34, W - 28));
-        sc.tex.needsUpdate = true; continue;
-      }
+      if (sc.kind === 'pc') { drawPcScreen(this, sc); sc.tex.needsUpdate = true; continue; } // Monitor in der Wohnung: Börse im Kleinen, beim Booten die Konsole (monitor.js)
       const s = this.game.s; g.fillStyle = '#04101c'; g.fillRect(0, 0, W, H);
       g.fillStyle = '#7fe3ff'; g.font = 'bold 54px Arial'; g.fillText('HASHWERK · NOC', 40, 80);
       g.font = '34px monospace'; g.fillStyle = '#cfe';

@@ -13,11 +13,14 @@ import { ROLES, TRAITS, QUOTES } from '../data/staff.js';
 import { CONTACTS, CONTACT, FEE_TIERS, FAMILY_CONTACTS } from '../data/contacts.js';
 import { showFinale, endlessGoals, egoalKey, egoalDone } from './finale.js';
 import { BILL_STAGE, billText, monthName, PAPA_HELP, siteIn } from '../data/bills.js';
+import { Market } from './market.js';
 
 const $ = (s) => document.querySelector(s);
 const h = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const SPEEDS = [{ l: 'II', v: 0, t: 'Pause (Leertaste)' }, { l: '1×', v: 1, t: 'Echtzeit – eine Sekunde ist eine Sekunde (Taste 1)' }, { l: '60×', v: 2, t: '1 Minute pro Sekunde (Taste 2)' }, { l: '1 h/s', v: 3, t: '1 Stunde pro Sekunde – ein Tag in 24 s (Taste 3)' }, { l: '6 h/s', v: 4, t: '6 Stunden pro Sekunde – ein Tag in 4 s (Taste 4)' }, { l: '2 T/s', v: 5, t: '2 Tage pro Sekunde (Taste 5)' }, { l: '8 T/s', v: 6, t: '8 Tage pro Sekunde (Taste 6)' }];
+const SPEEDS = [{ l: 'II', v: 0, t: 'Pause (Taste 0)' }, { l: '1×', v: 1, t: 'Echtzeit – eine Sekunde ist eine Sekunde (Taste 1)' }, { l: '60×', v: 2, t: '1 Minute pro Sekunde (Taste 2)' }, { l: '1 h/s', v: 3, t: '1 Stunde pro Sekunde – ein Tag in 24 s (Taste 3)' }, { l: '6 h/s', v: 4, t: '6 Stunden pro Sekunde – ein Tag in 4 s (Taste 4)' }, { l: '2 T/s', v: 5, t: '2 Tage pro Sekunde (Taste 5)' }, { l: '8 T/s', v: 6, t: '8 Tage pro Sekunde (Taste 6)' }];
+// Toasts kurz halten: erster Satz, höchstens ~80 Zeichen (die ganze Nachricht steht im Handy)
+const brief = (t, n = 80) => { t = String(t || '').replace(/\s+/g, ' ').trim(); const m = t.match(/^.{12,}?[.!?…](?=\s|$)/); if (m && m[0].length <= n) return m[0]; if (t.length <= n) return t; const c = t.slice(0, n); return c.slice(0, Math.max(30, c.lastIndexOf(' '))).replace(/[\s,–-]+$/, '') + ' …'; };
 const pctDE = (x) => (x * 100).toPrecision(3).replace('.', ',');
 
 const PART_ICON = {
@@ -37,7 +40,6 @@ const LOCK_SVG = '<svg class="lock-ic" viewBox="0 0 24 24" width="14" height="14
 const MONTH_RE = /^(Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)\s+\d{4}:\s*/;
 const PKG_SVG = '<svg class="pkg-ic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 7.5 12 3.5l8.5 4v9L12 20.5l-8.5-4z"/><path d="M3.5 7.5 12 11.5l8.5-4M12 11.5v9M7.8 5.5l8.4 4"/></svg>'; // Paket
 const PHONE_SVG = '<svg class="ph-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18h2"/></svg>';
-const LESSON_OF = Object.fromEntries(Object.entries(FEATURES).filter(([, F]) => typeof F.msg === 'string').map(([f, F]) => [F.msg, f])); // alte Stände: Lektions-Nachricht am Text erkennen
 const PAUSE_LABEL = { heat: 'Pausiert (zu heiß)', event: 'Gedrosselt (Ereignis)', loss: 'Pausiert (kaum rentabel)' }; // Grund der Auto-Pause (Game.autoLimit)
 const MOVE_TO = { kinder: 'In die Wohnung tragen', keller: 'In den Keller tragen', werkstatt: 'In die Werkstatt bringen', halle: 'In die Halle bringen', rz: 'Ins Rechenzentrum schicken', fjord: 'In die Fjordhalle schicken' };
 
@@ -59,6 +61,7 @@ function faceSvg(who) {
 export class UI {
   constructor(game, world) {
     this.g = game; this.w = world; this.cat = 'rigs'; this.marketCoin = 'BTC'; this.lastBuildDay = -1;
+    this.mk = new Market(this); // Browser „Shop | Börse“ (market.js): Fenster und PC-Monitor
     this.dock(); this.speedBar();
     world.onSelect = (uid) => this.inspect(uid);
     world.onHeat = () => this.sites();
@@ -72,17 +75,16 @@ export class UI {
     world.onSnap = () => this.audio?.install?.();
     world.onNoAim = () => { // E ohne Ziel: das markierte Ziel in Reichweite benutzen
       const t = this.objTarget, g = this.g; if (!t) return;
-      const lt = Object.keys(g.s.loose || {}).find((k) => t.label === PNAME[k]); if (lt) { world.onLoose(lt); return; }
-      const pc = g.facObjects(g.s.current).find((o) => o.type === 'tower'); if (pc && t.label === 'Dein PC') { this.openInspector(pc.uid); return; }
-      const pr = world.room?.props?.find((p) => p.action === 'market'); if (pr && (t.label === 'Börse' || t.label === 'Bitcoin verkaufen')) { this.useProp(pr); return; }
-      if (t.label === 'Shop: Grafikkarte bestellen') { this.openShop?.(); return; }
-      if (t.label === 'Paket abholen' && t.final) { const p = g.s.parcels?.[0]; if (p) world.pickParcel(p.id); return; }
-      if (/ freischalten$/.test(t.label)) { if (world.hoff) { if (t.final) this.travel(t.door); } else if (world.room?.doors?.[0]) this.travel(world.room.doors[0]); }
+      const lt = t.kind?.startsWith('loose:') ? t.kind.slice(6) : null; if (lt && g.s.loose?.[lt]) { world.onLoose(lt); return; }
+      const pc = g.facObjects(g.s.current).find((o) => o.type === 'tower'); if (pc && t.kind === 'pc') { this.openInspector(pc.uid); return; }
+      const pr = world.room?.props?.find((p) => p.action === 'market'); if (pr && t.kind === 'monitor') { this.useProp(pr); return; } // an den Monitor (Browser „Shop | Börse“)
+      if (t.kind === 'parcel' && t.final) { const p = g.s.parcels?.[0]; if (p) world.pickParcel(p.id); return; }
+      if (t.kind === 'unlock') { if (world.hoff) { if (t.final) this.travel(t.door); } else if (world.room?.doors?.[0]) this.travel(world.room.doors[0]); }
     };
     // Haus (Wohnung ↔ Treppenhaus ↔ Keller): Standortwechsel zu Fuß, Türgeräusch, Hinweis auf die Taschenlampe
     world.onHouseMove = (id) => this.houseMove(id);
     world.onDoorSound = (key, open) => this.audio?.door?.(open);
-    world.onZone = (where) => { if (where === 'kel' && world.dusty && !world.vm?.lampOn && !this.lampHinted) { this.lampHinted = true; this.lampHint = this.toast('Ganz schön dunkel hier unten. <kbd>F</kbd> schaltet die Taschenlampe an.', 'info', 4500); } };
+    world.onZone = (where) => { if (where === 'kel' && world.dusty && !world.vm?.lampOn && !this.lampHinted) { this.lampHinted = true; this.lampHint = this.toast('Dunkel hier – <kbd>F</kbd> Taschenlampe', 'info', 4500); } };
     world.onInstalled = (uid) => { this.installing = false; this.flushXp(); if (this.inspUid === uid) this.inspect(uid); if (this.afterSnap) { this.toast(this.afterSnap, 'good', 2600); this.afterSnap = null; } };
     world.onLoose = (t) => { this.w.pickupFx(t); if (!this.g.s.loose?.[t]) return; this.toast(`${PNAME[t]} in der Tasche`, 'good', 2200); if (!this.g.pickUp(t)) return; this.lastPick = { t, at: performance.now() }; setTimeout(() => this.goals(), 1300); this.audio?.install?.(); this.goals(); };
     world.onKeep = (id) => this.pickKeep(id);
@@ -93,6 +95,7 @@ export class UI {
     world.onIncome = () => { this.bumpWallet(); this.audio?.tick?.(); };
     world.onLamp = (on) => { if (on) this.lampHint?.remove(); this.toast(on ? 'Taschenlampe an' : 'Taschenlampe aus', 'info', 1500); this.keysHint(); };
     world.onPause = () => this.pause(true);
+    world.onUiEsc = () => { if (this.mg || this.stickyModal()) return; if (this.escLocal?.()) return; if (this.mk?.esc?.()) return; this.resume(); };
     world.onCanvasClickInUI = () => this.resume();
     world.onPlaced = (o, p) => { const again = this.placedAgain(o, p); this.pauseHint(this.g.facOf(o.uid) || this.g.s.current); return again; }; // true = gleich noch einen setzen (Rigs, Miner, Regale)
     world.onModeChange = (m) => { document.body.dataset.mode = m; this.dock(); };
@@ -112,10 +115,10 @@ export class UI {
     sens.oninput = () => { pref.sens = +sens.value; savePref(); applySens(); };
     setTimeout(() => { applySnd(); applySens(); }, 0);
     // Grafik in der Pause (früher im eigenen „Menü“): Hoch / Mittel / Niedrig
-    if (!$('#ps-gfx')) { const q = h('<div id="ps-gfx" class="ps-q"><span>Grafik</span></div>'); for (const [k, l] of [['high', 'Hoch'], ['medium', 'Mittel'], ['low', 'Niedrig']]) { const b = h(`<button class="ps-qb" data-q="${k}">${l}</button>`); b.onclick = () => { this.w.setQuality(k); this.applyGfx(); }; q.append(b); } snd.after(q); }
+    if (!$('#ps-gfx')) { const q = h('<div id="ps-gfx" class="ps-q"><span>Grafik</span></div>'); for (const [k, l] of [['auto', 'Auto'], ['high', 'Hoch'], ['medium', 'Mittel'], ['low', 'Niedrig']]) { const b = h(`<button class="ps-qb" data-q="${k}" title="${k === 'auto' ? 'Passt sich deinem Rechner an' : ''}">${l}</button>`); b.onclick = () => { if (this.w.setGfxMode) this.w.setGfxMode(k); else this.w.setQuality(k === 'auto' ? 'high' : k); this.applyGfx(); }; q.append(b); } snd.after(q); }
     $('#clickhint').onclick = () => this.w.requestLock();
     game.on('toast', (t, k, ms) => this.toast(t, k, ms));
-    const showMsg = (m) => { if (document.querySelector('#featcards .featcard:not(.lesson)') || document.getElementById('lvup') || this.lvBusy) { setTimeout(() => showMsg(m), 1200); return; } this.toast(`<b>${m.tip ? 'Tipp von ' : ''}${esc(m.from)}:</b> ${esc(m.text)}`, 'msg', m.tip ? 10000 : 7000); this.dock(); };
+    const showMsg = (m) => { if (document.querySelector('#featcards .featcard:not(.lesson)') || document.getElementById('lvup') || this.lvBusy) { setTimeout(() => showMsg(m), 1200); return; } this.toast(`<b>${esc(m.from)}:</b> ${esc(brief(m.text))}`, 'msg', 6000); this.dock(); };
     this.flushMsgs = (base = 3000) => { const q = this.msgQ || []; this.msgQ = []; q.forEach((m, i) => setTimeout(() => showMsg(m), base + i * 2500)); };
     game.on('message', (m) => { if (this.inspUid || this.w.focus) { (this.msgQ ||= []).push(m); this.dock(); return; } showMsg(m); });
     game.on('news', () => this.ticker());
@@ -178,7 +181,7 @@ export class UI {
     if (this.g.s.day % 7 === 0) this.dock();
     if (this.g.s.day - this.lastBuildDay >= 7) this.build(true); else this.buildPrices();
     if (this.inspUid) this.inspectStats();
-    if (this.modalKind === 'market') this.market(true);
+    this.market(true); // Börse auffrischen, falls sie offen ist
     if (this.modalKind === 'ranking') this.ranking();
     if (this.modalKind === 'company') this.company();
   }
@@ -187,12 +190,14 @@ export class UI {
   speedBar() {
     const el = $('#speed'); el.innerHTML = '';
     SPEEDS.forEach((s) => { const b = h(`<button title="${s.t}">${s.l}</button>`); b.onclick = () => this.setSpeed(s.v); if (!this.speedOk(s.v)) b.style.display = 'none'; el.append(b); });
-    el.style.display = this.speedShown() ? '' : 'none'; // Anlernen: Tempo-Knöpfe erst mit dem Zeitraffer
+    el.style.display = this.g.s.flags?.tutor && !this.g.has('speed2') ? 'none' : ''; // Anlernen: Tempo-Knöpfe erst mit dem Zeitraffer
     this.setSpeed(this.g.s.speed ?? 0);
   }
-  speedShown() { return !this.g.s.flags?.tutor || this.g.has('speed2'); }
-  speedOk(v) { const g = this.g; return v <= 1 || (v <= 4 && g.has('speed2')) || (v >= 5 && g.has('speed3')); } // Zeitraffer: Minuten bis 6 Std/s, schneller vorspulen: Tage pro Sekunde
-  setSpeed(v) { if (!this.speedOk(v)) return; this.g.s.speed = v; if (v) this.lastSpeed = v; this.g.s.paused = v === 0; if (v >= 2) this.g.learned?.('speed2'); if (v >= 5) this.g.learned?.('speed3'); [...$('#speed').children].forEach((b, i) => b.classList.toggle('on', SPEEDS[i].v === v)); } // gesperrtes Tempo: Taste tut nichts
+  // Tempo-Stufen kommen nach und nach: erst nur Echtzeit, mit dem laufenden PC 60× und 1 h/s, mit der ersten Grafikkarte 6 h/s, später Tage pro Sekunde
+  speedMax() { const g = this.g, s = g.s; if (!s.feat || g.has('speed3')) return 6; if (!g.has('speed2')) return 1; return s.flags.boughtGpu ? 4 : 3; }
+  speedOk(v) { return v <= this.speedMax(); }
+  speedNext() { const s = this.g.s, max = this.speedMax(); if (max <= 1) return; this.setSpeed(!s.speed || s.speed >= max ? (s.speed >= max ? 1 : 2) : s.speed + 1); this.toast(`Tempo: ${SPEEDS.find((x) => x.v === this.g.s.speed)?.l}`, 'info', 1200); }
+  setSpeed(v) { if (!this.speedOk(v)) return; this.g.s.speed = v; if (v) this.lastSpeed = v; this.g.s.paused = v === 0; if (v >= 2) this.g.learned?.('speed2'); if (v >= 5) this.g.learned?.('speed3'); [...$('#speed').children].forEach((b, i) => b.classList.toggle('on', SPEEDS[i].v === v)); }
   top() {
     const g = this.g, s = g.s;
     const vf = this.w.visFrac ?? s.frac, day = vf > 0.27 && vf < 0.79;
@@ -231,37 +236,37 @@ export class UI {
   // Zielhinweis direkt am Objekt: wo der nächste Handgriff wartet
   objMarker() {
     const el = $('#objmark'); if (!el) return;
-    const g = this.g, s = g.s, w = this.w; let pos = null, label = '', aimed = false, final = false, tdoor = null;
+    const g = this.g, s = g.s, w = this.w; let pos = null, label = '', kind = '', aimed = false, final = false, tdoor = null; // Marker: 1–2 Wörter, nur am echten Ziel
     const play = w.mode === 'play' && !this.paused && !w.cine, where = w.houseWhere?.() || null; // Haus: 'apt' | 'up' | 'low' | 'kel'
-    const route = (t, lab) => { const p = w.houseRoute(t); if (p) { pos = p; label = lab; final = (t === 'haustuer' || t === 'parcels') && where === 'up'; } };
+    const route = (t, lab, k = 'walk') => { const p = w.houseRoute(t); if (p) { pos = p; label = lab; kind = k; final = (t === 'haustuer' || t === 'parcels') && where === 'up'; } };
     const lying = Object.keys(s.loose || {});
     if (s.chapter === 0 && play && !s.flags.miningStarted && where) { // Anfang: zu Fuß in den Keller, Teile suchen, wieder hoch zum PC
-      if (lying.length && where !== 'kel') route('keller', 'Runter in den Keller');
+      if (lying.length && where !== 'kel') route('keller', 'Keller');
       else if (lying.length) {
         const spots = w.room?.looseSpots || {}, here = lying.filter((t) => spots[t]);
-        if (here.length) { const cp = w.camera.position, d = (t) => Math.hypot(spots[t][0] - cp.x, spots[t][2] - cp.z) + (w.toScreen(spots[t][0], spots[t][1] + 0.1, spots[t][2]).on ? 0 : 100); const keep = here.includes(this.markLoose) && w.toScreen(spots[this.markLoose][0], spots[this.markLoose][1] + 0.1, spots[this.markLoose][2]).on; const t = keep ? this.markLoose : here.sort((a, b) => d(a) - d(b))[0]; this.markLoose = w.markLoose = t; pos = [spots[t][0], spots[t][1] + 0.1, spots[t][2]]; label = PNAME[t]; aimed = w.aim?.loose === t; }
-      } else if (where !== 'apt') route('kinder', 'Hoch in deine Wohnung');
-      else { const pc = g.facObjects('kinder').find((o) => o.type === 'tower'); if (pc) { pos = [pc.x, 0.78, pc.z]; label = 'Dein PC'; aimed = w.aim?.uid === pc.uid; } }
+        if (here.length) { const cp = w.camera.position, d = (t) => Math.hypot(spots[t][0] - cp.x, spots[t][2] - cp.z) + (w.toScreen(spots[t][0], spots[t][1] + 0.1, spots[t][2]).on ? 0 : 100); const keep = here.includes(this.markLoose) && w.toScreen(spots[this.markLoose][0], spots[this.markLoose][1] + 0.1, spots[this.markLoose][2]).on; const t = keep ? this.markLoose : here.sort((a, b) => d(a) - d(b))[0]; this.markLoose = w.markLoose = t; pos = [spots[t][0], spots[t][1] + 0.1, spots[t][2]]; label = PNAME[t]; kind = 'loose:' + t; aimed = w.aim?.loose === t; }
+      } else if (where !== 'apt') route('kinder', 'Wohnung');
+      else { const pc = g.facObjects('kinder').find((o) => o.type === 'tower'); if (pc) { pos = [pc.x, 0.78, pc.z]; label = 'Dein PC'; kind = 'pc'; aimed = w.aim?.uid === pc.uid; } }
     } else if (s.chapter === 0 && play && !where && w.facId === 'kinder') { // (ohne Treppenhaus)
-      const pc = g.facObjects('kinder').find((o) => o.type === 'tower'); if (pc && !s.flags.miningStarted) { pos = [pc.x, 0.78, pc.z]; label = 'Dein PC'; aimed = w.aim?.uid === pc.uid; }
+      const pc = g.facObjects('kinder').find((o) => o.type === 'tower'); if (pc && !s.flags.miningStarted) { pos = [pc.x, 0.78, pc.z]; label = 'Dein PC'; kind = 'pc'; aimed = w.aim?.uid === pc.uid; }
     }
-    if (!pos && s.chapter === 0 && play && (where === 'apt' || (!where && w.facId === 'kinder')) && s.flags.miningStarted && s.flags.cpuStart && g.has('build') && !s.flags.gpuOrdered && !s.flags.boughtGpu) { const pr = w.room?.props?.find((p) => p.action === 'market'); if (pr) { pos = [pr.c[0], pr.c[1] + 0.16, pr.c[2]]; label = 'Shop: Grafikkarte bestellen'; aimed = w.aim?.prop === pr; } } // erstes Ziel nach dem Einschalten: der Shop am Monitor
+    if (!pos && s.chapter === 0 && play && (where === 'apt' || (!where && w.facId === 'kinder')) && s.flags.miningStarted && s.flags.cpuStart && g.has('build') && !s.flags.gpuOrdered && !s.flags.boughtGpu) { const pr = w.room?.props?.find((p) => p.action === 'market'); if (pr) { pos = [pr.c[0], pr.c[1], pr.c[2]]; label = 'Shop'; kind = 'monitor'; aimed = w.aim?.prop === pr; } } // erstes Ziel nach dem Einschalten: der Shop am Monitor
     const parcelFirst = !!(where && w.parcelsLying?.()); // ein Paket vor der Tür geht vor (Börse/Freischalten können warten)
-    if (!pos && !parcelFirst && s.chapter === 0 && play && (where === 'apt' || (!where && w.facId === 'kinder')) && s.flags.miningStarted && g.has('market') && !(s.stats.sold > 0)) { const pr = w.room?.props?.find((p) => p.action === 'market'); if (pr) { pos = [pr.c[0], pr.c[1] + 0.16, pr.c[2]]; label = 'Bitcoin verkaufen'; aimed = w.aim?.prop === pr; } }
+    if (!pos && !parcelFirst && s.chapter === 0 && play && (where === 'apt' || (!where && w.facId === 'kinder')) && s.flags.miningStarted && g.has('market') && !(s.stats.sold > 0)) { const pr = w.room?.props?.find((p) => p.action === 'market'); if (pr) { pos = [pr.c[0], pr.c[1], pr.c[2]]; label = 'Börse'; kind = 'monitor'; aimed = w.aim?.prop === pr; } }
     if (!pos && !parcelFirst && play && (where || !this.visiting) && s.flags.miningStarted) { // neuer Standort frei: im Haus an der Haustür (Keller: an der Kellertür), sonst an der Tür
       const fu = FACILITIES.find((f) => g.canUnlock(f.id)), door = w.room?.doors?.[0];
-      if (fu && where) { if (fu.id === 'keller') { route('keller', `${fu.short} freischalten`); final = where === 'low'; tdoor = { kind: 'kellertuer', label: 'Kellertür' }; } else { route('haustuer', `${fu.short} freischalten`); tdoor = { kind: 'haustuer', label: 'Haustür' }; } }
-      else if (fu && door && !door.auto) { pos = [door.c[0], Math.min(1.7, door.c[1] + 0.5), door.c[2]]; label = `${fu.short} freischalten`; aimed = w.aim?.door === door; }
+      if (fu && where) { if (fu.id === 'keller') { route('keller', fu.short, 'unlock'); final = where === 'low'; tdoor = { kind: 'kellertuer', label: 'Kellertür' }; } else { route('haustuer', fu.short, 'unlock'); tdoor = { kind: 'haustuer', label: 'Haustür' }; } }
+      else if (fu && door && !door.auto) { pos = [door.c[0], Math.min(1.7, door.c[1] + 0.5), door.c[2]]; label = fu.short; kind = 'unlock'; aimed = w.aim?.door === door; }
     }
     if (!pos && play && where && w.parcelsLying?.()) { // Pakete vor der Wohnungstür
-      route('parcels', 'Paket abholen'); if (pos && w.toScreen(...pos).dist < 1.7) pos = null;
+      route('parcels', 'Paket', 'parcel'); if (pos && w.toScreen(...pos).dist < 1.7) pos = null;
     }
     if (!pos && play && where && this.walkGoal) { // Klick auf Wohnung/Keller oben: Weg zeigen
       const done = this.walkGoal.id === 'keller' ? where === 'kel' : where === 'apt';
-      if (done || performance.now() > this.walkGoal.until) this.walkGoal = null; else route(this.walkGoal.id, this.walkGoal.id === 'keller' ? 'Zum Keller' : 'Zur Wohnung');
+      if (done || performance.now() > this.walkGoal.until) this.walkGoal = null; else route(this.walkGoal.id, this.walkGoal.id === 'keller' ? 'Keller' : 'Wohnung');
     }
     const sp = pos && w.toScreen(...pos);
-    this.objTarget = sp && sp.dist < 2.0 ? { label, pos, final, door: tdoor } : null;
+    this.objTarget = sp && sp.dist < 2.0 ? { label, kind, pos, final, door: tdoor } : null;
     if (!sp || aimed || (w.aim && !aimed)) { el.classList.add('hidden'); return; }
     el.classList.toggle('far', sp.dist > 2.2);
     el.classList.remove('hidden'); el.classList.toggle('edge', !sp.on); el.classList.toggle('left', !sp.on && sp.side < 0);
@@ -284,7 +289,7 @@ export class UI {
     el.style.display = on ? '' : 'none'; document.body.classList.toggle('has-wallet', on); document.body.classList.toggle('showrun', !!this.showRun); if (!on) return;
     if (this.rateDay !== s.day || !this.rateT || performance.now() - this.rateT > 1000) { this.rate = this.btcRate(); this.rateDay = s.day; this.rateT = performance.now(); }
     const w = s.wallet.BTC, live = w.ex + w.cold + this.pendingBtc(), usd = live * g.price('BTC'), rate = s.flags.miningStarted ? this.rate || 0 : 0;
-    const txt = `<div class="v"><span class="cn">₿</span> ${fmtCoin(live)}</div><div class="l">${usd < 0.01 ? 'noch keinen Cent wert' : `≈ ${fmtUSD(usd)}`}${rate > 0 ? ` · schürft +${fmtCoin(rate)} BTC/Tag` : ''}</div>`; // Ertrag als Coins, am Bestand – nicht am Kontostand
+    const txt = `<div class="v"><span class="cn">₿</span> ${fmtCoin(live)}</div><div class="l">${usd < 0.01 ? '< 1 Cent' : `≈ ${fmtUSD(usd)}`}${rate > 0 ? ` · <span class="pos">+${fmtCoin(rate)} BTC/Tag</span>` : ''}</div>`; // Ertrag als Coins, am Bestand – nicht am Kontostand
     const pl = document.getElementById('pcb-live'); if (pl) { const pb = this.pendingBtc() + (w.ex + w.cold - (this.btcAtStart ?? 0)); const t2 = pb < 0.01 ? 'Miner startet …' : '₿ ' + pb.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); if (pl.textContent !== t2) pl.textContent = t2; }
     if (txt !== this.walletTxt) { el.innerHTML = txt; this.walletTxt = txt; }
   }
@@ -321,7 +326,7 @@ export class UI {
     const w = this.w;
     if ((id === 'kinder' || id === 'keller') && w.hoff && !w.empire) {
       this.resume(); this.walkGoal = { id, until: performance.now() + 90000 };
-      this.toast(id === 'keller' ? 'Zum Keller gehst du zu Fuß: raus in den Flur und die Kellertreppe runter.' : 'Zur Wohnung: die Kellertreppe hoch, dann die paar Stufen rauf zur Wohnungstür.', 'info', 3800);
+      this.toast(id === 'keller' ? 'Zu Fuß: raus in den Flur, die Kellertreppe runter.' : 'Zu Fuß: die Kellertreppe hoch.', 'info', 3800);
       return;
     }
     this.switchSite(id, { arrive: true });
@@ -421,34 +426,26 @@ export class UI {
   placeFromStock(key) {
     const g = this.g, e = g.stockFind(key); if (!e) return; const def = PLACEABLE[e.type], fac = g.s.current;
     if (!g.placeableAllowed(def, fac)) { this.toast(`${esc(def.name)} passt nicht in ${esc(FACILITY[fac].short)}.`, 'bad'); return; }
-    if (!g.slotOk(fac, def)) { this.toast('Hier ist kein Platz mehr – stell es an einem anderen Standort auf.', 'bad'); return; }
+    if (!g.slotOk(fac, def)) { this.toast('Hier ist kein Platz mehr.', 'bad'); return; }
     this.resume(); this.w.startPlacement(e.type, null, { type: e.type, rot: 0, coin: e.coin || 'auto', parts: e.parts, items: e.items, stock: g.stockKey(e) });
   }
   // Paket vor der Wohnungstür aufheben (world.onParcel)
   pickParcel(id) {
     const r = this.g.pickupParcel(id); if (!r) return null;
     this.audio?.install?.();
-    const bits = []; if (r.parts) bits.push(`${r.parts === 1 ? 'ein Teil' : `${r.parts} Teile`} im Lager`); if (r.dev) bits.push(`${r.dev} im Regal`); if (r.place) bits.push(`${r.place === 1 ? 'eins' : r.place} zum Aufstellen: <kbd>B</kbd> → oben „Ausgepackt“`);
-    const names = r.names.slice(0, 3).join(', ') + (r.names.length > 3 ? ' …' : '');
-    this.toast(`<b>Paket ausgepackt:</b> ${esc(names)}${bits.length ? ` – ${bits.join(', ')}` : ''}`, 'good', 6500);
+    const names = r.names.slice(0, 2).join(', ') + (r.names.length > 2 ? ' …' : '');
+    this.toast(`<b>Ausgepackt:</b> ${esc(names)}${r.place ? ' – im Shop aufstellen' : ''}`, 'good', 4500);
     this.goals(); return r;
   }
   // Bestellt (Toast) – mit Hinweis auf die Lieferung
-  ordered(what, extra = '') { this.audio?.buy?.(); this.toast(`<b>Bestellt:</b> ${esc(what)} – kommt morgen früh als Paket vor deine Wohnungstür.${extra}`, 'good', 5000); this.goals(); }
+  ordered(what) { this.audio?.buy?.(); this.toast(`<b>Bestellt:</b> ${esc(what)} – kommt morgen früh`, 'good', 4000); this.goals(); }
   orderItem(it) {
     const g = this.g, why = g.orderWhy(it); if (why) { this.toast(`${esc(why)}.`, 'bad'); return false; }
     if (!g.orderPlace(it.id)) { this.toast('Bestellen ging nicht.', 'bad'); return false; }
     this.ordered(it.name); return true;
   }
-  // Monitor in der Wohnung: Online-Shop oder Börse
+  // Monitor in der Wohnung: Online-Shop oder Börse (die Börse ist der Desktop, oben ein Knopf „Shop“ – Market.atPc)
   openShop() { if (!document.body.classList.contains('show-build')) this.toggleBuild(); }
-  monitorPick() {
-    const g = this.g, pm = g.parcelMode();
-    const body = h(`<div class="mon-pick"><h2>Am Monitor</h2><div class="cards"><div class="card"><h3>Online-Shop</h3><div class="sub">Teile, Rigs, Kühlung, Deko${pm ? ' · Lieferung morgen vor deine Wohnungstür' : ''}</div><button class="btn primary"><kbd>B</kbd>Shop öffnen</button></div><div class="card"><h3>Börse</h3><div class="sub">Bitcoin verkaufen · gerade ${fmtUSD(g.price('BTC'))}</div><button class="btn"><kbd>M</kbd>Zur Börse</button></div></div></div>`);
-    const [sb, mb] = body.querySelectorAll('button');
-    sb.onclick = () => { this.closeModal(); this.openShop(); }; mb.onclick = () => { this.closeModal(); this.market(); };
-    this.openModal(body, 'narrow', 'monitor');
-  }
 
   // ---------- Ego-Steuerung: Panels öffnen/schließen ----------
   anyPanelOpen() { return !$('#modal').classList.contains('hidden') || !!this.inspUid || document.body.classList.contains('show-build'); }
@@ -467,7 +464,7 @@ export class UI {
     this.flushMsgs?.(hadLv ? 7200 : 3000); this.keysHint();
     if (this.w.mode === 'ui' || this.w.mode === 'play') this.w.setMode('play');
   }
-  applyGfx() { document.querySelectorAll('#ps-gfx .ps-qb').forEach((b) => b.classList.toggle('on', b.dataset.q === this.w.quality)); }
+  applyGfx() { const m = this.w.gfx?.mode || 'auto'; document.querySelectorAll('#ps-gfx .ps-qb').forEach((b) => b.classList.toggle('on', b.dataset.q === m)); }
   // Pause → „Zum Titelbild“: speichern, dann neu laden – dort Weiterspielen oder Neues Spiel
   toTitle() { if (!this.g.save()) { this.toast('Speichern fehlgeschlagen – bleib lieber hier.', 'bad', 3000); return; } location.reload(); }
   pause(on) {
@@ -539,11 +536,8 @@ export class UI {
     if (this.w.facId === 'keller' && this.w.dusty) ks.unshift(['lamp', 'F', this.w.vm?.lampOn ? 'Lampe aus' : 'Taschenlampe']);
     el.innerHTML = ks.map(([, k, l]) => `<span><kbd>${k}</kbd>${l}</span>`).join('') + '<span><kbd>Esc</kbd>Menü</span>';
   }
-  toggleBuild() {
-    if (document.body.classList.contains('show-build')) { this.resume(); return; }
-    const s = this.g.s; if (s.flags.cpuStart && !s.goals.gpuorder) { this.cat = 'parts'; this.partTab = 'gpu'; } // erste Grafikkarte: gleich bei den Grafikkarten
-    this.resume(); document.body.classList.add('show-build'); this.build(true); this.openUI(); this.dock(); this.g.learned?.('build');
-  }
+  // Shop (B): Reiter im Browser „Shop | Börse“ (market.js) – als Fenster oder am PC-Monitor; der Katalog selbst bleibt build()
+  toggleBuild() { (this.mk ||= new Market(this)).openTab('shop'); }
   prompt(aim) {
     const el = $('#prompt');
     if (!aim || this.w.mode !== 'play') { el.classList.add('hidden'); return; }
@@ -574,20 +568,34 @@ export class UI {
   useProp(p) {
     if (p.action === 'talk') { this.talk(p.who); return; }
     if (p.action === 'shop') { if (this.g.has('build')) this.openShop(); else this.toast('Bau erst deinen PC zusammen.', 'info', 3000); return; }
-    if (p.action === 'market') { const mon = this.monitorUse(p); if (mon === 'both') { this.monitorPick(); return; } if (mon === 'shop') { this.openShop(); return; } if (!this.g.has('market')) { this.toast(this.g.s.flags.miningStarted ? 'Noch nichts zu verkaufen – lass den PC arbeiten.' : 'Bau erst deinen PC zusammen.', 'info', 3000); return; } this.market(); }
+    if (p.action === 'market') { const mon = this.monitorUse(p); if (!mon) { this.toast(this.g.s.flags.miningStarted ? 'Noch nichts zu verkaufen.' : 'Erst den PC bauen.', 'info', 3000); return; } (this.mk ||= new Market(this)).atPc(p, mon); } // Browser „Shop | Börse“ auf dem Bildschirm
     else if (p.action === 'company') this.company();
     else if (p.action === 'techs') this.skills(); // Opas Werkbank: der Fähigkeiten-Baum
     else if (p.action === 'ranking') this.ranking();
     else if (p.action === 'sleep') {
       const s = this.g.s;
-      if (s.feat && !s.flags.miningStarted) { this.toast('Erst den PC bauen, dann schlafen.', 'info', 2500); return; }
-      const vf = this.w.visFrac ?? s.frac;
-      // jederzeit hinlegen: bis zum nächsten Morgen (nachts nach Mitternacht: bis 7 Uhr)
-      this.fade(); const steps = vf >= 0.29 ? 1 : 0;
-      for (let i = 0; i < steps; i++) this.g.advanceDay();
-      s.frac = 0.29; this.w.visFrac = 0.29;
-      this.g.learned?.('sleep'); this.toast(s.parcels?.length ? 'Guten Morgen! Vor deiner Wohnungstür liegt ein Paket.' : 'Guten Morgen!', 'good', 3000);
+      if (s.feat && !s.flags.miningStarted) { this.toast('Erst den PC bauen.', 'info', 2500); return; }
+      const hr = (this.w.visFrac ?? s.frac) * 24;
+      if (hr >= 5 && hr < 20) { this.toast(this.speedMax() > 1 ? 'Noch nicht müde – ab 20 Uhr. <kbd>Leertaste</kbd> spult vor.' : 'Noch nicht müde – ab 20 Uhr.', 'info', 2600); return; }
+      this.sleepScene(hr >= 20); // nach Mitternacht: bis 7 Uhr am selben Tag
     }
+  }
+  // Schlafen: Augen zu, Uhr tickt, Morgenlicht und Wecker; die Zeit steht währenddessen (main.js)
+  sleepScene(nextDay) {
+    if (this.sleeping) return; this.sleeping = true; const g = this.g, s = g.s;
+    const btc = () => { const w = s.wallet.BTC || { ex: 0, cold: 0 }; return w.ex + w.cold + (this.pendingBtc?.() || 0); }, b0 = btc();
+    const fx = h('<div id="sleepfx"><div class="zz">Zzz</div><div class="clk"><i></i><i></i></div></div>'); document.body.append(fx);
+    requestAnimationFrame(() => fx.classList.add('in'));
+    let n = 0; const tk = setInterval(() => { this.audio?.clockTick?.(); if (++n >= 8) clearInterval(tk); }, 280);
+    setTimeout(() => {
+      if (nextDay) g.advanceDay(); s.frac = 0.29; this.w.visFrac = 0.29; g.learned?.('sleep');
+      const mined = btc() - b0, day = new Date(s.day * 864e5).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+      fx.classList.add('morning'); this.audio?.alarm?.();
+      setTimeout(() => {
+        fx.classList.add('out'); setTimeout(() => { fx.remove(); this.sleeping = false; }, 900);
+        this.toast(`Guten Morgen – ${esc(day)}${mined >= 0.005 ? ` · nachts geschürft: ₿ ${fmtCoin(mined)}` : ''}`, 'good', 4200);
+      }, 1100);
+    }, 2500);
   }
   // Was kann man am Monitor? 'both' (Shop und Börse), 'shop', 'market' oder '' – der Shop nur am PC-Monitor in der Wohnung
   monitorUse(p) {
@@ -597,7 +605,7 @@ export class UI {
   // Am Anfang in den verstaubten Keller: früher per Überblendung, jetzt zu Fuß (der Marker zeigt den Weg)
   searchTrip(down) {
     this.resume();
-    if (down && this.w.facId !== 'keller' && this.w.hoff) this.toast('Raus in den Flur und die Kellertreppe runter – der Pfeil zeigt dir den Weg.', 'info', 4200);
+    if (down && this.w.facId !== 'keller' && this.w.hoff) this.toast('Raus in den Flur, die Kellertreppe runter.', 'info', 3500);
   }
   // Wechsel der Szene auf der Kellertreppe (World.checkHouseSwitch): Standort still umstellen, ohne Überblendung
   houseMove(id) {
@@ -616,7 +624,7 @@ export class UI {
     }
     const home = door?.kind === 'haustuer'; // aus dem Haus: Wohnung und Keller erreicht man zu Fuß
     const dests = FACILITIES.filter((f) => !(home && (f.id === 'kinder' || f.id === 'keller')));
-    if (!dests.some((f) => f.id !== g.s.current && (g.s.unlocked.includes(f.id) || g.canUnlock(f.id)))) { this.toast(home ? 'Draußen wartet noch nichts auf dich – erst mal hier Geld verdienen.' : 'Die Tür bleibt erst mal zu.', 'info', 2600); return; }
+    if (!dests.some((f) => f.id !== g.s.current && (g.s.unlocked.includes(f.id) || g.canUnlock(f.id)))) { this.toast(home ? 'Draußen wartet noch nichts.' : 'Die Tür bleibt zu.', 'info', 2600); return; }
     const body = h(`<div><h2>${esc(door.label)}</h2><p style="color:var(--dim);margin-top:-6px">Wohin willst du?</p><div class="cards"></div></div>`);
     const cards = body.querySelector('.cards');
     for (const f of dests) {
@@ -919,7 +927,7 @@ export class UI {
     let go = null; for (const x of ch.goals) { if (s.goals[x.id]) continue; if (this.goalVisible(x)) { go = x; break; } if (!x.skip) break; } // der Reihe nach; nur „Fülle …“ unter 70 % wird übersprungen
     if (!go) {
       // Anlernen: zwischen Einschalten und Shop – erst die Börse ansehen
-      if (first?.id === 'gpuorder' && g.lesson() === 'market') el.append(h('<div class="goal"><div class="ck"></div><div>Schau an der Börse, was deine Bitcoin wert sind</div></div>'));
+      if (first?.id === 'gpuorder' && g.lesson() === 'market') el.append(h('<div class="goal"><div class="ck"></div><div>Börse ansehen</div></div>'));
       else if (s.flags.miningStarted && s.day < toDay(ch.minDate) && ch.goals.every((x) => s.goals[x.id] || x.skip)) el.append(h(`<div class="goal wait" title="${esc(ch.waitText || '')}"><div class="ck"></div><div>${ch.unlock ? `${esc(FACILITY[ch.unlock].short)} ab ${this.monthYear(ch.minDate)}` : `Weiter ab ${this.monthYear(ch.minDate)}`}</div></div>`)); // Wartezeit: wann es weitergeht (Grund im Tooltip)
       fin(); return;
     }
@@ -932,20 +940,20 @@ export class UI {
     const gk = s.chapter + ':' + go.id, enter = gk !== this.goalKey; this.goalKey = gk;
     const bag = s.loose && !s.flags.miningStarted && go.id === 'collect' ? `<span class="bag">${g.firstNeed().map((t) => `<i class="${s.loose[t] ? 'miss' : 'got'}" title="${PNAME[t]}${s.loose[t] ? ' – noch nicht gefunden' : ' – eingesammelt'}">${partSvg(t, 16)}${s.loose[t] ? '' : '<b class="tk"></b>'}<em>${{ mobo: 'Board', cpu: 'CPU', gpu: 'GPU', psu: 'Netzteil' }[t]}</em></i>`).join('')}</span>` : '';
     const step = this.goalStep(go);
-    const gtext = step || ((go.id === 'sell' && !g.has('market') ? 'Lass deinen PC ein paar Tage schürfen' : go.id === 'pcbuild' && this.w.facId === 'keller' ? `Alle ${g.firstNeed().length} Teile gefunden · zurück in die Wohnung` : go.text) + (go.orDate && !go.skip ? ` – sonst ab ${this.monthYear(g.orDate(ch, go))}` : go.skip && ch.unlock ? ` → ${FACILITY[ch.unlock].short} sofort` : ''));
-    const row = h(`<div class="goal ${enter ? 'enter' : ''}"><div class="ck"></div><div>${bag ? `<div class="goal-line">${esc(gtext)}${step ? '' : prog}</div>${bag}` : `${esc(gtext)}${step ? '' : prog}`}</div></div>`);
+    const gtext = step || ((go.id === 'sell' && !g.has('market') ? 'PC schürfen lassen' : go.id === 'pcbuild' && this.w.facId === 'keller' ? 'Zurück in die Wohnung' : go.text) + (go.skip && ch.unlock ? ` → ${FACILITY[ch.unlock].short} sofort` : '')); // kurz: höchstens ein paar Wörter
+    const row = h(`<div class="goal ${enter ? 'enter' : ''}" ${go.orDate && !go.skip ? `title="Sonst ab ${this.monthYear(g.orDate(ch, go))} auch so"` : ''}><div class="ck"></div><div>${bag ? `<div class="goal-line">${esc(gtext)}${step ? '' : prog}</div>${bag}` : `${esc(gtext)}${step ? '' : prog}`}</div></div>`);
     if (go.action) { const b = h(`<button class="btn small primary"><kbd>G</kbd>${esc(paid > 0 && left > 0 ? `Rest überweisen · ${fmtUSD(left)}` : go.action.label)}</button>`); b.disabled = !g.canPayGoal(go); b.onclick = () => { if (g.goalAction(go)) { this.toast('✔ Erledigt!', 'good'); this.goals(); } }; row.lastElementChild.append(b); }
     if (go.open === 'company' && g.has('company')) { const cb = h(`<button class="btn small primary"><kbd>C</kbd>Ausbauten</button>`); cb.onclick = () => this.company(); row.lastElementChild.append(cb); } // z. B. Opas Nachtstromzähler
     el.append(row); fin();
   }
   // Grund schon da? Ziele erscheinen erst nach ihrer Nachricht bzw. Freischaltung; „Fülle …“ erst ab etwa 70 %
   goalVisible(go) {
-    const g = this.g, s = g.s, tut = !!s.flags?.tutor, read = (id) => !!s.messages.find((m) => m.id === id)?.read;
+    const g = this.g, s = g.s, tut = !!s.flags?.tutor, unread = (id) => s.messages.some((m) => m.id === id && !m.read);
     if (go.skip) { if (!go.progress) return true; const [cur, tgt] = go.progress(s, g.helpers(), g); return tgt > 0 && cur / tgt >= 0.7; }
     if (go.id === 'papa1') return !!s.flags.papa1 || s.messages.some((m) => m.id === 'mKrause'); // Herr Krause meldet sich wegen der Nachzahlung
     if (!tut) return true;
-    if (go.id === 'settle') return read('m0p'); // erst Papas Nachricht lesen
-    if (go.id === 'collect') return read('m0b') || Object.keys(s.loose || {}).length < (s.looseN || 4); // Deniz' Nachricht gelesen (oder schon ein Teil gefunden)
+    if (go.id === 'settle') return !unread('m0p'); // erst Papas Nachricht lesen
+    if (go.id === 'collect') return (!g.ideaPending?.() && !unread('m0b')) || Object.keys(s.loose || {}).length < (s.looseN || 4); // Deniz' Idee gelesen (oder schon ein Teil gefunden)
     if (go.id === 'gpuorder') return g.has('build'); // Deniz' Shop-Nachricht
     if (go.id === 'rig2') return g.has('rigs'); // „Mehr PCs“
     return true;
@@ -953,10 +961,10 @@ export class UI {
   // Was ist gerade der nächste Handgriff? Ersetzt den Zieltext, statt eine zweite Zeile aufzumachen
   goalStep(go) {
     const g = this.g, s0 = g.s;
-    if (go.id === 'gpu') { if (g.bagList('gpu').length) return ''; if (s0.parcels?.length) return 'Hol das Paket vor deiner Wohnungstür'; if (s0.orders?.length) return 'Die Karte kommt morgen früh – schlaf bis morgen'; return ''; }
+    if (go.id === 'gpu') { const bag = g.bagList('gpu'), pc0 = g.facObjects('kinder').find((x) => x.type === 'tower' && x.parts); if (bag.length) return !pc0 || bag.some((b) => !g.psuWhy(pc0, b.id)) ? '' : 'Stärkeres Netzteil einbauen'; if (s0.parcels?.length) return 'Paket holen'; if (s0.orders?.length) return 'Bis morgen schlafen'; return ''; } // Hindernis ersetzt die Zeile (das Wie steht im Inspektor)
     const site = { rig2: 'kinder', openrig: 'keller' }[go.id]; if (!site || !g.has('rigs') || !g.s.unlocked.includes(site)) return '';
-    if (g.facObjects(site).some((o) => g.osNeed?.(o) && g.pcReady(o))) return 'Installier ein Betriebssystem auf dem neuen Rig'; // Fähigkeiten: ohne System schürft er nicht
-    if (g.kitsOpen(site).length) return g.s.current === site ? 'Bau die Teile in deinen Bausatz ein' : `Dein Bausatz wartet ${site === 'kinder' ? 'in der Wohnung' : 'im Keller'}`;
+    if (g.facObjects(site).some((o) => g.osNeed?.(o) && g.pcReady(o))) return 'Betriebssystem installieren'; // Fähigkeiten: ohne System schürft er nicht
+    if (g.kitsOpen(site).length) return g.s.current === site ? 'Bausatz einbauen' : `Bausatz ${site === 'kinder' ? 'in der Wohnung' : 'im Keller'} einbauen`;
     return '';
   }
   // Taste G: Bezahl-Aktion des sichtbaren Ziels (z. B. die Strom-Nachzahlung) – ohne sichtbares Bezahl-Ziel tut G nichts
@@ -984,9 +992,9 @@ export class UI {
       const btc = s.wallet.BTC.ex;
       if (!s.flags.miningStarted) t = this.inspUid ? 'Klick auf <b>Mining starten</b>.' : 'Dein PC steht neben dem Schreibtischstuhl. Geh hin, schau ihn an und drück <kbd>E</kbd>.';
       else if (!g.has('market')) t = this.inspUid ? 'Dein PC schürft jetzt Bitcoin. Schließ das Fenster mit <kbd>E</kbd> und lass ihn ein paar Tage arbeiten.' : 'Dein PC schürft Bitcoin. Lass ihn ein paar Tage arbeiten, bis sich etwas angesammelt hat …';
-      else if (!(s.stats.sold > 0)) t = this.modalKind === 'market' ? 'Klick auf <b>Alles verkaufen</b>.' : `Du hast ${fmtCoin(btc)} BTC. Geh zum <b>PC-Monitor</b> auf dem Schreibtisch und drück <kbd>E</kbd>, um sie zu verkaufen.`;
+      else if (!(s.stats.sold > 0)) t = this.mk?.open ? 'Klick auf <b>Verkaufen</b>, dann <b>Alles</b> und bestätigen.' : `Du hast ${fmtCoin(btc)} BTC. Geh zum <b>PC-Monitor</b> auf dem Schreibtisch und drück <kbd>E</kbd>, um sie zu verkaufen.`;
       else if (!s.flags.boughtGpu) t = this.inspUid ? 'Klick auf den <b>freien GPU-Slot</b> und kauf eine zweite Grafikkarte.' : 'Mehr Grafikkarten = mehr Bitcoin. Schau deinen PC an (<kbd>E</kbd>) und bau eine zweite Karte ein.';
-      else if (!s.goals.earn) t = 'Lass den PC arbeiten (Tempo mit <kbd>1</kbd>–<kbd>4</kbd>) und verkauf regelmäßig am Monitor. Ziel: 1.000 $ verdient.';
+      else if (!s.goals.earn) t = 'Laufen lassen, am Monitor verkaufen.';
     }
     if (!t) {
       const ch = CHAPTERS[s.chapter], go = ch && ch.goals.find((x) => !s.goals[x.id] && x.action);
@@ -1083,209 +1091,29 @@ export class UI {
     this.openModal(n, 'narrow', 'keep');
   }
 
-  market(update = false) {
-    const g = this.g, s = g.s;
-    if (update && this.modalKind !== 'market') return;
-    this.g.learned?.('market');
-    // Auswahl aus einem früheren Spiel oder ein noch nicht gestarteter Coin: zurück auf Bitcoin
-    { const mc = COIN[this.marketCoin]; if (!g.has('coins') || !mc || s.day < mc.start) this.marketCoin = 'BTC'; }
-    if (this.trade?.mode === 'buy' && !g.has('buycoins')) this.trade.mode = 'sell';
-    const body = h(`<div><h2>Börse</h2><div class="grid2 ${g.has('coins') ? '' : 'single'}"><div class="coins"></div><div class="detail"></div></div></div>`);
-    const list = body.querySelector('.coins');
-    let total = 0;
-    for (const c of COINS) {
-      if (!g.has('coins') && c.id !== 'BTC') continue;
-      const p = g.price(c.id), p30 = g.price(c.id, s.day - 30), w = s.wallet[c.id]; const val = (w.ex + w.cold) * p; total += val;
-      const started = s.day >= c.start;
-      const ch = p30 ? (p / p30 - 1) * 100 : 0;
-      const row = h(`<div class="coin ${this.marketCoin === c.id ? 'on' : ''} ${started ? '' : 'inactive'}"><div class="dot" style="background:${c.color}">${c.id}</div><div class="nm">${c.name}<small>${started ? `${fmtCoin(w.ex + w.cold)} ${c.id} · ${fmtUSD(val)}` : `Start ${fmtDate(c.start)}`}</small></div><div class="pr">${started ? fmtUSD(p) : '—'}<small class="${ch >= 0 ? 'pos' : 'neg'}">${started ? `${ch >= 0 ? '+' : ''}${ch.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %` : ''}</small></div></div>`);
-      if (started) row.onclick = () => { this.marketCoin = c.id; this.market(); }; // noch nicht gestartete Coins: kein Kurs, nicht wählbar
-      list.append(row);
-    }
-    if (g.has('coins')) list.append(h(`<div style="padding:8px 10px;color:var(--dim);font-size:13px">Gesamt: <b style="color:#fff">${fmtUSD(total)}</b></div>`));
-    const sa = h(`<button class="btn small" style="margin:4px 10px">Alle Coins verkaufen</button>`); sa.onclick = () => { const u = g.sellAll(); this.audio?.cash(); this.toast(`Alles verkauft: ${fmtUSD(u)}`, 'good', 3000); this.market(); }; if (g.has('coins')) list.append(sa);
-    const pc = h(`<label style="display:flex;gap:8px;align-items:center;padding:4px 10px;font-size:13px"><input type="checkbox" ${s.payoutCold ? 'checked' : ''}/> Neue Coins in die Cold-Wallet</label>`);
-    pc.querySelector('input').onchange = (e) => { s.payoutCold = e.target.checked; };
-    if (g.has('cold')) list.append(pc);
-    const c = COIN[this.marketCoin], w = s.wallet[c.id], p = g.price(c.id);
-    const det = body.querySelector('.detail');
-    det.append(h(`<div class="mk-head"><span class="cdot" style="background:${c.color}">${c.id === 'BTC' ? '₿' : c.id.slice(0, 1)}</span><h3>${c.name} <span class="tk">${c.id}</span></h3><div class="px">${fmtUSD(p)}</div></div>`));
-    const hp = g.coinActive(c.id) ? g.revPerHash(c.id) : 0; const hpUnit = c.algo(s.day) === 'sha256' ? [1e12, 'TH/s'] : c.algo(s.day) === 'scrypt' ? [1e9, 'GH/s'] : c.algo(s.day) === 'kheavy' ? [1e12, 'TH/s'] : c.algo(s.day) === 'equihash' ? [1e3, 'kSol/s'] : ['rx', 'cn'].includes(c.algo(s.day)) ? [1e3, 'kH/s'] : [1e6, 'MH/s'];
-    if (g.has('coins')) det.append(h(`<div style="color:var(--dim);font-size:12px;margin:4px 0 8px">${esc(c.desc)} · Algo: ${ALGO_LABEL[c.algo(s.day)]} · Netz: ${s.day >= c.start ? fmtHash(g.netHash(c.id), c.algo(s.day)) : '—'}${hp ? ` · Hashprice: <b style="color:var(--text)">${fmtUSD(hp * hpUnit[0])} pro ${hpUnit[1]} und Tag</b>` : ''}${c.end && s.day >= c.end ? ' · <b class="neg">Mining beendet</b>' : ''}</div>`));
-    if (c.id === 'BTC' && g.has('autosell')) { const nh = HALVINGS.find((d) => d > s.day); if (nh) det.append(h(`<div style="font-size:13px;margin:-2px 0 8px">Nächstes Halving: <b>${fmtDate(nh)}</b> (in ${(nh - s.day).toLocaleString('de-DE')} Tagen) – Blockbelohnung ${String(BTC_REWARD(s.day)).replace('.', ',')} → ${String(BTC_REWARD(nh)).replace('.', ',')} BTC</div>`)); }
-    const cv = h('<canvas class="chart" width="1200" height="520"></canvas>'); det.append(cv);
-    const range = h(`<div class="seg" style="margin-top:10px"></div>`);
-    this.range ??= 365;
-    const hist = s.day - Math.max(c.start, toDay('2010-07-17'));
-    if (this.range !== 99999 && this.range >= hist) this.range = 99999;
-    for (const [l, d] of [['30 T', 30], ['1 J', 365], ['5 J', 1825], ['Alles', 99999]].filter(([, d]) => d === 99999 || d < hist)) { const b = h(`<button class="btn small ${this.range === d ? 'on' : ''}">${l}</button>`); b.onclick = () => { this.range = d; this.market(); }; range.append(b); }
-    det.append(range);
-    this.range ??= 365;
-    requestAnimationFrame(() => this.chart(cv, c.id, this.range));
-    // ---------- Handelsfenster: selbst eingeben, kaufen oder verkaufen ----------
-    det.classList.add('mk-left');
-    const wrap = h('<div class="mk-wrap"></div>'); det.replaceWith(wrap); wrap.append(det);
-    const tk = h('<div class="ticket"></div>'); wrap.append(tk);
-    this.trade ||= { mode: 'sell', unit: 'BTC' };
-    const T = this.trade, fee = g.tradeFee(), feeTxt = (fee * 100).toLocaleString('de-DE');
-    const pend = c.id === 'BTC' && !s.payoutCold ? this.pendingBtc() : 0, have = w.ex + pend;
-    const num = (str) => { str = String(str || '').trim().replace(/\s/g, ''); if (str.includes(',')) str = str.replace(/\./g, '').replace(',', '.'); else if (/^\d{1,3}(\.\d{3})+$/.test(str)) str = str.replace(/\./g, ''); const v = parseFloat(str); return Number.isFinite(v) && v > 0 ? v : 0; };
-    const fmtIn = (v, unit) => (v > 0 ? v.toLocaleString('de-DE', { maximumFractionDigits: unit === 'BTC' ? (v < 1 ? 6 : 4) : 2, useGrouping: false }) : '');
-    const sym = c.id === 'BTC' ? '₿' : c.id;
-    tk.innerHTML = `<div class="seg tk-tabs"><button class="btn small ${T.mode === 'sell' ? 'on' : ''}" data-m="sell">Verkaufen</button>${g.has('buycoins') ? `<button class="btn small ${T.mode === 'buy' ? 'on' : ''}" data-m="buy">Kaufen</button>` : ''}</div>
-      <div class="tk-bal"><div><span>Du hast</span><b>${fmtCoin(have)} ${c.id}</b><small>≈ ${fmtUSD(have * p)}</small></div><div><span>Kontostand</span><b>${fmtUSD(s.cash)}</b></div></div>
-      <label class="tk-amt"><span class="lab">${T.mode === 'sell' ? 'Menge verkaufen' : 'Menge kaufen'}</span><span class="field"><input type="text" inputmode="decimal" autocomplete="off" placeholder="0"/><button class="unit" title="Einheit wechseln">${T.unit === 'BTC' ? c.id : '$'}</button></span></label>
-      <div class="tk-chips"><button class="btn small" data-p="0.25">25 %</button><button class="btn small" data-p="0.5">50 %</button><button class="btn small" data-p="1">100 %</button></div>
-      <div class="tk-sum"><div><span>Kurs</span><b>${fmtUSD(p)}</b></div><div><span>Menge</span><b class="q">–</b></div><div><span>Gebühr (${feeTxt} %)</span><b class="f">–</b></div><div class="tot"><span class="tl">${T.mode === 'sell' ? 'Du bekommst' : 'Du zahlst'}</span><b class="t">–</b></div></div>
-      <div class="tk-msg"></div>
-      <button class="btn primary big wide tk-go" disabled>${T.mode === 'sell' ? 'Verkaufen' : 'Kaufen'}</button>
-      <div class="tk-note">Sofortverkauf ${feeTxt} % Gebühr${g.knows('limit') ? ` · Limit-Order ${(g.tradeFee(true) * 100).toLocaleString('de-DE')} %` : ' · mit „Limit-Orders“ (T) nur 0,5 %'}</div>`;
-    const inp = tk.querySelector('input[type=text]'), rng = tk.querySelector('.tk-range'), go = tk.querySelector('.tk-go'), msg = tk.querySelector('.tk-msg');
-    // Obergrenze in der gewählten Einheit
-    const maxIn = () => (T.mode === 'sell' ? (T.unit === 'BTC' ? have : have * p) : (T.unit === 'BTC' ? Math.max(0, s.cash) * (1 - fee) / p : Math.max(0, s.cash)));
-    const floorIn = (v, unit) => { const k = unit === 'BTC' ? 1e6 : 100; return Math.floor(v * k + 1e-7) / k; };
-    const m2 = (v) => `${Math.max(0, v).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $`, m2f = (v) => (v > 0 && v < 0.01 ? '< 0,01 $' : `−${m2(v)}`);
-    T.all = false;
-    const calc = () => {
-      const v = num(inp.value), mx = maxIn(), tol = T.unit === 'BTC' ? (mx < 1 ? 1e-6 : 1e-4) : 0.01, over = v > mx + tol;
-      const coins = T.unit === 'BTC' ? v : v / p;
-      let q = '–', f = '–', t = '0,00 $', ok = v > 0 && !over, small = false;
-      if (v > 0 && !over) {
-        if (T.mode === 'sell') { const cq = T.all ? have : Math.min(coins, have), gross = cq * p; q = `${fmtIn(cq, 'BTC') || '0'} ${c.id}`; f = m2f(gross * fee); t = `+${m2(gross * (1 - fee))}`; if (gross * (1 - fee) < 0.01) { ok = false; small = true; } }
-        else { const usd = T.all ? s.cash : Math.min(s.cash, T.unit === 'BTC' ? coins * p / (1 - fee) : v); q = `${fmtIn(usd * (1 - fee) / p, 'BTC') || '0'} ${c.id}`; f = m2f(usd * fee); t = m2(usd); if (usd < 0.01) { ok = false; small = true; } }
-      }
-      tk.querySelector('.q').textContent = q; tk.querySelector('.f').textContent = f; tk.querySelector('.t').textContent = t;
-      msg.textContent = over ? (T.mode === 'sell' ? `So viel hast du nicht – höchstens ${fmtIn(floorIn(mx, T.unit), T.unit)} ${T.unit === 'BTC' ? c.id : '$'}.` : `Dafür reicht dein Geld nicht – höchstens ${fmtIn(floorIn(mx, T.unit), T.unit)} ${T.unit === 'BTC' ? c.id : '$'}.`) : (mx <= 0 ? (T.mode === 'sell' ? (s.stats.sold > 0 ? 'Alles verkauft – dein PC schürft schon weiter.' : 'Noch keine Bitcoin – dein PC schürft gerade.') : 'Kein Geld zum Kaufen da.') : (small ? 'Mindestens 0,01 $ pro Auftrag.' : v > 0 ? '' : 'Menge eingeben oder 25 %, 50 % oder 100 % wählen.'));
-      msg.classList.toggle('bad', over || small); inp.closest('.field').classList.toggle('bad', over); tk.querySelector('.tk-sum').classList.toggle('bad', over); tk.querySelector('.tk-sum').classList.toggle('empty', !(v > 0) || over);
-      go.disabled = !ok; go.textContent = ok ? (T.mode === 'sell' ? `Verkaufen · ${t}` : `Kaufen · ${q}`) : (T.mode === 'sell' ? 'Verkaufen' : 'Kaufen');
-      if (rng && document.activeElement !== rng) rng.value = mx > 0 ? (over || T.all ? 100 : Math.round(Math.min(1, v / mx) * 100)) : 0;
-      tk.querySelectorAll('.tk-chips .btn').forEach((b) => b.classList.toggle('on', mx > 0 && !over && (+b.dataset.p === 1 ? T.all : !T.all && Math.abs(v / mx - +b.dataset.p) < 0.004)));
-    };
-    const setPct = (k) => { const mx = maxIn(); T.all = k >= 1 && mx > 0; inp.value = fmtIn(floorIn(k >= 1 ? mx : mx * k, T.unit), T.unit); calc(); };
-    inp.oninput = () => { T.all = false; calc(); }; inp.onkeydown = (e) => { if (e.key === 'Enter' && !go.disabled) go.click(); if (e.key === 'Escape') inp.blur(); };
-    if (rng) rng.oninput = () => setPct(+rng.value / 100);
-    tk.querySelectorAll('.tk-chips .btn').forEach((b) => (b.onclick = () => setPct(+b.dataset.p)));
-    tk.querySelectorAll('.tk-tabs .btn').forEach((b) => (b.onclick = () => { T.mode = b.dataset.m; this.market(); }));
-    tk.querySelector('.unit').onclick = (e) => { e.preventDefault(); if (T.all) { T.unit = T.unit === 'BTC' ? 'USD' : 'BTC'; e.currentTarget.textContent = T.unit === 'BTC' ? c.id : '$'; setPct(1); return; } const v = num(inp.value), k = T.mode === 'buy' ? 1 - fee : 1, coins = T.unit === 'BTC' ? v / k : v / p; T.unit = T.unit === 'BTC' ? 'USD' : 'BTC'; e.currentTarget.textContent = T.unit === 'BTC' ? c.id : '$'; inp.value = fmtIn(floorIn(T.unit === 'BTC' ? coins * k : coins * p, T.unit), T.unit); calc(); };
-    if (maxIn() <= 0) { inp.disabled = true; if (rng) rng.disabled = true; tk.querySelectorAll('.tk-chips .btn').forEach((b) => (b.disabled = true)); }
-    go.onclick = () => {
-      const v = num(inp.value); if (!(v > 0)) return;
-      if (T.mode === 'sell') {
-        if (pend) g.creditPending(c.id, this.pendingBtc());
-        const avail = s.wallet[c.id].ex, coins = T.all ? avail : Math.min(avail, T.unit === 'BTC' ? v : v / p); if (!(coins > 0)) return;
-        const u = g.sell(c.id, T.all || coins >= avail * 0.9999 ? 1 : coins / avail); if (!u) return;
-        this.audio?.cash(); this.flashCash(u); this.toast(`${fmtIn(coins, 'BTC')} ${c.id} verkauft · +${m2(u)}`, 'good', 3000);
-      } else {
-        let usd = Math.min(s.cash, T.unit === 'BTC' ? v * p / (1 - fee) : v); if (T.all || (usd > s.cash * 0.999 && s.cash - usd < 0.01)) usd = s.cash; const u = g.buy(c.id, usd); if (!u) { this.toast('Kauf nicht möglich.', 'bad'); return; }
-        this.audio?.cash(); this.toast(`${fmtIn(u * (1 - fee) / p, 'BTC')} ${c.id} gekauft · −${m2(u)}`, 'good', 3000);
-      }
-      this.market();
-    };
-    calc();
-    if (g.has('cold')) { const ct = h(`<div class="tk-cold"><div><span>Cold-Wallet</span><b>${fmtCoin(w.cold)} ${c.id}</b></div><button class="btn small">${w.cold > 0 && w.ex === 0 ? 'Auf Börse holen' : 'Einlagern'}</button></div>`); ct.querySelector('button').onclick = () => { g.transfer(c.id, !(w.cold > 0 && w.ex === 0)); this.market(); }; tk.append(ct); }
-    const r3 = h(`<div class="sec"><h4>Auto-Verkauf: <span id="as-v">${Math.round(s.autoSell[c.id] * 100)} %</span></h4><input type="range" min="0" max="100" step="5" value="${Math.round(s.autoSell[c.id] * 100)}"/></div>`);
-    r3.querySelector('input').oninput = (e) => { s.autoSell[c.id] = e.target.value / 100; r3.querySelector('#as-v').textContent = e.target.value + ' %'; };
-    const all = h('<button class="btn small" style="margin-top:6px">Für alle</button>'); all.onclick = () => { for (const k of COINS) s.autoSell[k.id] = s.autoSell[c.id]; this.toast('Übernommen', 'good', 1500); }; r3.append(all);
-    if (g.has('autosell')) det.append(r3);
-    if (g.knows('limit') && g.has('autosell')) { const lc = h(`<label class="lim-auto"><input type="checkbox" ${s.autoLimit ? 'checked' : ''}/> Auto-Verkauf als Limit-Order: nur über dem 7-Tage-Schnitt, 0,5 % Gebühr</label>`); lc.querySelector('input').onchange = (e) => { s.autoLimit = e.target.checked; this.toast(s.autoLimit ? 'Auto-Verkauf wartet jetzt auf gute Kurse.' : 'Auto-Verkauf verkauft wieder sofort.', 'info', 2500); }; r3.append(lc); }
-    if (g.knows('limit')) this.limitBox(det, c, p); // Limit-Orders (Fähigkeit Nr. 16)
-    this.openModal(body, '', 'market');
-  }
-  chart(cv, id, range, mini = false) {
-    const g = this.g, s = g.s, ctx = cv.getContext('2d'), dpr = Math.min(2, window.devicePixelRatio || 1);
-    const cw = cv.clientWidth || 600, chh = cv.clientHeight || 220; cv.width = Math.round(cw * dpr); cv.height = Math.round(chh * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const W = cw, H = chh; ctx.clearRect(0, 0, W, H);
-    const start = Math.max(COIN[id].start, s.day - range, toDay('2010-07-17')), end = s.day;
-    if (end - start < 2) { ctx.fillStyle = '#c9b8a3'; ctx.font = '600 14px Nunito, sans-serif'; ctx.fillText('Noch keine Kursdaten', 40, 60); return; }
-    const n = Math.max(2, Math.min(300, end - start)), pts = []; ctx.lineJoin = 'round';
-    for (let i = 0; i <= n; i++) { const d = Math.round(start + (end - start) * (i / n)); pts.push([d, g.price(id, d)]); }
-    const vals = pts.map((p) => p[1]).filter((v) => v > 0);
-    const logScale = Math.max(...vals) / Math.min(...vals) > 30;
-    const tf = (v) => (logScale ? Math.log10(Math.max(v, 1e-9)) : v);
-    const mn = Math.min(...vals.map(tf)), mx = Math.max(...vals.map(tf));
-    const padT = mini ? 6 : 26, padR = mini ? 6 : 18, padB = mini ? 6 : 26; let pad = mini ? 6 : 78;
-    // Runde Achsenwerte (linear) bzw. Zehnerpotenzen (log)
-    let ticks = [], lo = mn, hi = mx, st = 0;
-    if (!mini) {
-      if (logScale) { for (let e = Math.floor(mn); e <= Math.ceil(mx); e++) ticks.push(e); lo = Math.min(lo, ticks[0]); hi = Math.max(hi, ticks[ticks.length - 1]); }
-      else { const raw = (mx - mn) / 4 || Math.abs(mx) * 0.1 || 1, mag = Math.pow(10, Math.floor(Math.log10(raw))); st = [1, 2, 2.5, 5, 10].map((k) => k * mag).find((k) => k >= raw) || 10 * mag; lo = Math.floor(mn / st) * st; hi = Math.ceil(mx / st) * st; for (let v = lo; v <= hi + st * 0.01; v += st) ticks.push(v); }
-    }
-    const dec = st ? Math.max(0, Math.ceil(-Math.log10(st) - 1e-9) + (Math.abs(st / Math.pow(10, Math.floor(Math.log10(st))) - 2.5) < 1e-6 ? 1 : 0)) : 0;
-    const tl = (t) => { const v = logScale ? Math.pow(10, t) : t; return !logScale && v > 0 && v < 1 ? v.toFixed(dec).replace('.', ',') + ' $' : fmtUSD(v); };
-    if (!mini) { ctx.font = '600 14px Nunito, sans-serif'; pad = Math.max(56, ...ticks.map((t) => ctx.measureText(tl(t)).width)) + 20; }
-    const x = (i) => pad + (i / n) * (W - pad - padR), y = (v) => H - padB - ((tf(v) - lo) / (hi - lo || 1)) * (H - padB - padT);
-    ctx.strokeStyle = 'rgba(255,240,220,0.07)'; ctx.font = '600 14px Nunito, sans-serif'; ctx.lineWidth = 1; ctx.fillStyle = '#e2d1bb'; ctx.textBaseline = 'middle';
-    if (!mini) for (const t of ticks) { const yy = H - padB - ((t - lo) / (hi - lo || 1)) * (H - padB - padT); ctx.beginPath(); ctx.moveTo(pad, yy); ctx.lineTo(W - padR, yy); ctx.stroke(); ctx.textAlign = 'right'; ctx.fillText(tl(t), pad - 10, yy); }
-    ctx.textBaseline = 'alphabetic';
-    if (!mini) { ctx.textAlign = 'left'; ctx.fillText(fmtDate(start), pad, H - 6); ctx.textAlign = 'right'; ctx.fillText(fmtDate(end), W - padR, H - 6); ctx.textAlign = 'left'; }
-    const grad = ctx.createLinearGradient(0, 0, 0, H); grad.addColorStop(0, COIN[id].color + '38'); grad.addColorStop(1, COIN[id].color + '00');
-    ctx.beginPath(); pts.forEach(([d, v], i) => (i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v)))); ctx.lineTo(x(n), H - padB); ctx.lineTo(x(0), H - padB); ctx.fillStyle = grad; ctx.fill();
-    ctx.beginPath(); pts.forEach(([d, v], i) => (i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v)))); ctx.strokeStyle = COIN[id].color; ctx.lineWidth = 2; ctx.stroke();
-    if (!mini) { const [, lv] = pts[n]; ctx.beginPath(); ctx.arc(x(n), y(lv), 4.5, 0, 7); ctx.fillStyle = COIN[id].color; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#302419'; ctx.stroke(); }
-    if (logScale && !mini) { ctx.fillStyle = '#9a8a78'; ctx.textAlign = 'right'; ctx.fillText('log. Skala', W - padR, 14); ctx.textAlign = 'left'; }
-  }
+  // Börse: eigene Seite (market.js) – als Fenster (M) oder am PC-Monitor (useProp → Market.atPc)
+  market(update = false) { (this.mk ||= new Market(this)).show(update); }
 
-  // Handy: Chats pro Person (neuester oben, Ungelesen-Zahl), im Chat die neueste Nachricht unten. Offene Rechnung und offene Entscheidung stehen über den Chats.
-  // chat: Name des offenen Chats (null = Liste); ohne Angabe öffnet sich der eine Chat mit Ungelesenem direkt (z. B. „Bzzz … Papa“)
-  phone(tab = null, chat) {
+  phone(tab = null) {
     this.g.learned?.('phone'); this.ringOff?.(); this.ringOff = null;
-    const g = this.g, s = g.s; let chats = this.phoneChats(), unread = chats.reduce((a, c) => a + c.unread, 0);
-    const tabs = ['msgs', ...(this.contactsOk() ? ['contacts'] : []), ...(this.kontoOk() ? ['konto'] : [])];
-    tab = tab || (unread || s.ev?.open || s.bills?.open ? 'msgs' : this.phoneTab || 'msgs'); if (!tabs.includes(tab)) tab = 'msgs'; this.phoneTab = tab;
-    if (chat === undefined) { const un = chats.filter((c) => c.unread); chat = tab === 'msgs' && un.length === 1 && !s.ev?.open && !s.bills?.open ? un[0].who : null; } // genau ein Chat mit Neuem: gleich dorthin
-    this.phoneChat = tab === 'msgs' ? chat : null;
-    let fresh = new Set(); if (this.phoneChat) { const c = chats.find((x) => x.who === chat); for (const m of c?.msgs || []) if (!m.read) { fresh.add(m); m.read = true; } chats = this.phoneChats(); unread = chats.reduce((a, x) => a + x.unread, 0); if (fresh.size) this.goals(); } // geöffneter Chat gilt als gelesen (Ziele, die darauf warten, erscheinen)
+    const g = this.g;
+    const msgs = [...g.s.messages].sort((a, b) => b.day - a.day), unread = msgs.filter((m) => !m.read).length;
+    const tabs = ['msgs', ...(this.contactsOk() ? ['contacts'] : []), ...(this.kontoOk() ? ['konto'] : [])]; // Reiter erst mit Grund (Papas Darlehen, erste Abrechnung)
+    tab = tab || (unread || g.s.ev?.open ? 'msgs' : this.phoneTab || 'msgs'); if (!tabs.includes(tab)) tab = 'msgs'; this.phoneTab = tab;
     const newC = CONTACTS.filter((c) => g.contactMet(c.id) && !g.contactOn(c.id)).length, owe = g.owed?.() > 0;
-    const TL = { msgs: `Nachrichten${unread ? ` <span class="ph-n">${unread}</span>` : ''}`, contacts: `Kontakte${newC ? ` <span class="ph-n">${newC}</span>` : ''}`, konto: `Konto${owe ? ' <span class="ph-n ph-warn">!</span>' : ''}` };
-    const body = h(`<div><h2>Handy</h2>${tabs.length > 1 ? `<div class="ph-tabs" role="tablist">${tabs.map((t) => `<button class="btn small ${tab === t ? 'on' : ''}" data-t="${t}">${TL[t]}</button>`).join('')}</div>` : ''}<div class="phone"></div></div>`);
-    body.querySelectorAll('.ph-tabs button').forEach((b) => { b.onclick = () => this.phone(b.dataset.t, null); });
+    const body = h(`<div><h2>Handy</h2>${tabs.length > 1 ? `<div class="ph-tabs" role="tablist">${tabs.map((t) => `<button class="btn small ${tab === t ? 'on' : ''}" data-t="${t}">${{ msgs: `Nachrichten${unread ? ` <span class="ph-n">${unread}</span>` : ''}`, contacts: `Kontakte${newC ? ` <span class="ph-n">${newC}</span>` : ''}`, konto: `Konto${owe ? ' <span class="ph-n ph-warn">!</span>' : ''}` }[t]}</button>`).join('')}</div>` : ''}<div class="phone"></div></div>`);
+    body.querySelectorAll('.ph-tabs button').forEach((b) => { b.onclick = () => this.phone(b.dataset.t); });
     const ph = body.querySelector('.phone');
     if (tab === 'contacts') { this.phoneContacts(ph); this.openModal(body, 'narrow', 'phone'); this.dock(); return; }
     if (tab === 'konto') { g.learned?.('konto'); this.phoneKonto(ph); this.openModal(body, 'narrow', 'phone'); this.dock(); return; }
-    if (chat) { this.phoneChatView(ph, chats.find((c) => c.who === chat), fresh); this.openModal(body, 'narrow', 'phone'); this.dock(); this.keysHint(); const card = $('#modal .modal-card'); if (card) card.scrollTop = card.scrollHeight; return; }
-    // Liste: offene Rechnung (Mahnung) und offene Entscheidung ganz oben
-    const oe = s.ev?.open && EVENT[s.ev.open.id], bm = this.billMsg();
-    if (bm) ph.append(bm);
-    if (oe && oe.id !== 'mahnung') { const card = h(`<div class="msg decide"><div class="fr">${esc(oe.from || '')}<span>Entscheidung offen · noch ${Math.max(0, s.ev.open.until - s.day)} Tage</span></div><b>${esc(g.evText(oe, 'title'))}</b><div class="row" style="margin-top:8px"><button class="btn small primary">Jetzt entscheiden</button></div></div>`); card.querySelector('button').onclick = () => { this.evSnooze = null; this.closeModal(); this.eventCard(); }; ph.append(card); }
-    if (!chats.length) ph.append(h('<div class="empty">Keine Nachrichten.</div>'));
-    const list = h('<div class="ch-list"></div>');
-    for (const c of chats) {
-      const last = c.msgs[c.msgs.length - 1], svc = c.who === 'Paketdienst' && !c.unread; // Paketdienst: eingeklappt, ohne Vorschau
-      const row = h(`<button class="ch-row ${c.unread ? 'unread' : ''} ${svc ? 'svc' : ''}"><span class="ch-av">${this.chatFace(c.who)}</span><span class="ch-main"><span class="ch-top"><b>${esc(c.who)}</b><em>${fmtDate(last.day)}</em></span>${svc ? '' : `<span class="ch-last">${esc(last.text)}</span>`}</span>${c.unread ? `<span class="ch-n">${c.unread}</span>` : ''}</button>`);
-      row.onclick = () => this.phone('msgs', c.who);
-      list.append(row);
-    }
-    ph.append(list);
+    const oe = g.s.ev?.open && EVENT[g.s.ev.open.id];
+    const ob = g.s.bills?.open; // offene Rechnung: immer oben, auch wenn gerade eine andere Entscheidung offen ist (die Mahnung kommt dann danach)
+    const bm = this.billMsg(); if (bm) ph.append(bm); // offene Rechnung: klare Mahnung mit Betrag, Frist, Folge und „Jetzt zahlen“ – auch während die Mahnung als Entscheidung offen ist
+    if (oe && !(ob && oe.id === 'mahnung')) { const card = h(`<div class="msg decide"><div class="fr">${esc(oe.from || '')}<span>Entscheidung offen · noch ${Math.max(0, g.s.ev.open.until - g.s.day)} Tage</span></div><b>${esc(g.evText(oe, 'title'))}</b><div class="row" style="margin-top:8px"><button class="btn small primary">Jetzt entscheiden</button></div></div>`); card.querySelector('button').onclick = () => { this.evSnooze = null; this.closeModal(); this.eventCard(); }; ph.append(card); }
+    if (!msgs.length) ph.append(h('<div class="empty">Keine Nachrichten.</div>'));
+    for (const m of msgs) { if (m.old) continue; const tip = MESSAGES.find((x) => x.id === m.id)?.tip; ph.append(h(`<div class="msg f-${m.from.split(' ')[0]} ${m.read ? '' : 'unread'} ${tip ? 'tip' : ''}"><div class="fr">${esc(m.from)}${tip ? '<em class="tip-tag">Tipp</em>' : ''}<span>${fmtDate(m.day)}</span></div>${esc(m.text)}</div>`)); }
+    msgs.forEach((m) => (m.read = true)); this.goals(); // gelesen: Ziele, die auf eine Nachricht warten, erscheinen
     this.openModal(body, 'narrow', 'phone'); this.dock();
-  }
-  // Chats: Nachrichten nach Absender, im Chat aufsteigend (Tag, dann Reihenfolge des Eintreffens); Liste: neuester Chat oben, Paketdienst unten
-  phoneChats() {
-    const by = new Map();
-    this.g.s.messages.forEach((m, i) => { if (m.old) return; const who = m.from || '?'; if (!by.has(who)) by.set(who, []); by.get(who).push({ m, i }); });
-    const out = [];
-    for (const [who, arr] of by) { arr.sort((a, b) => a.m.day - b.m.day || a.i - b.i); const lastI = arr[arr.length - 1]; out.push({ who, msgs: arr.map((x) => x.m), unread: arr.filter((x) => !x.m.read).length, key: [lastI.m.day, lastI.i] }); }
-    return out.sort((a, b) => ((a.who === 'Paketdienst' && !a.unread) - (b.who === 'Paketdienst' && !b.unread)) || b.key[0] - a.key[0] || b.key[1] - a.key[1]);
-  }
-  chatFace(who) {
-    const id = { Papa: 'papa', Mama: 'mama', Opa: 'opa', 'Opa Heinz': 'opa', Deniz: 'deniz', Kemal: 'kemal', Jonas: 'jonas' }[who];
-    return id ? faceSvg(id) : `<span class="ch-ini">${esc(String(who).replace(/^Herr\s+|^Frau\s+/, '').slice(0, 1))}</span>`;
-  }
-  // Ein Chat: Datum als Trenner, neueste Nachricht unten; erledigte Anleitungen eingeklappt
-  phoneChatView(ph, c, fresh = new Set()) {
-    const g = this.g, done = g.s.learn?.done || {};
-    ph.classList.add('ph-chat');
-    const head = h(`<div class="ch-head"><button class="btn small ch-back" title="Alle Chats">‹ Chats</button><span class="ch-av">${this.chatFace(c?.who || '')}</span><b>${esc(c?.who || '')}</b></div>`);
-    head.querySelector('button').onclick = () => this.phone('msgs', null);
-    ph.append(head);
-    if (!c) { ph.append(h('<div class="empty">Keine Nachrichten.</div>')); return; }
-    const log = h('<div class="ch-log"></div>'); let day = null;
-    for (const m of c.msgs) {
-      if (m.day !== day) { day = m.day; log.append(h(`<div class="ch-day">${fmtDate(m.day)}</div>`)); }
-      const tip = MESSAGES.find((x) => x.id === m.id)?.tip, les = m.lesson || LESSON_OF[m.text], fin = les && done[les] && !fresh.has(m); // Lektion erledigt: eingeklappt
-      if (fin) { const d = h(`<details class="msg done"><summary>Anleitung: ${esc(FEATURES[les]?.title || 'erledigt')} <span>erledigt</span></summary><div>${esc(m.text)}</div></details>`); log.append(d); continue; }
-      log.append(h(`<div class="msg f-${esc(String(m.from).split(' ')[0])} ${fresh.has(m) ? 'unread' : ''} ${tip ? 'tip' : ''}">${tip ? '<em class="tip-tag">Tipp</em>' : ''}${esc(m.text)}</div>`));
-    }
-    ph.append(log);
   }
   // Mahnung im Handy: wie viel, bis wann, was sonst passiert – mit „Jetzt zahlen“ bzw. „Coins verkaufen“
   billMsg() {
@@ -1419,8 +1247,7 @@ export class UI {
     if (!b || b.st === 'open') return; // offen: chargeBill meldet sich selbst, die Mahnung kommt als Ereignis
     const s = this.g.s, first = (s.stats.bills || 0) <= 2;
     if (!first && (s.speed || 0) >= 5 && b.st !== 'dispo') return;
-    const parts = (b.items || []).map((it) => `${FACILITY[it.fac]?.short || it.fac} ${fmtUSD(it.rent + it.elec)}`).join(', ');
-    this.toast(`<b>Monatsabrechnung ${esc(monthName(b.m))}:</b> ${b.total < 0 ? `+${fmtUSD(-b.total)} gutgeschrieben` : `${fmtUSD(b.total)} abgebucht`}${parts ? ` (${esc(parts)})` : ''}${b.st === 'dispo' ? ' – das Konto ist im Dispo' : ''}. Details: Handy → Konto.`, b.st === 'dispo' ? 'bad' : 'info', first ? 9000 : 5000);
+    this.toast(`<b>Abrechnung ${esc(monthName(b.m))}:</b> ${b.total < 0 ? `<span class="pos">+${fmtUSD(-b.total)}</span>` : `<span class="neg">−${fmtUSD(b.total)}</span>`}${b.st === 'dispo' ? ' – Konto im Minus' : ''}`, b.st === 'dispo' ? 'bad' : 'info', first ? 6000 : 4000); // Details im Handy → Konto
   }
   // Anlernen: nach Papas Nachricht schreibt Deniz – nach ein paar Schritten oder spätestens 40 Sekunden (liest man das Handy nicht: nach 90 Sekunden)
   ideaTick() {
@@ -1599,16 +1426,6 @@ export class UI {
   // Finale: mehrseitige Abschluss-Sequenz (src/ui/finale.js)
   ending() { showFinale(this, 'won'); }
 
-  // Limit-Order: „Verkaufe X, sobald der Kurs ≥ Y steht“ – die Coins sind bis dahin reserviert
-  limitBox(det, c, p) {
-    const g = this.g, s = g.s, w = s.wallet[c.id], mine = (s.limits || []).filter((l) => l.coin === c.id);
-    const box = h(`<div class="sec lim"><h4>Limit-Order</h4><div class="lim-row"><input class="lim-n" type="text" inputmode="decimal" placeholder="Menge ${c.id}"/><span>zu</span><input class="lim-p" type="text" inputmode="decimal" value="${Math.ceil(p * 1.1)}"/><span>$</span><button class="btn small primary">Setzen · 0,5 %</button></div><div class="lim-list"></div></div>`);
-    const num = (v) => { const x = parseFloat(String(v).replace(/\./g, '').replace(',', '.')); return Number.isFinite(x) ? x : 0; };
-    box.querySelector('button').onclick = () => { const n = Math.min(num(box.querySelector('.lim-n').value) || w.ex, w.ex), lp = num(box.querySelector('.lim-p').value); if (!(n > 0) || !(lp > 0)) { this.toast('Menge und Preis eingeben.', 'info', 2500); return; } if (!g.limitAdd(c.id, n, lp)) { this.toast('So viel liegt nicht auf der Börse.', 'bad', 2500); return; } this.toast(`Limit-Order: ${fmtCoin(n)} ${c.id} zu ${fmtUSD(lp)}`, 'good', 3000); this.market(); };
-    const list = box.querySelector('.lim-list'); if (!mine.length) list.append(h('<div class="lim-e">Keine offenen Aufträge.</div>'));
-    for (const l of mine) { const r = h(`<div class="lim-o"><span>${fmtCoin(l.n)} ${c.id} ab ${fmtUSD(l.p)}</span><button class="btn small">Streichen</button></div>`); r.querySelector('button').onclick = () => { g.limitCancel(l.id); this.market(); }; list.append(r); }
-    det.append(box);
-  }
   techs() { this.skills(); } // Technik ist in den Fähigkeiten aufgegangen (Taste T)
 
   ranking(tab = this.logTab || 'rank') {
@@ -1804,7 +1621,7 @@ export class UI {
   // Esc zuerst für das, was gerade offen ist: Mini-Spiel, Installer, Details im Baum (main.js) – true = erledigt
   escLocal() {
     if (this.mg) { this.mg.cancel(); return true; } if (this.osWiz) return osAbort(this); if (skCloseDetail(this)) return true;
-    const b = this.modalBack; if (b && !$('#modal').classList.contains('hidden') && !this.stickyModal()) { this.closeModal(); if (b === 'shop') this.toggleBuild(); return true; } // Unterfenster: zurück zu Inspektor bzw. Shop
+    const b = this.modalBack; if (b && !$('#modal').classList.contains('hidden') && !this.stickyModal()) { this.closeModal(); if (b === 'shop' && !this.mk?.where) this.toggleBuild(); return true; } // im Browser „Shop | Börse“ springt der Shop-Reiter von selbst zurück // Unterfenster: zurück zu Inspektor bzw. Shop
     return false;
   }
   milestone(title, sub, kicker = 'Meilenstein') {
@@ -1870,7 +1687,7 @@ export class UI {
     // gekauft wird genau die gezeigte Zusammenstellung; hat sich der Preis spürbar geändert oder ist ein Teil ausgelaufen: Katalog neu
     const buy = (c, ready, shown) => go(() => {
       const blk = g.buildBlocked(c), now = blk ? 0 : g.buildStats(c, fac, ready).price;
-      if (blk || Math.abs(now - shown) > Math.max(2, shown * 0.02)) { this.toast(blk ? `${esc(blk)} gibt es nicht mehr zu kaufen – Katalog aktualisiert.` : `Neuer Preis: ${this.money(now)} statt ${this.money(shown)}. Katalog aktualisiert.`, 'info', 4500); this.build(true); return; }
+      if (blk || Math.abs(now - shown) > Math.max(2, shown * 0.02)) { this.toast(blk ? `${esc(blk)} gibt es nicht mehr.` : `Neuer Preis: ${this.money(now)}.`, 'info', 4500); this.build(true); return; }
       this.startBuild(c, ready);
     });
     const ready = cfg ? buy(cfg, true, r.price) : null, kit = cfg ? buy(cfg, false, r.price) : null;
@@ -1927,7 +1744,7 @@ export class UI {
   }
   // Alle offenen Bausätze am Standort einbauen (Inspektor, Katalog)
   assembleAllUI(fac = this.g.s.current, uid = null) {
-    const r = this.g.assembleAll(fac); if (!r.parts) { this.toast('Für die Bausätze liegen keine passenden Teile im Lager.', 'info', 3500); return; }
+    const r = this.g.assembleAll(fac); if (!r.parts) { this.toast('Keine passenden Teile im Lager.', 'info', 3000); return; }
     this.audio?.install?.(); this.toast(`${r.kits} ${r.kits === 1 ? 'Bausatz' : 'Bausätze'} fertig geschraubt · ${r.parts} Teile eingebaut`, 'good', 4000);
     if (uid && this.inspUid === uid) this.inspect(uid); this.build(true); this.pauseHint(fac);
   }
@@ -1954,7 +1771,7 @@ export class UI {
   startBuild(cfg, ready) {
     const g = this.g, fac = g.s.current, st = g.buildStats(cfg, fac, ready), blk = g.buildBlocked(cfg);
     if (blk) { this.toast(`${esc(blk)} gibt es nicht mehr zu kaufen.`, 'bad'); return; }
-    if (ready && !g.readyOk(cfg.type)) { this.toast(`${this.lockText(g.readyBy(cfg.type)).short} Als Bausatz geht’s sofort.`, 'info', 5000); return; }
+    if (ready && !g.readyOk(cfg.type)) { this.toast('Fertig montiert gibt’s erst über einen Kontakt.', 'info', 3500); return; }
     if (!st.ok) { this.toast(esc(st.why), 'bad'); return; }
     const pm = g.parcelMode();
     if (pm ? !g.orderRoomOk(PLACEABLE[cfg.type]) : !g.slotOk(fac, PLACEABLE[cfg.type])) { this.toast(pm ? `${esc(g.orderWhy(PLACEABLE[cfg.type]) || 'Kein Platz mehr')}.` : 'Kein Platz mehr – Zeit für einen größeren Standort.', 'bad'); return; }
@@ -1977,9 +1794,9 @@ export class UI {
     const key = `${fac}:${heat}:${full}:${loss}`; if (this.pauseKey === key) return; this.pauseKey = key;
     const n = (k) => `${k} ${k === 1 ? 'Gerät pausiert' : 'Geräte pausieren'}`;
     this.pauseToast?.remove();
-    if (full) this.pauseToast = this.toast(`Anschluss voll: ${n(full)}. Mehr Strom: <kbd>B</kbd> Shop → oben „Strom ausbauen“.`, 'info', 7000);
-    else if (!heat) this.pauseToast = this.toast(`Kaum rentabel: ${n(loss)} – der Strom frisst fast den ganzen Ertrag. Kühlung hilft da nicht.`, 'info', 7000);
-    else { const fan = g.shopList('cool', fac).sort((x, y) => g.itemPrice(x) - g.itemPrice(y))[0]; this.pauseToast = this.toast(`Zu heiß hier: ${n(heat)}. Stell Kühlung auf: <kbd>B</kbd> Shop → Kühlung${fan ? ` (${esc(fan.name)} ab ${this.money(g.itemPrice(fan))})` : ''}.`, 'info', 7000); }
+    if (full) this.pauseToast = this.toast(`Anschluss voll: ${n(full)} – Strom ausbauen`, 'info', 6000);
+    else if (!heat) this.pauseToast = this.toast(`Kaum rentabel: ${n(loss)}`, 'info', 5000);
+    else this.pauseToast = this.toast(`Zu heiß: ${n(heat)} – Kühlung aufstellen`, 'info', 6000);
   }
   // Nach dem Setzen: gleich noch einen? (Rigs, Miner, Regale – solange Geld, Platz und Kontingent reichen)
   placedAgain(o, p) {
@@ -1988,11 +1805,11 @@ export class UI {
     if (t?.stock) { // aus dem Bestand „Ausgepackt“: gleich das nächste gleiche Stück, solange eins da ist und Platz bleibt
       const left = g.stockGroups().find((x) => x.key === t.stock)?.n || 0;
       if (left && g.slotOk(fac, d)) { this.hint(`${n} aufgestellt · Klick = noch eins (${left} übrig) · R = drehen · Rechtsklick = fertig`); return true; }
-      if (empty) this.toast(o.kit ? 'Bausatz steht. Die Teile liegen im Lager – anschauen und <kbd>E</kbd>: einbauen.' : 'Steht. Anschauen und <kbd>E</kbd>: bestücken.', 'good', 5000);
-      if (left) this.toast(`Hier ist kein Platz mehr – ${left === 1 ? 'das letzte Stück' : `die übrigen ${left}`} stellst du woanders auf.`, 'info', 5000);
+      if (empty) this.toast(o.kit ? 'Bausatz steht – Teile einbauen' : 'Steht – jetzt bestücken', 'good', 3500);
+      if (left) this.toast('Hier ist kein Platz mehr.', 'info', 3500);
       return false;
     }
-    const tipE = () => { if (empty) this.toast((t?.build && !t.ready) || t?.kit ? `Bausatz steht. Teile liegen im Lager – anschauen und <kbd>E</kbd>: einbauen${n > 1 ? ' (oder <kbd>B</kbd> → „Alle fertig schrauben“)' : ''}` : 'Anschauen und <kbd>E</kbd>: bestücken', 'good', 5000); };
+    const tipE = () => { if (empty) this.toast((t?.build && !t.ready) || t?.kit ? 'Bausatz steht – Teile einbauen' : 'Steht – jetzt bestücken', 'good', 3500); };
     if (!g.slotKind(d)) { tipE(); return false; }
     const cost = t?.build ? g.buildStats(t.build, fac, t.ready).price : src ? g.cloneCost(src, !!t.kit) : g.itemPrice(d);
     const why = !g.slotOk(fac, d) ? 'full' : !g.canAfford(cost) ? 'money' : (t?.build ? g.buildBlocked(t.build) : src ? g.cloneBlocked(src) || !g.cloneStockOk(src) : g.stockLeft(d) < 1) ? 'stock' : '';
@@ -2078,13 +1895,15 @@ export class UI {
     for (const it of parts) {
       const price = g.itemPrice(it), n = g.bagN(it.id), isNew = g.s.day - it.releaseDay < 120;
       let spec = '';
-      if (T === 'gpu') { const v = val(it); spec = `${it.watt} W${multi ? ` · ${fmtNum(it.vram, it.vram < 1 ? 1 : 0)} GB` : ''}${v.c ? ` · ${fmtHash(it.hash[g.coinAlgo(v.c)] || 0, g.coinAlgo(v.c))}` : ''}<br/>schürft allein ≈ <b class="${v.net >= 0 ? 'pos' : 'neg'}">${v.net >= 0 ? '+' : ''}${fmtUSD(v.net)}/Tag</b>${v.c && multi ? ` mit ${COIN[v.c].name}` : ''}`; } // VRAM und Coin erst, wenn es mehr als Bitcoin gibt
-      if (T === 'cpu') spec = `${it.watt} W · reicht als Steuerzentrale${it.hash.sha256 ? ` · schürft mit (${fmtHash(it.hash.sha256, 'sha256')})` : ''}`;
+      let psuNeed = 0; // passt die Karte in keinen PC mit freiem Platz, weil das Netzteil zu schwach ist? Dann gleich beim Kauf sagen
+      if (T === 'gpu') { const v = val(it); const rigs = g.facObjects(fac).filter((o2) => o2.parts?.mobo && o2.parts.psu && PLACEABLE[o2.type]?.kind === 'rig' && o2.parts.gpus.length < g.rigGpuCap(o2)); if (rigs.length && rigs.every((o2) => g.psuWhy(o2, it.id))) psuNeed = Math.min(...rigs.map((o2) => g.wattAfter(o2, it.id)));
+        spec = `${it.watt} W${multi ? ` · ${fmtNum(it.vram, it.vram < 1 ? 1 : 0)} GB` : ''}${v.c ? ` · ${fmtHash(it.hash[g.coinAlgo(v.c)] || 0, g.coinAlgo(v.c))}` : ''}<br/>schürft allein ≈ <b class="${v.net >= 0 ? 'pos' : 'neg'}">${v.net >= 0 ? '+' : ''}${fmtUSD(v.net)}/Tag</b>${v.c && multi ? ` mit ${COIN[v.c].name}` : ''}${psuNeed ? `<br/><b class="neg">Netzteil zu schwach (ab ${psuNeed} W)</b>` : ''}`; } // VRAM und Coin erst, wenn es mehr als Bitcoin gibt
+      if (T === 'cpu') spec = `${it.watt} W${it.hash.sha256 ? ` · schürft mit (${fmtHash(it.hash.sha256, 'sha256')})` : ''}`;
       if (T === 'mobo') spec = `${it.slots} Grafikkarten-Plätze · ${it.watt} W`;
-      if (T === 'psu') spec = `${it.cap} W Leistung${it.cap >= 1600 ? ' · für große Rahmen (8er/12er brauchen zwei)' : ''}`;
+      if (T === 'psu') spec = `${it.cap} W${it.cap >= 1600 ? ' · große Rahmen brauchen zwei' : ''}`;
       const card = h(`<div class="item part" data-price="${price}"><div class="t"><span>${esc(it.name)}${isNew ? '<span class="new">NEU</span>' : ''}</span><span class="p">${this.money(price)}</span></div><div class="s">${it.id === bestId ? '<b class="pv-best">Bester Wert für dein Geld</b><br/>' : ''}${spec}${n ? `<br/><b class="pv-n">Im Lager: ${n}</b>` : ''}${pend[it.id] ? `<br/><b class="pv-n">Unterwegs: ${pend[it.id]}</b>` : ''}</div><div class="miss"></div><div class="rc-row"><button class="btn small primary place" data-p="${price}">${pm ? 'Bestellen' : 'Kaufen'} · ${this.money(price)}</button></div></div>`);
       const [b1] = card.querySelectorAll('button');
-      const buy = (k) => (e) => { e.stopPropagation(); if (g.parcelMode()) { const got = g.orderPart(it.id, k); if (!got) { this.toast('Nicht genug Geld.', 'bad'); return; } this.ordered(`${got}× ${it.name}`, ' Paket aufheben, dann PC anschauen und <kbd>E</kbd>: einbauen.'); return; } const got = g.buyPart(it.id, k); if (!got) { this.toast('Nicht genug Geld.', 'bad'); return; } this.audio?.buy?.(); this.toast(`${got}× ${esc(it.name)} im Lager – einbauen: PC anschauen und <kbd>E</kbd>`, 'good', 3500); };
+      const buy = (k) => (e) => { e.stopPropagation(); if (g.parcelMode()) { const got = g.orderPart(it.id, k); if (!got) { this.toast('Nicht genug Geld.', 'bad'); return; } this.ordered(`${got}× ${it.name}`); return; } const got = g.buyPart(it.id, k); if (!got) { this.toast('Nicht genug Geld.', 'bad'); return; } this.audio?.buy?.(); this.toast(`${got}× ${esc(it.name)} im Lager`, 'good', 3000); };
       b1.onclick = buy(1); card.onclick = buy(1);
       list.append(card);
     }
@@ -2104,7 +1923,7 @@ export class UI {
       if (!g.installPart(uid, id, idx)) return;
       this.inspect(uid); this.w.animateInstall?.(uid, t); this.audio?.install?.();
       const after = revOf(), over = g.rigWatt(o) > (o.parts.psu ? PART[o.parts.psu].cap * np : Infinity);
-      this.toast(over ? `${esc(PART[id].name)} eingebaut – <b>Netzteil zu schwach</b> (${g.rigWatt(o)} W). Stärkeres einbauen!` : `${esc(PART[id].name)} eingebaut${after > before + 0.005 ? ` · ${fmtUSD(before)} → <b>${fmtUSD(after)}</b> pro Tag` : ''}`, over ? 'bad' : 'good', 4000);
+      this.toast(over ? `${esc(PART[id].name)} eingebaut – <b>Netzteil zu schwach</b>` : `${esc(PART[id].name)} eingebaut${after > before + 0.005 ? ` · ${fmtUSD(before)} → <b>${fmtUSD(after)}</b> pro Tag` : ''}`, over ? 'bad' : 'good', 4000);
     };
     // Neu kaufen und einbauen – reicht das Netzteil nicht, kommt das passende gleich mit (Preis im Knopf)
     const buyIn = (id, idx) => {
@@ -2143,6 +1962,13 @@ export class UI {
         c.onmouseenter = () => this.w.ghostPart?.(uid, t, b2.id); c.onmouseleave = () => this.w.ghostPart?.(null);
         c.querySelector('button').onclick = () => install(b2.id, t === 'gpu' && id ? idx : null);
         pick.append(c);
+        if (bw && t !== 'psu' && p.psu) { // Netzteil zu schwach: Grund lesbar machen und das kleinste passende gleich anbieten
+          const need = g.wattAfter(o, b2.id, t === 'gpu' && id ? idx : null), cap = PART[p.psu].cap * np;
+          const fit = g.partList('psu').filter((x) => g.available(x) && x.cap * np >= need).sort((a, b) => a.cap - b.cap || g.itemPrice(a) - g.itemPrice(b))[0];
+          const fx = h(`<div class="rb-fix"><span>Braucht ${need} W – dein Netzteil schafft nur ${cap} W.</span>${fit ? `<button class="btn small primary">${pm ? 'Netzteil bestellen' : 'Netzteil kaufen'} · ${esc(fit.name)} · ${this.money(g.itemPrice(fit) * np)}</button>` : '<span>Dafür gibt es noch kein passendes Netzteil.</span>'}</div>`);
+          if (fit) fx.querySelector('button').onclick = () => buyIn(fit.id, null);
+          pick.append(fx);
+        }
       }
       const shop = shopFor(t).filter((x) => x.id !== id);
       if (shop.length) pick.append(h(`<div class="rb-h">${pm ? 'Im Shop bestellen · Lieferung morgen' : 'Neu kaufen'}</div>`));

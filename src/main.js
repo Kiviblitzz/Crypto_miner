@@ -13,6 +13,7 @@ const game = new Game();
 const world = new World(document.getElementById('c'), game);
 world.loadFacility('kinder');
 const ui = new UI(game, world);
+world.onGfxAuto = (q) => ui.toast(`Grafik auf „${q === 'medium' ? 'Mittel' : 'Niedrig'}“ gestellt, damit es flüssig läuft. Ändern kannst du das unter Esc → Menü → Grafik.`, 'info', 6000);
 const audio = new Audio(); ui.audio = audio;
 window.addEventListener('pointerdown', () => audio.init(), { once: true });
 world.player.onStep = (run) => { audio.step(run); ui.steps = (ui.steps || 0) + 1; }; // Schritte zählen: Deniz schreibt, sobald man sich in der Bude umgesehen hat (ui.ideaTick)
@@ -104,11 +105,14 @@ function onKey(e) {
   if (world.cine) { e.preventDefault(); return; } // Aufwachen (World.wakeUp): keine Eingabe
   if (ui.mg) { e.preventDefault(); return; } // Mini-Spiel hat eigene Tasten (Esc bricht nur es ab)
   const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-  if (e.code === 'Space') { e.preventDefault(); if (ui.speedShown()) ui.setSpeed(game.s.speed ? 0 : (ui.lastSpeed || 1)); return; } // Pause per Leertaste erst, wenn es die Tempo-Knöpfe gibt
+  if (ui.sleeping) { e.preventDefault(); return; } // Schlafszene
+  if (e.code === 'Space') { e.preventDefault(); ui.speedNext(); return; } // Leertaste: nächste freigeschaltete Tempo-Stufe
+  if (e.key === '0') { ui.setSpeed(game.s.speed ? 0 : (ui.lastSpeed || 1)); return; }
   if (['1', '2', '3', '4', '5', '6'].includes(e.key)) { ui.setSpeed(+e.key); return; }
   if (k === 'Escape') {
     if (ui.escLocal()) return; // erst das Offene: Mini-Spiel, Installer, Details im Fähigkeiten-Baum – dann Fenster, dann Pause
     if (world.mode === 'map') { ui.toggleMap(); return; }
+    if (ui.mk?.esc()) return; // Börse: erst schließt Esc die Betragsauswahl, dann die Seite (am Monitor fährt die Kamera zurück)
     if (world.mode === 'ui') { ui.resume(); return; }
     if (ui.paused) { if (performance.now() - (ui.pausedAt || 0) > 350) ui.resume(); return; } // dasselbe Esc, das gerade die Maus freigab und pausierte, nicht gleich wieder auflösen
     // Im Spiel ohne eingefangene Maus (z. B. gerade ein Fenster mit Esc geschlossen, eingebettete Seite): das nächste Esc öffnet die Pause
@@ -116,6 +120,8 @@ function onKey(e) {
     return;
   }
   if (world.mode === 'ui' && k === 'e' && ui.inspUid && document.getElementById('modal').classList.contains('hidden') && performance.now() - (ui.openedAt || 0) > 200) { ui.resume(); return; }
+  if (world.mode === 'ui' && k === 'e' && ui.mk?.atMonitor && document.getElementById('modal').classList.contains('hidden') && performance.now() - (ui.mk.openedAt || 0) > 300) { ui.resume(); return; } // E am Monitor: wieder aufstehen
+  if ((k === 'b' || k === 'm') && !ui.stickyModal() && ui.mk?.key(k)) return; // Browser „Shop | Börse“ offen: B/M schalten den Reiter um (im Fenster: zweimal = zu)
   if (HOT[k] && (world.mode === 'play' || world.mode === 'ui' || ui.paused || world.mode === 'map')) {
     if (world.mode === 'map' && k !== 'k') return;
     if (k === 'b' && world.mode === 'ui' && document.body.classList.contains('show-build')) { ui.resume(); return; }
@@ -148,14 +154,14 @@ function loop(now) {
     world.camera.position.set(3.3, 1.6, 3.05);
     world.controls.target.set(2.35 + Math.sin(t) * 0.4, 1.0 + Math.sin(t * 0.7) * 0.1, 0.4 + Math.cos(t) * 0.25);
     s.frac = 0.83;
-  } else if (s.speed && document.getElementById('modal').classList.contains('hidden') && !ui.paused && !ui.mg && (s.flags.miningStarted || !s.feat)) { // Zeit steht, bis der erste PC läuft
+  } else if (s.speed && document.getElementById('modal').classList.contains('hidden') && !ui.paused && !ui.mg && !ui.sleeping && !ui.mk?.where && (s.flags.miningStarted || !s.feat)) { // Zeit steht, bis der erste PC läuft – und wie bei jedem Fenster, solange Shop/Börse offen sind (Fenster oder Monitor), und beim Schlafen
     const slow = ui.showRun && performance.now() < (ui.slowUntil || 0); s.frac += dt / (slow ? Math.max(60, SEC_PER_DAY[s.speed]) : SEC_PER_DAY[s.speed]); // Einschalt-Moment kurz in Zeitlupe
     let n = 0;
     while (s.frac >= 1 && n < 4) { s.frac -= 1; game.advanceDay(); n++; }
     if (s.frac >= 1) s.frac = 0.99;
   }
   screenTimer -= dt; if (world.screensDirty) { world.screensDirty = false; screenTimer = 0; } if (screenTimer <= 0) { screenTimer = 1.0; world.updateStatus(); world.drawScreens(); if (!splashOrbit) ui.tutorial(); const sm = game.summary[s.current]; if (sm) audio.setLoad(sm.watt, !sm.tripped && !splashOrbit); if (world.aim) ui.prompt(world.aim); }
-  ui.liveWallet(); ui.objMarker();
+  if (now - (loop.lw || 0) > 100) { loop.lw = now; ui.liveWallet(); } ui.objMarker(); // Bitcoin-Zähler reicht 10× pro Sekunde (liest das Layout)
   world.update();
   requestAnimationFrame(loop);
 }

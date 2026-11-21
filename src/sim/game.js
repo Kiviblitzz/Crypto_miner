@@ -15,6 +15,7 @@ import { SKILL_METHODS, migrateSkills, skEmpty } from './skills.js'; // Fähigke
 import { BOOK, XP_POT } from '../data/skills.js';
 for (const e of [...BANK_EVENTS, ...BILL_EVENTS]) if (!EVENT[e.id]) { EVENTS.push(e); EVENT[e.id] = e; } // Bankgespräch (Game.dispoDay), Mahnung (Game.billsDay)
 
+const STARTER_GPU = 'rhd5770'; // erste Karte im Shop: ~108 W, passt zu Papas altem 400-W-Netzteil
 const LAST_DATA_DAY = BTC_PRICE.lastDay;
 const FREE_POWER_END = toDay('2011-03-01'); // bis dahin steckt der Strom der Wohnung in der Pauschale der Warmmiete – dann sieht Herr Krause die Abrechnung
 export const SAVE_KEY = 'hashwerk-save-v1';
@@ -263,7 +264,9 @@ export class Game {
   shopList(cat, facId) {
     return PLACEABLES.filter((p) => p.cat === cat && this.available(p) && (this.placeableAllowed(p, facId) || (p.hydro && this.facTier(facId) >= 3)));
   }
-  partList(type) { return PARTS.filter((p) => p.type === type && this.available(p)).sort((a, b) => b.releaseDay - a.releaseDay); }
+  partList(type) { return PARTS.filter((p) => p.type === type && this.available(p) && (type !== 'gpu' || this.gpuShopOk(p))).sort((a, b) => b.releaseDay - a.releaseDay); }
+  // Am Anfang gibt's im Shop nur eine Einsteigerkarte (läuft mit dem 400-W-Netzteil); die große Auswahl kommt ein paar Tage nach der ersten Karte mit Deniz' Nachricht
+  gpuShopOk(p) { const s = this.s; return !s.feat || !!s.flags.gpuMore || p.id === STARTER_GPU; }
 
   // ---------- Objekte ----------
   facObjects(facId = this.s.current) { return this.s.fac[facId].objects; }
@@ -309,7 +312,7 @@ export class Game {
       if (F?.stale?.(s, this)) continue; // z. B. „Paket abholen“, obwohl es schon aufgehoben ist
       L.cur = f; L.day = s.day; this.introduce(f);
       const txt = typeof F?.msg === 'function' ? F.msg(s, this) : F?.msg;
-      if (txt) this.pushMsg({ from: F.from || 'Deniz', text: txt, lesson: f }); // lesson: im Handy eingeklappt, sobald die Lektion erledigt ist
+      if (txt) this.pushMsg({ from: F.from || 'Deniz', text: txt });
       this.emit('lesson', f); return;
     }
   }
@@ -325,13 +328,15 @@ export class Game {
     if (s.flags.tutor) { // Anlernen: Laufen/Benutzen, PC bauen, dann Börse und Shop gleich nach dem Einschalten, Schlafen, Paket, Einbau, Fähigkeiten
       if (this.has('phone') && !s.flags.miningStarted) { if (Object.keys(s.loose || {}).length) this.grant('walk'); else if (s.inv?.length) this.grant('pcbuild'); }
       if (s.flags.cpuStart && s.flags.miningStarted) { this.grant('market'); this.grant('build'); }
-      if (s.flags.gpuOrdered && !s.flags.boughtGpu && s.orders?.length) this.grant('sleep');
+      if (s.flags.gpuOrdered && !s.flags.boughtGpu && s.orders?.length) { this.grant('speed2'); this.grant('sleep'); } // erst Tempo (Leertaste), dann ab 20 Uhr schlafen
       if (!s.flags.boughtGpu && s.parcels?.length) this.grant('parcel');
       if (!s.flags.boughtGpu && s.flags.miningStarted && this.bagList('gpu').length) this.grant('install');
       if (s.flags.boughtGpu) { this.learned('install'); this.grant('skills'); }
     }
     if (s.flags.miningStarted && btc * this.price('BTC') >= 12) this.grant('market');
+    if (!s.flags.tutor && s.flags.miningStarted) this.grant('speed2'); // Tempo: sobald der PC läuft (im Anlernen: mit der ersten Bestellung, vor dem Schlafen)
     if (s.flags.boughtGpu) { this.grant('build'); this.grant('speed2'); this.grant('rigs'); } // gleich weitere Mining-PCs bauen
+    if (s.flags.boughtGpu && !s.flags.gpuMore) { s.flags.gpuDay ??= s.day; if (s.day >= s.flags.gpuDay + 3 || s.chapter >= 1) { s.flags.gpuMore = true; if (s.chapter < 1) this.pushMsg({ from: 'Deniz', text: 'Läuft die Karte? Dann wird’s jetzt richtig was: Im Shop gibt’s auch die dicken. Aber guck aufs Netzteil.' }); } }
     if (s.flags.cpuStart && s.flags.miningStarted) this.grant('build'); // CPU-Start: der Shop ist sofort da – die erste Grafikkarte bestellt man dort
     if (s.goals.rig2 || (s.unlocked.includes('kinder') && this.summary?.kinder?.watt > 1200)) this.grant('company'); // Strom ausbauen (Eigener Stromkreis)
     if (this.has('build')) { let hot = false; for (const id of s.unlocked) if ((this.summary[id]?.temp || 0) > 30) hot = true; if (hot) this.grant('heat'); }
@@ -1242,7 +1247,7 @@ export class Game {
     if (w <= cap) { delete this.capWarned[facId]; return; }
     if (this.capWarned[facId] && w < this.capWarned[facId] * 1.5) return; // erst bei deutlich mehr Last erneut warnen
     this.capWarned[facId] = w;
-    this.toast(`Volllast ${fmtWatt(w)} – mehr als der Anschluss (${fmtWatt(cap)}). Im Auto-Betrieb laufen nur so viele Geräte, wie Strom da ist.`, 'info', 7000);
+    this.toast(`Volllast ${fmtWatt(w)} – mehr als der Anschluss (${fmtWatt(cap)})`, 'info', 6000);
   }
 
   // ---------- Kennzahlen ----------
@@ -1303,7 +1308,7 @@ export class Game {
     }
     s.lastNet = netOwn;
     // Defekte des Tages: höchstens eine Meldung
-    if (this.broke?.length) { const br = this.broke; this.broke = null; for (const fid of new Set(br.map((o) => this.facOf(o.uid)))) this.emit('objects', fid); this.toast(br.length === 1 ? `${PLACEABLE[br[0].type].name} ist kaputt!` : `${br.length} Geräte kaputt${s.staff.tech ? ' – die Techniker reparieren …' : ' – reparieren nicht vergessen'}`, 'bad'); }
+    if (this.broke?.length) { const br = this.broke; this.broke = null; for (const fid of new Set(br.map((o) => this.facOf(o.uid)))) this.emit('objects', fid); this.toast(br.length === 1 ? `${PLACEABLE[br[0].type].name} ist kaputt!` : `${br.length} Geräte kaputt`, 'bad'); }
     // Coins gutschreiben & Auto-Verkauf
     let sold = 0, minedUSD = 0;
     s.stats.coins ||= {};
@@ -1510,7 +1515,7 @@ export class Game {
     if (nh > e.hrec * 1.15) { e.hrec = nh; this.news(`Rekord: Die Netz-Hashrate steigt auf ${fmtHash(nh, 'sha256')}`); }
     if (day >= e.next) { let pool = ENDLESS_NEWS.map((_, i) => i).filter((i) => !e.used.includes(i)); if (!pool.length) { e.used = []; pool = ENDLESS_NEWS.map((_, i) => i); } const i = pool[Math.floor(Math.random() * pool.length)]; e.used.push(i); e.next = day + 40 + Math.floor(Math.random() * 40); this.news(ENDLESS_NEWS[i]); }
   }
-  pushMsg(m) { const s = this.s, x = { id: 'eg' + s.day + Math.random().toString(36).slice(2, 6), day: s.day, from: m.from, text: m.text, read: false }; if (m.lesson) x.lesson = m.lesson; s.messages.push(x); this.emit('message', x); }
+  pushMsg(m) { const s = this.s, x = { id: 'eg' + s.day + Math.random().toString(36).slice(2, 6), day: s.day, from: m.from, text: m.text, read: false }; s.messages.push(x); this.emit('message', x); }
 
   // ---------- Endlosziele (nach dem Sieg über MONOLITH) ----------
   endlessDay() {
@@ -1724,7 +1729,7 @@ export class Game {
   upgradePower(facId) {
     const f = this.s.fac[facId], fd = FACILITY[facId];
     const next = fd.power[f.power + 1]; if (!next) return false;
-    const wait = this.powerWaitUntil(facId); if (wait) { this.toast(`Der Netzbetreiber lässt dich warten: Ausbau ab ${fmtDate(wait)}.`, 'info', 7000); return false; }
+    const wait = this.powerWaitUntil(facId); if (wait) { this.toast(`Netzbetreiber: Ausbau erst ab ${fmtDate(wait)}`, 'info', 5000); return false; }
     const cost = this.powerCost(facId); if (!this.canAfford(cost)) return false;
     this.s.cash -= cost; f.power++; this.dayUpdate(true); return true;
   }
@@ -1967,7 +1972,7 @@ export class Game {
     if (s.staff?.list && this.staffFx().elec) {
       for (const id of s.unlocked) {
         const f = s.fac[id]; if (f.tripped || f.mothball || day - (f.tripWarn || -99) < 10) continue;
-        if (this.facSummary(id, day + 3).tripped) { f.tripWarn = day; const p = this.staffOf('elec')[0]; this.toast(`${p.name}: ${FACILITY[id].name} – in drei Tagen fliegt dort die Sicherung, wenn wir nichts ändern.`, 'bad', 9000); }
+        if (this.facSummary(id, day + 3).tripped) { f.tripWarn = day; const p = this.staffOf('elec')[0]; this.toast(`${p.name}: ${FACILITY[id].short} – in drei Tagen fliegt die Sicherung`, 'bad', 8000); }
       }
     }
   }
@@ -2024,7 +2029,7 @@ export class Game {
       for (const n of [it.rent > 0 && LANDLORD[it.fac], it.elec > 0 && SUPPLIER(it.fac)]) if (n && !o.who.includes(n)) o.who.push(n);
     }
     bill.st = 'open'; o.ask = 1; s.stats.billsOpen = (s.stats.billsOpen || 0) + 1;
-    this.toast(`Monatsabrechnung ${monthName(bill.m)}: ${fmtUSD(amt)} – dein Konto reicht nicht. Die Rechnung ist offen.`, 'bad', 8000);
+    this.toast(`Abrechnung ${monthName(bill.m)}: ${fmtUSD(amt)} offen – Konto reicht nicht`, 'bad', 7000);
     return false;
   }
   // Täglich: offene Rechnung bezahlen, sobald das Konto reicht – sonst nach jeder Frist die nächste Mahnstufe (Gebühr), zuletzt Strom aus
@@ -2034,7 +2039,7 @@ export class Game {
     if (day >= o.due) {
       if (o.stage < 3) {
         o.stage++; o.fee = round2(o.fee + Math.max(o.stage === 3 ? 30 : 5, Math.round(o.amt * 0.02))); o.due = day + (o.stage >= 3 ? 30 : BILL_GRACE); o.ask = 1;
-        if (o.stage === 3) { for (const id of o.sites) if (s.fac[id]) s.fac[id].cut = day; s.stats.cuts = (s.stats.cuts || 0) + 1; this.toast(`Strom abgestellt: ${o.sites.map((id) => FACILITY[id].short).join(', ')} – bis die offene Rechnung bezahlt ist.`, 'bad', 10000); this.dayUpdate(true); for (const id of o.sites) this.emit('objects', id); }
+        if (o.stage === 3) { for (const id of o.sites) if (s.fac[id]) s.fac[id].cut = day; s.stats.cuts = (s.stats.cuts || 0) + 1; this.toast(`Strom abgestellt: ${o.sites.map((id) => FACILITY[id].short).join(', ')}`, 'bad', 9000); this.dayUpdate(true); for (const id of o.sites) this.emit('objects', id); }
         else this.toast(`${o.stage === 1 ? '2. Mahnung' : 'Letzte Mahnung'}: ${fmtUSD(o.amt + o.fee)} offen, Frist bis ${fmtDate(o.due)}.`, 'bad', 8000);
       } else { o.due = day + 30; o.ask = 1; } // gesperrt: einmal im Monat erinnern
     }
@@ -2053,7 +2058,7 @@ export class Game {
     if (s.ev?.open?.id === 'mahnung') s.ev.open = null; // Mahnung erledigt
     const cut = (o.sites || []).filter((id) => s.fac[id]?.cut); for (const id of cut) delete s.fac[id].cut;
     s.stats.billFees = (s.stats.billFees || 0) + o.fee;
-    this.toast(`Offene Rechnung bezahlt: ${fmtUSD(amt)}${cut.length ? `. Der Strom ist wieder da (${cut.map((id) => FACILITY[id].short).join(', ')})` : ''}.`, 'good', 6000);
+    this.toast(`Rechnung bezahlt: ${fmtUSD(amt)}${cut.length ? ' – Strom ist wieder da' : ''}`, 'good', 5000);
     this.dayUpdate(true); for (const id of cut) this.emit('objects', id); this.emit('bill', null); return amt;
   }
   bankTalk() { const s = this.s; s.flags.bankTalk = s.day; this.openEvent(EVENT.bank, 'bank:' + s.day); } // Mahnung → Bankgespräch (Herr Albers)
