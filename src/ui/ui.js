@@ -1266,7 +1266,7 @@ export class UI {
       ph.append(box);
     }
     const mc = g.monthlyCosts(), OTHER = { staff: 'Gehälter', ups: 'Ausbauten (laufend)', deals: 'Laufende Verträge', income: 'Einnahmen aus Verträgen' };
-    const rows = mc.rows.filter((r) => r.rent >= 0.5 || r.elec >= 0.5 || r.pausch).map((r) => [`${esc(FACILITY[r.fac].short)}${r.cut ? ' <em class="neg">gesperrt</em>' : ''}`, [r.rent >= 0.5 ? `Miete ${fmtUSD(r.rent)}` : '', r.pausch ? 'Strom in der Warmmiete' : r.elec >= 0.5 ? `Strom ~${fmtUSD(r.elec)}` : ''].filter(Boolean).join(' · ')]);
+    const rows = mc.rows.filter((r) => r.rent >= 0.5 || r.elec >= 0.5 || r.pausch).map((r) => [`${esc(this.homeOutLabel(r.fac) || FACILITY[r.fac].short)}${r.cut ? ' <em class="neg">gesperrt</em>' : ''}`, [r.rent >= 0.5 ? `Miete ${fmtUSD(r.rent)}${this.homeOutTill(r.fac)}` : '', r.pausch ? 'Strom in der Warmmiete' : r.elec >= 0.5 ? `Strom ~${fmtUSD(r.elec)}` : ''].filter(Boolean).join(' · ')]);
     for (const [k, v] of Object.entries(mc.other)) if (Math.abs(v) >= 0.5) rows.push([OTHER[k], v < 0 ? `<span class="pos">+${fmtUSD(-v)}</span>` : fmtUSD(v)]);
     { const hr = this.homeRow(); if (hr) rows.push(hr); } // Wohnung gekündigt
     ph.append(h('<div class="ct-sec">Monatskosten bei heutiger Last</div>'));
@@ -1349,7 +1349,7 @@ export class UI {
   costsSec() {
     const g = this.g, s = g.s, mc = g.monthlyCosts(), nb = g.nextBillDay(), o = s.bills?.open, L = s.papaLoan;
     const OTHER = { staff: 'Gehälter', ups: 'Ausbauten (laufend)', deals: 'Laufende Verträge', income: 'Einnahmen aus Verträgen' }, rows = [];
-    for (const r of mc.rows) { if (!(r.rent >= 0.5 || r.elec >= 0.5 || r.pausch)) continue; rows.push([`${esc(FACILITY[r.fac].name)}${r.cut ? ' <em class="neg">· Strom gesperrt</em>' : ''}`, [r.rent >= 0.5 ? `Miete ${fmtUSD(r.rent)}` : '', r.pausch ? 'Strom in der Warmmiete' : r.elec >= 0.5 ? `Strom ~${fmtUSD(r.elec)}` : ''].filter(Boolean).join(' · ')]); }
+    for (const r of mc.rows) { if (!(r.rent >= 0.5 || r.elec >= 0.5 || r.pausch)) continue; rows.push([`${esc(this.homeOutLabel(r.fac) || FACILITY[r.fac].name)}${r.cut ? ' <em class="neg">· Strom gesperrt</em>' : ''}`, [r.rent >= 0.5 ? `Miete ${fmtUSD(r.rent)}${this.homeOutTill(r.fac)}` : '', r.pausch ? 'Strom in der Warmmiete' : r.elec >= 0.5 ? `Strom ~${fmtUSD(r.elec)}` : ''].filter(Boolean).join(' · ')]); }
     for (const [k, v] of Object.entries(mc.other)) if (Math.abs(v) >= 0.5) rows.push([OTHER[k], v < 0 ? `<span class="pos">+${fmtUSD(-v)}</span>` : fmtUSD(v)]);
     { const hr = this.homeRow(); if (hr) rows.push(hr); } // Wohnung gekündigt
     rows.push(['<b>Pro Monat</b>', `<b>${fmtUSD(mc.total)}</b>`], ['Nächste Abrechnung', `${fmtDate(nb)} · etwa ${fmtUSD(g.billEstimate())}`]);
@@ -1363,9 +1363,11 @@ export class UI {
   // Wohnung gekündigt (Umzug ins Zimmer über dem Laden): bis Monatsende läuft die Miete, danach steht hier ein paar Monate „keine Miete mehr“
   homeRow() {
     const g = this.g, H = g.s.home; if (!H?.out || !H.rentEnd) return null;
-    if (!g.homeRentOff()) return ['Wohnung · gekündigt', `Miete bis ${fmtDate(H.rentEnd - 1)}`];
+    if (!g.homeRentOff()) return null; // solange die Miete läuft: steht in der Zeile der Wohnung selbst (homeOutLabel/homeOutTill)
     return g.s.day - H.rentEnd < 120 ? ['Wohnung · gekündigt', `<span class="pos">keine Miete mehr · spart ${fmtUSD(FACILITY.kinder.rent)} im Monat</span>`] : null;
   }
+  homeOutLabel(fac) { return fac === 'kinder' && this.g.homeOut?.() ? 'Wohnung · gekündigt' : ''; }
+  homeOutTill(fac) { const H = this.g.s.home; return fac === 'kinder' && H?.out && H.rentEnd && !this.g.homeRentOff() ? ` bis ${fmtDate(H.rentEnd - 1)}` : ''; }
   rentLabel(f, un) {
     const g = this.g; if (!f.rent) return 'keine';
     if (un && g.upgrades(f.id).some((u) => u.fx?.rent === 0 && g.upActive(f.id, u))) return 'keine (gekauft)';
