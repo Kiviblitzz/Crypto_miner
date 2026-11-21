@@ -129,7 +129,7 @@ export function buildRoom(def) {
     put('monitor', 2.6, 0.14).position.y = 0.74;
     const sm = new THREE.Mesh(new THREE.PlaneGeometry(0.49, 0.285), new THREE.MeshStandardMaterial({ map: scr, emissive: 0xffffff, emissiveMap: scr, emissiveIntensity: 0.9, roughness: 0.95 })); sm.position.set(2.6, 0.74 + 0.32, 0.152); g.add(sm); scrE.mesh = sm;
     B.blocked.push(blk(2.0, 0, 3.5, 0.5));
-    put('chair', 3.3, 0.95, 0.42 + 0.45);
+    put('chair', 3.3, 0.95, 0.42 + 0.45); scrE.seat = { eye: 1.18, d: 0.72, dx: 0.06 }; // am Monitor setzt man sich erst (monitor.js): Augen auf Sitzhöhe, 72 cm vor dem Bildschirm
     B.blocked.push(blk(3.05, 0.7, 3.55, 1.2));
     put('movingboxes', 3.74, 0.22);
     B.blocked.push(blk(3.5, 0, 4.0, 0.5));
