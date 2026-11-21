@@ -38,11 +38,12 @@ export function billText(s, g) {
   const who = (o.who || []).length ? list(o.who) : 'deine Gläubiger', sum = usd(o.amt + o.fee), months = list((o.months || []).map(monthName)), where = siteIn(o.sites || []);
   let t;
   if (o.stage === 0) t = `Die Monatsabrechnung für ${months} ist nicht gedeckt: <b>${sum}</b> sind offen. ${cap(who)} ${(o.who || []).length > 1 ? 'bitten' : 'bittet'} um Zahlung bis zum <b>${dd(o.due)}</b>.`;
-  else if (o.stage === 1) t = `Zweite Mahnung von ${who}: <b>${sum}</b> offen, darin ${usd(o.fee)} Mahngebühr. Neue Frist: <b>${dd(o.due)}</b>.`;
+  else if (o.stage === 1) t = `${cap(who)} ${(o.who || []).length > 1 ? 'mahnen' : 'mahnt'} zum zweiten Mal: <b>${sum}</b> offen, darin ${usd(o.fee)} Mahngebühr. Neue Frist: <b>${dd(o.due)}</b>.`;
   else if (o.stage === 2) t = `Letzte Mahnung: <b>${sum}</b> offen. Kommt bis zum <b>${dd(o.due)}</b> nichts, wird ${where} der Strom abgestellt.`;
   else t = `${cap(where)} ist der Strom abgestellt, bis die <b>${sum}</b> bezahlt sind – dort steht alles still.`;
-  const ex = g.coinFunds();
-  return `${t} Auf deinem Konto: <b>${usd(s.cash)}</b>.${ex >= 1 ? ` Deine Coins sind ${usd(ex)} wert – verkaufen hilft.` : ' Verkauf Teile oder Geräte, die du nicht brauchst – oder frag Papa.'}`;
+  const ex = g.coinFunds(), gap = o.amt + o.fee - Math.max(0, s.cash);
+  const tip = ex >= gap ? ` Deine Coins sind ${usd(ex)} wert – verkaufen hilft.` : ex >= 1 ? ` Deine Coins (${usd(ex)}) reichen allein nicht – verkauf dazu Teile oder Geräte, die du nicht brauchst, oder frag Papa.` : ' Verkauf Teile oder Geräte, die du nicht brauchst – oder frag Papa.';
+  return `${t} Auf deinem Konto: <b>${usd(s.cash)}</b>.${tip}`;
 }
 
 export const BILL_EVENTS = [
