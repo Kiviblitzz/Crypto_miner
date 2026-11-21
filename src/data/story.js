@@ -29,7 +29,7 @@ export const PEOPLE = {
   papa: { name: 'Papa', full: 'Frank Brandt', role: (s) => (s && lost(s) ? (s.flags.papaJob ? 'Reparaturen bei Hashwerk' : 'Elektro Brandt, 1985–2013') : 'Elektro Brandt, seit 1985'), as: 'Papa' },
   opa: { name: 'Opa Heinz', full: 'Heinz Brandt', role: () => 'Elektromeister a. D.', as: 'Opa' },
   deniz: { name: 'Deniz', full: 'Deniz', role: (s) => (s.flags.gmbh && s.chapter >= 3 ? 'CTO, Hashwerk GmbH' : 'Bester Kumpel, Hardware-Nerd'), as: 'Deniz' },
-  tech: { name: 'Techniker', full: 'Techniker', role: () => 'Hashwerk GmbH', as: 'dem Techniker' },
+  tech: { name: 'Kollege', full: 'Kollege', role: () => 'Hashwerk GmbH', as: 'dem Kollegen' }, // Personal in der Halle (Elektrik, Handel)
 };
 // Deniz ist zu MONOLITH gegangen: an seinem Platz steht eine Aushilfe
 export const talkWho = (s, who) => (who === 'deniz' && s.flags.denizLeft && !s.flags.denizReturned ? 'tech' : who);
@@ -170,7 +170,7 @@ export const TALK = [
   { who: 'deniz', ch: [3], lines: [
     'Kaltgang, Warmgang. Ich hab die Halle mit Klebeband markiert. Das ist jetzt professionell, weil das Band gelb ist.',
     'Ich hab ausgerechnet, dass unsere Halle mehr Strom zieht als halb Lindental-Nord. Der Zähler dreht sich wie ein Ventilator.',
-    'Ich hab den Technikern Namen auf die Helme geschrieben. Jetzt streiten sie, wer den cooleren hat.',
+    'Ich hab den Robis Namen auf die Garagen geschrieben. Jetzt fahren sie, als wüssten sie es.',
   ] },
   { who: 'deniz', ch: [4], lines: [
     'Frankfurt! Doppelboden! Ich hab heute zehn Minuten lang einfach nur den Doppelboden angeschaut. Schön.',
@@ -227,7 +227,7 @@ export const TALK = [
     'Deniz sagt, ich soll Sie nicht mit Kleinkram stören. Also nur kurz: schöne Anlage.',
   ] },
   { who: 'tech', cond: (s, h, g, fac) => (s.fac[fac]?.temp || 21) > 30, lines: ['Hier drin hat es gut über dreißig Grad. Meine Brotdose steht jetzt direkt vor der Kühlung.'] },
-  { who: 'tech', cond: (s, h, g, fac) => broken(s, fac), lines: ['Da hinten qualmt einer. Nicht ich, ein Miner. Ich kümmer mich drum.'] },
+  { who: 'tech', cond: (s, h, g, fac) => broken(s, fac), lines: ['Da hinten qualmt einer. Nicht ich, ein Miner. Ich sag Robi Bescheid.'] },
   { who: 'tech', cond: (s, h, g, fac) => !broken(s, fac) && (s.fac[fac]?.objects?.length || 0) > 3, lines: ['Keine Ausfälle gerade. Ich klopf auf Holz. Hier gibt es nur Stahl, also klopf ich auf Stahl.'] },
   { who: 'tech', cond: (s, h, g, fac) => fac === 'rz', lines: ['Im Rechenzentrum trägt man Überschuhe. Ich fühl mich wie im Krankenhaus. Für Computer.'] },
   { who: 'tech', cond: (s, h, g, fac) => fac === 'fjord', lines: ['Heute stand ein Elch vor dem Fenster und hat auf die Container geguckt. Ich glaube, der will sich bewerben.'] },

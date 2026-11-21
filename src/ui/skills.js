@@ -1,8 +1,9 @@
 // Fähigkeiten-Seite (Taste T, J geht auch): EIN großer Baum – Knoten mit Verbindungslinien, zeitlich von links (2010) nach rechts,
 // Äste je Kategorie als Farbe, ziehen = verschieben, Rad/Pinch = zoomen, Klick auf einen Knoten öffnet rechts die Details.
-// Dazu die Handgriffe im Inspektor (Betriebssystem-Installer, BIOS-Profile, Firmware, Wartung, Wasserkühlung, Bitstream, Roboter)
-// und die Reparatur-Knöpfe (selbst = Mini-Spiel, Routine, reparieren lassen). Esc: erst Details/Installer zu, dann der Baum, dann Pause.
-import { SKILLS, SKILL, SKILL_CAT, POTS, PROFILES, OS, TEACHERS } from '../data/skills.js';
+// Im Baum stehen nur gebaute Fähigkeiten (TREE); was noch kommt, bleibt unsichtbar, auch als Voraussetzung (needsOf).
+// Dazu die Handgriffe im Inspektor (Betriebssystem-Installer, BIOS-Profile, Leistungsziel, Firmware, BIOS-Mod, Netzteil-Mod, Wartung, Wasserkühlung, Bitstream, Robi)
+// und die Reparatur-Knöpfe je Defekt (selbst = Mini-Spiel Löten / Fehlersuche / Chip-Kette, Routine, reparieren lassen). Esc: erst Details/Installer zu, dann der Baum, dann Pause.
+import { TREE, needsOf, SKILL, SKILL_CAT, POTS, PROFILES, OS, TEACHERS, REPAIR, PLIMIT, PSUMOD } from '../data/skills.js';
 import { PLACEABLE } from '../data/hardware.js';
 import { FACILITY } from '../data/world.js';
 import { fmtUSD, fmtHash, fmtWatt, fmtDate } from '../sim/game.js';
@@ -35,8 +36,8 @@ const ICON = {
 function layout() {
   const pos = {}, X = {};
   const base = (k) => yearOf(k.from || AT[k.id] || '2010-10-15');
-  const order = [...SKILLS].sort((a, b) => base(a) - base(b));
-  const xOf = (k) => { if (X[k.id] != null) return X[k.id]; let x = xs(base(k)); for (const n of k.needs || []) if (SKILL[n]) x = Math.max(x, xOf(SKILL[n]) + NW + 26); return (X[k.id] = x); }; // rechts von allen Voraussetzungen
+  const order = [...TREE].sort((a, b) => base(a) - base(b));
+  const xOf = (k) => { if (X[k.id] != null) return X[k.id]; let x = xs(base(k)); for (const n of needsOf(k)) x = Math.max(x, xOf(SKILL[n]) + NW + 26); return (X[k.id] = x); }; // rechts von allen Voraussetzungen
   const lanes = []; let y = PADT;
   for (const [cat, color] of LANES) {
     const rows = []; const list = order.filter((k) => k.cat === cat).map((k) => ({ k, x: xOf(k) })).sort((a, b) => a.x - b.x);
@@ -108,9 +109,9 @@ function drawTree(ui, root) {
   for (let y = 2011; y <= 2026; y++) { const x = xs(y); if (x > W) break; root.append(sv('line', { x1: x, y1: 24, x2: x, y2: H, class: 'skt-yl' })); const t = sv('text', { x: x + 4, y: 18, class: 'skt-year' }); t.textContent = y; root.append(t); }
   const tx = xs(dayYear(g.s.day)); root.append(sv('line', { x1: tx, y1: 22, x2: tx, y2: H, class: 'skt-now' })); const nt = sv('text', { x: tx + 5, y: 34, class: 'skt-nowt' }); nt.textContent = 'Heute'; root.append(nt);
   // Kanten (Voraussetzungen, auch quer zwischen den Ästen)
-  const st = {}; for (const k of SKILLS) st[k.id] = g.skillState(k.id).st;
+  const st = {}; for (const k of TREE) st[k.id] = g.skillState(k.id).st;
   const eg = sv('g', { class: 'skt-edges' }); root.append(eg);
-  for (const k of SKILLS) for (const n of k.needs || []) {
+  for (const k of TREE) for (const n of needsOf(k)) {
     const a = pos[n], b = pos[k.id]; if (!a || !b) continue;
     const x1 = a.x + NW, y1 = a.y + NH / 2, x2 = b.x, y2 = b.y + NH / 2, dx = Math.max(30, (x2 - x1) * 0.5);
     const on = st[n] === 'known', both = on && st[k.id] === 'known';
@@ -118,7 +119,7 @@ function drawTree(ui, root) {
   }
   // Knoten
   const L = g.s.sk?.learning;
-  for (const k of SKILLS) {
+  for (const k of TREE) {
     const p = pos[k.id], s0 = st[k.id], col = CAT_COLOR[k.cat], later = s0 === 'later', grp = sv('g', { class: `skn st-${s0} ${ui.skView?.sel === k.id ? 'sel' : ''}`, 'data-sk': k.id, transform: `translate(${p.x},${p.y})` });
     const fill = s0 === 'known' ? col : '#151922', fo = s0 === 'known' ? 0.22 : 1;
     if (s0 === 'open') grp.append(sv('rect', { x: -3, y: -3, width: NW + 6, height: NH + 6, rx: 14, fill: 'none', stroke: col, 'stroke-opacity': 0.55, filter: 'url(#skglow)', class: 'skn-glow' }));
@@ -138,7 +139,7 @@ const STATE_TXT = { known: ['Gelernt', 'ok'], open: ['Jetzt lernbar', 'warn'], l
 function showDetail(ui, id) {
   const g = ui.g, s = g.s, k = SKILL[id], el = ui.skTree?.body.querySelector('.skt-det'); if (!k || !el) return;
   const st = g.skillState(id), [stl, stc] = STATE_TXT[st.st] || ['', 'idle'], col = CAT_COLOR[k.cat], later = st.st === 'later';
-  const needs = (k.needs || []).map((n) => `<span class="skd-need ${g.knows(n) ? 'ok' : ''}" data-go="${n}">${esc(SKILL[n]?.name || n)}</span>`).join('');
+  const needs = needsOf(k).map((n) => `<span class="skd-need ${g.knows(n) ? 'ok' : ''}" data-go="${n}">${esc(SKILL[n]?.name || n)}</span>`).join('');
   el.innerHTML = `<div class="skd-h"><span class="skd-cat" style="--c:${col}">${esc(SKILL_CAT[k.cat].name)} · ${esc(k.feel)}</span><button class="modal-x skd-x" title="Details schließen (Esc)">✕</button></div>
     <h3>${later ? '???' : esc(k.name)}</h3><span class="badge ${stc}"><i></i>${stl}${st.why ? ' · ' + esc(st.why) : ''}</span>
     ${later ? `<p class="skd-p">Noch zu weit weg${k.from ? ` – frühestens ${k.from.slice(0, 4)}` : ''}. Je weiter du kommst, desto mehr siehst du.</p>` : `<p class="skd-p">${esc(k.desc)}</p>${k.use ? `<div class="skd-kv"><span>Wo</span><b>${esc(k.use)}</b></div>` : ''}${k.hint ? `<div class="skd-kv"><span>Lohnt sich</span><b>${esc(k.hint)}</b></div>` : ''}`}
@@ -166,14 +167,15 @@ const WAY_IC = { pts: '★', forum: '#', book: '▤', course: '✎', person: '�
 // „Zeig mir wo“: Baum zu, dann das passende Fenster (nie zwei übereinander)
 function showWhere(ui, k) {
   const g = ui.g, s = g.s, fac = s.current, objs = g.facObjects(fac);
-  const pick = { rig: (o) => PLACEABLE[o.type].kind === 'rig' && o.parts, gpuRig: (o) => g.profKind(o) === 'gpu', rigNoOs: (o) => g.osNeed(o), asic: (o) => g.profKind(o) === 'asic', fpga: (o) => PLACEABLE[o.type].look === 'fpga', broken: (o) => o.broken }[k.where];
+  const pick = { rig: (o) => PLACEABLE[o.type].kind === 'rig' && o.parts, gpuRig: (o) => g.profKind(o) === 'gpu', rigNoOs: (o) => g.osNeed(o), asic: (o) => g.profKind(o) === 'asic', fpga: (o) => PLACEABLE[o.type].look === 'fpga', broken: (o) => o.broken || (o.items || []).some((i) => i.b), robi: (o) => o.type === 'robi' }[k.where];
   ui.resume();
   if (k.where === 'market') { ui.market(); return; }
   if (k.where === 'company') { ui.company(); return; }
+  if (k.where === 'phone') { ui.phone('contacts'); return; }
   if (k.where?.startsWith('shop:')) { ui.cat = k.where.slice(5); ui.toggleBuild(); return; }
   const o = pick && (objs.find(pick) || (k.where === 'rigNoOs' ? objs.find((x) => PLACEABLE[x.type].kind === 'rig') : null));
   if (o) { ui.openInspector(o.uid); return; }
-  ui.toast(k.where === 'asic' ? 'Hier steht noch kein ASIC-Miner – stell einen auf und schau ihn an (E).' : k.where === 'gpuRig' ? 'Hier steht noch kein Rig mit Grafikkarte.' : k.where === 'broken' ? 'Gerade ist nichts kaputt. Bei einem Defekt: Gerät anschauen (E) → Selbst reparieren.' : 'Hier gibt es dafür gerade kein Gerät.', 'info', 4500);
+  ui.toast(k.where === 'asic' ? 'Hier steht noch kein ASIC-Miner – stell einen auf und schau ihn an (E).' : k.where === 'gpuRig' ? 'Hier steht noch kein Rig mit Grafikkarte.' : k.where === 'broken' ? 'Gerade ist nichts kaputt. Bei einem Defekt: Gerät anschauen (E) → Selbst reparieren.' : k.where === 'robi' ? 'Hier steht noch kein Robi – Shop → Roboter.' : 'Hier gibt es dafür gerade kein Gerät.', 'info', 4500);
 }
 
 // ---------- Handgriffe im Inspektor ----------
@@ -245,6 +247,23 @@ export function deviceSecs(ui, o) {
       if (pk === 'gpu' && g.knows('luefter')) { const fs = h(`<div class="bios-row"><span>Lüfterkurve</span><div class="bios-seg sm"></div></div>`); for (const [f, l] of [['quiet', 'Leise'], ['', 'Normal'], ['cool', 'Kühl']]) { const b = h(`<button class="bios-b ${(o.fan || '') === f ? 'on' : ''}">${l}</button>`); b.onclick = () => { g.setFan(o.uid, f); re(); }; fs.querySelector('.bios-seg').append(b); } sec.append(fs); }
       if (pk === 'gpu' && g.knows('skript')) { const on = !!s.fac[fac]?.skript; const b = h(`<label class="bios-row chk"><input type="checkbox" ${on ? 'checked' : ''}/> <span>Miner-Skript für ${esc(FACILITY[fac].short)}: Profile täglich selbst wählen (nur Linux-Rigs)</span></label>`); b.querySelector('input').onchange = (e) => { g.setSkript(fac, e.target.checked); re(); }; sec.append(b); }
     } else sec.insertAdjacentHTML('beforeend', lockLine(why.replace(/ \(T\)$/, '')));
+    if (!g.plWhy(o)) { // Leistungsziel (Nr. 33): sichtbar an Watt und Hash
+      const pl = o.pl || 100, a = g.analyze(o, s.day, null, fac), u = a.units.reduce((m, x) => { for (const [al, v] of Object.entries(x.hash)) if (v > (m.v || 0)) { m.v = v; m.al = al; } return m; }, {});
+      const r = h(`<div class="bios-row pl"><span>Leistungsziel</span><input type="range" min="${PLIMIT.min}" max="${PLIMIT.max}" step="5" value="${pl}" aria-label="Leistungsziel in Prozent"/><b class="pl-v">${pl} %</b></div>`);
+      const r2 = h(`<div class="pl-fx">${fmtWatt(a.watt)}${u.v ? ` · ${fmtHash(u.v, u.al)}` : ''}${pl > 100 ? ' · mehr Verschleiß' : pl < 100 ? ' · spart Strom' : ''}</div>`);
+      const inp = r.querySelector('input'), lab = r.querySelector('.pl-v');
+      inp.oninput = () => { lab.textContent = `${inp.value} %`; }; inp.onchange = () => { g.setPl(o.uid, +inp.value); ui.audio?.click?.(); re(); };
+      sec.append(r, r2);
+      const row2 = h('<div class="row"></div>'), same = g.facObjects(fac).filter((x) => x !== o && x.type === o.type && !g.plWhy(x) && (x.pl || 100) !== pl).length;
+      if (same) { const b = h(`<button class="btn small">${pl} % auf alle ${same + 1} gleichen hier</button>`); b.onclick = () => { const n = g.plAll(fac, pl, o.type); ui.toast(`Leistungsziel ${pl} % auf ${n} weiteren Geräten`, 'good', 2500); re(); }; row2.append(b); }
+      const fit = h(`<button class="btn small" title="Ein Ziel für alle einstellbaren Geräte hier, sodass 95 % des Anschlusses genutzt werden">${esc(FACILITY[fac].short)} genau auf den Anschluss fahren</button>`); fit.onclick = () => { const pc = g.plFit(fac); ui.toast(`Leistungsziel ${pc} % für alle hier – ${esc(FACILITY[fac].short)} nutzt jetzt bis zu 95 % des Anschlusses.`, 'good', 4000); re(); }; row2.append(fit);
+      sec.append(row2);
+    }
+    if (pk === 'gpu' && g.knows('biosmod') && g.biosCards(o)) { // BIOS-Mod (Nr. 28): Polaris-Straps
+      const n = g.biosCards(o);
+      if (o.bios) sec.append(h(`<div class="bios-row"><span>BIOS</span><b>Polaris-Straps · +18 % Ethash auf ${n} ${n === 1 ? 'Karte' : 'Karten'}</b></div>`));
+      else { const r = h('<div class="row"></div>'), b = h(`<button class="btn" ${g.biosWhy(o) ? 'disabled' : ''} title="${esc(g.biosWhy(o) || '+18 % Ethash bei gleichem Strom, 3 % Risiko')}">BIOS flashen: Polaris-Straps (${n} ${n === 1 ? 'Karte' : 'Karten'})</button>`); b.onclick = () => handBar(ui, sec, 'Nicht ausschalten! BIOS wird geschrieben …', 3200, () => { const x = g.biosFlash(o.uid); ui.toast(x?.brick ? 'Flash hängengeblieben – der Rig startet nicht mehr. Mit dem BIOS-Clip selbst löten oder reparieren lassen.' : '<b>Polaris-Straps</b> drauf: +18 % Ethash bei gleichem Strom.', x?.brick ? 'bad' : 'good', 5000); re(); }); r.append(b); const m = g.facObjects(fac).filter((x) => !g.biosWhy(x)).length; if (m > 1) { const a = h(`<button class="btn small">Alle ${m} Rigs hier flashen</button>`); a.onclick = () => handBar(ui, sec, `${m} Rigs werden geflasht …`, 4200, () => { const x = g.biosAll(fac); ui.toast(`${x.n} Rigs mit Polaris-Straps${x.b ? ` · ${x.b} hängengeblieben (defekt)` : ''}`, x.b ? 'info' : 'good', 4500); re(); }); r.append(a); } sec.append(r); }
+    }
     if (pk === 'asic') {
       if (o.fw) { sec.append(h('<div class="bios-row"><span>Firmware</span><b>Hashwerk-FW · −10 % Strom, +8 % Hash</b></div>')); if (g.knows('autotuning')) { const b = h(`<label class="bios-row chk"><input type="checkbox" ${o.at ? 'checked' : ''}/> <span>Autotuning (Spannung je Chip, −10 % Strom)</span></label>`); b.querySelector('input').onchange = (e) => { g.setAt(o.uid, e.target.checked); re(); }; sec.append(b); } }
       else if (g.knows('firmware')) { const n = g.facObjects(fac).filter((x) => !g.flashOk(x)).length; const r = h('<div class="row"></div>'); const b = h('<button class="btn">Firmware flashen</button>'); b.onclick = () => handBar(ui, sec, 'Nicht ausschalten! Firmware wird geschrieben …', 3200, () => { const x = g.flash(o.uid); ui.toast(x?.brick ? 'Flash hängengeblieben – ein Gerät ist jetzt defekt. Reparieren lassen.' : 'Hashwerk-Firmware drauf: −10 % Strom, +8 % Hash.', x?.brick ? 'bad' : 'good', 4500); re(); }); r.append(b); if (n > 1) { const a = h(`<button class="btn small">Alle ${n} hier flashen</button>`); a.onclick = () => handBar(ui, sec, `${n} Geräte werden geflasht …`, 4200, () => { const x = g.flashAll(fac); ui.toast(`${x.n} geflasht${x.b ? ` · ${x.b} hängengeblieben (defekt)` : ''}`, x.b ? 'info' : 'good', 4500); re(); }); r.append(a); } sec.append(r); }
@@ -253,6 +272,12 @@ export function deviceSecs(ui, o) {
   }
   // Wasserkühlung (GPU-Rigs)
   if (pk === 'gpu' && g.knows('wasser')) { if (o.wk) out.append(h('<div class="sec os-ok"><span class="os-chip wk">Wasser</span><span class="os-ln">Wasserkühlung drin – 70 % der Wärme gehen nach draußen</span></div>')); else { const sec = h(`<div class="sec"><h4>Wasserkühlung</h4></div>`), why = g.wkWhy(o); const b = h(`<button class="btn" ${why ? 'disabled' : ''} title="${esc(why)}">Kühler und Schläuche einbauen · ${money(g.wkCost(o))}</button>`); b.onclick = () => handBar(ui, sec, 'Kühler drauf, Schläuche stecken, befüllen …', 2600, () => { if (g.wkInstall(o.uid)) ui.toast('Dicht! Die Wasserkühlung läuft.', 'good', 3000); re(); }); sec.append(b); out.append(sec); } }
+  // Netzteil-Mod (Nr. 44)
+  if (def.kind === 'rig' && o.parts?.psu && g.knows('psumod')) {
+    const cap = g.psuCap(o), w = g.rigWatt(o), sec = h(`<div class="sec"><h4>Netzteil</h4><div class="sv-ln">${o.psuMod ? `Umgelötet: ${fmtWatt(cap)} statt ${fmtWatt(Math.round(cap / PSUMOD.cap))}` : `${fmtWatt(cap)}`} · der Rig braucht ${fmtWatt(w)}${o.psuMod ? ' · fällt etwas öfter aus' : ''}</div><div class="row"></div></div>`), row = sec.querySelector('.row');
+    if (!o.psuMod) { const why = g.psuModWhy(o), b = h(`<button class="btn small" ${why ? 'disabled' : ''} title="${esc(why || 'Mini-Spiel: Spannung einstellen, Shunt brücken')}">Umlöten (+15 %) · ${money(PSUMOD.cost)}</button>`); b.onclick = () => psuGame(ui, o); row.append(b); if (g.psuRoutineOk(o)) { const r = h('<button class="btn small">Routine · 1 Klick</button>'); r.onclick = () => { if (g.psuMod(o.uid, { ok: true, routine: true })) ui.toast('Routine: umgelötet.', 'good', 2200); re(); }; row.append(r); } }
+    out.append(sec);
+  }
   // Wartung
   if (g.knows('wartung') && g.serviceCost(o)) {
     const left = o.serv ? Math.max(0, 180 - (s.day - o.serv)) : 0, why = g.serviceWhy(o);
@@ -261,34 +286,47 @@ export function deviceSecs(ui, o) {
     const due = g.facObjects(fac).filter((x) => !g.serviceWhy(x)).length; if (due > 1) { const a = h(`<button class="btn small">Alle ${due} hier warten</button>`); a.onclick = () => { const n = g.serviceAll(fac); ui.toast(`${n} Geräte gewartet`, 'good', 2500); re(); }; row.append(a); }
     out.append(sec);
   }
-  // Robi: Module
+  // Robi: Stufe, Fahrten, Module der Reihe nach (USB-Stick → Greifarm → Lötkopf)
   if (o.type === 'robi') {
-    const sec = h(`<div class="sec"><h4>Robi</h4><div class="sv-ln">Fährt zu neuen Rigs und steckt den USB-Stick ein${o.mods?.steck ? ', baut Bausätze ein' : ''}${o.mods?.loet ? ', lötet kaputte Rigs' : ''}.</div></div>`);
-    for (const [m, M] of Object.entries(g.roboMods)) { if (o.mods?.[m]) { sec.append(h(`<div class="bios-row"><span>${esc(M.name)}</span><b>eingebaut</b></div>`)); continue; } const why = g.roboModWhy(o, m), lk = !g.knows(M.skill); const b = h(`<button class="btn small" ${why ? 'disabled' : ''} title="${esc(why)}">${esc(M.name)} nachrüsten · ${money(M.price)}</button>`); b.onclick = () => { if (g.roboMod(o.uid, m)) ui.toast(`${M.name} eingebaut.`, 'good', 2500); re(); }; sec.append(b); if (lk) sec.insertAdjacentHTML('beforeend', lockLine(`Erst „${SKILL[M.skill].name}“ lernen`)); }
+    const n = g.robiIn(fac).length, can = ['USB-Stick an neue Rigs', o.mods?.steck && 'Riser und Karten tauschen, Bausätze einbauen', o.mods?.loet && `löten${g.knows('hashboard') ? ', Hashboards' : ''}${g.knows('psumod') ? ', Netzteile umlöten' : ''}`].filter(Boolean);
+    const sec = h(`<div class="sec"><h4>Robi · Stufe ${g.roboStage(o)}</h4><div class="sv-ln">${esc(can.join(' · '))}. ${g.roboJobs(o)} Fahrten am Tag${n > 1 ? ` · ${n} Robis teilen sich ${esc(FACILITY[fac].short)}` : ''} · nur Material, kein Gehalt.</div></div>`);
+    for (const [m, M] of Object.entries(g.roboMods)) { if (o.mods?.[m]) { sec.append(h(`<div class="bios-row"><span>${esc(M.name)}</span><b>eingebaut</b></div>`)); continue; } const why = g.roboModWhy(o, m), lk = !g.knows(M.skill); const b = h(`<button class="btn small" ${why ? 'disabled' : ''} title="${esc(why)}">${esc(M.name)} nachrüsten · ${money(M.price)}</button>`); b.onclick = () => { if (g.roboMod(o.uid, m)) ui.toast(`${M.name} eingebaut – Robi ist jetzt Stufe ${g.roboStage(o)}.`, 'good', 2500); re(); }; sec.append(b); if (lk) sec.insertAdjacentHTML('beforeend', lockLine(`Erst „${SKILL[M.skill].name}“ lernen`)); }
+    if (o.mods?.loet && !g.knows('hashboard')) sec.insertAdjacentHTML('beforeend', lockLine('Für kaputte Miner: „Hashboard-Reparatur“ lernen'));
     out.append(sec);
   }
   return out;
 }
 
-// Reparatur: selbst (Mini-Spiel, Material), Routine (1 Klick), reparieren lassen (voller Preis)
+// Reparatur je Defekt: selbst (Mini-Spiel, Material), Routine (1 Klick), reparieren lassen (Händler-Service, voller Preis)
+const DEFECT = { loet: 'Brandgeruch – ein Kondensator ist durch.', steck: 'Startet nicht – Riser, Kabel oder eine Karte?', chip: 'Ein Hashboard meldet keine Chips mehr.' };
+const RGAME = { loet: { kind: 'loeten', btn: 'Selbst löten', title: 'Löten' }, steck: { kind: 'stecken', btn: 'Fehler suchen', title: 'Fehlersuche' }, chip: { kind: 'chips', btn: 'Hashboard reparieren', title: 'Chip-Kette' } };
 export function repairRow(ui, o, row) {
   const g = ui.g, broken = o.broken || (o.items && o.items.some((i) => i.b)); if (!broken) return;
-  const rc = g.repairCost(o), re = () => ui.inspect(o.uid);
-  if (g.repairSelfOk(o)) {
-    const mc = g.repairSelfCost(o), b = h(`<button class="btn good">Selbst reparieren · ${money(mc)}</button>`);
-    b.title = g.knows('loeten') ? 'Mini-Spiel Löten (leicht) – nur Material' : 'Mini-Spiel Löten – mit der Fähigkeit „Löten“ wird es leichter und billiger';
-    b.onclick = () => repairGame(ui, o); row.append(b);
-    if (g.repairRoutineOk(o)) { const r = h(`<button class="btn">Routine · 1 Klick</button>`); r.title = 'Fünf Reparaturen geschafft – jetzt geht das im Schlaf'; r.onclick = () => { if (!g.repairSelf(o.uid, { ok: true, routine: true })) ui.toast('Nicht genug Geld.', 'bad'); else { ui.audio?.install?.(); ui.toast('Routine: repariert.', 'good', 2200); } re(); }; row.append(r); }
-  }
-  const b = h(`<button class="btn">Reparieren lassen · ${money(rc)}</button>`); b.onclick = () => { if (!g.repair(o.uid)) ui.toast('Nicht genug Geld.', 'bad'); else re(); }; row.append(b);
+  const rc = g.repairCost(o), re = () => ui.inspect(o.uid), k = g.repairKind(o), ok = g.repairSelfOk(o), nb = g.repairBrokenN(o);
+  if (k) row.append(h(`<div class="rp-d">${esc(DEFECT[k])}${o.items ? ` · ${nb} von ${o.items.length} Plätzen` : ''}</div>`));
+  if (ok) {
+    const G = RGAME[ok], R = REPAIR[ok], mc = g.repairSelfCost(o), b = h(`<button class="btn good">${G.btn}${o.items && nb > 1 ? ' (1 Platz)' : ''} · ${money(mc)}</button>`);
+    b.title = g.knows(R.sk) ? `Mini-Spiel ${G.title} (mit Übung) – nur Material` : `Mini-Spiel ${G.title} – mit der Fähigkeit „${SKILL[R.sk].name}“ leichter und billiger`;
+    b.onclick = () => repairGame(ui, o, ok); row.append(b);
+    if (g.repairRoutineOk(o)) { const all = !!o.items && nb > 1, r = h(`<button class="btn">Routine · ${all ? `alle ${nb} · ${money(g.repairSelfCost(o, true))}` : '1 Klick'}</button>`); r.title = 'Fünfmal geschafft – jetzt geht das im Schlaf'; r.onclick = () => { if (!g.repairSelf(o.uid, { ok: true, routine: true })) ui.toast('Nicht genug Geld.', 'bad'); else { ui.audio?.install?.(); ui.toast(all ? `Routine: ${nb} Plätze repariert.` : 'Routine: repariert.', 'good', 2200); } re(); }; row.append(r); }
+  } else if (k === 'chip') row.insertAdjacentHTML('beforeend', lockLine('Selbst reparieren: erst „Hashboard-Reparatur“ lernen'));
+  const b = h(`<button class="btn">Reparieren lassen · ${money(rc)}</button>`); b.title = 'Händler-Service: holt ab, bringt es repariert zurück – voller Preis'; b.onclick = () => { if (!g.repair(o.uid)) ui.toast('Nicht genug Geld.', 'bad'); else re(); }; row.append(b);
 }
-async function repairGame(ui, o) {
+async function repairGame(ui, o, k) {
   const g = ui.g; if (!g.canAfford(g.repairSelfCost(o))) { ui.toast('Fürs Material reicht das Geld nicht.', 'bad'); return; }
-  const easy = g.knows('loeten'), uid = o.uid;
-  const r = await playMinigame(ui, { kind: 'loeten', easy, title: easy ? 'Löten (mit Übung)' : 'Löten' });
-  if (r.skipped) { ui.toast('Abgebrochen – nichts passiert.', 'info', 2200); }
-  else if (!r.ok) ui.toast('Lötstellen nicht sauber – noch mal versuchen oder reparieren lassen.', 'bad', 4000);
-  else if (g.repairSelf(uid, r)) { ui.audio?.powerOn?.(); ui.toast(`<b>Repariert!</b>${r.clean ? ' Alle Lötstellen sauber.' : ''} Nur das Material bezahlt.${!easy ? ' Mit der Fähigkeit „Löten“ (T) geht es leichter.' : ''}`, 'good', 4500); }
+  const R = REPAIR[k], G = RGAME[k], easy = g.knows(R.sk), uid = o.uid;
+  const r = await playMinigame(ui, { kind: G.kind, easy, title: easy ? `${G.title} (mit Übung)` : G.title, n: o.parts?.gpus?.length || 0 });
+  if (r.skipped) ui.toast('Abgebrochen – nichts passiert.', 'info', 2200);
+  else if (!r.ok) ui.toast(k === 'steck' ? 'Den Fehler nicht gefunden – noch mal suchen oder reparieren lassen.' : k === 'chip' ? 'Die Kette läuft noch nicht – noch mal messen oder reparieren lassen.' : 'Lötstellen nicht sauber – noch mal versuchen oder reparieren lassen.', 'bad', 4000);
+  else if (g.repairSelf(uid, r)) { ui.audio?.powerOn?.(); ui.toast(`<b>Repariert!</b>${r.clean ? ' Ohne einen Fehlgriff.' : ''} Nur das Material bezahlt.${!easy ? ` Mit der Fähigkeit „${esc(SKILL[R.sk].name)}“ (T) geht es leichter.` : ''}`, 'good', 4500); }
+  if (ui.inspUid === uid) ui.inspect(uid);
+}
+async function psuGame(ui, o) {
+  const g = ui.g, uid = o.uid, why = g.psuModWhy(o); if (why) { ui.toast(esc(why), 'bad', 3000); return; }
+  const r = await playMinigame(ui, { kind: 'psu', easy: g.knows('loeten'), title: 'Netzteil-Mod' });
+  if (r.skipped) ui.toast('Abgebrochen – das Netzteil ist wie vorher.', 'info', 2200);
+  else if (!r.ok) ui.toast('Nicht geschafft – nichts kaputt, das Netzteil ist wie vorher. Noch mal versuchen?', 'bad', 4000);
+  else if (g.psuMod(uid, r)) { ui.audio?.powerOn?.(); ui.toast(`<b>Umgelötet!</b> Das Netzteil schafft jetzt ${fmtWatt(g.psuCap(g.findObj(uid)))}.`, 'good', 4000); }
   if (ui.inspUid === uid) ui.inspect(uid);
 }
 
