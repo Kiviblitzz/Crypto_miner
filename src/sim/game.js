@@ -12,7 +12,7 @@ import { CONTACT, CONTACTS, READY_BY, FEE_TIERS } from '../data/contacts.js';
 import { FUTURE, futureModel, ENDLESS_GOALS, EGOAL, ENDLESS_NEWS } from '../data/endless.js';
 import { BTC_HASH, POWER_HOUSEHOLD, GPU_BOOM, MONOLITH_SHARE, DAG_AET, DAG_AEC, seasonOffset, noise, toDay, BTC_PRICE, curve, HALVINGS, BTC_REWARD } from '../data/history.js';
 import { SKILL_METHODS, migrateSkills, skEmpty } from './skills.js'; // Fähigkeiten 2.0: Handgriffe statt Prozent-Boni
-import { BOOK, XP_POT, BIOSMOD } from '../data/skills.js';
+import { XP_POT, BIOSMOD } from '../data/skills.js';
 for (const e of [...BANK_EVENTS, ...BILL_EVENTS]) if (!EVENT[e.id]) { EVENTS.push(e); EVENT[e.id] = e; } // Bankgespräch (Game.dispoDay), Mahnung (Game.billsDay)
 
 const STARTER_GPU = 'rhd5770'; // erste Karte im Shop: ~108 W, passt zu Papas altem 400-W-Netzteil
@@ -986,7 +986,6 @@ export class Game {
   parcelLabel(items) {
     const n = items.reduce((a, it) => a + (it.k === 'place' ? 1 : it.n || 1), 0), it = items[0];
     if (n !== 1 || !it) return `${n} Teile`;
-    if (it.k === 'book') return 'Buch';
     if (it.k === 'part') return { gpu: 'Grafikkarte', cpu: 'Prozessor', mobo: 'Mainboard', psu: 'Netzteil' }[PART[it.id]?.type] || 'Teil';
     const d = PLACEABLE[it.k === 'dev' ? it.id : it.type]; if (!d) return 'Paket';
     return d.id === 'tower' ? (it.ready ? 'Mining-PC' : 'PC-Gehäuse') : d.short || d.name.replace(/\s*\(.*\)/, '');
@@ -1015,7 +1014,6 @@ export class Game {
         res.dev += it.n - n; for (; n > 0; n--) { this.stockAdd({ type: it.id }); res.place++; } // Regal weg oder voll: einzeln aufstellen
         const d = PLACEABLE[it.id]; if (d.look !== 'fpga' && d.look !== 'usb') s.flags.boughtAsic = true; res.names.push(`${it.n}× ${d.name}`);
       } else if (it.k === 'place' && PLACEABLE[it.type]) { const { k, ...e } = it; this.stockAdd(e); res.place++; res.names.push(this.stockName(e)); }
-      else if (it.k === 'book' && BOOK[it.id]) { this.skBook(it.id); res.books = (res.books || 0) + 1; res.names.push(`Buch „${BOOK[it.id].title}“`); }
     }
     this.learned('parcel'); this.dayUpdate(true); for (const f of facs) if (f) this.emit('objects', f);
     this.emit('parcels'); this.emit('bag'); this.emit('unpacked'); return res;
@@ -1057,7 +1055,7 @@ export class Game {
       if (!it || typeof it !== 'object') return null;
       if (it.k === 'part') return PART[it.id] && it.n > 0 ? { k: 'part', id: it.id, n: Math.round(it.n) } : null;
       if (it.k === 'dev') return PLACEABLE[it.id] && it.n > 0 ? { k: 'dev', id: it.id, n: Math.round(it.n), holder: it.holder } : null;
-      if (it.k === 'book') return BOOK[it.id] ? { k: 'book', id: it.id } : null;
+      if (it.k === 'book') return null; // Bücher gibt es nicht mehr (Paket 18: nur Punkte)
       if (it.k === 'place' || !it.k) { const d = PLACEABLE[it.type]; if (!d) return null; const e = { ...it, k: 'place' }; if (d.kind === 'rig') { e.parts = okParts(e.parts) || Game.emptyParts(); if (e.kit) e.kit = okParts(e.kit); } else { delete e.parts; delete e.kit; } if (d.kind === 'holder') e.items = (e.items || []).filter((i) => i && PLACEABLE[i.id]); else delete e.items; return e; }
       return null;
     };
