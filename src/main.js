@@ -13,6 +13,7 @@ const game = new Game();
 const world = new World(document.getElementById('c'), game);
 world.loadFacility('kinder');
 const ui = new UI(game, world);
+world.onGfxAuto = (q) => ui.toast(`Grafik auf „${q === 'medium' ? 'Mittel' : 'Niedrig'}“ gestellt, damit es flüssig läuft. Ändern kannst du das unter Esc → Menü → Grafik.`, 'info', 6000);
 const audio = new Audio(); ui.audio = audio;
 window.addEventListener('pointerdown', () => audio.init(), { once: true });
 world.player.onStep = (run) => { audio.step(run); ui.steps = (ui.steps || 0) + 1; }; // Schritte zählen: Deniz schreibt, sobald man sich in der Bude umgesehen hat (ui.ideaTick)
@@ -155,7 +156,7 @@ function loop(now) {
     if (s.frac >= 1) s.frac = 0.99;
   }
   screenTimer -= dt; if (world.screensDirty) { world.screensDirty = false; screenTimer = 0; } if (screenTimer <= 0) { screenTimer = 1.0; world.updateStatus(); world.drawScreens(); if (!splashOrbit) ui.tutorial(); const sm = game.summary[s.current]; if (sm) audio.setLoad(sm.watt, !sm.tripped && !splashOrbit); if (world.aim) ui.prompt(world.aim); }
-  ui.liveWallet(); ui.objMarker();
+  if (now - (loop.lw || 0) > 100) { loop.lw = now; ui.liveWallet(); } ui.objMarker(); // Bitcoin-Zähler reicht 10× pro Sekunde (liest das Layout)
   world.update();
   requestAnimationFrame(loop);
 }

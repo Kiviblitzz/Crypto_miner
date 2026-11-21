@@ -73,7 +73,7 @@ export class World {
   constructor(canvas, game) {
     this.game = game; this.canvas = canvas;
     const r = this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: false });
-    r.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+    r.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
     r.toneMapping = THREE.NeutralToneMapping; r.toneMappingExposure = 0.98;
     r.outputColorSpace = THREE.SRGBColorSpace;
@@ -158,7 +158,7 @@ export class World {
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
     this.grade = new ShaderPass(GradeShader); this.composer.addPass(this.grade);
-    this.quality = 'high';
+    this.quality = 'high'; this.initGfx(); // Grafikstufe: automatisch bzw. gemerkt
 
     // Feste Lichter: Glimmen in laufenden Tower-PCs (Pool statt Licht pro Gerät) und das Licht der Nahansicht
     this.towerLights = []; for (let i = 0; i < TOWER_LIGHTS; i++) { const l = new THREE.PointLight(0xffa860, 0, 0.7, 2); this.scene.add(l); this.towerLights.push(l); }
@@ -188,17 +188,53 @@ export class World {
     game.on('update', () => this.spawnIncome());
   }
 
+  // Grafikstufen: hoch (alle Effekte), mittel (ohne Umgebungsverdeckung und Bloom, kleinere Schatten, Pixel 1:1), niedrig (ohne Nachbearbeitung und Schatten)
   setQuality(q) {
     this.quality = q;
-    const r = this.renderer;
-    r.shadowMap.enabled = q !== 'low';
-    r.setPixelRatio(q === 'low' ? 1 : Math.min(window.devicePixelRatio, 1.75));
+    const r = this.renderer, hi = q === 'high', lo = q === 'low';
+    r.shadowMap.enabled = !lo; r.shadowMap.type = hi ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+    const ms = hi ? 2048 : 1024; if (this.sun.shadow.mapSize.x !== ms) { this.sun.shadow.mapSize.set(ms, ms); this.sun.shadow.map?.dispose(); this.sun.shadow.map = null; }
+    r.setPixelRatio(hi ? Math.min(window.devicePixelRatio, 1.5) : Math.min(window.devicePixelRatio, 1));
     this.composer.setPixelRatio(r.getPixelRatio());
-    this.bloom.enabled = q === 'high';
-    if (this.gtao) this.gtao.enabled = q === 'high' && (this.def?.tier ?? 0) <= 2;
-    document.body.classList.toggle('lowfx', q === 'low');
+    for (const rt of [this.composer.renderTarget1, this.composer.renderTarget2]) { const n = hi ? 4 : 2; if (rt && rt.samples !== n) { rt.samples = n; rt.dispose(); } }
+    this.bloom.enabled = hi;
+    if (this.gtao) this.gtao.enabled = hi && (this.def?.tier ?? 0) <= 2;
+    document.body.classList.toggle('lowfx', lo);
     this.scene.traverse((o) => { if (o.material) o.material.needsUpdate = true; });
     this.resize();
+  }
+  // Einstellung pro Gerät: 'auto' (Standard) oder eine feste Stufe. Automatisch: ohne Grafikkarte (Software-Rendering) gleich niedrig,
+  // sonst wird die Bildrate gemessen und bei Ruckeln eine Stufe heruntergeschaltet; die gefundene Stufe gilt auch beim nächsten Start
+  gfxLoad() { try { return JSON.parse(localStorage.getItem('hashwerk_gfx') || '{}'); } catch (e) { return {}; } }
+  gfxSave() { try { localStorage.setItem('hashwerk_gfx', JSON.stringify(this.gfx)); } catch (e) { /* egal */ } }
+  softGL() {
+    try { const gl = this.renderer.getContext(), ext = gl.getExtension('WEBGL_debug_renderer_info'); const n = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)); this.glName = n; this.glSoft = /swiftshader|llvmpipe|softpipe|software|basic render/i.test(n); this.glInfo = n.replace(/^ANGLE \((.*)\)$/, '$1').replace(/\s*\(0x[0-9a-f]+\)/gi, '').replace(/,\s*(D3D|Vulkan|OpenGL)[^,]*$/i, '').slice(0, 80); return this.glSoft; } catch (e) { return false; }
+  }
+  initGfx() {
+    this.gfx = this.gfxLoad(); const mode = this.gfx.mode || 'auto';
+    // Automatisierte Tests (Playwright) laufen bewusst in voller Qualität
+    const auto = mode === 'auto' && !navigator.webdriver;
+    let q = mode === 'auto' ? (this.gfx.auto || 'high') : mode;
+    const soft = this.softGL(); if (auto && soft) q = 'low';
+    this.fpsMon = auto ? { t0: 0, n: 0, bad: 0, skipUntil: performance.now() + 5000 } : null;
+    if (q !== this.quality) this.setQuality(q);
+  }
+  setGfxMode(mode) {
+    this.gfx ||= {}; this.gfx.mode = mode; if (mode !== 'auto') this.setQuality(mode); else { this.setQuality(this.gfx.auto || 'high'); this.fpsMon = { t0: 0, n: 0, bad: 0, skipUntil: performance.now() + 3000 }; }
+    this.gfxSave();
+  }
+  // Bildrate messen (nur wenn das Fenster aktiv ist und gerade nichts lädt); zweimal hintereinander unter 40 Bildern pro Sekunde: eine Stufe runter
+  fpsTick(now) {
+    const m = this.fpsMon; if (!m) return;
+    if (now < m.skipUntil || document.hidden || !document.hasFocus() || this.throttled) { m.t0 = 0; return; }
+    if (!m.t0) { m.t0 = now; m.n = 0; return; }
+    m.n++; const el = now - m.t0; if (el < 3000) return;
+    const fps = (m.n * 1000) / el; m.t0 = 0; this.fpsNow = fps;
+    if (fps >= 40) { m.bad = 0; return; }
+    if (++m.bad < 2) return; m.bad = 0;
+    const next = this.quality === 'high' ? 'medium' : this.quality === 'medium' ? 'low' : null; if (!next) { this.fpsMon = null; return; }
+    this.setQuality(next); this.gfx.auto = next; this.gfxSave(); m.skipUntil = now + 3000;
+    this.onGfxAuto?.(next);
   }
 
   resize() {
@@ -211,6 +247,7 @@ export class World {
   // opt.pose: Spielerpose in Haus-Koordinaten (nahtloser Wechsel Wohnung ↔ Keller), opt.at: 'haustuer' (Ankunft von woanders)
   loadFacility(id, opt = {}) {
     const t0 = performance.now();
+    if (this.fpsMon) this.fpsMon.skipUntil = t0 + 2500; // Shader übersetzen und Aufbau verfälschen die Messung
     this.cancelPlacement(); this.select(null); this.onHover?.(null);
     if (this.room) { this.scene.remove(this.room.root); this.scene.remove(this.outside); if (!this.room.cached) { disposeTree(this.room.root); disposeTree(this.outside); } }
     // Geräte: Wohnung und Keller behalten ihre Modelle (Wechsel auf der Treppe baut nichts neu), sonst freigeben
@@ -1402,7 +1439,11 @@ export class World {
     const blink = (Math.sin(this.t * 7) > 0.2) ? 3.5 : 0.6, blink2 = (Math.sin(this.t * 5.3 + 1) > -0.3) ? 3 : 0.4;
     M.ledGreen().emissiveIntensity = blink; M.ledGreen2().emissiveIntensity = blink2; M.ledAmber().emissiveIntensity = blink2 * 0.9;
     M.rgb().emissive.setHSL(0.07 + 0.05 * Math.sin(this.t * 0.6), 0.95, 0.55); { let on = false; for (const e of this.entries.values()) if (e.running) { on = true; break; } const tgt = on && this.mode !== 'title' ? 2.2 : this.mode === 'title' ? 0.6 : 0.15; M.rgb().emissiveIntensity += (tgt - M.rgb().emissiveIntensity) * Math.min(1, dt * 3); }
-    // Rendern
+    // Rendern: ist das Fenster nicht aktiv (z. B. der Chat daneben), reichen wenige Bilder pro Sekunde; hinter Menüs reichen 30
+    const now = performance.now(); this.fpsTick(now);
+    const menu = !!document.body.dataset.modal || document.body.classList.contains('show-build') || !document.getElementById('modal')?.classList.contains('hidden');
+    const minMs = !document.hasFocus() ? 140 : menu ? 30 : 0; this.throttled = minMs > 0;
+    if (minMs && now - (this.lastDraw || 0) < minMs) return; this.lastDraw = now;
     if (this.quality === 'low') { const r = this.renderer; r.render(this.scene, this.camera); if (this.vm.root.visible) { r.autoClear = false; r.clearDepth(); r.render(this.vm.scene, this.camera); r.autoClear = true; } } else this.composer.render();
   }
 
