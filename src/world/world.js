@@ -793,7 +793,7 @@ export class World {
     const pr = this.room?.props?.find((p) => p.action === 'market'); if (!pr) return null;
     if (opt?.page) {
       const P = monitorPose(this, opt.top || 0); if (!P) return null;
-      this.focus = { pos: P.pos, q: P.q, look: P.look, page: true, sc: P.sc, light: P.look.clone().add(new THREE.Vector3(0.3, 0.25, 0.45)) }; this.focusUid = null;
+      this.focus = { pos: P.pos, q: P.q, look: P.look, page: true, sc: P.sc, seat: P.seat, light: P.look.clone().add(new THREE.Vector3(0.3, 0.25, 0.45)) }; this.focusUid = null;
       if (!this.focusLight) { this.focusLight = new THREE.PointLight(0xfff2df, 0, 0.75, 1.6); this.scene.add(this.focusLight); }
       return P;
     }
@@ -1412,20 +1412,27 @@ export class World {
     } else if (this.cine) {
       this.updateCine(dt);
     } else {
-      if (this.mode === 'play' && !this.paused) {
+      if (this.mode === 'play' && !this.paused && !(this.fc?.seat && this.focusK > 0)) { // vom Monitor-Stuhl erst aufstehen, dann laufen
         const scale = this.def.tier >= 3 ? 1.6 : 1;
         this.player.update(dt, (x, z, r) => this.collides(x, z, r), scale, this.hoff ? (x, z, y) => this.groundAt(x, z, y) : null);
         if (this.hoff) { this.doorAssist(dt); this.player.apply(); this.checkHouseSwitch(); }
         if (this.placing) this.updatePlacement(); else this.updateAim();
       } else this.player.apply();
       // Weiche Fahrt zur Nahansicht und zurück
-      this.focusK = Math.max(0, Math.min(1, (this.focusK || 0) + (this.focus && this.mode === 'ui' ? dt : -dt) / 0.6));
+      this.focusK = Math.max(0, Math.min(1, (this.focusK || 0) + (this.focus && this.mode === 'ui' ? dt : -dt) / (this.focus?.seat || this.fc?.seat ? 0.9 : 0.6))); // mit Hinsetzen 0,9 s
       if (this.focusK > 0 && (this.focus || this.fc)) {
         const f = this.focus, k = this.focusK * this.focusK * (3 - 2 * this.focusK);
-        if (f) { if (!this.fc) this.fc = { pos: f.pos.clone(), q: f.q.clone(), light: f.light.clone() }; const a = 1 - Math.exp(-dt * 3.2); this.fc.pos.lerp(f.pos, a); this.fc.q.slerp(f.q, a); this.fc.light.lerp(f.light, a); this.fc.page = !!f.page; this.fc.sc = f.sc; this.fc.look = f.look ? (this.fc.look || f.look.clone()).lerp(f.look, a) : null; }
-        this.camera.position.lerp(this.fc.pos, k);
-        if (this.fc.look) { this._fq ||= new THREE.Quaternion(); this._fq.setFromRotationMatrix(tmpM.lookAt(this.camera.position, this.fc.look, this.camera.up)); this.camera.quaternion.slerp(this._fq, Math.min(1, k * 1.8)); } // Monitor: Bildschirm bleibt während der Fahrt mittig und ganz im Bild
-        else this.camera.quaternion.slerp(this.fc.q, k);
+        if (f) { if (!this.fc) this.fc = { pos: f.pos.clone(), q: f.q.clone(), light: f.light.clone() }; const a = 1 - Math.exp(-dt * 3.2); this.fc.pos.lerp(f.pos, a); this.fc.q.slerp(f.q, a); this.fc.light.lerp(f.light, a); this.fc.page = !!f.page; this.fc.sc = f.sc; this.fc.look = f.look ? (this.fc.look || f.look.clone()).lerp(f.look, a) : null; this.fc.seat = f.seat ? (this.fc.seat || f.seat.clone()).copy(f.seat) : null; }
+        if (this.fc.seat && this.fc.look) { // Monitor mit Stuhl: erst hinsetzen (Sitzhöhe, näher an den Tisch), dann an den Bildschirm – zurück genauso andersherum
+          const K = this.focusK, A = 0.45, ss = (x) => x * x * (3 - 2 * x), u = ss(Math.min(1, K / A)), v = ss(Math.max(0, (K - A) / (1 - A)));
+          this._fq ||= new THREE.Quaternion();
+          if (K < A) { this.camera.position.lerp(this.fc.seat, u); this._fq.setFromRotationMatrix(tmpM.lookAt(this.camera.position, this.fc.look, this.camera.up)); this.camera.quaternion.slerp(this._fq, u); }
+          else { this.camera.position.copy(this.fc.seat).lerp(this.fc.pos, v); this.camera.quaternion.setFromRotationMatrix(tmpM.lookAt(this.camera.position, this.fc.look, this.camera.up)); }
+        } else {
+          this.camera.position.lerp(this.fc.pos, k);
+          if (this.fc.look) { this._fq ||= new THREE.Quaternion(); this._fq.setFromRotationMatrix(tmpM.lookAt(this.camera.position, this.fc.look, this.camera.up)); this.camera.quaternion.slerp(this._fq, Math.min(1, k * 1.8)); } // Monitor: Bildschirm bleibt während der Fahrt mittig und ganz im Bild
+          else this.camera.quaternion.slerp(this.fc.q, k);
+        }
         if (this.focusLight) { this.focusLight.position.copy(this.fc.light); this.focusLight.intensity = 1.9 * k; }
         if (this.outline && !this.outline.pulsePeriod) this.outline.edgeStrength = 1.15 - 0.7 * k;
       } else { this.fc = null; if (this.focusLight) this.focusLight.intensity = 0; if (this.outline) this.outline.edgeStrength = 1.15; }

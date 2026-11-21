@@ -20,7 +20,10 @@ export function monitorPose(world, top = 0) {
   const d = (sh * ih) / (2 * t * Hpx), ppm = ih / (2 * t * d), cy = (y0 + y1) / 2, off = (cy - ih / 2) / ppm; // Bildschirm etwas unter die Mitte
   const pos = c.clone().addScaledVector(n, d).addScaledVector(UP, off), look = c.clone().addScaledVector(UP, off);
   const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(pos, look, UP));
-  return { pos, look, q, W: Math.round(sw * ppm), H: Math.round(sh * ppm), sc };
+  // Steht ein Stuhl davor (rooms.js: sc.seat), setzt man sich erst: Augen auf Sitzhöhe, ein Stück vor dem Bildschirm, leicht zur Stuhlseite
+  let seat = null;
+  if (sc.seat) { const floor = m.parent ? new THREE.Vector3().setFromMatrixPosition(m.parent.matrixWorld).y : 0, right = new THREE.Vector3().crossVectors(UP, n).normalize(); seat = c.clone().addScaledVector(n, sc.seat.d).addScaledVector(right, sc.seat.dx || 0); seat.y = floor + sc.seat.eye; }
+  return { pos, look, q, seat, W: Math.round(sw * ppm), H: Math.round(sh * ppm), sc };
 }
 
 // Homographie: Rechteck (0,0)–(W,H) → Viereck p[0..3] (oben links, oben rechts, unten rechts, unten links) als CSS matrix3d
