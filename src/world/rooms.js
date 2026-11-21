@@ -123,11 +123,11 @@ export function buildRoom(def) {
     put('clothesrail', 0.3, 0.52);
     B.blocked.push(blk(0, 0, 0.6, 1.0));
     put('desk', 2.75, 0.25).traverse((m) => { if (m.isMesh && m.material?.name === 'darkMetal') m.userData.focusHide = true; }); // Tischbeine stören die Nahansicht
-    // Monitor mit Mining-Konsole
-    const scrC = document.createElement('canvas'); scrC.width = 512; scrC.height = 288; const scr = new THREE.CanvasTexture(scrC); scr.colorSpace = THREE.SRGBColorSpace;
-    B.screens.push({ canvas: scrC, tex: scr, kind: 'pc' });
+    // Monitor: Börse im Kleinen (World.drawScreens → monitor.js), mit E fährt die Kamera heran und die Seite liegt als HTML darauf
+    const scrC = document.createElement('canvas'); scrC.width = 1024; scrC.height = 576; const scr = new THREE.CanvasTexture(scrC); scr.colorSpace = THREE.SRGBColorSpace; scr.anisotropy = 8;
+    const scrE = { canvas: scrC, tex: scr, kind: 'pc' }; B.screens.push(scrE);
     put('monitor', 2.6, 0.14).position.y = 0.74;
-    const sm = new THREE.Mesh(new THREE.PlaneGeometry(0.49, 0.285), new THREE.MeshStandardMaterial({ map: scr, emissive: 0xffffff, emissiveMap: scr, emissiveIntensity: 0.9, roughness: 0.95 })); sm.position.set(2.6, 0.74 + 0.32, 0.152); g.add(sm);
+    const sm = new THREE.Mesh(new THREE.PlaneGeometry(0.49, 0.285), new THREE.MeshStandardMaterial({ map: scr, emissive: 0xffffff, emissiveMap: scr, emissiveIntensity: 0.9, roughness: 0.95 })); sm.position.set(2.6, 0.74 + 0.32, 0.152); g.add(sm); scrE.mesh = sm;
     B.blocked.push(blk(2.0, 0, 3.5, 0.5));
     put('chair', 3.3, 0.95, 0.42 + 0.45);
     B.blocked.push(blk(3.05, 0.7, 3.55, 1.2));

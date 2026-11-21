@@ -14,6 +14,7 @@ import { ROLES, TRAITS, QUOTES } from '../data/staff.js';
 import { CONTACTS, CONTACT, FEE_TIERS, FAMILY_CONTACTS } from '../data/contacts.js';
 import { showFinale, endlessGoals, egoalKey, egoalDone } from './finale.js';
 import { BILL_STAGE, billText, monthName, PAPA_HELP } from '../data/bills.js';
+import { Market } from './market.js';
 
 const $ = (s) => document.querySelector(s);
 const h = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
@@ -59,6 +60,7 @@ function faceSvg(who) {
 export class UI {
   constructor(game, world) {
     this.g = game; this.w = world; this.cat = 'rigs'; this.marketCoin = 'BTC'; this.lastBuildDay = -1;
+    this.mk = new Market(this); // Browser „Shop | Börse“ (market.js): Fenster und PC-Monitor
     this.dock(); this.speedBar();
     world.onSelect = (uid) => this.inspect(uid);
     world.onHeat = () => this.sites();
@@ -74,8 +76,7 @@ export class UI {
       const t = this.objTarget, g = this.g; if (!t) return;
       const lt = Object.keys(g.s.loose || {}).find((k) => t.label === PNAME[k]); if (lt) { world.onLoose(lt); return; }
       const pc = g.facObjects(g.s.current).find((o) => o.type === 'tower'); if (pc && t.label === 'Dein PC') { this.openInspector(pc.uid); return; }
-      const pr = world.room?.props?.find((p) => p.action === 'market'); if (pr && (t.label === 'Börse' || t.label === 'Bitcoin verkaufen')) { this.useProp(pr); return; }
-      if (t.label === 'Shop: Grafikkarte bestellen') { this.openShop?.(); return; }
+      const pr = world.room?.props?.find((p) => p.action === 'market'); if (pr && (t.label === 'Börse' || t.label === 'Bitcoin verkaufen' || t.label === 'Shop: Grafikkarte bestellen')) { this.useProp(pr); return; } // an den Monitor (Browser „Shop | Börse“)
       if (t.label === 'Paket abholen' && t.final) { const p = g.s.parcels?.[0]; if (p) world.pickParcel(p.id); return; }
       if (/ freischalten$/.test(t.label)) { if (world.hoff) { if (t.final) this.travel(t.door); } else if (world.room?.doors?.[0]) this.travel(world.room.doors[0]); }
     };
@@ -93,7 +94,7 @@ export class UI {
     world.onIncome = () => { this.bumpWallet(); this.audio?.tick?.(); };
     world.onLamp = (on) => { if (on) this.lampHint?.remove(); this.toast(on ? 'Taschenlampe an' : 'Taschenlampe aus', 'info', 1500); this.keysHint(); };
     world.onPause = () => this.pause(true);
-    world.onUiEsc = () => { if (this.mg || this.stickyModal()) return; if (this.escLocal?.()) return; this.resume(); };
+    world.onUiEsc = () => { if (this.mg || this.stickyModal()) return; if (this.escLocal?.()) return; if (this.mk?.esc?.()) return; this.resume(); };
     world.onCanvasClickInUI = () => this.resume();
     world.onPlaced = (o, p) => { const again = this.placedAgain(o, p); this.pauseHint(this.g.facOf(o.uid) || this.g.s.current); return again; }; // true = gleich noch einen setzen (Rigs, Miner, Regale)
     world.onModeChange = (m) => { document.body.dataset.mode = m; this.dock(); };
@@ -174,7 +175,7 @@ export class UI {
     if (this.g.s.day % 7 === 0) this.dock();
     if (this.g.s.day - this.lastBuildDay >= 7) this.build(true); else this.buildPrices();
     if (this.inspUid) this.inspectStats();
-    if (this.modalKind === 'market') this.market(true);
+    this.market(true); // Börse auffrischen, falls sie offen ist
     if (this.modalKind === 'ranking') this.ranking();
     if (this.modalKind === 'company') this.company();
   }
@@ -442,15 +443,8 @@ export class UI {
     if (!g.orderPlace(it.id)) { this.toast('Bestellen ging nicht.', 'bad'); return false; }
     this.ordered(it.name); return true;
   }
-  // Monitor in der Wohnung: Online-Shop oder Börse
+  // Monitor in der Wohnung: Online-Shop oder Börse (die Börse ist der Desktop, oben ein Knopf „Shop“ – Market.atPc)
   openShop() { if (!document.body.classList.contains('show-build')) this.toggleBuild(); }
-  monitorPick() {
-    const g = this.g, pm = g.parcelMode();
-    const body = h(`<div class="mon-pick"><h2>Am Monitor</h2><div class="cards"><div class="card"><h3>Online-Shop</h3><div class="sub">Teile, Rigs, Kühlung, Deko${pm ? ' · Lieferung morgen vor deine Wohnungstür' : ''}</div><button class="btn primary"><kbd>B</kbd>Shop öffnen</button></div><div class="card"><h3>Börse</h3><div class="sub">Bitcoin verkaufen · gerade ${fmtUSD(g.price('BTC'))}</div><button class="btn"><kbd>M</kbd>Zur Börse</button></div></div></div>`);
-    const [sb, mb] = body.querySelectorAll('button');
-    sb.onclick = () => { this.closeModal(); this.openShop(); }; mb.onclick = () => { this.closeModal(); this.market(); };
-    this.openModal(body, 'narrow', 'monitor');
-  }
 
   // ---------- Ego-Steuerung: Panels öffnen/schließen ----------
   anyPanelOpen() { return !$('#modal').classList.contains('hidden') || !!this.inspUid || document.body.classList.contains('show-build'); }
@@ -537,11 +531,8 @@ export class UI {
     if (this.w.facId === 'keller' && this.w.dusty) ks.unshift(['lamp', 'F', this.w.vm?.lampOn ? 'Lampe aus' : 'Taschenlampe']);
     el.innerHTML = ks.map(([, k, l]) => `<span><kbd>${k}</kbd>${l}</span>`).join('') + '<span><kbd>Esc</kbd>Menü</span>';
   }
-  toggleBuild() {
-    if (document.body.classList.contains('show-build')) { this.resume(); return; }
-    const s = this.g.s; if (s.flags.cpuStart && !s.goals.gpuorder) { this.cat = 'parts'; this.partTab = 'gpu'; } // erste Grafikkarte: gleich bei den Grafikkarten
-    this.resume(); document.body.classList.add('show-build'); this.build(true); this.openUI(); this.dock(); this.g.learned?.('build');
-  }
+  // Shop (B): Reiter im Browser „Shop | Börse“ (market.js) – als Fenster oder am PC-Monitor; der Katalog selbst bleibt build()
+  toggleBuild() { (this.mk ||= new Market(this)).openTab('shop'); }
   prompt(aim) {
     const el = $('#prompt');
     if (!aim || this.w.mode !== 'play') { el.classList.add('hidden'); return; }
@@ -572,7 +563,7 @@ export class UI {
   useProp(p) {
     if (p.action === 'talk') { this.talk(p.who); return; }
     if (p.action === 'shop') { if (this.g.has('build')) this.openShop(); else this.toast('Bau erst deinen PC zusammen.', 'info', 3000); return; }
-    if (p.action === 'market') { const mon = this.monitorUse(p); if (mon === 'both') { this.monitorPick(); return; } if (mon === 'shop') { this.openShop(); return; } if (!this.g.has('market')) { this.toast(this.g.s.flags.miningStarted ? 'Noch nichts zu verkaufen – lass den PC arbeiten.' : 'Bau erst deinen PC zusammen.', 'info', 3000); return; } this.market(); }
+    if (p.action === 'market') { const mon = this.monitorUse(p); if (!mon) { this.toast(this.g.s.flags.miningStarted ? 'Noch nichts zu verkaufen – lass den PC arbeiten.' : 'Bau erst deinen PC zusammen.', 'info', 3000); return; } (this.mk ||= new Market(this)).atPc(p, mon); } // Browser „Shop | Börse“ auf dem Bildschirm
     else if (p.action === 'company') this.company();
     else if (p.action === 'techs') this.skills(); // Opas Werkbank: der Fähigkeiten-Baum
     else if (p.action === 'ranking') this.ranking();
@@ -980,7 +971,7 @@ export class UI {
       const btc = s.wallet.BTC.ex;
       if (!s.flags.miningStarted) t = this.inspUid ? 'Klick auf <b>Mining starten</b>.' : 'Dein PC steht neben dem Schreibtischstuhl. Geh hin, schau ihn an und drück <kbd>E</kbd>.';
       else if (!g.has('market')) t = this.inspUid ? 'Dein PC schürft jetzt Bitcoin. Schließ das Fenster mit <kbd>E</kbd> und lass ihn ein paar Tage arbeiten.' : 'Dein PC schürft Bitcoin. Lass ihn ein paar Tage arbeiten, bis sich etwas angesammelt hat …';
-      else if (!(s.stats.sold > 0)) t = this.modalKind === 'market' ? 'Klick auf <b>Alles verkaufen</b>.' : `Du hast ${fmtCoin(btc)} BTC. Geh zum <b>PC-Monitor</b> auf dem Schreibtisch und drück <kbd>E</kbd>, um sie zu verkaufen.`;
+      else if (!(s.stats.sold > 0)) t = this.mk?.open ? 'Klick auf <b>Verkaufen</b>, dann <b>Alles</b> und bestätigen.' : `Du hast ${fmtCoin(btc)} BTC. Geh zum <b>PC-Monitor</b> auf dem Schreibtisch und drück <kbd>E</kbd>, um sie zu verkaufen.`;
       else if (!s.flags.boughtGpu) t = this.inspUid ? 'Klick auf den <b>freien GPU-Slot</b> und kauf eine zweite Grafikkarte.' : 'Mehr Grafikkarten = mehr Bitcoin. Schau deinen PC an (<kbd>E</kbd>) und bau eine zweite Karte ein.';
       else if (!s.goals.earn) t = 'Laufen lassen, am Monitor verkaufen.';
     }
@@ -1071,147 +1062,8 @@ export class UI {
     this.openModal(n, 'narrow', 'keep');
   }
 
-  market(update = false) {
-    const g = this.g, s = g.s;
-    if (update && this.modalKind !== 'market') return;
-    this.g.learned?.('market');
-    // Auswahl aus einem früheren Spiel oder ein noch nicht gestarteter Coin: zurück auf Bitcoin
-    { const mc = COIN[this.marketCoin]; if (!g.has('coins') || !mc || s.day < mc.start) this.marketCoin = 'BTC'; }
-    if (this.trade?.mode === 'buy' && !g.has('buycoins')) this.trade.mode = 'sell';
-    const body = h(`<div><h2>Börse</h2><div class="grid2 ${g.has('coins') ? '' : 'single'}"><div class="coins"></div><div class="detail"></div></div></div>`);
-    const list = body.querySelector('.coins');
-    let total = 0;
-    for (const c of COINS) {
-      if (!g.has('coins') && c.id !== 'BTC') continue;
-      const p = g.price(c.id), p30 = g.price(c.id, s.day - 30), w = s.wallet[c.id]; const val = (w.ex + w.cold) * p; total += val;
-      const started = s.day >= c.start;
-      const ch = p30 ? (p / p30 - 1) * 100 : 0;
-      const row = h(`<div class="coin ${this.marketCoin === c.id ? 'on' : ''} ${started ? '' : 'inactive'}"><div class="dot" style="background:${c.color}">${c.id}</div><div class="nm">${c.name}<small>${started ? `${fmtCoin(w.ex + w.cold)} ${c.id} · ${fmtUSD(val)}` : `Start ${fmtDate(c.start)}`}</small></div><div class="pr">${started ? fmtUSD(p) : '—'}<small class="${ch >= 0 ? 'pos' : 'neg'}">${started ? `${ch >= 0 ? '+' : ''}${ch.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %` : ''}</small></div></div>`);
-      if (started) row.onclick = () => { this.marketCoin = c.id; this.market(); }; // noch nicht gestartete Coins: kein Kurs, nicht wählbar
-      list.append(row);
-    }
-    if (g.has('coins')) list.append(h(`<div style="padding:8px 10px;color:var(--dim);font-size:13px">Gesamt: <b style="color:#fff">${fmtUSD(total)}</b></div>`));
-    const sa = h(`<button class="btn small" style="margin:4px 10px">Alle Coins verkaufen</button>`); sa.onclick = () => { const u = g.sellAll(); this.audio?.cash(); this.toast(`Alles verkauft: ${fmtUSD(u)}`, 'good', 3000); this.market(); }; if (g.has('coins')) list.append(sa);
-    const pc = h(`<label style="display:flex;gap:8px;align-items:center;padding:4px 10px;font-size:13px"><input type="checkbox" ${s.payoutCold ? 'checked' : ''}/> Neue Coins in die Cold-Wallet</label>`);
-    pc.querySelector('input').onchange = (e) => { s.payoutCold = e.target.checked; };
-    if (g.has('cold')) list.append(pc);
-    const c = COIN[this.marketCoin], w = s.wallet[c.id], p = g.price(c.id);
-    const det = body.querySelector('.detail');
-    det.append(h(`<div class="mk-head"><span class="cdot" style="background:${c.color}">${c.id === 'BTC' ? '₿' : c.id.slice(0, 1)}</span><h3>${c.name} <span class="tk">${c.id}</span></h3><div class="px">${fmtUSD(p)}</div></div>`));
-    const hp = g.coinActive(c.id) ? g.revPerHash(c.id) : 0; const hpUnit = c.algo(s.day) === 'sha256' ? [1e12, 'TH/s'] : c.algo(s.day) === 'scrypt' ? [1e9, 'GH/s'] : c.algo(s.day) === 'kheavy' ? [1e12, 'TH/s'] : c.algo(s.day) === 'equihash' ? [1e3, 'kSol/s'] : ['rx', 'cn'].includes(c.algo(s.day)) ? [1e3, 'kH/s'] : [1e6, 'MH/s'];
-    if (g.has('coins')) det.append(h(`<div style="color:var(--dim);font-size:12px;margin:4px 0 8px">${esc(c.desc)} · Algo: ${ALGO_LABEL[c.algo(s.day)]} · Netz: ${s.day >= c.start ? fmtHash(g.netHash(c.id), c.algo(s.day)) : '—'}${hp ? ` · Hashprice: <b style="color:var(--text)">${fmtUSD(hp * hpUnit[0])} pro ${hpUnit[1]} und Tag</b>` : ''}${c.end && s.day >= c.end ? ' · <b class="neg">Mining beendet</b>' : ''}</div>`));
-    if (c.id === 'BTC' && g.has('autosell')) { const nh = HALVINGS.find((d) => d > s.day); if (nh) det.append(h(`<div style="font-size:13px;margin:-2px 0 8px">Nächstes Halving: <b>${fmtDate(nh)}</b> (in ${(nh - s.day).toLocaleString('de-DE')} Tagen) – Blockbelohnung ${String(BTC_REWARD(s.day)).replace('.', ',')} → ${String(BTC_REWARD(nh)).replace('.', ',')} BTC</div>`)); }
-    const cv = h('<canvas class="chart" width="1200" height="520"></canvas>'); det.append(cv);
-    const range = h(`<div class="seg" style="margin-top:10px"></div>`);
-    this.range ??= 365;
-    const hist = s.day - Math.max(c.start, toDay('2010-07-17'));
-    if (this.range !== 99999 && this.range >= hist) this.range = 99999;
-    for (const [l, d] of [['30 T', 30], ['1 J', 365], ['5 J', 1825], ['Alles', 99999]].filter(([, d]) => d === 99999 || d < hist)) { const b = h(`<button class="btn small ${this.range === d ? 'on' : ''}">${l}</button>`); b.onclick = () => { this.range = d; this.market(); }; range.append(b); }
-    det.append(range);
-    this.range ??= 365;
-    requestAnimationFrame(() => this.chart(cv, c.id, this.range));
-    // ---------- Handelsfenster: selbst eingeben, kaufen oder verkaufen ----------
-    det.classList.add('mk-left');
-    const wrap = h('<div class="mk-wrap"></div>'); det.replaceWith(wrap); wrap.append(det);
-    const tk = h('<div class="ticket"></div>'); wrap.append(tk);
-    this.trade ||= { mode: 'sell', unit: 'BTC' };
-    const T = this.trade, fee = g.tradeFee(), feeTxt = (fee * 100).toLocaleString('de-DE');
-    const pend = c.id === 'BTC' && !s.payoutCold ? this.pendingBtc() : 0, have = w.ex + pend;
-    const num = (str) => { str = String(str || '').trim().replace(/\s/g, ''); if (str.includes(',')) str = str.replace(/\./g, '').replace(',', '.'); else if (/^\d{1,3}(\.\d{3})+$/.test(str)) str = str.replace(/\./g, ''); const v = parseFloat(str); return Number.isFinite(v) && v > 0 ? v : 0; };
-    const fmtIn = (v, unit) => (v > 0 ? v.toLocaleString('de-DE', { maximumFractionDigits: unit === 'BTC' ? (v < 1 ? 6 : 4) : 2, useGrouping: false }) : '');
-    const sym = c.id === 'BTC' ? '₿' : c.id;
-    tk.innerHTML = `<div class="seg tk-tabs"><button class="btn small ${T.mode === 'sell' ? 'on' : ''}" data-m="sell">Verkaufen</button>${g.has('buycoins') ? `<button class="btn small ${T.mode === 'buy' ? 'on' : ''}" data-m="buy">Kaufen</button>` : ''}</div>
-      <div class="tk-bal"><div><span>Du hast</span><b>${fmtCoin(have)} ${c.id}</b><small>≈ ${fmtUSD(have * p)}</small></div><div><span>Kontostand</span><b>${fmtUSD(s.cash)}</b></div></div>
-      <label class="tk-amt"><span class="lab">${T.mode === 'sell' ? 'Menge verkaufen' : 'Menge kaufen'}</span><span class="field"><input type="text" inputmode="decimal" autocomplete="off" placeholder="0"/><button class="unit" title="Einheit wechseln">${T.unit === 'BTC' ? c.id : '$'}</button></span></label>
-      <div class="tk-chips"><button class="btn small" data-p="0.25">25 %</button><button class="btn small" data-p="0.5">50 %</button><button class="btn small" data-p="1">100 %</button></div>
-      <div class="tk-sum"><div><span>Kurs</span><b>${fmtUSD(p)}</b></div><div><span>Menge</span><b class="q">–</b></div><div><span>Gebühr (${feeTxt} %)</span><b class="f">–</b></div><div class="tot"><span class="tl">${T.mode === 'sell' ? 'Du bekommst' : 'Du zahlst'}</span><b class="t">–</b></div></div>
-      <div class="tk-msg"></div>
-      <button class="btn primary big wide tk-go" disabled>${T.mode === 'sell' ? 'Verkaufen' : 'Kaufen'}</button>
-      <div class="tk-note">Sofortverkauf ${feeTxt} % Gebühr${g.knows('limit') ? ` · Limit-Order ${(g.tradeFee(true) * 100).toLocaleString('de-DE')} %` : ' · mit „Limit-Orders“ (T) nur 0,5 %'}</div>`;
-    const inp = tk.querySelector('input[type=text]'), rng = tk.querySelector('.tk-range'), go = tk.querySelector('.tk-go'), msg = tk.querySelector('.tk-msg');
-    // Obergrenze in der gewählten Einheit
-    const maxIn = () => (T.mode === 'sell' ? (T.unit === 'BTC' ? have : have * p) : (T.unit === 'BTC' ? Math.max(0, s.cash) * (1 - fee) / p : Math.max(0, s.cash)));
-    const floorIn = (v, unit) => { const k = unit === 'BTC' ? 1e6 : 100; return Math.floor(v * k + 1e-7) / k; };
-    const m2 = (v) => `${Math.max(0, v).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $`, m2f = (v) => (v > 0 && v < 0.01 ? '< 0,01 $' : `−${m2(v)}`);
-    T.all = false;
-    const calc = () => {
-      const v = num(inp.value), mx = maxIn(), tol = T.unit === 'BTC' ? (mx < 1 ? 1e-6 : 1e-4) : 0.01, over = v > mx + tol;
-      const coins = T.unit === 'BTC' ? v : v / p;
-      let q = '–', f = '–', t = '0,00 $', ok = v > 0 && !over, small = false;
-      if (v > 0 && !over) {
-        if (T.mode === 'sell') { const cq = T.all ? have : Math.min(coins, have), gross = cq * p; q = `${fmtIn(cq, 'BTC') || '0'} ${c.id}`; f = m2f(gross * fee); t = `+${m2(gross * (1 - fee))}`; if (gross * (1 - fee) < 0.01) { ok = false; small = true; } }
-        else { const usd = T.all ? s.cash : Math.min(s.cash, T.unit === 'BTC' ? coins * p / (1 - fee) : v); q = `${fmtIn(usd * (1 - fee) / p, 'BTC') || '0'} ${c.id}`; f = m2f(usd * fee); t = m2(usd); if (usd < 0.01) { ok = false; small = true; } }
-      }
-      tk.querySelector('.q').textContent = q; tk.querySelector('.f').textContent = f; tk.querySelector('.t').textContent = t;
-      msg.textContent = over ? (T.mode === 'sell' ? `So viel hast du nicht – höchstens ${fmtIn(floorIn(mx, T.unit), T.unit)} ${T.unit === 'BTC' ? c.id : '$'}.` : `Dafür reicht dein Geld nicht – höchstens ${fmtIn(floorIn(mx, T.unit), T.unit)} ${T.unit === 'BTC' ? c.id : '$'}.`) : (mx <= 0 ? (T.mode === 'sell' ? (s.stats.sold > 0 ? 'Alles verkauft – dein PC schürft schon weiter.' : 'Noch keine Bitcoin – dein PC schürft gerade.') : 'Kein Geld zum Kaufen da.') : (small ? 'Mindestens 0,01 $ pro Auftrag.' : v > 0 ? '' : 'Menge eingeben oder 25 %, 50 % oder 100 % wählen.'));
-      msg.classList.toggle('bad', over || small); inp.closest('.field').classList.toggle('bad', over); tk.querySelector('.tk-sum').classList.toggle('bad', over); tk.querySelector('.tk-sum').classList.toggle('empty', !(v > 0) || over);
-      go.disabled = !ok; go.textContent = ok ? (T.mode === 'sell' ? `Verkaufen · ${t}` : `Kaufen · ${q}`) : (T.mode === 'sell' ? 'Verkaufen' : 'Kaufen');
-      if (rng && document.activeElement !== rng) rng.value = mx > 0 ? (over || T.all ? 100 : Math.round(Math.min(1, v / mx) * 100)) : 0;
-      tk.querySelectorAll('.tk-chips .btn').forEach((b) => b.classList.toggle('on', mx > 0 && !over && (+b.dataset.p === 1 ? T.all : !T.all && Math.abs(v / mx - +b.dataset.p) < 0.004)));
-    };
-    const setPct = (k) => { const mx = maxIn(); T.all = k >= 1 && mx > 0; inp.value = fmtIn(floorIn(k >= 1 ? mx : mx * k, T.unit), T.unit); calc(); };
-    inp.oninput = () => { T.all = false; calc(); }; inp.onkeydown = (e) => { if (e.key === 'Enter' && !go.disabled) go.click(); if (e.key === 'Escape') inp.blur(); };
-    if (rng) rng.oninput = () => setPct(+rng.value / 100);
-    tk.querySelectorAll('.tk-chips .btn').forEach((b) => (b.onclick = () => setPct(+b.dataset.p)));
-    tk.querySelectorAll('.tk-tabs .btn').forEach((b) => (b.onclick = () => { T.mode = b.dataset.m; this.market(); }));
-    tk.querySelector('.unit').onclick = (e) => { e.preventDefault(); if (T.all) { T.unit = T.unit === 'BTC' ? 'USD' : 'BTC'; e.currentTarget.textContent = T.unit === 'BTC' ? c.id : '$'; setPct(1); return; } const v = num(inp.value), k = T.mode === 'buy' ? 1 - fee : 1, coins = T.unit === 'BTC' ? v / k : v / p; T.unit = T.unit === 'BTC' ? 'USD' : 'BTC'; e.currentTarget.textContent = T.unit === 'BTC' ? c.id : '$'; inp.value = fmtIn(floorIn(T.unit === 'BTC' ? coins * k : coins * p, T.unit), T.unit); calc(); };
-    if (maxIn() <= 0) { inp.disabled = true; if (rng) rng.disabled = true; tk.querySelectorAll('.tk-chips .btn').forEach((b) => (b.disabled = true)); }
-    go.onclick = () => {
-      const v = num(inp.value); if (!(v > 0)) return;
-      if (T.mode === 'sell') {
-        if (pend) g.creditPending(c.id, this.pendingBtc());
-        const avail = s.wallet[c.id].ex, coins = T.all ? avail : Math.min(avail, T.unit === 'BTC' ? v : v / p); if (!(coins > 0)) return;
-        const u = g.sell(c.id, T.all || coins >= avail * 0.9999 ? 1 : coins / avail); if (!u) return;
-        this.audio?.cash(); this.flashCash(u); this.toast(`${fmtIn(coins, 'BTC')} ${c.id} verkauft · +${m2(u)}`, 'good', 3000);
-      } else {
-        let usd = Math.min(s.cash, T.unit === 'BTC' ? v * p / (1 - fee) : v); if (T.all || (usd > s.cash * 0.999 && s.cash - usd < 0.01)) usd = s.cash; const u = g.buy(c.id, usd); if (!u) { this.toast('Kauf nicht möglich.', 'bad'); return; }
-        this.audio?.cash(); this.toast(`${fmtIn(u * (1 - fee) / p, 'BTC')} ${c.id} gekauft · −${m2(u)}`, 'good', 3000);
-      }
-      this.market();
-    };
-    calc();
-    if (g.has('cold')) { const ct = h(`<div class="tk-cold"><div><span>Cold-Wallet</span><b>${fmtCoin(w.cold)} ${c.id}</b></div><button class="btn small">${w.cold > 0 && w.ex === 0 ? 'Auf Börse holen' : 'Einlagern'}</button></div>`); ct.querySelector('button').onclick = () => { g.transfer(c.id, !(w.cold > 0 && w.ex === 0)); this.market(); }; tk.append(ct); }
-    const r3 = h(`<div class="sec"><h4>Auto-Verkauf: <span id="as-v">${Math.round(s.autoSell[c.id] * 100)} %</span></h4><input type="range" min="0" max="100" step="5" value="${Math.round(s.autoSell[c.id] * 100)}"/></div>`);
-    r3.querySelector('input').oninput = (e) => { s.autoSell[c.id] = e.target.value / 100; r3.querySelector('#as-v').textContent = e.target.value + ' %'; };
-    const all = h('<button class="btn small" style="margin-top:6px">Für alle</button>'); all.onclick = () => { for (const k of COINS) s.autoSell[k.id] = s.autoSell[c.id]; this.toast('Übernommen', 'good', 1500); }; r3.append(all);
-    if (g.has('autosell')) det.append(r3);
-    if (g.knows('limit') && g.has('autosell')) { const lc = h(`<label class="lim-auto"><input type="checkbox" ${s.autoLimit ? 'checked' : ''}/> Auto-Verkauf als Limit-Order: nur über dem 7-Tage-Schnitt, 0,5 % Gebühr</label>`); lc.querySelector('input').onchange = (e) => { s.autoLimit = e.target.checked; this.toast(s.autoLimit ? 'Auto-Verkauf wartet jetzt auf gute Kurse.' : 'Auto-Verkauf verkauft wieder sofort.', 'info', 2500); }; r3.append(lc); }
-    if (g.knows('limit')) this.limitBox(det, c, p); // Limit-Orders (Fähigkeit Nr. 16)
-    this.openModal(body, '', 'market');
-  }
-  chart(cv, id, range, mini = false) {
-    const g = this.g, s = g.s, ctx = cv.getContext('2d'), dpr = Math.min(2, window.devicePixelRatio || 1);
-    const cw = cv.clientWidth || 600, chh = cv.clientHeight || 220; cv.width = Math.round(cw * dpr); cv.height = Math.round(chh * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const W = cw, H = chh; ctx.clearRect(0, 0, W, H);
-    const start = Math.max(COIN[id].start, s.day - range, toDay('2010-07-17')), end = s.day;
-    if (end - start < 2) { ctx.fillStyle = '#c9b8a3'; ctx.font = '600 14px Nunito, sans-serif'; ctx.fillText('Noch keine Kursdaten', 40, 60); return; }
-    const n = Math.max(2, Math.min(300, end - start)), pts = []; ctx.lineJoin = 'round';
-    for (let i = 0; i <= n; i++) { const d = Math.round(start + (end - start) * (i / n)); pts.push([d, g.price(id, d)]); }
-    const vals = pts.map((p) => p[1]).filter((v) => v > 0);
-    const logScale = Math.max(...vals) / Math.min(...vals) > 30;
-    const tf = (v) => (logScale ? Math.log10(Math.max(v, 1e-9)) : v);
-    const mn = Math.min(...vals.map(tf)), mx = Math.max(...vals.map(tf));
-    const padT = mini ? 6 : 26, padR = mini ? 6 : 18, padB = mini ? 6 : 26; let pad = mini ? 6 : 78;
-    // Runde Achsenwerte (linear) bzw. Zehnerpotenzen (log)
-    let ticks = [], lo = mn, hi = mx, st = 0;
-    if (!mini) {
-      if (logScale) { for (let e = Math.floor(mn); e <= Math.ceil(mx); e++) ticks.push(e); lo = Math.min(lo, ticks[0]); hi = Math.max(hi, ticks[ticks.length - 1]); }
-      else { const raw = (mx - mn) / 4 || Math.abs(mx) * 0.1 || 1, mag = Math.pow(10, Math.floor(Math.log10(raw))); st = [1, 2, 2.5, 5, 10].map((k) => k * mag).find((k) => k >= raw) || 10 * mag; lo = Math.floor(mn / st) * st; hi = Math.ceil(mx / st) * st; for (let v = lo; v <= hi + st * 0.01; v += st) ticks.push(v); }
-    }
-    const dec = st ? Math.max(0, Math.ceil(-Math.log10(st) - 1e-9) + (Math.abs(st / Math.pow(10, Math.floor(Math.log10(st))) - 2.5) < 1e-6 ? 1 : 0)) : 0;
-    const tl = (t) => { const v = logScale ? Math.pow(10, t) : t; return !logScale && v > 0 && v < 1 ? v.toFixed(dec).replace('.', ',') + ' $' : fmtUSD(v); };
-    if (!mini) { ctx.font = '600 14px Nunito, sans-serif'; pad = Math.max(56, ...ticks.map((t) => ctx.measureText(tl(t)).width)) + 20; }
-    const x = (i) => pad + (i / n) * (W - pad - padR), y = (v) => H - padB - ((tf(v) - lo) / (hi - lo || 1)) * (H - padB - padT);
-    ctx.strokeStyle = 'rgba(255,240,220,0.07)'; ctx.font = '600 14px Nunito, sans-serif'; ctx.lineWidth = 1; ctx.fillStyle = '#e2d1bb'; ctx.textBaseline = 'middle';
-    if (!mini) for (const t of ticks) { const yy = H - padB - ((t - lo) / (hi - lo || 1)) * (H - padB - padT); ctx.beginPath(); ctx.moveTo(pad, yy); ctx.lineTo(W - padR, yy); ctx.stroke(); ctx.textAlign = 'right'; ctx.fillText(tl(t), pad - 10, yy); }
-    ctx.textBaseline = 'alphabetic';
-    if (!mini) { ctx.textAlign = 'left'; ctx.fillText(fmtDate(start), pad, H - 6); ctx.textAlign = 'right'; ctx.fillText(fmtDate(end), W - padR, H - 6); ctx.textAlign = 'left'; }
-    const grad = ctx.createLinearGradient(0, 0, 0, H); grad.addColorStop(0, COIN[id].color + '38'); grad.addColorStop(1, COIN[id].color + '00');
-    ctx.beginPath(); pts.forEach(([d, v], i) => (i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v)))); ctx.lineTo(x(n), H - padB); ctx.lineTo(x(0), H - padB); ctx.fillStyle = grad; ctx.fill();
-    ctx.beginPath(); pts.forEach(([d, v], i) => (i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v)))); ctx.strokeStyle = COIN[id].color; ctx.lineWidth = 2; ctx.stroke();
-    if (!mini) { const [, lv] = pts[n]; ctx.beginPath(); ctx.arc(x(n), y(lv), 4.5, 0, 7); ctx.fillStyle = COIN[id].color; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#302419'; ctx.stroke(); }
-    if (logScale && !mini) { ctx.fillStyle = '#9a8a78'; ctx.textAlign = 'right'; ctx.fillText('log. Skala', W - padR, 14); ctx.textAlign = 'left'; }
-  }
+  // Börse: eigene Seite (market.js) – als Fenster (M) oder am PC-Monitor (useProp → Market.atPc)
+  market(update = false) { (this.mk ||= new Market(this)).show(update); }
 
   phone(tab = null) {
     this.g.learned?.('phone'); this.ringOff?.(); this.ringOff = null;
@@ -1523,16 +1375,6 @@ export class UI {
   // Finale: mehrseitige Abschluss-Sequenz (src/ui/finale.js)
   ending() { showFinale(this, 'won'); }
 
-  // Limit-Order: „Verkaufe X, sobald der Kurs ≥ Y steht“ – die Coins sind bis dahin reserviert
-  limitBox(det, c, p) {
-    const g = this.g, s = g.s, w = s.wallet[c.id], mine = (s.limits || []).filter((l) => l.coin === c.id);
-    const box = h(`<div class="sec lim"><h4>Limit-Order</h4><div class="lim-row"><input class="lim-n" type="text" inputmode="decimal" placeholder="Menge ${c.id}"/><span>zu</span><input class="lim-p" type="text" inputmode="decimal" value="${Math.ceil(p * 1.1)}"/><span>$</span><button class="btn small primary">Setzen · 0,5 %</button></div><div class="lim-list"></div></div>`);
-    const num = (v) => { const x = parseFloat(String(v).replace(/\./g, '').replace(',', '.')); return Number.isFinite(x) ? x : 0; };
-    box.querySelector('button').onclick = () => { const n = Math.min(num(box.querySelector('.lim-n').value) || w.ex, w.ex), lp = num(box.querySelector('.lim-p').value); if (!(n > 0) || !(lp > 0)) { this.toast('Menge und Preis eingeben.', 'info', 2500); return; } if (!g.limitAdd(c.id, n, lp)) { this.toast('So viel liegt nicht auf der Börse.', 'bad', 2500); return; } this.toast(`Limit-Order: ${fmtCoin(n)} ${c.id} zu ${fmtUSD(lp)}`, 'good', 3000); this.market(); };
-    const list = box.querySelector('.lim-list'); if (!mine.length) list.append(h('<div class="lim-e">Keine offenen Aufträge.</div>'));
-    for (const l of mine) { const r = h(`<div class="lim-o"><span>${fmtCoin(l.n)} ${c.id} ab ${fmtUSD(l.p)}</span><button class="btn small">Streichen</button></div>`); r.querySelector('button').onclick = () => { g.limitCancel(l.id); this.market(); }; list.append(r); }
-    det.append(box);
-  }
   techs() { this.skills(); } // Technik ist in den Fähigkeiten aufgegangen (Taste T)
 
   ranking(tab = this.logTab || 'rank') {

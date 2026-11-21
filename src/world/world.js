@@ -37,8 +37,9 @@ import { M, mat } from './materials.js';
 import { FACILITY } from '../data/world.js';
 import { PLACEABLE, PART } from '../data/hardware.js';
 import { fmtHash, fmtUSD, fmtDate, fmtCoin } from '../sim/game.js';
+import { MonitorOverlay, monitorPose, drawPcScreen } from './monitor.js';
 
-const tmpV = new THREE.Vector3();
+const tmpV = new THREE.Vector3(), tmpM = new THREE.Matrix4();
 
 // Teilbaum freigeben (GPU-Speicher): Geometrien, Materialien, Texturen – außer geteilten aus Caches (userData.shared);
 // Modell-Vorlagen werden nur abgemeldet (releaseModel)
@@ -787,15 +788,22 @@ export class World {
     const e = this.entries.get(uid); if (e) e.spinK = 0;
     this.bootPending = true; this.screensDirty = true; this.pulse(uid); const e2 = this.entries.get(uid), bb = e2?.group.userData.bbox; if (e2 && !this.focus) this.coinBurst(new THREE.Vector3(e2.group.position.x, (bb ? bb.max.y : 0.5) + 0.1, e2.group.position.z), 6);
   }
-  // Kamera zum Monitor (Miner bootet)
-  focusMonitor() {
-    const pr = this.room?.props?.find((p) => p.action === 'market'); if (!pr) return;
+  // Kamera zum Monitor (Miner bootet). opt.page: Börse auf dem Monitor (Market.atPc) – Bildschirm füllt die Sicht, die Seite liegt als HTML darauf
+  focusMonitor(opt = null) {
+    const pr = this.room?.props?.find((p) => p.action === 'market'); if (!pr) return null;
+    if (opt?.page) {
+      const P = monitorPose(this, opt.top || 0); if (!P) return null;
+      this.focus = { pos: P.pos, q: P.q, look: P.look, page: true, sc: P.sc, light: P.look.clone().add(new THREE.Vector3(0.3, 0.25, 0.45)) }; this.focusUid = null;
+      if (!this.focusLight) { this.focusLight = new THREE.PointLight(0xfff2df, 0, 0.75, 1.6); this.scene.add(this.focusLight); }
+      return P;
+    }
     const pos = new THREE.Vector3(pr.c[0] + 0.18, pr.c[1] + 0.05, pr.c[2] + 0.62), look = new THREE.Vector3(pr.c[0] + 0.05, pr.c[1], pr.c[2]);
     const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(pos, look, new THREE.Vector3(0, 1, 0)));
     this.focus = { pos, q, light: new THREE.Vector3(pr.c[0] + 0.4, pr.c[1] + 0.15, pr.c[2] + 0.5) }; this.focusUid = null;
     if (this.bootPending) { this.bootT = this.t; this.bootPending = false; this.screensDirty = true; }
     if (!this.focusLight) { this.focusLight = new THREE.PointLight(0xfff2df, 0, 0.75, 1.6); this.scene.add(this.focusLight); }
   }
+  monitorPage(el, tick) { (this.monOverlay ||= new MonitorOverlay(this)).attach(el, tick); }
   select(uid) {
     this.selected = uid; this.refreshSelBox();
     this.onSelect?.(uid);
@@ -1414,13 +1422,16 @@ export class World {
       this.focusK = Math.max(0, Math.min(1, (this.focusK || 0) + (this.focus && this.mode === 'ui' ? dt : -dt) / 0.6));
       if (this.focusK > 0 && (this.focus || this.fc)) {
         const f = this.focus, k = this.focusK * this.focusK * (3 - 2 * this.focusK);
-        if (f) { if (!this.fc) this.fc = { pos: f.pos.clone(), q: f.q.clone(), light: f.light.clone() }; const a = 1 - Math.exp(-dt * 3.2); this.fc.pos.lerp(f.pos, a); this.fc.q.slerp(f.q, a); this.fc.light.lerp(f.light, a); }
-        this.camera.position.lerp(this.fc.pos, k); this.camera.quaternion.slerp(this.fc.q, k);
+        if (f) { if (!this.fc) this.fc = { pos: f.pos.clone(), q: f.q.clone(), light: f.light.clone() }; const a = 1 - Math.exp(-dt * 3.2); this.fc.pos.lerp(f.pos, a); this.fc.q.slerp(f.q, a); this.fc.light.lerp(f.light, a); this.fc.page = !!f.page; this.fc.sc = f.sc; this.fc.look = f.look ? (this.fc.look || f.look.clone()).lerp(f.look, a) : null; }
+        this.camera.position.lerp(this.fc.pos, k);
+        if (this.fc.look) { this._fq ||= new THREE.Quaternion(); this._fq.setFromRotationMatrix(tmpM.lookAt(this.camera.position, this.fc.look, this.camera.up)); this.camera.quaternion.slerp(this._fq, Math.min(1, k * 1.8)); } // Monitor: Bildschirm bleibt während der Fahrt mittig und ganz im Bild
+        else this.camera.quaternion.slerp(this.fc.q, k);
         if (this.focusLight) { this.focusLight.position.copy(this.fc.light); this.focusLight.intensity = 1.9 * k; }
         if (this.outline && !this.outline.pulsePeriod) this.outline.edgeStrength = 1.15 - 0.7 * k;
       } else { this.fc = null; if (this.focusLight) this.focusLight.intensity = 0; if (this.outline) this.outline.edgeStrength = 1.15; }
     }
     this.vm.update(dt, { moving: this.player.moving && this.mode === 'play', bob: this.player.bob, placing: !!this.placing, visible: (this.mode === 'play' || this.mode === 'ui') && !this.cine, uiOpen: this.mode === 'ui' });
+    this.monOverlay?.update(); // Börsen-Seite auf dem Monitor folgt der Kamera
     this.updateHouseDoors(dt); this.updateZone(dt); this.updateParcels(dt);
     // Tag/Nacht
     // Optik-Uhr: Licht folgt der Spielzeit gedämpft (höchstens ein Tag pro 90 s) – kein Flackern bei hohem Tempo
@@ -1443,7 +1454,8 @@ export class World {
     // Rendern: ist das Fenster nicht aktiv (z. B. der Chat daneben), reichen wenige Bilder pro Sekunde; hinter Menüs reichen 30
     const now = performance.now(); this.fpsTick(now);
     const menu = !!document.body.dataset.modal || document.body.classList.contains('show-build') || !document.getElementById('modal')?.classList.contains('hidden');
-    const minMs = !document.hasFocus() ? 140 : menu ? 30 : 0; this.throttled = minMs > 0;
+    const drive = this.focusK > 0 && this.focusK < 1; // Kamerafahrt zum Monitor: voll flüssig, sonst hinkt die Seite darauf hinterher
+    const minMs = !document.hasFocus() ? 140 : menu && !drive ? 30 : 0; this.throttled = minMs > 0;
     if (minMs && now - (this.lastDraw || 0) < minMs) return; this.lastDraw = now;
     if (this.quality === 'low') { const r = this.renderer; r.render(this.scene, this.camera); if (this.vm.root.visible) { r.autoClear = false; r.clearDepth(); r.render(this.vm.scene, this.camera); r.autoClear = true; } } else this.composer.render();
   }
@@ -1494,27 +1506,7 @@ export class World {
     if (!this.room) return;
     for (const sc of this.room.screens) {
       const g = sc.canvas.getContext('2d'), W = sc.canvas.width, H = sc.canvas.height;
-      if (sc.kind === 'pc') {
-        // Mining-Konsole auf dem Monitor im Kinderzimmer – mit echten Werten
-        const s = this.game.s, sm = this.game.summary[this.facId];
-        if (s.feat && !s.flags.miningStarted) { g.fillStyle = '#050403'; g.fillRect(0, 0, W, H); g.fillStyle = '#3a2a18'; g.beginPath(); g.arc(W - 18, H - 16, 4, 0, 7); g.fill(); sc.tex.needsUpdate = true; continue; }
-        g.fillStyle = '#140b04'; g.fillRect(0, 0, W, H); g.font = 'bold 26px monospace'; g.fillStyle = '#ffb347';
-        g.fillText('miner v0.3 – ' + fmtDate(s.day), 14, 34);
-        g.font = '21px monospace';
-        const lines = [];
-        if (this.bootT != null && this.t - this.bootT < 5.5) {
-          const pc = this.game.facObjects(this.facId).find((o) => o.type === 'tower'), gpu = pc?.parts?.gpus?.[0], a = pc && sm?.per.get(pc.uid);
-          const boot = ['Starte Miner ...', gpu ? `GPU gefunden: ${PART[gpu].name}` : `Keine GPU – rechne mit der CPU (${PART[pc?.parts?.cpu]?.name || 'CPU'})`, 'Verbinde mit dem Bitcoin-Netz ...', `Schürfe! ${a?.units?.[0]?.h ? fmtHash(a.units[0].h, 'sha256') : ''}`];
-          g.font = 'bold 24px monospace'; boot.slice(0, 1 + Math.floor((this.t - this.bootT) / 1.1)).forEach((l, k) => g.fillText(l, 14, 80 + k * 36, W - 28));
-          sc.tex.needsUpdate = true; continue;
-        }
-        let i = 0;
-        for (const o of this.game.facObjects(this.facId)) { const a = sm?.per.get(o.uid); if (!a || !a.units.length) continue; const u = a.units[0]; lines.push(`RIG${i++}: ${u.h ? fmtHash(u.h, u.algo) : 'idle'} ${u.coin || ''}`); if (lines.length >= 4) break; }
-        lines.push(`BTC ${fmtUSD(this.game.price('BTC'))}  T ${sm ? sm.temp.toFixed(1).replace('.', ',') : '--'} °C`);
-        lines.push(`> ${Math.floor(this.t * 2) % 2 ? '_' : ' '}`);
-        lines.forEach((l, k) => g.fillText(l, 14, 76 + k * 34, W - 28));
-        sc.tex.needsUpdate = true; continue;
-      }
+      if (sc.kind === 'pc') { drawPcScreen(this, sc); sc.tex.needsUpdate = true; continue; } // Monitor in der Wohnung: Börse im Kleinen, beim Booten die Konsole (monitor.js)
       const s = this.game.s; g.fillStyle = '#04101c'; g.fillRect(0, 0, W, H);
       g.fillStyle = '#7fe3ff'; g.font = 'bold 54px Arial'; g.fillText('HASHWERK · NOC', 40, 80);
       g.font = '34px monospace'; g.fillStyle = '#cfe';
