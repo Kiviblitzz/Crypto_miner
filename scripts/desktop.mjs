@@ -73,7 +73,7 @@ function check(dir, platform) {
 }
 
 async function pack(platform) {
-  const { packager } = require('@electron/packager');
+  const { packager } = await import('@electron/packager');
   const electronVersion = require('electron/package.json').version;
   const [dir] = await packager({
     dir: ROOT,
