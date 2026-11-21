@@ -589,7 +589,6 @@ export class UI {
       setTimeout(() => {
         fx.classList.add('out'); setTimeout(() => { fx.remove(); this.sleeping = false; }, 900);
         this.toast(`Guten Morgen – ${esc(day)}${mined >= 0.005 ? ` · nachts geschürft: ₿ ${fmtCoin(mined)}` : ''}`, 'good', 4200);
-        if (s.parcels?.length) this.toast('Paket vor der Tür.', 'info', 4200);
       }, 1100);
     }, 2500);
   }

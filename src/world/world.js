@@ -93,10 +93,10 @@ export class World {
     this.mode = 'title';
     this.touchMode = window.matchMedia?.('(pointer: coarse)').matches || false;
     document.addEventListener('pointerlockchange', () => {
-      const locked = document.pointerLockElement === canvas;
+      const locked = document.pointerLockElement === canvas, wasLocked = !!this.player.locked; // nur ein echter Wechsel zählt (manche Browser melden auch Freigaben ohne vorherigen Fang)
       this.player.locked = locked; if (locked) { this.player.lockAt = performance.now(); this.lockFailed = false; }
-      if (!locked && this.mode === 'play' && !this.expectUnlock) { this.cancelPlacement(); this.onPause?.(); }
-      else if (!locked && this.mode === 'ui' && !this.expectUnlock) this.onUiEsc?.(); // Fenster offen, aber die Maus war noch gefangen: Chromes Esc gibt nur die Maus frei – dann schließt dieses Esc das Fenster
+      if (!locked && wasLocked && this.mode === 'play' && !this.expectUnlock) { this.cancelPlacement(); this.onPause?.(); }
+      else if (!locked && wasLocked && this.mode === 'ui' && !this.expectUnlock) this.onUiEsc?.(); // Fenster offen, aber die Maus war noch gefangen: Chromes Esc gibt nur die Maus frei – dann schließt dieses Esc das Fenster
       this.expectUnlock = false;
       // Wettlauf: die Maus wurde erst eingefangen, nachdem schon ein Fenster aufging – sofort wieder freigeben
       if (locked && (this.mode !== 'play' || this.paused)) { this.expectUnlock = true; document.exitPointerLock(); }
