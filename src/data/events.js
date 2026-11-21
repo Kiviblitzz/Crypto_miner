@@ -221,7 +221,7 @@ export const EVENTS = [
     cond: (s, h, g) => g.wsCan(),
     text: (s, h, g) => { const o = g.wsOffer(); if (!o) return '„Der Posten ist leider schon weg.“'; const full = o.unit * o.n; return `„Ich habe einen Posten <b>${o.n}× ${PLACEABLE[o.id].name}</b> für <b>${usd(o.price)}</b> – einzeln wären das ${usd(full)}, Sie sparen ${usd(full - o.price)}. Nur diese Woche, dann geht er nach Kasachstan. Die Spedition kommt am Tag nach Ihrer Zusage: in freie Regale, der Rest zum Aufstellen.“`; },
     choices: [
-      { label: (g) => `Nehmen · ${usd(g.wsOffer()?.price || 0)}`, cost: (g) => g.wsOffer()?.price || 0, need: (s, h, g) => !!g.wsOffer(), needText: 'Der Posten ist schon weg', hint: (g) => { const o = g.wsOffer(); return o ? `${Math.round((1 - o.price / (o.unit * o.n)) * 100)}\u00a0% unter Einzelpreis · ${o.n} Plätze in Regalen oder einzeln aufstellen · Lieferung morgen` : ''; }, fx: { do: (g) => g.wsAccept(), log: 'Sammelangebot von Herrn Lindqvist angenommen' }, reply: '<b>Herr Lindqvist:</b> Tack! Die Spedition kommt morgen früh.' },
+      { label: 'Nehmen', cost: (g) => g.wsOffer()?.price || 0, need: (s, h, g) => !!g.wsOffer(), needText: 'Der Posten ist schon weg', hint: (g) => { const o = g.wsOffer(); return o ? `${Math.round((1 - o.price / (o.unit * o.n)) * 100)}\u00a0% unter Einzelpreis · ${o.n} Plätze in Regalen oder einzeln aufstellen · Lieferung morgen` : ''; }, fx: { do: (g) => g.wsAccept(), log: 'Sammelangebot von Herrn Lindqvist angenommen' }, reply: '<b>Herr Lindqvist:</b> Tack! Die Spedition kommt morgen früh.' },
       { label: 'Diesmal nicht', fx: { do: (g) => g.wsDecline(), log: 'Sammelangebot von Herrn Lindqvist abgelehnt' }, reply: '<b>Herr Lindqvist:</b> Kein Problem. Der nächste Posten kommt bestimmt.' },
     ],
   },
