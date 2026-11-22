@@ -29,12 +29,8 @@ export function initSettings({ world, ui, audio }) {
     audio.setVolumes?.(s.vol); audio.setMuted?.(s.mute);
     ui.refreshKeys?.();
   }
-  function applyWindow() { // nur Desktop: Vollbild und Fenstergröße wie zuletzt gewählt
-    const s = P.get(); if (!platform.desktop) return;
-    if (typeof s.fullscreen === 'boolean' && s.fullscreen !== platform.isFullscreen()) platform.setFullscreen(s.fullscreen);
-    if (s.win && platform.canResize() && !platform.isFullscreen()) platform.setWindowSize(s.win[0], s.win[1]);
-  }
-  applyAll(); applyWindow();
+  // Vollbild und Fenstergröße merkt sich die Desktop-Hülle selbst (electron/main.cjs, auch F11): hier nur anzeigen und weiterreichen
+  applyAll();
   // Beschriftungen nach dem echten Tastatur-Layout (Chrome/Edge/Desktop)
   try { navigator.keyboard?.getLayoutMap?.().then((m) => { if (KEYS.setLayout([...m.entries()])) { ui.refreshKeys?.(); if (S.open) render(); } }).catch(() => {}); } catch (e) { /* ohne Layout: Standard-Beschriftungen */ }
 
@@ -103,11 +99,12 @@ export function initSettings({ world, ui, audio }) {
     body.append(row('Vollbild', '', toggle(fs, (on) => { platform.setFullscreen(on); P.set({ fullscreen: on }); setTimeout(render, 250); })));
     body.append(row('Auflösung', 'Weniger Bildpunkte – läuft flüssiger', seg(P.SCALE_STEPS.map((v) => [v, pct(v)]), s.scale, (v) => { P.set({ scale: v }); world.setRenderScale?.(v); render(); }, 'Auflösung')));
     if (platform.canResize()) {
-      const sizes = (platform.displaySizes() || []).filter((x) => Array.isArray(x) && x.length === 2), curW = s.win || [window.outerWidth, window.outerHeight];
+      const sizes = (platform.displaySizes() || []).filter((x) => Array.isArray(x) && x.length === 2), cur = fs && s.win ? s.win : [window.innerWidth, window.innerHeight];
       if (sizes.length) {
-        const sel = h(`<select class="set-sel" aria-label="Fenstergröße" ${fs ? 'disabled' : ''}>${sizes.map(([w, hh]) => `<option value="${w}x${hh}" ${w === curW[0] && hh === curW[1] ? 'selected' : ''}>${w} × ${hh}</option>`).join('')}</select>`);
+        if (!sizes.some(([w, hh]) => w === cur[0] && hh === cur[1])) sizes.unshift(cur); // jetzige Größe auch dann zeigen, wenn sie nicht in der Liste steht
+        const sel = h(`<select class="set-sel" aria-label="Fenstergröße">${sizes.map(([w, hh]) => `<option value="${w}x${hh}" ${w === cur[0] && hh === cur[1] ? 'selected' : ''}>${w} × ${hh}</option>`).join('')}</select>`);
         sel.onchange = () => { const [w, hh] = sel.value.split('x').map(Number); platform.setWindowSize(w, hh); P.set({ win: [w, hh] }); };
-        body.append(row('Fenstergröße', fs ? 'Erst Vollbild ausschalten' : '', sel));
+        body.append(row('Fenstergröße', fs ? 'Gilt, sobald das Spiel im Fenster läuft' : '', sel));
       }
     }
   }
