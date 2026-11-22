@@ -1,11 +1,11 @@
 # HASHWERK als Desktop-Spiel (Electron, Steam)
 
-Die Desktop-Version ist das normale Spiel (Vite-Build) in einem eigenen Fenster mit Electron 33. Sie läuft komplett offline,
+Die Desktop-Version ist das normale Spiel (Vite-Build) in einem eigenen Fenster mit Electron 45 (Chromium 156). Sie läuft komplett offline,
 Spielstände und Protokoll liegen als Dateien im Benutzerordner.
 
 ## Bauen
 
-Einmal `npm install`, dann:
+Voraussetzung: Node.js 22.12 oder neuer. Einmal `npm install`, dann:
 
 | Befehl | Ergebnis |
 |---|---|
@@ -74,8 +74,8 @@ Umgebungsvariablen (nur zum Testen): `HASHWERK_DEV=1` (Entwicklerwerkzeuge), `HA
 6. **Steam Cloud** (optional, für Spielstände auf mehreren PCs): Auto-Cloud, Stammverzeichnis `WinAppDataRoaming`, Unterordner `HASHWERK/saves`, Muster `*.json`.
 7. **Code-Signatur** (optional): Über Steam gestartet ist die fehlende Signatur kaum ein Problem. Wer die ZIP-Datei auch außerhalb von Steam weitergibt, braucht gegen SmartScreen-Warnungen ein Code-Signing-Zertifikat (kostet jährlich).
 
-## Bekannte Grenzen
+## Hinweise
 
-- Electron 33 bekommt keine Sicherheitsupdates mehr. Weil das Spiel nur eigene, lokale Dateien lädt und Netzzugriffe gesperrt sind, ist das Risiko gering;
-  vor dem Release kann die Version in `package.json` angehoben werden (danach `npm install` und testen).
+- Electron bringt alle acht Wochen eine neue Hauptversion; Sicherheitsupdates gibt es nur für die drei neuesten. Vor größeren Updates des Spiels
+  die Version in `package.json` anheben (`electron`, exakte Versionsnummer), `npm install`, dann bauen und testen.
 - Das Steam-Overlay (Erfolgs-Meldungen, Shift+Tab) wird nur eingeschaltet, wenn Steam läuft und eine App-ID gesetzt ist.

@@ -157,8 +157,8 @@ function start() {
   // ---------- Sicherheit: nur das eigene Spiel, keine Navigation nach außen, keine neuen Fenster ----------
   app.on('web-contents-created', (_e, wc) => {
     wc.setWindowOpenHandler(({ url }) => { openExternal(url); return { action: 'deny' }; });
-    wc.on('will-navigate', (e, url) => { if (!isAppUrl(url)) { e.preventDefault(); openExternal(url); } });
-    wc.on('will-redirect', (e, url) => { if (!isAppUrl(url)) { e.preventDefault(); log(`Weiterleitung blockiert: ${String(url).slice(0, 200)}`); } });
+    wc.on('will-navigate', (e) => { if (!isAppUrl(e.url)) { e.preventDefault(); openExternal(e.url); } });
+    wc.on('will-redirect', (e) => { if (!isAppUrl(e.url)) { e.preventDefault(); log(`Weiterleitung blockiert: ${String(e.url).slice(0, 200)}`); } });
     wc.on('will-attach-webview', (e) => e.preventDefault());
   });
 
@@ -212,8 +212,9 @@ function start() {
   // ---------- Absturzschutz ----------
   function watchRenderer(wc) {
     let consoleN = 0, consoleT = Date.now(), dropped = 0;
-    wc.on('console-message', (_e, level, message, line, sourceId) => {
-      if (level < 3) return;
+    wc.on('console-message', (e) => {
+      const { level, message, lineNumber: line, sourceId } = e;
+      if (level !== 'error') return;
       const now = Date.now();
       if (now - consoleT > 60000) { if (dropped) log(`Konsole: ${dropped} weitere Fehler nicht protokolliert`); consoleT = now; consoleN = 0; dropped = 0; }
       if (++consoleN > 40) { dropped++; return; }
@@ -300,7 +301,8 @@ function start() {
     // für Fehlerberichte: welche Grafikkarte Chromium nutzt (nach dem ersten Laden, dann läuft der GPU-Prozess)
     win.webContents.once('did-finish-load', () => {
       const st = app.getGPUFeatureStatus();
-      log(`Grafik: WebGL ${st.webgl}, WebGL2 ${st.webgl2}, Compositing ${st.gpu_compositing}, Rasterung ${st.rasterization}`);
+      const names = { webgl: 'WebGL', webgl2: 'WebGL2', gpu_compositing: 'Compositing', rasterization: 'Rasterung' };
+      log(`Grafik: ${Object.keys(names).filter((k) => st[k]).map((k) => `${names[k]} ${st[k]}`).join(', ')}`);
       const hex = (n) => `0x${Number(n || 0).toString(16).padStart(4, '0')}`;
       app.getGPUInfo('basic').then((info) => {
         const g = (info && info.gpuDevice) || [];
