@@ -43,6 +43,8 @@ npm run dev
 Dann <http://localhost:5173> öffnen. Ein Hinweis-Balken oben führt Schritt für Schritt durch Kapitel 1. Statischer Build: `npm run build` (Ausgabe in `dist/`),
 Ein-Datei-Version neu bauen: `npm run build:single`.
 
+**Desktop-Version (Electron, für Steam):** `npm run desktop:build:win` bzw. `npm run desktop:build:linux`, Details in [docs/desktop.md](docs/desktop.md).
+
 ## Was drin ist
 
 * **Echte Geschichte als Spielwelt:** Bitcoin-Kurs und Netz-Hashrate (2010–2026) aus gerundeten
