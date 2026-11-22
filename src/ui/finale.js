@@ -109,7 +109,7 @@ function endButtons(ui, mode, usd, box) {
 // ---------- Neues Spiel+ ----------
 export function startNewGamePlus(ui, ending) {
   const g = ui.g; ui.onModalClose = null; ui.closeModal();
-  g.newGamePlus(ending); g.save();
+  g.newGamePlus(ending); g.save('ngplus'); // bleibt auf dem Platz des Spiels (Rückfrage „Spielstand wird überschrieben“ kam vorher)
   ui.w.setMode('ui'); ui.switchSite('kinder'); ui.w.syncLoose?.(); ui.speedBar(); ui.ticker();
   const p = g.s.fin.prev || {};
   const last = p.ending === 'sold' ? `Beim letzten Mal hast du Hashwerk am ${fmtDate(p.day)} an Kral verkauft.` : p.won ? `Beim letzten Mal hast du MONOLITH am ${fmtDate(p.won)} überholt.` : '';

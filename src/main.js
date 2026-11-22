@@ -1,19 +1,34 @@
 // HASHWERK – Einstiegspunkt: Spielschleife, Zeit, Tastatur (Ego-Perspektive), Titelbild
-import { Game, fmtDate, fmtUSD } from './sim/game.js';
+import { Game } from './sim/game.js';
+import { SaveStore } from './sim/saves.js';
 import { World } from './world/world.js';
 import { UI } from './ui/ui.js';
 import { CHAPTERS, DIFFICULTY } from './data/world.js';
 import { PLACEABLE } from './data/hardware.js';
 import { Audio } from './ui/audio.js';
 import { initTouch } from './ui/touch.js';
+import { SavesUI } from './ui/saves.js';
+import { Crash } from './ui/crash.js';
+import { platform } from './platform.js';
 import { load as loadSettings } from './prefs.js';
 import { actionOf, is as keyIs, keyLabel } from './keys.js';
 import { initSettings } from './ui/settings.js';
 
 const SEC_PER_DAY = [Infinity, 86400, 1440, 24, 4, 0.5, 0.12]; // 1 = Echtzeit, 2 = 1 Min/s, 3 = 1 Std/s, 4 = 6 Std/s, 5 = 2 Tage/s, 6 = 8 Tage/s
 
-loadSettings(); // Einstellungen und Tastenbelegung vor allem anderen (alte Schalter werden einmalig übernommen)
-const game = new Game();
+// Absturzschutz zuerst (src/ui/crash.js): Fehler werden protokolliert; bis window.__hwBoot zeigt index.html die Startmeldung
+const crash = new Crash({
+  inGame: () => inGame(), rescue: () => store.rescue(game), hasSave: () => !!store.latest({ rescue: false }),
+  onShow: () => { store.blocked = true; if (document.pointerLockElement) { world.expectUnlock = true; document.exitPointerLock(); } }, // keine Autosaves über gute Stände, Maus frei für die Knöpfe
+  onResume: () => { store.blocked = false; },
+  loadLast: () => { if (!saves.reloadInto('*')) location.reload(); },
+  toTitle: () => { store.blocked = true; location.reload(); },
+});
+crash.install();
+// Spielstände (src/sim/saves.js): Plätze, Autosaves, Prüfsumme; alter Einzelstand wird beim ersten Start übernommen
+const store = new SaveStore(); store.migrateLegacy();
+loadSettings(); // Einstellungen und Tastenbelegung vor der Welt (alte Schalter werden einmalig übernommen)
+const game = new Game(); game.store = store;
 const world = new World(document.getElementById('c'), game);
 world.loadFacility('kinder');
 const ui = new UI(game, world);
@@ -23,7 +38,7 @@ window.addEventListener('pointerdown', () => audio.init(), { once: true });
 window.addEventListener('keydown', () => audio.init(), { once: true });
 initSettings({ game, world, ui, audio }); // Einstellungen (Grafik, Ton, Steuerung, Tasten, Sprache): anwenden, Knöpfe in Titelbild und Pause
 world.player.onStep = (run) => { audio.step(run); ui.steps = (ui.steps || 0) + 1; }; // Schritte zählen: Deniz schreibt, sobald man sich in der Bude umgesehen hat (ui.ideaTick)
-window.__hw = { game, world, ui }; // Debug/Tests
+window.__hw = { game, world, ui, store, crash }; // Debug/Tests
 document.body.dataset.mode = 'title';
 if (world.touchMode) initTouch(world, ui);
 
@@ -51,15 +66,9 @@ world.onPlace = (type, x, z, rot, template) => {
   return o;
 };
 
-// Titelbild
+// Titelbild: Weiterspielen (jüngster heiler Stand), Laden, Neues Spiel (fragt nach dem Platz) – src/ui/saves.js
 const splash = document.getElementById('splash');
-const hasSave = game.hasSave();
-if (hasSave) {
-  // Hintergrund im Titel: das eigene Zimmer aus dem Spielstand
-  let loaded = false; try { loaded = game.load(); if (loaded) { world.syncObjects(); world.syncLoose(); world.syncParcels?.(); } } catch (e) { /* neuer Stand bleibt */ }
-  const b = document.getElementById('btn-continue'); if (loaded) b.classList.remove('hidden'); b.classList.add('primary'); document.getElementById('btn-new').classList.remove('primary');
-  const info = game.saveInfo(); if (info) b.innerHTML = `<span class="bi"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span><span class="bt">Weiterspielen<small>${fmtDate(info.day)} · ${fmtUSD(info.cash)}</small></span>`;
-}
+const inGame = () => splash.classList.contains('hidden');
 let splashOrbit = true;
 // Neues Spiel: erst den Schwierigkeitsgrad wählen
 const DIFF_ICON = { easy: '<path d="M4 15c3-6 13-6 16 0"/><path d="M7 19h10"/>', normal: '<path d="M5 12h14"/><path d="M12 5v14"/>', hard: '<path d="M6 4h12v4a6 6 0 0 1-12 0z"/><path d="M12 14v4M8 20h8"/>' };
@@ -78,25 +87,30 @@ function pickDifficulty(start) {
   box.append(back);
   btns.after(box);
 }
-const btnNew = document.getElementById('btn-new');
-btnNew.onclick = () => {
-  // Vorhandener Spielstand: erst nach zweitem Klick überschreiben
-  if (hasSave && !btnNew.dataset.armed) { const bt = btnNew.querySelector('.bt'), was = bt.innerHTML; btnNew.dataset.armed = '1'; bt.innerHTML = 'Wirklich neu?<small>Nochmal klicken – der Spielstand wird überschrieben</small>'; setTimeout(() => { delete btnNew.dataset.armed; bt.innerHTML = was; }, 4000); return; }
-  pickDifficulty((diff) => {
+// Neues Spiel: vorhandene Stände → erst den Platz wählen (belegt: Rückfrage), dann den Schwierigkeitsgrad
+document.getElementById('btn-new').onclick = () => saves.newGame((slot) => pickDifficulty((diff) => {
   game.newGame(diff); ui.resetSession(); splash.classList.add('hidden'); splashOrbit = false;
   world.setMode('ui');
   game.startTutor(); // Anlernen: alles kommt nach und nach – zuerst das Handy
   ui.switchSite('kinder'); world.syncLoose(); world.syncParcels?.(); ui.speedBar(); ui.ticker(); ui.dock(); ui.keysHint();
   ui.wakeUp(); // aufwachen, dann vibriert das Handy
-  });
-};
-document.getElementById('btn-continue').onclick = () => {
-  if (game.load()) { ui.resetSession(); splash.classList.add('hidden'); splashOrbit = false; ui.switchSite(game.s.current, { bed: game.homeOut() && game.s.current === 'werkstatt' }); ui.speedBar(); ui.ticker(); ui.keysHint(); world.setMode('play'); ui.toast('Willkommen zurück!', 'good'); } // nach dem Umzug: am Feldbett
-  else ui.toast('Spielstand konnte nicht geladen werden', 'bad');
-};
+  store.startNew(game, slot, { overwrite: true }); // Platz ist gewählt (belegt nur nach Rückfrage)
+}));
+// Geladen (Titelbild, Laden-Liste, Neustart mit Ladeauftrag): ins Spiel
+function enterGame(msg) {
+  ui.resetSession(); splash.classList.add('hidden'); splashOrbit = false;
+  ui.switchSite(game.s.current, { bed: game.homeOut() && game.s.current === 'werkstatt' }); // nach dem Umzug: am Feldbett
+  ui.speedBar(); ui.ticker(); ui.keysHint(); world.setMode('play'); ui.toast(msg || 'Willkommen zurück!', 'good');
+}
+const saves = new SavesUI({ game, world, ui, store, splash, enter: enterGame, inGame, crash }); // vor den Tasten unten: Esc gehört zuerst Liste/Rückfrage
+window.__hw.saves = saves;
+saves.initPause();
+document.getElementById('btn-continue').onclick = () => saves.continue();
+saves.initTitle();
 
 // Beim Verlassen speichern – auch wenn der Tab nur in den Hintergrund geht (mobil kommt beforeunload oft nicht)
-const saveNow = () => { if (splash.classList.contains('hidden')) game.save(); };
+const saveNow = () => { if (inGame() && !crash.stop) game.save('exit'); };
+const quit0 = platform.quit.bind(platform); platform.quit = () => { saveNow(); return quit0(); }; // Beenden (Desktop): vorher sichern
 window.addEventListener('beforeunload', saveNow);
 window.addEventListener('pagehide', saveNow);
 document.addEventListener('visibilitychange', () => {
@@ -108,6 +122,7 @@ document.addEventListener('visibilitychange', () => {
 const HOT = { skills: () => ui.skills(), goal: () => ui.goalActionKey(), build: () => ui.toggleBuild(), market: () => ui.market(), phone: () => ui.phone(), heat: () => ui.toggleHeat(), company: () => ui.company(), ranking: () => ui.ranking(), map: () => ui.toggleMap() };
 function onKey(e) {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || !splash.classList.contains('hidden')) return;
+  if (saves.open || crash.open) return; // Spielstand-Liste, Rückfrage, Fehlerfenster: eigene Tasten
   if (world.cine) { e.preventDefault(); return; } // Aufwachen (World.wakeUp): keine Eingabe
   if (ui.mg) { e.preventDefault(); return; } // Mini-Spiel hat eigene Tasten (Esc bricht nur es ab)
   const act = actionOf(e);
@@ -153,6 +168,11 @@ window.addEventListener('keydown', (e) => { if (!keyIs('phone', e) || ui.mg) ret
 let last = performance.now();
 let screenTimer = 0;
 function loop(now) {
+  requestAnimationFrame(loop); // zuerst: ein Fehler in einem Bild hält die Schleife nicht an
+  if (crash.stop) { last = now; return; } // Fehlerfenster offen oder angehalten: keine Simulation
+  try { frame(now); } catch (e) { crash.report(e, 'Hauptschleife'); }
+}
+function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   const s = game.s;
   if (splashOrbit) {
@@ -170,6 +190,7 @@ function loop(now) {
   screenTimer -= dt; if (world.screensDirty) { world.screensDirty = false; screenTimer = 0; } if (screenTimer <= 0) { screenTimer = 1.0; world.updateStatus(); world.drawScreens(); if (!splashOrbit) ui.tutorial(); const sm = game.summary[s.current]; if (sm) audio.setLoad(sm.watt, !sm.tripped && !splashOrbit); if (world.aim) ui.prompt(world.aim); }
   if (now - (loop.lw || 0) > 100) { loop.lw = now; ui.liveWallet(); } ui.objMarker(); // Bitcoin-Zähler reicht 10× pro Sekunde (liest das Layout)
   world.update();
-  requestAnimationFrame(loop);
+  if (!splashOrbit) saves.tick(); // Autosave morgens und beim Standortwechsel
 }
 requestAnimationFrame(loop);
+window.__hwBoot = 1; // Start geschafft: ab jetzt zeigt crash.js Fehler (davor index.html)
