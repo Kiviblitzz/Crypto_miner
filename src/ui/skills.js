@@ -12,6 +12,7 @@ import { PLACEABLE } from '../data/hardware.js';
 import { FACILITY } from '../data/world.js';
 import { fmtUSD, fmtHash, fmtWatt, fmtDate } from '../sim/game.js';
 import { playMinigame } from './minigame.js';
+import { keyLabel as K, kbd } from '../keys.js';
 
 const h = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -219,7 +220,7 @@ function showWhere(ui, k) {
   if (k.where?.startsWith('shop:')) { ui.cat = k.where.slice(5); ui.toggleBuild(); return; }
   const o = pick && (objs.find(pick) || (k.where === 'rigNoOs' ? objs.find((x) => PLACEABLE[x.type].kind === 'rig') : null));
   if (o) { ui.openInspector(o.uid); return; }
-  ui.toast(k.where === 'asic' ? 'Hier steht noch kein ASIC-Miner – stell einen auf und schau ihn an (E).' : k.where === 'gpuRig' ? 'Hier steht noch kein Rig mit Grafikkarte.' : k.where === 'broken' ? 'Gerade ist nichts kaputt. Bei einem Defekt: Gerät anschauen (E) → Selbst reparieren.' : k.where === 'robi' ? 'Hier steht noch kein Robi – Shop → Roboter.' : 'Hier gibt es dafür gerade kein Gerät.', 'info', 4500);
+  ui.toast(k.where === 'asic' ? `Hier steht noch kein ASIC-Miner – stell einen auf und schau ihn an (${esc(K('use'))}).` : k.where === 'gpuRig' ? 'Hier steht noch kein Rig mit Grafikkarte.' : k.where === 'broken' ? `Gerade ist nichts kaputt. Bei einem Defekt: Gerät anschauen (${esc(K('use'))}) → Selbst reparieren.` : k.where === 'robi' ? 'Hier steht noch kein Robi – Shop → Roboter.' : 'Hier gibt es dafür gerade kein Gerät.', 'info', 4500);
 }
 
 // ---------- Handgriffe im Inspektor ----------
@@ -232,7 +233,7 @@ export function osWizard(ui, o, c) {
     inn.innerHTML = `<div class="os-t">Willkommen beim Setup</div><div class="os-kv"><span>Sprache</span><b>Deutsch</b><span>Festplatte</span><b>${o.parts?.gpus?.length ? '120' : '80'} GB · leer</b><span>Arbeitsspeicher</span><b>4 GB</b></div><button class="btn primary os-go">Weiter ›</button>`;
     inn.querySelector('.os-go').onclick = () => { w.step = 1; ui.audio?.click?.(); ui.inspect(o.uid); };
   } else if (w.step === 1) {
-    inn.innerHTML = `<div class="os-t">Welches System?</div><button class="os-pick" data-k="win"><b>Windows 7</b><small>Lizenz ${money(lic)} · läuft sofort</small></button><button class="os-pick ${lin ? '' : 'no'}" data-k="linux" ${lin ? '' : 'disabled'}><b>Linux (Mining-Distribution)</b><small>${lin ? 'gratis · schlank, läuft stabil' : 'Erst lernen: „Linux-Mining-System“ (T)'}</small></button>${g.canAfford(lic) ? '' : `<div class="os-warn">Für die Lizenz fehlen ${money(lic - g.s.cash)}.</div>`}`;
+    inn.innerHTML = `<div class="os-t">Welches System?</div><button class="os-pick" data-k="win"><b>Windows 7</b><small>Lizenz ${money(lic)} · läuft sofort</small></button><button class="os-pick ${lin ? '' : 'no'}" data-k="linux" ${lin ? '' : 'disabled'}><b>Linux (Mining-Distribution)</b><small>${lin ? 'gratis · schlank, läuft stabil' : `Erst lernen: „Linux-Mining-System“ (${esc(K('skills'))})`}</small></button>${g.canAfford(lic) ? '' : `<div class="os-warn">Für die Lizenz fehlen ${money(lic - g.s.cash)}.</div>`}`;
     inn.querySelectorAll('.os-pick').forEach((b) => (b.onclick = () => { const kd = b.dataset.k, why = g.osWhy(o, kd); if (why) { ui.toast(esc(why), 'bad', 3000); return; } w.kind = kd; w.step = 2; w.t0 = performance.now(); ui.audio?.click?.(); ui.inspect(o.uid); }));
   } else {
     const dur = 6000, name = w.kind === 'win' ? 'Windows 7' : 'Linux';
@@ -253,7 +254,7 @@ function handBar(ui, sec, label, ms, act) {
   const tick = () => { if (!bar.isConnected) return; const p = Math.min(1, (performance.now() - t0) / ms); i.style.width = `${Math.round(p * 100)}%`; if (p < 1) requestAnimationFrame(tick); else act(); };
   requestAnimationFrame(tick);
 }
-const lockLine = (txt) => `<div class="sk-lock"><svg viewBox="0 0 24 24" width="14" height="14">${ICON.lock}</svg><span>${esc(txt)}</span><kbd>T</kbd></div>`;
+const lockLine = (txt) => `<div class="sk-lock"><svg viewBox="0 0 24 24" width="14" height="14">${ICON.lock}</svg><span>${esc(txt)}</span>${kbd('skills')}</div>`;
 
 export function deviceSecs(ui, o) {
   const g = ui.g, s = g.s, def = PLACEABLE[o.type], fac = g.facOf(o.uid), out = document.createDocumentFragment(); if (!def) return out;
@@ -362,7 +363,7 @@ async function repairGame(ui, o, k) {
   const r = await playMinigame(ui, { kind: G.kind, easy, title: easy ? `${G.title} (mit Übung)` : G.title, n: o.parts?.gpus?.length || 0 });
   if (r.skipped) ui.toast('Abgebrochen – nichts passiert.', 'info', 2200);
   else if (!r.ok) ui.toast(k === 'steck' ? 'Den Fehler nicht gefunden – noch mal suchen oder reparieren lassen.' : k === 'chip' ? 'Die Kette läuft noch nicht – noch mal messen oder reparieren lassen.' : 'Lötstellen nicht sauber – noch mal versuchen oder reparieren lassen.', 'bad', 4000);
-  else if (g.repairSelf(uid, r)) { ui.audio?.powerOn?.(); ui.toast(`<b>Repariert!</b>${r.clean ? ' Ohne einen Fehlgriff.' : ''} Nur das Material bezahlt.${!easy ? ` Mit der Fähigkeit „${esc(SKILL[R.sk].name)}“ (T) geht es leichter.` : ''}`, 'good', 4500); }
+  else if (g.repairSelf(uid, r)) { ui.audio?.powerOn?.(); ui.toast(`<b>Repariert!</b>${r.clean ? ' Ohne einen Fehlgriff.' : ''} Nur das Material bezahlt.${!easy ? ` Mit der Fähigkeit „${esc(SKILL[R.sk].name)}“ (${esc(K('skills'))}) geht es leichter.` : ''}`, 'good', 4500); }
   if (ui.inspUid === uid) ui.inspect(uid);
 }
 async function psuGame(ui, o) {
@@ -379,14 +380,14 @@ export function skillCard(ui, id) {
   const k = SKILL[id]; if (!k) return;
   if (ui.modalKind === 'skills') { skRefresh(ui); return; }
   document.getElementById('lvup')?.remove(); ui.audio?.fanfare?.(); ui.lvBusy = true; clearTimeout(ui.lvBT); ui.lvBT = setTimeout(() => { ui.lvBusy = false; }, 3900);
-  const el = h(`<div id="lvup" class="sklv"><div class="lv-ic" style="background:${CAT_COLOR[k.cat]}"><svg viewBox="0 0 24 24" width="30" height="30">${ICON.check}</svg></div><div class="lv-t1">Gelernt</div><div class="lv-t2">${esc(k.name)}</div><div class="lv-t3">${esc(k.use ? 'Neu: ' + k.use : k.desc)}</div><div class="lv-t4"><kbd>T</kbd> Fähigkeiten</div></div>`);
+  const el = h(`<div id="lvup" class="sklv"><div class="lv-ic" style="background:${CAT_COLOR[k.cat]}"><svg viewBox="0 0 24 24" width="30" height="30">${ICON.check}</svg></div><div class="lv-t1">Gelernt</div><div class="lv-t2">${esc(k.name)}</div><div class="lv-t3">${esc(k.use ? 'Neu: ' + k.use : k.desc)}</div><div class="lv-t4">${kbd('skills')} Fähigkeiten</div></div>`);
   document.body.append(el); setTimeout(() => el.classList.add('out'), 3600); setTimeout(() => el.remove(), 4100);
 }
 export function pointCard(ui) {
   if (ui.modalKind === 'skills') { skRefresh(ui); return; }
   document.getElementById('lvup')?.remove(); ui.audio?.fanfare?.(); ui.lvBusy = true; clearTimeout(ui.lvBT); ui.lvBT = setTimeout(() => { ui.lvBusy = false; }, 3900);
   const free = ui.g.fpFree?.() || 1;
-  const el = h(`<div id="lvup"><div class="lv-ic">★</div><div class="lv-t1">Fähigkeitspunkt frei</div><div class="lv-t2">${free} ${free === 1 ? 'Punkt' : 'Punkte'} zum Freischalten</div><div class="lv-t3">Einlösen im Fähigkeiten-Baum</div><div class="lv-t4"><kbd>T</kbd> Fähigkeiten</div></div>`);
+  const el = h(`<div id="lvup"><div class="lv-ic">★</div><div class="lv-t1">Fähigkeitspunkt frei</div><div class="lv-t2">${free} ${free === 1 ? 'Punkt' : 'Punkte'} zum Freischalten</div><div class="lv-t3">Einlösen im Fähigkeiten-Baum</div><div class="lv-t4">${kbd('skills')} Fähigkeiten</div></div>`);
   document.body.append(el); setTimeout(() => el.classList.add('out'), 3400); setTimeout(() => el.remove(), 3900);
 }
 export const POT_SVG = { w: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5a1.8 1.8 0 0 0 2.5 2.5l5.8-5.8a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>', r: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>', g: '<circle cx="9" cy="9" r="5.5"/><path d="M14.6 8.8a5.5 5.5 0 1 1-5.8 5.8"/>' };

@@ -17,6 +17,8 @@ import { Market } from './market.js';
 import { ChatView, unreadChats } from './chat.js';
 import { LETTERS } from '../data/world.js';
 import { papaRig, papaTalk, moveScene, papaPrompt } from './papa.js'; // Papas Miner, Umzug ins Zimmer über dem Laden
+import { keyLabel as K, keyHtml as KH, kbd, keyFor } from '../keys.js'; // Tasten nach der Belegung (Einstellungen)
+import { get as getPrefs, save as savePrefs } from '../prefs.js';
 
 const $ = (s) => document.querySelector(s);
 const h = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
@@ -91,7 +93,7 @@ export class UI {
     // Haus (Wohnung ↔ Treppenhaus ↔ Keller): Standortwechsel zu Fuß, Türgeräusch, Hinweis auf die Taschenlampe
     world.onHouseMove = (id) => this.houseMove(id);
     world.onDoorSound = (key, open) => this.audio?.door?.(open);
-    world.onZone = (where) => { if (where === 'kel' && world.dusty && !world.vm?.lampOn && !this.lampHinted) { this.lampHinted = true; this.lampHint = this.toast('Dunkel hier – <kbd>F</kbd> Taschenlampe', 'info', 4500); } };
+    world.onZone = (where) => { if (where === 'kel' && world.dusty && !world.vm?.lampOn && !this.lampHinted) { this.lampHinted = true; this.lampHint = this.toast(`Dunkel hier – ${kbd('lamp')} Taschenlampe`, 'info', 4500); } };
     world.onInstalled = (uid) => { this.installing = false; this.flushXp(); if (this.inspUid === uid) this.inspect(uid); if (this.afterSnap) { this.toast(this.afterSnap, 'good', 2600); this.afterSnap = null; } };
     world.onLoose = (t) => { this.w.pickupFx(t); if (!this.g.s.loose?.[t]) return; this.toast(`${PNAME[t]} in der Tasche`, 'good', 2200); if (!this.g.pickUp(t)) return; this.lastPick = { t, at: performance.now() }; setTimeout(() => this.goals(), 1300); this.audio?.install?.(); this.goals(); };
     world.onKeep = (id) => this.pickKeep(id);
@@ -102,7 +104,7 @@ export class UI {
     game.on('papa', () => { this.goals(); this.dock(); if (this.w.aim) this.prompt(this.w.aim); }); // Papas Miner: nächster Schritt
     game.on('xp', (k, n, lv) => this.xpPop(k, n, lv));
     game.on('skill', (id) => { if (!this.g.has('skills')) return; if (this.w.focus || this.installing) { this.lvQ = ['sk', id]; return; } setTimeout(() => skillCard(this, id), 700); this.dock(); }); // „Gelernt …“ (erst, wenn es den Fähigkeiten-Baum gibt)
-    game.on('skillopen', (ids) => { if (!this.g.has('skills')) return; this.toast(`<b>Neu lernbar:</b> ${ids.slice(0, 3).map((id) => esc(SKILL[id]?.name || id)).join(', ')}${ids.length > 3 ? ' …' : ''} – <kbd>T</kbd>`, 'good', 6000); this.dock(); });
+    game.on('skillopen', (ids) => { if (!this.g.has('skills')) return; this.toast(`<b>Neu lernbar:</b> ${ids.slice(0, 3).map((id) => esc(SKILL[id]?.name || id)).join(', ')}${ids.length > 3 ? ' …' : ''} – ${kbd('skills')}`, 'good', 6000); this.dock(); });
     game.on('skills', () => { skRefresh(this); this.dock(); });
     world.onIncome = () => { this.bumpWallet(); this.audio?.tick?.(); };
     world.onLamp = (on) => { if (on) this.lampHint?.remove(); this.toast(on ? 'Taschenlampe an' : 'Taschenlampe aus', 'info', 1500); this.keysHint(); };
@@ -116,18 +118,8 @@ export class UI {
     $('#modal').addEventListener('pointerdown', (e) => { if (e.target.id === 'modal') this.closeModal(); });
     $('#pause-resume').onclick = () => this.resume();
     $('#pause-menu').onclick = () => this.toTitle(); // Pause: zurück zum Titelbild (dort Weiterspielen oder Neues Spiel)
-    // Einstellungen in der Pause: Ton, Mausempfindlichkeit (pro Gerät gemerkt)
-    const pref = (() => { try { return JSON.parse(localStorage.getItem('hashwerk_prefs') || '{}'); } catch (e) { return {}; } })();
-    const savePref = () => { try { localStorage.setItem('hashwerk_prefs', JSON.stringify(pref)); } catch (e) { /* egal */ } };
-    this.pref = pref; this.savePref = savePref; // auch für weitere Schalter (Jahresrückblick)
-    const snd = $('#ps-sound'), sens = $('#ps-sens');
-    const applySnd = () => { const on = pref.sound !== false; snd.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/>${on ? '<path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>' : '<path d="M16 9.5l5 5M21 9.5l-5 5"/>'}</svg><span>${on ? 'Ton an' : 'Ton aus'}</span>`; snd.setAttribute('aria-pressed', on); snd.title = on ? 'Ton ist an – klicken zum Ausschalten' : 'Ton ist aus – klicken zum Einschalten'; snd.classList.toggle('off', !on); this.audio?.setMuted?.(!on); };
-    snd.onclick = () => { pref.sound = pref.sound === false; savePref(); applySnd(); };
-    sens.value = pref.sens || 1; const applySens = () => { this.w.player.sens = 0.0022 * (+sens.value || 1); const v = $('#ps-val'); if (v) v.textContent = (+sens.value).toLocaleString('de-DE', { minimumFractionDigits: 1 }) + '×'; };
-    sens.oninput = () => { pref.sens = +sens.value; savePref(); applySens(); };
-    setTimeout(() => { applySnd(); applySens(); }, 0);
-    // Grafik in der Pause (früher im eigenen „Menü“): Hoch / Mittel / Niedrig
-    if (!$('#ps-gfx')) { const q = h('<div id="ps-gfx" class="ps-q"><span>Grafik</span></div>'); for (const [k, l] of [['auto', 'Auto'], ['high', 'Hoch'], ['medium', 'Mittel'], ['low', 'Niedrig']]) { const b = h(`<button class="ps-qb" data-q="${k}" title="${k === 'auto' ? 'Passt sich deinem Rechner an' : ''}">${l}</button>`); b.onclick = () => { if (this.w.setGfxMode) this.w.setGfxMode(k); else this.w.setQuality(k === 'auto' ? 'high' : k); this.applyGfx(); }; q.append(b); } snd.after(q); }
+    // Ton, Grafik, Maus, Tasten: Einstellungen (settings.js, prefs.js) – hier nur noch der Jahresrückblick-Schalter (pref.year)
+    Object.defineProperty(this, 'pref', { get: () => getPrefs(), configurable: true }); this.savePref = () => savePrefs(); // immer die aktuellen Einstellungen
     $('#clickhint').onclick = () => this.w.requestLock();
     game.on('toast', (t, k, ms) => this.toast(t, k, ms));
     const showMsg = (m) => { if (document.querySelector('#featcards .featcard:not(.lesson)') || document.getElementById('lvup') || this.lvBusy) { setTimeout(() => showMsg(m), 1200); return; } this.toast(`<b>${esc(m.from)}:</b> ${esc(brief(m.text))}`, 'msg', 6000); this.dock(); };
@@ -168,7 +160,7 @@ export class UI {
   // Geldbeträge im Katalog: ab 10 $ ganze Dollar, darunter mit Cent – überall gleich
   money(v) { return v >= 10 ? Math.ceil(v - 1e-9).toLocaleString('de-DE') + ' $' : fmtUSD(v); }
   // „Dir fehlen …“ – und wenn Coins auf der Börse liegen, die das decken: verkaufen (M)
-  missText(p, ex = null) { const g = this.g, gap = p - g.s.cash; if (!(gap > 0)) return ''; ex ??= g.has('market') ? g.exchangeValue() : 0; return `Dir fehlen ${this.money(gap)}${ex >= gap ? ' – verkauf Bitcoin an der Börse (M)' : ''}`; }
+  missText(p, ex = null) { const g = this.g, gap = p - g.s.cash; if (!(gap > 0)) return ''; ex ??= g.has('market') ? g.exchangeValue() : 0; return `Dir fehlen ${this.money(gap)}${ex >= gap ? ` – verkauf Bitcoin an der Börse (${KH('market')})` : ''}`; }
   buildAfford() {
     if (!document.body.classList.contains('show-build')) return;
     const cash = this.g.s.cash, ex = this.g.has('market') ? this.g.exchangeValue() : 0; let again = false;
@@ -205,7 +197,7 @@ export class UI {
   // ---------- Topbar ----------
   speedBar() {
     const el = $('#speed'); el.innerHTML = '';
-    SPEEDS.forEach((s) => { const b = h(`<button title="${s.t}">${s.l}</button>`); b.onclick = () => this.setSpeed(s.v); if (!this.speedOk(s.v)) b.style.display = 'none'; el.append(b); });
+    SPEEDS.forEach((s) => { const b = h(`<button title="${esc(s.t.replace(/\(Taste \d\)/, `(Taste ${K(s.v ? 'sp' + s.v : 'halt')})`))}">${s.l}</button>`); b.onclick = () => this.setSpeed(s.v); if (!this.speedOk(s.v)) b.style.display = 'none'; el.append(b); });
     el.style.display = this.g.s.flags?.tutor && !this.g.has('speed2') ? 'none' : ''; // Anlernen: Tempo-Knöpfe erst mit dem Zeitraffer
     this.setSpeed(this.g.s.speed ?? 0);
   }
@@ -345,7 +337,7 @@ export class UI {
       b.onclick = () => { if (g.s.current !== f.id) this.goSite(f.id); };
       el.append(b);
     }
-    const hb = h(`<div class="site ${this.w.heatMode ? 'on' : ''}" title="Wärmebild ein/aus (Taste I)"><div class="n">Wärmebild</div><div class="m">Taste I</div></div>`);
+    const hb = h(`<div class="site ${this.w.heatMode ? 'on' : ''}" title="Wärmebild ein/aus (Taste ${KH('heat')})"><div class="n">Wärmebild</div><div class="m">Taste ${KH('heat')}</div></div>`);
     hb.onclick = () => this.toggleHeat(); if (g.has('heat')) el.append(hb);
     const br = g.brokenIn(g.s.current);
     if (br.n) { const b = h(`<div class="site fix" title="Alle defekten Geräte hier reparieren"><div class="n">${br.n} defekt</div><div class="m">Alle reparieren: ${fmtUSD(br.c)}</div></div>`); b.onclick = () => { const n = g.repairAll(g.s.current); this.toast(n ? `${n} Gerät(e) repariert` : 'Nicht genug Geld.', n ? 'good' : 'bad'); this.sites(); }; el.append(b); }
@@ -381,7 +373,7 @@ export class UI {
     if (!force && el.childElementCount) return;
     this.lastBuildDay = g.s.day;
     el.innerHTML = '';
-    const head = h(`<div class="bhead"><h2>Shop${pm ? '<span class="bsub">Online-Shop · Lieferung morgen vor deine Wohnungstür</span>' : ''}</h2><button class="modal-x" title="Schließen (B)">✕</button></div>`); head.querySelector('button').onclick = () => this.resume(); const cs = this.capStrip(fac); if (cs) head.lastElementChild.before(cs); el.append(head);
+    const head = h(`<div class="bhead"><h2>Shop${pm ? '<span class="bsub">Online-Shop · Lieferung morgen vor deine Wohnungstür</span>' : ''}</h2><button class="modal-x" title="Schließen (${KH('build')})">✕</button></div>`); head.querySelector('button').onclick = () => this.resume(); const cs = this.capStrip(fac); if (cs) head.lastElementChild.before(cs); el.append(head);
     const cats = h('<div class="cats"></div>');
     const catOk = (c) => (c.id === 'parts' ? (g.has('rigs') || !!g.s.flags.cpuStart) && PARTS.some((p) => g.available(p)) : (c.id !== 'rigs' || g.has('rigs')) && (c.id !== 'cool' || g.has('heat')) && (c.id !== 'decor' || this.decorOk()) && g.shopList(c.id, fac).length > 0); // CPU-Start: Teile (Grafikkarten) gleich von Anfang an; Kühlung mit dem Wärmebild, Deko mit Mamas Nachricht
     if (!CATEGORIES.some((c) => c.id === this.cat && catOk(c))) this.cat = (CATEGORIES.find(catOk) || CATEGORIES[0]).id;
@@ -434,7 +426,7 @@ export class UI {
     if (parcels.length || orders.length) {
       const n = orders.reduce((a, o) => a + o.items.length, 0), bits = [];
       if (orders.length) bits.push(`${n === 1 ? 'Eine Bestellung' : `${n} Bestellungen`} unterwegs – kommt morgen früh`);
-      if (parcels.length) bits.push(`<b>${parcels.length === 1 ? 'Ein Paket' : `${parcels.length} Pakete`} vor deiner Wohnungstür</b> (${esc(parcels.slice(0, 3).map((p) => p.label).join(', '))}${parcels.length > 3 ? ' …' : ''}) – hingehen und <kbd>E</kbd>`);
+      if (parcels.length) bits.push(`<b>${parcels.length === 1 ? 'Ein Paket' : `${parcels.length} Pakete`} vor deiner Wohnungstür</b> (${esc(parcels.slice(0, 3).map((p) => p.label).join(', '))}${parcels.length > 3 ? ' …' : ''}) – hingehen und ${kbd('use')}`);
       const bar = h(`<div class="shipbar">${PKG_SVG}<span>${bits.join('<br/>')}</span></div>`);
       if (parcels.length && !this.w.syncParcels) { const b = h('<button class="btn small primary">Reinholen</button>'); b.onclick = (e) => { e.stopPropagation(); for (const p of [...parcels]) this.pickParcel(p.id); }; bar.append(b); } // Welt ohne Paket-Kartons: hier hereinholen
       list.append(bar);
@@ -494,11 +486,11 @@ export class UI {
     this.flushMsgs?.(hadLv ? 7200 : 3000); this.keysHint();
     if (this.w.mode === 'ui' || this.w.mode === 'play') this.w.setMode('play');
   }
-  applyGfx() { const m = this.w.gfx?.mode || 'auto'; document.querySelectorAll('#ps-gfx .ps-qb').forEach((b) => b.classList.toggle('on', b.dataset.q === m)); }
   // Pause → „Zum Titelbild“: speichern, dann neu laden – dort Weiterspielen oder Neues Spiel
   toTitle() { if (!this.g.save()) { this.toast('Speichern fehlgeschlagen – bleib lieber hier.', 'bad', 3000); return; } location.reload(); }
   pause(on) {
-    if (on) { this.applyGfx(); const yb = $('#ps-year'); if (yb) yb.style.display = this.g.s.flags?.yrSeen || this.pref?.year === false ? '' : 'none'; } // Jahresrückblick-Schalter erst nach dem ersten Rückblick
+    if (!on) this.settings?.pauseOff?.(); // Pause zu: die Einstellungen darüber auch
+    if (on) { const yb = $('#ps-year'); if (yb) yb.style.display = this.g.s.flags?.yrSeen || this.pref?.year === false ? '' : 'none'; } // Jahresrückblick-Schalter erst nach dem ersten Rückblick
     if (on && !this.paused) this.pausedAt = performance.now();
     this.paused = on; this.w.paused = on; // Welt: keine Bewegung/Spieltasten in der Pause
     $('#pause').classList.toggle('hidden', !on);
@@ -532,7 +524,7 @@ export class UI {
     const box = $('#featcards'); box.innerHTML = '';
     const PRIO = ['market', 'build', 'skills', 'speed2', 'autosell', 'rigs', 'company', 'coins', 'cold', 'heat', 'map', 'techs', 'ranking', 'loan', 'buycoins', 'speed3', 'phone'];
     const top = [...q].sort((a, b) => (PRIO.indexOf(a) + 99) % 99 - (PRIO.indexOf(b) + 99) % 99)[0], rest = q.filter((f) => f !== top);
-    const T = FEATURES[top], tk = !T.text && T.key ? ` <kbd class="fc-k">${esc(T.key)}</kbd>` : '';
+    const T = FEATURES[top], tk = !T.text && T.key ? ` <kbd class="fc-k">${esc(keyFor(T.key))}</kbd>` : '';
     const el = h(`<div class="featcard ${T.text ? '' : 'mini'}"><div class="fc-t">Neu</div><div class="fc-h">${esc(T.title)}${tk}</div>${T.text ? `<div class="fc-b">${T.text}</div>` : ''}${rest.length && top !== 'market' ? `<div class="fc-more">Außerdem: ${rest.map((f) => esc(FEATURES[f].title)).join(', ')}</div>` : ''}</div>`);
     box.append(el); clearTimeout(this.featHide);
     this.featHide = setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 600); }, top === 'market' ? 4000 : 5200);
@@ -544,11 +536,11 @@ export class UI {
     const box = $('#featcards'); box.querySelectorAll('.featcard').forEach((x) => x.remove()); clearTimeout(this.featHide);
     const ring = f === 'phone', ph = this.g.has('phone');
     if (!F.text) { // Anlernen: ganz kurz – Titel und Taste (die Erklärung steht, wenn nötig, in den Nachrichten)
-      const title = f === 'bills' ? (ph ? 'Kontoauszug im Handy' : 'Kontoauszug am PC') : F.title, k = f === 'bills' ? (ph ? 'H' : '') : F.key;
+      const title = f === 'bills' ? (ph ? 'Kontoauszug im Handy' : 'Kontoauszug am PC') : F.title, k = f === 'bills' ? (ph ? K('phone') : '') : keyFor(F.key);
       const el = h(`<div class="featcard lesson mini ${ring ? 'ring' : ''}" data-f="${f}"><div class="fc-h">${ring ? PHONE_SVG : ''}<span>${esc(title)}</span>${k ? `<kbd class="fc-k">${esc(k)}</kbd>` : ''}</div></div>`);
       box.append(el); this.audio?.message?.(); this.speedBar(); this.dock(); this.keysHint(); this.sites(); this.goals(); return;
     }
-    const key = F.key && !F.pseudo ? `<kbd class="fc-k">${F.key}</kbd>` : '';
+    const key = F.key && !F.pseudo ? `<kbd class="fc-k">${esc(keyFor(F.key))}</kbd>` : '';
     const el = h(`<div class="featcard lesson ${ring ? 'ring' : ''}" data-f="${f}"><div class="fc-t">${ring ? `${PHONE_SVG}Bzzz … bzzz …` : F.pseudo ? 'Nächster Schritt' : 'Neu'}</div><div class="fc-h">${key}${esc(F.title)}</div><div class="fc-b">${F.text}</div></div>`);
     box.append(el); this.audio?.message();
     this.speedBar(); this.dock(); this.keysHint(); this.sites(); this.goals();
@@ -568,10 +560,16 @@ export class UI {
   keysHint() {
     const g = this.g, el = $('#keys'); if (!el) return;
     const unread = unreadChats(g.s);
-    const ks = [['build', 'B', 'Shop'], ['market', 'M', 'Börse']].filter(([f]) => g.has(f));
-    if (g.has('phone')) ks.unshift(['phone', 'H', unread ? `Handy (${unread})` : 'Handy']);
-    if (this.w.facId === 'keller' && this.w.dusty) ks.unshift(['lamp', 'F', this.w.vm?.lampOn ? 'Lampe aus' : 'Taschenlampe']);
-    el.innerHTML = ks.map(([, k, l]) => `<span><kbd>${k}</kbd>${l}</span>`).join('') + '<span><kbd>Esc</kbd>Menü</span>';
+    const ks = [['build', 'Shop'], ['market', 'Börse']].filter(([f]) => g.has(f));
+    if (g.has('phone')) ks.unshift(['phone', unread ? `Handy (${unread})` : 'Handy']);
+    if (this.w.facId === 'keller' && this.w.dusty) ks.unshift(['lamp', this.w.vm?.lampOn ? 'Lampe aus' : 'Taschenlampe']);
+    el.innerHTML = ks.map(([a, l]) => `<span>${kbd(a)}${l}</span>`).join('') + '<span><kbd>Esc</kbd>Menü</span>';
+  }
+  // Tastenbelegung geändert (Einstellungen): alles mit Tasten-Hinweis neu zeichnen
+  refreshKeys() {
+    const om = document.querySelector('#objmark kbd'); if (om) om.textContent = K('use');
+    [...($('#speed')?.children || [])].forEach((b, i) => { const sp = SPEEDS[i]; if (sp) b.title = sp.t.replace(/\(Taste \d\)/, `(Taste ${K(sp.v ? 'sp' + sp.v : 'halt')})`); });
+    this.keysHint(); this.dock(); this.sites(); this.goals(); this.prompt(this.w.aim);
   }
   // Shop (B): Reiter im Browser „Shop | Börse“ (market.js) – als Fenster oder am PC-Monitor; der Katalog selbst bleibt build()
   toggleBuild() { (this.mk ||= new Market(this)).openTab('shop'); }
@@ -581,19 +579,19 @@ export class UI {
     if (aim.keep || aim.prop?.action === 'talk') { el.innerHTML = this.promptLife(aim); el.classList.remove('hidden'); return; }
     let html = '';
     if (aim.letter) {
-      html = aim.letter === 'papa' ? '<kbd>E</kbd>Umschlag öffnen<span> · von Papa</span>' : '<kbd>E</kbd>Brief lesen<span> · von Deniz</span>';
+      html = aim.letter === 'papa' ? `${kbd('use')}Umschlag öffnen<span> · von Papa</span>` : `${kbd('use')}Brief lesen<span> · von Deniz</span>`;
     } else if (aim.loose) {
-      html = `<kbd>E</kbd>${PNAME[aim.loose]} aufheben`;
+      html = `${kbd('use')}${PNAME[aim.loose]} aufheben`;
     } else if (aim.parcel != null) {
-      html = `<kbd>E</kbd>Paket aufheben${aim.label ? `<span> · ${esc(aim.label)}</span>` : ''}`;
+      html = `${kbd('use')}Paket aufheben${aim.label ? `<span> · ${esc(aim.label)}</span>` : ''}`;
     } else if (aim.door) {
       const k = aim.door.kind;
-      html = k === 'kellertuer' ? (this.g.canUnlock('keller') ? `<kbd>E</kbd>${esc(FACILITY.keller.short)} freischalten` : '<kbd>E</kbd>Kellertür<span> · abgeschlossen</span>') : k === 'haustuer' ? '<kbd>E</kbd>Haustür<span> · raus in die Stadt</span>' : `<kbd>E</kbd>${esc(aim.door.label)}`;
+      html = k === 'kellertuer' ? (this.g.canUnlock('keller') ? `${kbd('use')}${esc(FACILITY.keller.short)} freischalten` : `${kbd('use')}Kellertür<span> · abgeschlossen</span>`) : k === 'haustuer' ? `${kbd('use')}Haustür<span> · raus in die Stadt</span>` : `${kbd('use')}${esc(aim.door.label)}`;
     } else if (aim.prop && (aim.prop.action === 'papaRig' || aim.prop.action === 'crate')) {
       html = papaPrompt(this, aim.prop);
     } else if (aim.prop) {
       const mon = this.monitorUse(aim.prop), un = mon && aim.prop.label === 'PC-Monitor' ? unreadChats(this.g.s) : 0; // PC-Monitor: Shop, Börse, Nachrichten
-      html = un ? `<kbd>E</kbd>An den PC<span> · ${un === 1 ? 'eine neue Nachricht' : `${un} neue Nachrichten`}</span>` : mon === 'msgs' ? '<kbd>E</kbd>Nachrichten' : mon ? `<kbd>E</kbd>${mon === 'both' ? 'Shop · Börse' : mon === 'shop' ? 'Online-Shop' : esc(aim.prop.hint)}` : aim.prop.action === 'market' ? `Monitor · ${this.g.s.flags.miningStarted ? 'Miner läuft' : 'aus'}` : `<kbd>E</kbd>${esc(aim.prop.hint)}`;
+      html = un ? `${kbd('use')}An den PC<span> · ${un === 1 ? 'eine neue Nachricht' : `${un} neue Nachrichten`}</span>` : mon === 'msgs' ? `${kbd('use')}Nachrichten` : mon ? `${kbd('use')}${mon === 'both' ? 'Shop · Börse' : mon === 'shop' ? 'Online-Shop' : esc(aim.prop.hint)}` : aim.prop.action === 'market' ? `Monitor · ${this.g.s.flags.miningStarted ? 'Miner läuft' : 'aus'}` : `${kbd('use')}${esc(aim.prop.hint)}`;
     } else {
       const o = this.g.findObj(aim.uid); if (!o) { el.classList.add('hidden'); return; }
       const def = PLACEABLE[o.type], sm = this.g.summary[this.g.facOf(aim.uid)], a = sm?.per.get(aim.uid);
@@ -602,7 +600,7 @@ export class UI {
       else if (def.kind === 'cooling') line = `kühlt ${fmtWatt(def.cool)}`;
       const st = a?.psuOff && a.status === 'ok' ? `Netzteil zu schwach – ${a.psuOff === 1 ? '1 Karte' : a.psuOff + ' Karten'} aus` : { broken: 'Defekt – reparieren', partial: 'Teilweise defekt', psu: 'Netzteil zu schwach', incomplete: 'Teile fehlen – bestücken', noos: 'Kein Betriebssystem – installieren', nobit: 'Bitstream fehlt – laden', empty: '➕ Leer – Geräte einsetzen', idle: { heat: 'pausiert (zu heiß)', event: 'gedrosselt (Ereignis)', loss: 'pausiert (kaum rentabel)' }[a?.limit] || 'pausiert (unrentabel)', full: 'pausiert (Anschluss voll)', off: '⏻ aus' }[a?.status];
       const build = o.type === 'tower' && o.parts && !this.g.s.flags.miningStarted, first = this.g.isFirstPc(o), need = first ? this.g.firstNeed().length : 4, miss = build ? (first ? this.g.firstMissing(o) : this.g.pcMissing(o)).length : 0;
-      html = build ? `<kbd>E</kbd>${miss ? 'Teile einbauen' : 'PC einschalten'}<div class="st">${need - miss} von ${need} Teilen eingebaut</div>` : `<kbd>E</kbd>${esc(o.type === 'tower' ? (this.g.facObjects('kinder').find((x) => x.type === 'tower')?.uid === o.uid ? 'Dein PC' : 'Mining-PC') : (def.short || def.name.replace(/[-‑]Gehäuse|\s*\(.*\)/g, '')))}${st ? `<div class="st">${st}</div>` : line ? `<div class="ln">${line}</div>` : ''}`;
+      html = build ? `${kbd('use')}${miss ? 'Teile einbauen' : 'PC einschalten'}<div class="st">${need - miss} von ${need} Teilen eingebaut</div>` : `${kbd('use')}${esc(o.type === 'tower' ? (this.g.facObjects('kinder').find((x) => x.type === 'tower')?.uid === o.uid ? 'Dein PC' : 'Mining-PC') : (def.short || def.name.replace(/[-‑]Gehäuse|\s*\(.*\)/g, '')))}${st ? `<div class="st">${st}</div>` : line ? `<div class="ln">${line}</div>` : ''}`;
     }
     el.innerHTML = html; el.classList.remove('hidden');
   }
@@ -619,7 +617,7 @@ export class UI {
       const s = this.g.s;
       if (s.feat && !s.flags.miningStarted) { this.toast('Erst den PC bauen.', 'info', 2500); return; }
       const hr = (this.w.visFrac ?? s.frac) * 24;
-      if (hr >= 5 && hr < 20) { this.toast(this.speedMax() > 1 ? 'Noch nicht müde – ab 20 Uhr. <kbd>Leertaste</kbd> spult vor.' : 'Noch nicht müde – ab 20 Uhr.', 'info', 2600); return; }
+      if (hr >= 5 && hr < 20) { this.toast(this.speedMax() > 1 ? `Noch nicht müde – ab 20 Uhr. ${kbd('speed')} spult vor.` : 'Noch nicht müde – ab 20 Uhr.', 'info', 2600); return; }
       this.sleepScene(hr >= 20); // nach Mitternacht: bis 7 Uhr am selben Tag
     }
   }
@@ -988,8 +986,8 @@ export class UI {
     const step = this.goalStep(go);
     const gtext = step || ((go.id === 'sell' && !g.has('market') ? 'PC schürfen lassen' : go.id === 'pcbuild' && this.w.facId === 'keller' ? 'Zurück in die Wohnung' : go.text) + (go.skip && ch.unlock ? ` → ${FACILITY[ch.unlock].short} sofort` : '')); // kurz: höchstens ein paar Wörter
     const row = h(`<div class="goal ${enter ? 'enter' : ''}" ${go.orDate && !go.skip ? `title="Sonst ab ${this.monthYear(g.orDate(ch, go))} auch so"` : ''}><div class="ck"></div><div>${bag ? `<div class="goal-line">${esc(gtext)}${step ? '' : prog}</div>${bag}` : `${esc(gtext)}${step ? '' : prog}`}</div></div>`);
-    if (go.action) { const b = h(`<button class="btn small primary"><kbd>G</kbd>${esc(paid > 0 && left > 0 ? `Rest überweisen · ${fmtUSD(left)}` : go.action.label)}</button>`); b.disabled = !g.canPayGoal(go); b.onclick = () => { if (g.goalAction(go)) { this.toast('✔ Erledigt!', 'good'); this.goals(); } }; row.lastElementChild.append(b); }
-    if (go.open === 'company' && g.has('company')) { const cb = h(`<button class="btn small primary"><kbd>C</kbd>Ausbauten</button>`); cb.onclick = () => this.company(); row.lastElementChild.append(cb); } // z. B. Opas Nachtstromzähler
+    if (go.action) { const b = h(`<button class="btn small primary">${kbd('goal')}${esc(paid > 0 && left > 0 ? `Rest überweisen · ${fmtUSD(left)}` : go.action.label)}</button>`); b.disabled = !g.canPayGoal(go); b.onclick = () => { if (g.goalAction(go)) { this.toast('✔ Erledigt!', 'good'); this.goals(); } }; row.lastElementChild.append(b); }
+    if (go.open === 'company' && g.has('company')) { const cb = h(`<button class="btn small primary">${kbd('company')}Ausbauten</button>`); cb.onclick = () => this.company(); row.lastElementChild.append(cb); } // z. B. Opas Nachtstromzähler
     el.append(row); fin();
   }
   // Grund schon da? Ziele erscheinen erst nach ihrer Nachricht bzw. Freischaltung; „Fülle …“ erst ab etwa 70 %
@@ -1036,20 +1034,20 @@ export class UI {
     const g = this.g, s = g.s; let t = '';
     if (s.chapter === 0) {
       const btc = s.wallet.BTC.ex;
-      if (!s.flags.miningStarted) t = this.inspUid ? 'Klick auf <b>Mining starten</b>.' : 'Dein PC steht neben dem Schreibtischstuhl. Geh hin, schau ihn an und drück <kbd>E</kbd>.';
-      else if (!g.has('market')) t = this.inspUid ? 'Dein PC schürft jetzt Bitcoin. Schließ das Fenster mit <kbd>E</kbd> und lass ihn ein paar Tage arbeiten.' : 'Dein PC schürft Bitcoin. Lass ihn ein paar Tage arbeiten, bis sich etwas angesammelt hat …';
-      else if (!(s.stats.sold > 0)) t = this.mk?.open ? 'Klick auf <b>Verkaufen</b>, dann <b>Alles</b> und bestätigen.' : `Du hast ${fmtCoin(btc)} BTC. Geh zum <b>PC-Monitor</b> auf dem Schreibtisch und drück <kbd>E</kbd>, um sie zu verkaufen.`;
-      else if (!s.flags.boughtGpu) t = this.inspUid ? 'Klick auf den <b>freien GPU-Slot</b> und kauf eine zweite Grafikkarte.' : 'Mehr Grafikkarten = mehr Bitcoin. Schau deinen PC an (<kbd>E</kbd>) und bau eine zweite Karte ein.';
+      if (!s.flags.miningStarted) t = this.inspUid ? 'Klick auf <b>Mining starten</b>.' : `Dein PC steht neben dem Schreibtischstuhl. Geh hin, schau ihn an und drück ${kbd('use')}.`;
+      else if (!g.has('market')) t = this.inspUid ? `Dein PC schürft jetzt Bitcoin. Schließ das Fenster mit ${kbd('use')} und lass ihn ein paar Tage arbeiten.` : 'Dein PC schürft Bitcoin. Lass ihn ein paar Tage arbeiten, bis sich etwas angesammelt hat …';
+      else if (!(s.stats.sold > 0)) t = this.mk?.open ? 'Klick auf <b>Verkaufen</b>, dann <b>Alles</b> und bestätigen.' : `Du hast ${fmtCoin(btc)} BTC. Geh zum <b>PC-Monitor</b> auf dem Schreibtisch und drück ${kbd('use')}, um sie zu verkaufen.`;
+      else if (!s.flags.boughtGpu) t = this.inspUid ? 'Klick auf den <b>freien GPU-Slot</b> und kauf eine zweite Grafikkarte.' : `Mehr Grafikkarten = mehr Bitcoin. Schau deinen PC an (${kbd('use')}) und bau eine zweite Karte ein.`;
       else if (!s.goals.earn) t = 'Laufen lassen, am Monitor verkaufen.';
     }
     if (!t) {
       const ch = CHAPTERS[s.chapter], go = ch && ch.goals.find((x) => !s.goals[x.id] && x.action);
       const rest = ch && ch.goals.filter((x) => !s.goals[x.id] && !x.action).length;
-      if (go && !rest) t = s.cash >= go.action.cost ? `Drück <b>G</b>: ${esc(go.action.label)}.` : `Spare für „${esc(go.action.label)}“ – ${fmtUSD(s.cash)} / ${fmtUSD(go.action.cost)}.`;
+      if (go && !rest) t = s.cash >= go.action.cost ? `Drück <b>${KH('goal')}</b>: ${esc(go.action.label)}.` : `Spare für „${esc(go.action.label)}“ – ${fmtUSD(s.cash)} / ${fmtUSD(go.action.cost)}.`;
     }
-    if (!t && FACILITIES.some((f) => g.canUnlock(f.id))) t = `Ein neuer Standort ist frei: Geh zur <b>${this.w.hoff ? 'Haustür' : 'Tür'}</b>, schau sie an und drück <b>E</b>.`;
-    if (!t && s.chapter === 0 && s.goals.gpu && !s.goals.rig2) t = g.readyOk('tower') ? 'Drück <b>B</b> → Rigs → Tower: <b>Fertig bestückt</b> kaufen und hinstellen – oder als Bausatz selbst bauen.' : 'Drück <b>B</b> → Rigs → Tower: <b>Als Bausatz</b> kaufen und hinstellen. Dann anschauen, <b>E</b> und die Teile aus dem Lager einbauen.';
-    if (!t && s.chapter === 1 && !s.goals.openrig) t = 'Drück <b>B</b> → Rigs: Stell eine <b>Milchkiste</b> auf. Dann anschauen, <b>E</b> und bestücken (Mainboard, CPU, Netzteil, GPUs).';
+    if (!t && FACILITIES.some((f) => g.canUnlock(f.id))) t = `Ein neuer Standort ist frei: Geh zur <b>${this.w.hoff ? 'Haustür' : 'Tür'}</b>, schau sie an und drück <b>${KH('use')}</b>.`;
+    if (!t && s.chapter === 0 && s.goals.gpu && !s.goals.rig2) t = g.readyOk('tower') ? `Drück <b>${KH('build')}</b> → Rigs → Tower: <b>Fertig bestückt</b> kaufen und hinstellen – oder als Bausatz selbst bauen.` : `Drück <b>${KH('build')}</b> → Rigs → Tower: <b>Als Bausatz</b> kaufen und hinstellen. Dann anschauen, <b>${KH('use')}</b> und die Teile aus dem Lager einbauen.`;
+    if (!t && s.chapter === 1 && !s.goals.openrig) t = `Drück <b>${KH('build')}</b> → Rigs: Stell eine <b>Milchkiste</b> auf. Dann anschauen, <b>${KH('use')}</b> und bestücken (Mainboard, CPU, Netzteil, GPUs).`;
     if (!t) { const ch = CHAPTERS[s.chapter], go = ch && ch.goals.find((x) => !s.goals[x.id]); if (go) t = `Nächstes Ziel: ${esc(go.text)}`; }
     if (el.dataset.t !== t) { el.dataset.t = t; el.innerHTML = t; el.classList.toggle('hidden', !t); if (t) { el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); } }
   }
@@ -1079,7 +1077,7 @@ export class UI {
     const need = { B: 'build', M: 'market', H: 'phone', C: 'company', T: 'skills', L: 'ranking', K: 'map' };
     const act = document.body.classList.contains('show-build') ? 'B' : this.w.empire ? 'K' : ({ market: 'M', phone: 'H', intro: 'H', company: 'C', skills: 'T', ranking: 'L', menu: 'ESC' })[this.modalKind] || (this.paused ? 'ESC' : null);
     const les = g.lesson(), lf = les && (les === 'bills' ? 'phone' : FEATURES[les]?.by || les); // Anlernen: der Knopf der laufenden Lektion leuchtet (Monatsabrechnung: das Handy)
-    for (const [ic, l, key, fn, b] of btns.filter((x) => !need[x[2]] || g.has(need[x[2]]))) { const e = h(`<button class="${act === key ? 'on' : ''} ${lf && need[key] === lf ? 'learn' : ''}" title="${l} (${key})">${ic}${l}<span class="key">${key}</span>${b ? `<span class="bdg">${b}</span>` : ''}</button>`); e.onclick = () => { if (this.stickyModal()) return; fn(); }; el.append(e); }
+    for (const [ic, l, key, fn, b] of btns.filter((x) => !need[x[2]] || g.has(need[x[2]]))) { const kl = need[key] ? KH(need[key]) : key; const e = h(`<button class="${act === key ? 'on' : ''} ${lf && need[key] === lf ? 'learn' : ''}" title="${l} (${kl})">${ic}${l}<span class="key">${kl}</span>${b ? `<span class="bdg">${b}</span>` : ''}</button>`); e.onclick = () => { if (this.stickyModal()) return; fn(); }; el.append(e); }
   }
   toggleMap() {
     this.g.learned?.('map');
@@ -1106,10 +1104,10 @@ export class UI {
 
   // ---------- Lebendige Welt: Gespräche & Fundstücke ----------
   promptLife(aim) {
-    if (aim.keep) { const k = KEEPSAKE[aim.keep]; return `<kbd>E</kbd>${esc(k?.label || 'Etwas')} aufheben<div class="st">Sieht nach einer Erinnerung aus</div>`; }
+    if (aim.keep) { const k = KEEPSAKE[aim.keep]; return `${kbd('use')}${esc(k?.label || 'Etwas')} aufheben<div class="st">Sieht nach einer Erinnerung aus</div>`; }
     const s = this.g.s, who = talkWho(s, aim.prop.who), p = PEOPLE[who];
     const today = s.talk?.last?.[who] === s.day;
-    return `<kbd>E</kbd>Mit ${esc(p.as)} reden<div class="st">${esc(p.role(s))}${today ? ' · heute schon gesprochen' : ''}</div>`;
+    return `${kbd('use')}Mit ${esc(p.as)} reden<div class="st">${esc(p.role(s))}${today ? ' · heute schon gesprochen' : ''}</div>`;
   }
   talk(who0) {
     if (who0 === 'papa' && papaTalk(this)) return; // Papas Miner: Kurssturz (halten oder verkaufen), Abschluss
@@ -1142,7 +1140,7 @@ export class UI {
   letterCard(who) {
     const g = this.g, L = LETTERS[who]; if (!L || !g.s.letters || g.s.letters[who]) return;
     const lines = typeof L.lines === 'function' ? L.lines(this.money(g.s.papaLoan?.total || g.s.cash)) : L.lines;
-    const n = h(`<div class="story letter lt-${who}"><div class="lt-paper"><div class="lt-h">${esc(L.title)}</div>${lines.map((l) => `<p>${esc(l)}</p>`).join('')}</div><div class="row" style="justify-content:flex-end"><button class="btn primary">${who === 'papa' ? 'Einstecken' : 'Weglegen'} <kbd>E</kbd></button></div></div>`);
+    const n = h(`<div class="story letter lt-${who}"><div class="lt-paper"><div class="lt-h">${esc(L.title)}</div>${lines.map((l) => `<p>${esc(l)}</p>`).join('')}</div><div class="row" style="justify-content:flex-end"><button class="btn primary">${who === 'papa' ? 'Einstecken' : 'Weglegen'} ${kbd('use')}</button></div></div>`);
     n.querySelector('button').onclick = () => this.closeModal();
     this.audio?.click?.(); this.letterAt = performance.now();
     this.openModal(n, 'narrow', 'letter');
@@ -1341,7 +1339,7 @@ export class UI {
   // Das Handy klingelt (neue Nachricht außerhalb einer Lektion): Karte bis zum Öffnen des Handys
   ringCard(from) {
     const box = $('#featcards'); if (!box) return; box.querySelector('.featcard.ring2')?.remove();
-    const el = h(`<div class="featcard ring ring2"><div class="fc-t">${PHONE_SVG}Bzzz … bzzz …</div><div class="fc-h"><kbd class="fc-k">H</kbd>${esc(from)} schreibt dir</div><div class="fc-b">Neue Nachricht! Drück <kbd>H</kbd> für dein Handy.</div></div>`);
+    const el = h(`<div class="featcard ring ring2"><div class="fc-t">${PHONE_SVG}Bzzz … bzzz …</div><div class="fc-h">${kbd('phone', 'fc-k')}${esc(from)} schreibt dir</div><div class="fc-b">Neue Nachricht! Drück ${kbd('phone')} für dein Handy.</div></div>`);
     box.prepend(el); this.audio?.message?.(); this.keysHint(); this.dock();
     let gone = false; const off = () => { if (gone) return; gone = true; el.classList.add('out'); setTimeout(() => el.remove(), 600); }; this.ringOff = off; setTimeout(off, 45000); // bleibt, bis das Handy aufgeht (spätestens 45 Sekunden)
   }
@@ -1592,9 +1590,9 @@ export class UI {
     g.on('year', (y) => { if (this.pref?.year === false) return; (this.yearQ ||= []).push(y); this.tryYear(); });
     g.on('achievement', (id) => { if (ACH[id]) { this.achNew = (this.achNew || 0) + 1; this.dock(); } });
     setInterval(() => { if (this.yearQ?.length) this.tryYear(); }, 1000);
-    const snd = $('#ps-sound');
-    if (snd && !$('#ps-year')) {
-      const b = h('<button id="ps-year" class="ps-t"></button>'); snd.after(b);
+    const box = $('#pause .pause-set');
+    if (box && !$('#ps-year')) {
+      const b = h('<button id="ps-year" class="ps-t"></button>'); box.append(b);
       const apply = () => { const on = this.pref?.year !== false; b.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5.5" width="16" height="14.5" rx="2.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>${on ? '<path d="M9 14.5l2 2 4-4"/>' : '<path d="M10 13l4 4M14 13l-4 4"/>'}</svg><span>Jahresrückblick ${on ? 'an' : 'aus'}</span>`; b.classList.toggle('off', !on); b.setAttribute('aria-pressed', on); b.title = on ? 'Am 1. Januar erscheint ein Rückblick aufs alte Jahr – klicken zum Ausschalten' : 'Kein Jahresrückblick – klicken zum Einschalten'; };
       b.onclick = () => { if (!this.pref) return; this.pref.year = this.pref.year === false; this.savePref?.(); apply(); };
       apply();
@@ -1793,7 +1791,7 @@ export class UI {
     for (const gp of g.partList('gpu')) { const ps = psus.find((x) => x.cap * np >= 25 + mb.watt + cpu.watt + gp.watt); if (!ps) continue; const st = g.buildStats({ type: it.id, mobo: mb.id, cpu: cpu.id, psu: ps.id, gpu: gp.id, n: 1 }, fac, ready, g.s.day, el); if (st.ok && st.net > 0 && (!best || st.price < best.price)) best = st; }
     return best;
   }
-  saveText(price, ex = null) { const g = this.g, gap = price - g.s.cash; if (!(gap > 0)) return ''; ex ??= g.has('market') ? g.exchangeValue() : 0; return `Spar noch ${this.money(gap)}${ex >= gap ? ' – oder verkauf Bitcoin an der Börse (M)' : ''}`; }
+  saveText(price, ex = null) { const g = this.g, gap = price - g.s.cash; if (!(gap > 0)) return ''; ex ??= g.has('market') ? g.exchangeValue() : 0; return `Spar noch ${this.money(gap)}${ex >= gap ? ` – oder verkauf Bitcoin an der Börse (${KH('market')})` : ''}`; }
   // Katalog: offene Bausätze am Standort in einem Rutsch fertig schrauben
   kitsBar(fac) {
     const g = this.g, k = g.kitsOpen(fac); if (!k.length) return null; const n = k.reduce((a, o) => a + g.kitPlan(o).length, 0);
@@ -1804,7 +1802,7 @@ export class UI {
   // Gesperrt: wer liefert fertig montiert, und wie lernt man ihn kennen? (abgelehnt: gleich anrufen)
   lockText(cid) {
     const g = this.g, c = CONTACT[cid], st = g.contactState(cid);
-    if (st?.met) return { short: `Fertig bestückt liefert dir ${esc(c.name)}, sobald du ihn anrufst.`, long: `${c.name} (${c.biz}): ${c.offer}.${g.has('phone') ? ' Auch im Handy (H) unter Kontakte.' : ''}`, call: true };
+    if (st?.met) return { short: `Fertig bestückt liefert dir ${esc(c.name)}, sobald du ihn anrufst.`, long: `${c.name} (${c.biz}): ${c.offer}.${g.has('phone') ? ` Auch im Handy (${K('phone')}) unter Kontakte.` : ''}`, call: true };
     return { short: esc(c.soon), long: c.meet(g.s, g, fmtDate), call: false };
   }
   lockLine(cid) {
@@ -2090,7 +2088,7 @@ export class UI {
   }
   nextSiteStep(id) {
     const g = this.g, s = g.s, f = FACILITY[id], nx = FACILITIES.find((x) => x.tier === f.tier + 1); if (!nx) return '';
-    if (s.unlocked.includes(nx.id)) return `Platz gibt es im <b>${esc(nx.short)}</b> – Karte <kbd>K</kbd> oder durch die Tür.`;
+    if (s.unlocked.includes(nx.id)) return `Platz gibt es im <b>${esc(nx.short)}</b> – Karte ${kbd('map')} oder durch die Tür.`;
     if (g.canUnlock(nx.id)) return `<b>${esc(nx.short)} freischalten:</b> geh durch die Tür${nx.cost ? ` (${fmtUSD(nx.cost)})` : ''}.`;
     const ci = CHAPTERS.findIndex((x) => x.unlock === nx.id), ch = CHAPTERS[ci]; if (!ch || s.chapter > ci) return '';
     const open = ch.goals.filter((x) => !s.goals[x.id] && !x.orDate);

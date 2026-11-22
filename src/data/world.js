@@ -1,5 +1,6 @@
 // Standorte, Kapitel, Story-Nachrichten und Nachrichten-Ticker
 import { toDay } from './history.js';
+import { keyLabel as K } from '../keys.js'; // Tasten in Nachrichten nach der Belegung (Einstellungen)
 
 export const FACILITIES = [
   {
@@ -236,7 +237,7 @@ export const MESSAGES = [
   // ---------- Deniz-Tipps (ab Kapitel 2; tip: true – fallen z. B. bei „keine Tipps“ weg) ----------
   { id: 't_gpuwait', tip: true, cond: (s) => s.chapter === 1 && s.day < toDay('2013-01-20') && (s.stats.pauseRun || 0) >= 30, from: 'Deniz', text: 'GPUs lohnen gerade nicht – Bitcoin halten, 2013 kommen ASICs. Spul ruhig vor (Tempo 4).' }, // ≥ 75 % der Rigs seit 30 Tagen unrentabel pausiert (Game.progressDay)
   { id: 't_idle', tip: true, cond: (s) => s.chapter >= 1 && s.stats.idle > 0, from: 'Deniz', text: 'Eins deiner Geräte pausiert – der Strom kostet mehr, als es schürft. Stell es auf einen anderen Coin oder verkauf es, solange es noch was wert ist.' },
-  { id: 't_hot', tip: true, cond: (s, h) => s.chapter >= 1 && h.maxTemp() > 34, from: 'Deniz', text: 'Über 34 Grad bei dir! Ab 38 drosseln die Karten, und heiße Hardware geht schneller kaputt. Im Katalog (B) gibt es Lüfter.' },
+  { id: 't_hot', tip: true, cond: (s, h) => s.chapter >= 1 && h.maxTemp() > 34, from: 'Deniz', get text() { return `Über 34 Grad bei dir! Ab 38 drosseln die Karten, und heiße Hardware geht schneller kaputt. Im Katalog (${K('build')}) gibt es Lüfter.`; } },
   { id: 't_trip', tip: true, cond: (s) => s.chapter >= 1 && !!s.flags.everTripped, from: 'Deniz', text: 'Unter C siehst du, wie viel dein Anschluss schafft. Erst den Strom ausbauen, dann neue Geräte hinstellen.' },
   { id: 't_halv12', tip: true, date: '2012-10-29', from: 'Deniz', text: 'In einem Monat ist Halving: nur noch halb so viele Bitcoin pro Block. Alte, stromhungrige Karten rechnen sich danach kaum noch.' },
   { id: 't_net14', tip: true, date: '2014-06-10', from: 'Deniz', text: 'Die Netz-Hashrate verdoppelt sich gerade alle zwei Monate. Ein Miner, der sich heute rechnerisch in 90 Tagen bezahlt, schafft das so nie. Lieber weniger kaufen – und nur die sparsamsten.' },
@@ -341,23 +342,23 @@ export const FEATURES = {
   pcbuild: { title: 'PC zusammenbauen', key: 'E', pseudo: true, text: '', stale: (s) => !!s.flags.miningStarted },
   phone: { title: 'Handy', key: 'H', text: '' }, // erst gekauft (Shop, Paket) – alte Spielstände und Spiele ohne Anlernen haben es von Anfang an
   bills: { title: 'Kontoauszug', key: '', pseudo: true, by: 'konto', text: '' }, // am PC → Bank (mit Handy: Konto)
-  market: { title: 'Börse', key: 'M', by: 'market', text: '', from: 'Deniz', msg: 'Was die Coins wert sind, siehst du am Monitor unter Börse. Oder drück M.' },
-  build: { title: 'Shop', key: 'B', text: '', from: 'Deniz', msg: (s, g) => `Dein Prozessor schafft gerade mal ${centsDay(s, g)} am Tag. Mit einer Grafikkarte locker vierzigmal so viel! Gibt’s im Shop, am Monitor oder mit B.` },
+  market: { title: 'Börse', key: 'M', by: 'market', text: '', from: 'Deniz', msg: () => `Was die Coins wert sind, siehst du am Monitor unter Börse. Oder drück ${K('market')}.` },
+  build: { title: 'Shop', key: 'B', text: '', from: 'Deniz', msg: (s, g) => `Dein Prozessor schafft gerade mal ${centsDay(s, g)} am Tag. Mit einer Grafikkarte locker vierzigmal so viel! Gibt’s im Shop, am Monitor oder mit ${K('build')}.` },
   sleep: { title: 'Schlafen', key: 'E', pseudo: true, text: '', from: 'Deniz', msg: 'Bestellt? Dann ab 20 Uhr ins Bett. Morgen früh steht das Paket vor deiner Tür.', stale: (s) => !s.orders?.length || !!s.flags.boughtGpu },
   parcel: { title: 'Paket abholen', key: 'E', pseudo: true, text: '', stale: (s) => !s.parcels?.length },
-  install: { title: 'Karte einbauen', key: 'E', pseudo: true, text: '', from: 'Deniz', msg: 'Karte da? Rein damit: PC anschauen, E, einbauen. Nicht an die goldenen Kontakte fassen!', stale: (s) => !!s.flags.boughtGpu },
-  skills: { title: 'Fähigkeiten', key: 'T', by: 'skills', text: '', from: 'Opa Heinz', msg: 'Selbst eingebaut? Sauber, Junge. Drück mal T.' },
-  speed2: { title: 'Tempo', key: 'Leertaste', by: 'speed2', text: '', from: 'Deniz', msg: 'Läuft? Leertaste drücken, dann vergeht die Zeit schneller.' },
-  heat: { title: 'Wärmebild', key: 'I', by: 'heat', text: '', from: 'Deniz', msg: 'Bei dir wird’s warm! Mit I siehst du, wo die Hitze steht. Lüfter gibt’s im Shop.' },
+  install: { title: 'Karte einbauen', key: 'E', pseudo: true, text: '', from: 'Deniz', msg: () => `Karte da? Rein damit: PC anschauen, ${K('use')}, einbauen. Nicht an die goldenen Kontakte fassen!`, stale: (s) => !!s.flags.boughtGpu },
+  skills: { title: 'Fähigkeiten', key: 'T', by: 'skills', text: '', from: 'Opa Heinz', msg: () => `Selbst eingebaut? Sauber, Junge. Drück mal ${K('skills')}.` },
+  speed2: { title: 'Tempo', key: 'Leertaste', by: 'speed2', text: '', from: 'Deniz', msg: () => `Läuft? ${K('speed')} drücken, dann vergeht die Zeit schneller.` },
+  heat: { title: 'Wärmebild', key: 'I', by: 'heat', text: '', from: 'Deniz', msg: () => `Bei dir wird’s warm! Mit ${K('heat')} siehst du, wo die Hitze steht. Lüfter gibt’s im Shop.` },
   rigs: { title: 'Mehr PCs', key: 'B', by: 'build', text: '', from: 'Deniz', msg: 'Ein PC ist gut, zwei sind besser. Im Shop unter „Rigs“ gibt’s Gehäuse als Bausatz.' },
   autosell: { title: 'Auto-Verkauf', key: 'M', by: 'market', text: '', from: 'Deniz', msg: 'Keine Lust, jeden Tag selbst zu verkaufen? An der Börse geht jetzt Auto-Verkauf.' },
-  speed3: { title: 'Vorspulen', key: 'Leertaste', by: 'speed3', text: '', from: 'Deniz', msg: 'Du wartest eh nur noch? Leertaste, dann rauschen die Tage vorbei.' },
-  company: { title: 'Meine Bude', key: 'C', by: 'company', text: '', from: 'Opa Heinz', msg: 'Noch ein paar Rechner, und die Sicherung fliegt. Drück C, dann leg ich dir einen eigenen Stromkreis.' },
-  coins: { title: 'Mehr Coins', key: 'E', by: 'inspect', text: '', from: 'Deniz', msg: 'Es gibt jetzt mehr als Bitcoin! Schau dir deine Rechner an (E), da stellst du den Coin ein.' },
+  speed3: { title: 'Vorspulen', key: 'Leertaste', by: 'speed3', text: '', from: 'Deniz', msg: () => `Du wartest eh nur noch? ${K('speed')}, dann rauschen die Tage vorbei.` },
+  company: { title: 'Meine Bude', key: 'C', by: 'company', text: '', from: 'Opa Heinz', msg: () => `Noch ein paar Rechner, und die Sicherung fliegt. Drück ${K('company')}, dann leg ich dir einen eigenen Stromkreis.` },
+  coins: { title: 'Mehr Coins', key: 'E', by: 'inspect', text: '', from: 'Deniz', msg: () => `Es gibt jetzt mehr als Bitcoin! Schau dir deine Rechner an (${K('use')}), da stellst du den Coin ein.` },
   cold: { title: 'Cold-Wallet', key: 'M', by: 'market', text: '', from: 'Deniz', msg: 'Lass nicht alles auf der Börse liegen! Leg deine Coins in die Cold-Wallet, da kommt kein Hacker ran.' },
-  map: { title: 'Karte', key: 'K', by: 'map', text: '', from: 'Papa', msg: 'Der Hobbyraum im Keller ist frei! Mit K siehst du alle deine Standorte.' },
-  ranking: { title: 'Logbuch', key: 'L', by: 'ranking', text: '', from: 'Deniz', msg: 'Ich hab dir ein Logbuch angelegt: Rangliste, Erfolge, Chronik. Drück L.' },
-  loan: { title: 'Bankkredit', key: 'C', by: 'company', text: '', from: 'Papa', msg: 'Die Bank würde dir jetzt Geld leihen. Mit Zinsen, natürlich. Steht unter C.' },
+  map: { title: 'Karte', key: 'K', by: 'map', text: '', from: 'Papa', msg: () => `Der Hobbyraum im Keller ist frei! Mit ${K('map')} siehst du alle deine Standorte.` },
+  ranking: { title: 'Logbuch', key: 'L', by: 'ranking', text: '', from: 'Deniz', msg: () => `Ich hab dir ein Logbuch angelegt: Rangliste, Erfolge, Chronik. Drück ${K('ranking')}.` },
+  loan: { title: 'Bankkredit', key: 'C', by: 'company', text: '', from: 'Papa', msg: () => `Die Bank würde dir jetzt Geld leihen. Mit Zinsen, natürlich. Steht unter ${K('company')}.` },
   buycoins: { title: 'Coins kaufen', key: 'M', by: 'market', text: '', from: 'Deniz', msg: 'An der Börse kannst du jetzt auch kaufen. Günstig rein, teuer raus. Theoretisch.' },
 };
 // Start ohne Handy (Anlernen): zwei Briefe auf dem Schreibtisch (World: letters.js, Game.readLetter)

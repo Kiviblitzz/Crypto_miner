@@ -10,6 +10,7 @@ import { SKILLS, SKILL, POTS, EP_DAY_CAP, ptsFor, epFor, PROFILES, PROFILE_IMM, 
 import { PLACEABLE, PART } from '../data/hardware.js';
 import { FACILITY, UPGRADES } from '../data/world.js';
 import { toDay } from '../data/history.js';
+import { keyLabel as K } from '../keys.js'; // Tasten in Texten nach der Belegung (Einstellungen)
 import { EVENT } from '../data/events.js';
 
 const costOf = (id) => SKILL[id]?.learn.find((w) => w.via === 'pts')?.n || 0;
@@ -133,13 +134,13 @@ export const SKILL_METHODS = {
   skillsOpenN() { let n = 0; for (const k of SKILLS) if (k.play && this.skillWays(k.id).some((w) => w.ok)) n++; return n; },
 
   // ---------- Sperren mit Ausweg (nur mit s.flags.sk2) ----------
-  skillLock(def) { if (!this.skOn() || !def?.skill || this.knows(def.skill)) return ''; return `Erst lernen: ${SKILL[def.skill]?.name || def.skill} (T)`; },
+  skillLock(def) { if (!this.skOn() || !def?.skill || this.knows(def.skill)) return ''; return `Erst lernen: ${SKILL[def.skill]?.name || def.skill} (${K('skills')})`; },
 
   // ---------- Betriebssystem (Nr. 5, 6, 18, 32) ----------
   osNeed(o) { return this.skOn() && isRig(o) && o.os === null; },
   osNeedAny() { const s = this.s; if (!this.skOn()) return false; for (const id of s.unlocked) for (const o of s.fac[id].objects) if (this.osNeed(o)) return true; return this.pendingItems().some((e) => e.k === 'place' && PLACEABLE[e.type]?.kind === 'rig' && !e.ready); }, // auch bestellt, unterwegs oder ausgepackt
   osPrice(kind) { return kind === 'win' ? OS.win.price(this.s.day) : 0; },
-  osWhy(o, kind) { if (!this.osNeed(o)) return 'Hat schon ein System'; if (kind === 'linux' && !this.knows('linux')) return 'Erst Linux lernen (T)'; if (kind === 'win' && !this.canAfford(this.osPrice('win'))) return `Die Lizenz kostet ${this.osPrice('win')} $`; return ''; },
+  osWhy(o, kind) { if (!this.osNeed(o)) return 'Hat schon ein System'; if (kind === 'linux' && !this.knows('linux')) return `Erst Linux lernen (${K('skills')})`; if (kind === 'win' && !this.canAfford(this.osPrice('win'))) return `Die Lizenz kostet ${this.osPrice('win')} $`; return ''; },
   osInstall(uid, kind, viaImage = false) {
     const o = this.findObj(uid); if (!o || this.osWhy(o, kind) || (viaImage && !this.knows('image'))) return false;
     if (kind === 'win') this.s.cash -= this.osPrice('win');
@@ -153,7 +154,7 @@ export const SKILL_METHODS = {
 
   // ---------- Takt & Spannung, Lüfterkurve, Skript (Nr. 7, 42, 43) und ASIC-Firmware (Nr. 27) ----------
   profKind(o) { const d = PLACEABLE[o?.type]; if (!d) return ''; if (isRig(o)) return o.parts.gpus.length ? 'gpu' : ''; if (d.kind === 'device' || d.kind === 'holder') return isAsic(o) ? 'asic' : ''; return ''; },
-  profOk(o) { const k = this.profKind(o); if (k === 'gpu') return this.knows('takt') ? '' : 'Erst „Takt und Spannung“ lernen (T)'; if (k === 'asic') return this.knows('asictakt') || (o.fw && this.knows('firmware')) ? '' : 'Erst „ASIC-Takt im Web-Interface“ lernen (T)'; return 'Nur für Grafikkarten oder geflashte ASICs'; },
+  profOk(o) { const k = this.profKind(o); if (k === 'gpu') return this.knows('takt') ? '' : `Erst „Takt und Spannung“ lernen (${K('skills')})`; if (k === 'asic') return this.knows('asictakt') || (o.fw && this.knows('firmware')) ? '' : `Erst „ASIC-Takt im Web-Interface“ lernen (${K('skills')})`; return 'Nur für Grafikkarten oder geflashte ASICs'; },
   setProfile(uid, p) {
     const o = this.findObj(uid); if (!o || !PROFILES[p] || this.profOk(o)) return false;
     if (p === 'std') delete o.prof; else o.prof = p;
@@ -171,14 +172,14 @@ export const SKILL_METHODS = {
   },
   autoProfiles(facId) { const p = this.profRule(facId, 'gpu'); let n = 0; for (const o of this.s.fac[facId].objects) { if (this.profKind(o) !== 'gpu' || o.os !== 'linux' && this.skOn() || this.profOk(o) || (o.prof || 'std') === p) continue; if (p === 'std') delete o.prof; else o.prof = p; n++; } return n; },
   setSkript(facId, on) { if (!this.knows('skript') || !this.s.fac[facId]) return false; this.s.fac[facId].skript = on ? 1 : 0; if (on) this.autoProfiles(facId); this.dayUpdate(true); return true; },
-  flashOk(o) { if (!this.knows('firmware')) return 'Erst „ASIC-Firmware flashen“ lernen (T)'; if (!isAsic(o)) return 'Nur für ASIC-Miner'; if (o.fw) return 'Schon geflasht'; return ''; },
+  flashOk(o) { if (!this.knows('firmware')) return `Erst „ASIC-Firmware flashen“ lernen (${K('skills')})`; if (!isAsic(o)) return 'Nur für ASIC-Miner'; if (o.fw) return 'Schon geflasht'; return ''; },
   flash(uid, quiet = false) {
     const o = this.findObj(uid); if (!o || this.flashOk(o)) return null; o.fw = 1; let brick = false;
     if (Math.random() < FIRMWARE.brick) { brick = true; if (o.items?.length) o.items[Math.floor(Math.random() * o.items.length)].b = 1; else o.broken = true; }
     this.addEp('r', 20, quiet); if (!quiet) { this.dayUpdate(true); this.emit('objects', this.facOf(uid)); } return { brick };
   },
   flashAll(facId) { let n = 0, b = 0; for (const o of this.s.fac[facId]?.objects || []) { const r = this.flash(o.uid, true); if (r) { n++; if (r.brick) b++; } } if (n) { this.dayUpdate(true); this.emit('objects', facId); } return { n, b }; },
-  atOk(o) { if (!this.knows('autotuning')) return 'Erst „Autotuning“ lernen (T)'; if (this.profKind(o) !== 'asic') return 'Nur für ASIC-Miner'; if (!o.fw) return 'Erst die Firmware flashen'; return ''; },
+  atOk(o) { if (!this.knows('autotuning')) return `Erst „Autotuning“ lernen (${K('skills')})`; if (this.profKind(o) !== 'asic') return 'Nur für ASIC-Miner'; if (!o.fw) return 'Erst die Firmware flashen'; return ''; },
   setAt(uid, on) { const o = this.findObj(uid); if (!o || this.atOk(o)) return false; if (on) o.at = 1; else delete o.at; this.dayUpdate(true); this.emit('objects', this.facOf(uid)); return true; },
   atAll(facId) { let n = 0; for (const o of this.s.fac[facId]?.objects || []) if (!o.at && !this.atOk(o)) { o.at = 1; n++; } if (n) { this.dayUpdate(true); this.emit('objects', facId); } return n; },
   siteImm(facId) { return !!facId && (UPGRADES[facId] || []).some((u) => u.imm && this.upActive(facId, u)); },
@@ -196,13 +197,13 @@ export const SKILL_METHODS = {
 
   // ---------- Wartung (Nr. 9) ----------
   serviceCost(o) { const d = PLACEABLE[o?.type]; if (!d) return 0; if (d.kind === 'rig') return SERVICE.rig; if (d.kind === 'device') return SERVICE.dev; if (d.kind === 'holder') return SERVICE.dev * (o.items?.length || 0); return 0; },
-  serviceWhy(o) { if (!this.knows('wartung')) return 'Erst „Wartung“ lernen (T)'; const c = this.serviceCost(o); if (!c) return 'Nichts zu warten'; if (o.serv && this.s.day - o.serv < 30) return 'Gerade erst gewartet'; if (!this.canAfford(c)) return `Material kostet ${c} $`; return ''; },
+  serviceWhy(o) { if (!this.knows('wartung')) return `Erst „Wartung“ lernen (${K('skills')})`; const c = this.serviceCost(o); if (!c) return 'Nichts zu warten'; if (o.serv && this.s.day - o.serv < 30) return 'Gerade erst gewartet'; if (!this.canAfford(c)) return `Material kostet ${c} $`; return ''; },
   service(uid, quiet = false) { const o = this.findObj(uid); if (!o || this.serviceWhy(o)) return false; this.s.cash -= this.serviceCost(o); o.serv = this.s.day || 1; const d = this.s.sk.day; if ((d.serv || 0) < 50 || d.d !== this.s.day) { this.addEp('w', 5, true); d.serv = (d.d === this.s.day ? d.serv || 0 : 0) + 5; } if (!quiet) { this.dayUpdate(true); this.emit('objects', this.facOf(uid)); } return true; },
   serviceAll(facId) { let n = 0; for (const o of this.s.fac[facId]?.objects || []) if (this.service(o.uid, true)) n++; if (n) { this.dayUpdate(true); this.emit('objects', facId); } return n; },
 
   // ---------- Wasserkühlung (Nr. 15) und FPGA-Bitstream (Nr. 21) ----------
   wkCost(o) { return WK.perGpu * Math.max(1, o?.parts?.gpus?.length || 0); },
-  wkWhy(o) { if (!this.knows('wasser')) return 'Erst „Wasserkühlung“ lernen (T)'; if (this.profKind(o) !== 'gpu') return 'Nur für Rigs mit Grafikkarten'; if (o.wk) return 'Schon eingebaut'; if (!this.canAfford(this.wkCost(o))) return `Das Set kostet ${this.wkCost(o)} $`; return ''; },
+  wkWhy(o) { if (!this.knows('wasser')) return `Erst „Wasserkühlung“ lernen (${K('skills')})`; if (this.profKind(o) !== 'gpu') return 'Nur für Rigs mit Grafikkarten'; if (o.wk) return 'Schon eingebaut'; if (!this.canAfford(this.wkCost(o))) return `Das Set kostet ${this.wkCost(o)} $`; return ''; },
   wkInstall(uid) { const o = this.findObj(uid); if (!o || this.wkWhy(o)) return false; this.s.cash -= this.wkCost(o); this.s.stats.spentHW += this.wkCost(o); o.wk = 1; this.addEp('w', 40); this.dayUpdate(true); this.emit('objects', this.facOf(uid)); return true; },
   bitNeed(o) { return this.skOn() && PLACEABLE[o?.type]?.look === 'fpga' && !o.bit; },
   bitLoad(uid) { const o = this.findObj(uid); if (!o || !this.bitNeed(o) || !this.knows('fpga')) return false; o.bit = 1; this.addEp('r', 20); this.dayUpdate(true); this.emit('objects', this.facOf(uid)); return true; },
@@ -240,7 +241,7 @@ export const SKILL_METHODS = {
 
   // ---------- Netzteil-Mod (Nr. 44): umlöten, +15 % Leistung am Netzteil, das Rig fällt etwas öfter aus ----------
   psuCap(o, ps = PART[o?.parts?.psu]) { return ps ? Math.round(ps.cap * this.psuCount(o) * (o.psuMod && ps.id === o.parts.psu ? PSUMOD.cap : 1)) : 0; },
-  psuModWhy(o) { if (!isRig(o) || !o.parts.psu) return 'Nur für Rigs mit Netzteil'; if (!this.knows('psumod')) return 'Erst „Netzteil-Mod“ lernen (T)'; if (o.psuMod) return 'Schon umgelötet'; if (o.broken) return 'Erst reparieren'; if (!this.canAfford(PSUMOD.cost)) return `Material kostet ${PSUMOD.cost} $`; return ''; },
+  psuModWhy(o) { if (!isRig(o) || !o.parts.psu) return 'Nur für Rigs mit Netzteil'; if (!this.knows('psumod')) return `Erst „Netzteil-Mod“ lernen (${K('skills')})`; if (o.psuMod) return 'Schon umgelötet'; if (o.broken) return 'Erst reparieren'; if (!this.canAfford(PSUMOD.cost)) return `Material kostet ${PSUMOD.cost} $`; return ''; },
   psuRoutineOk(o) { return !this.psuModWhy(o) && (this.s.sk?.reps?.psu || 0) >= REPAIR.routine; },
   psuMod(uid, res = {}) {
     const o = this.findObj(uid); if (!o || this.psuModWhy(o) || !res.ok) return false;
@@ -251,7 +252,7 @@ export const SKILL_METHODS = {
 
   // ---------- BIOS-Mod (Nr. 28): Polaris-Karten eines Rigs mit Speicher-Timings flashen (+18 % Ethash, 3 % Risiko) ----------
   biosCards(o) { return isRig(o) ? o.parts.gpus.filter((id) => BIOSMOD.cards.includes(id)).length : 0; },
-  biosWhy(o) { if (!this.knows('biosmod')) return 'Erst „BIOS-Mod“ lernen (T)'; if (!this.biosCards(o)) return 'Nur für Rigs mit Polaris-Karten (RS 470 bis 580)'; if (o.bios) return 'Schon geflasht'; if (o.broken) return 'Erst reparieren'; return ''; },
+  biosWhy(o) { if (!this.knows('biosmod')) return `Erst „BIOS-Mod“ lernen (${K('skills')})`; if (!this.biosCards(o)) return 'Nur für Rigs mit Polaris-Karten (RS 470 bis 580)'; if (o.bios) return 'Schon geflasht'; if (o.broken) return 'Erst reparieren'; return ''; },
   biosFlash(uid, quiet = false) {
     const o = this.findObj(uid); if (!o || this.biosWhy(o)) return null; o.bios = 1; let brick = false;
     if (Math.random() < BIOSMOD.risk) { brick = true; o.broken = true; o.defect = 'loet'; } // hängt im Flash: BIOS-Clip anlöten
@@ -260,7 +261,7 @@ export const SKILL_METHODS = {
   biosAll(facId) { let n = 0, b = 0; for (const o of this.s.fac[facId]?.objects || []) { const r = this.biosFlash(o.uid, true); if (r) { n++; if (r.brick) b++; } } if (n) { this.dayUpdate(true); this.emit('objects', facId); } return { n, b }; },
 
   // ---------- Leistungsziel (Nr. 33): Regler 60–120 % je Gerät; Hash ∝ Leistung^0,7, über 100 % mehr Verschleiß ----------
-  plWhy(o) { const k = this.profKind(o); if (!this.knows('autotuning')) return 'Erst „Autotuning und Leistungsziel“ lernen (T)'; if (!k) return 'Nur für Grafikkarten-Rigs und ASIC-Miner'; if (k === 'asic' && !o.fw) return 'Erst die Firmware flashen'; return ''; },
+  plWhy(o) { const k = this.profKind(o); if (!this.knows('autotuning')) return `Erst „Autotuning und Leistungsziel“ lernen (${K('skills')})`; if (!k) return 'Nur für Grafikkarten-Rigs und ASIC-Miner'; if (k === 'asic' && !o.fw) return 'Erst die Firmware flashen'; return ''; },
   plClamp(pc) { return Math.round(Math.max(PLIMIT.min, Math.min(PLIMIT.max, +pc || 100)) / 5) * 5; },
   setPl(uid, pc) { const o = this.findObj(uid); if (!o || this.plWhy(o)) return false; pc = this.plClamp(pc); if (pc === 100) delete o.pl; else o.pl = pc; this.dayUpdate(true); this.emit('objects', this.facOf(uid)); return true; },
   plAll(facId, pc, type = null) { let n = 0; pc = this.plClamp(pc); for (const o of this.s.fac[facId]?.objects || []) { if (this.plWhy(o) || (type && o.type !== type) || (o.pl || 100) === pc) continue; if (pc === 100) delete o.pl; else o.pl = pc; n++; } if (n) { this.dayUpdate(true); this.emit('objects', facId); } return n; },
@@ -278,7 +279,7 @@ export const SKILL_METHODS = {
   roboStage(o) { return 1 + (o?.mods?.steck ? 1 : 0) + (o?.mods?.loet ? 1 : 0); },
   roboJobs(o) { return ROBO.jobs[this.roboStage(o) - 1] || ROBO.jobs[0]; },
   robiIn(facId) { return (this.s.fac[facId]?.objects || []).filter((o) => o.type === 'robi'); },
-  roboModWhy(o, m) { const M = ROBO.mods[m]; if (!M || o?.type !== 'robi') return 'Geht nicht'; if (o.mods?.[m]) return 'Schon eingebaut'; if (M.after && !o.mods?.[M.after]) return `Erst den ${ROBO.mods[M.after].name} nachrüsten`; if (!this.knows(M.skill)) return `Erst „${SKILL[M.skill].name}“ lernen (T)`; if (!this.canAfford(M.price)) return `Kostet ${M.price.toLocaleString('de-DE')} $`; return ''; },
+  roboModWhy(o, m) { const M = ROBO.mods[m]; if (!M || o?.type !== 'robi') return 'Geht nicht'; if (o.mods?.[m]) return 'Schon eingebaut'; if (M.after && !o.mods?.[M.after]) return `Erst den ${ROBO.mods[M.after].name} nachrüsten`; if (!this.knows(M.skill)) return `Erst „${SKILL[M.skill].name}“ lernen (${K('skills')})`; if (!this.canAfford(M.price)) return `Kostet ${M.price.toLocaleString('de-DE')} $`; return ''; },
   roboMod(uid, m) { const o = this.findObj(uid); if (!o || this.roboModWhy(o, m)) return false; const M = ROBO.mods[m]; this.s.cash -= M.price; this.s.stats.spentHW += M.price; (o.mods ||= {})[m] = this.s.day || 1; this.dayUpdate(true); this.emit('objects', this.facOf(uid)); return true; },
   // Jeden Tag je Standort: alle Robis dort teilen sich die Fahrten. USB-Stick an neue Rigs (alle), Riser/Karte tauschen und Bausätze einbauen (Greifarm),
   // löten: Rigs, Miner mit „Hashboard-Reparatur“, überlastete Netzteile mit „Netzteil-Mod“ (Lötkopf). Bezahlt wird nur Material. Die Welt zeigt die Fahrt ('robo').
@@ -312,7 +313,7 @@ export const SKILL_METHODS = {
     const sp = fid && this.freeSpot(fid, PLACEABLE.robi), IN = { halle: 'in der Lagerhalle', rz: 'im Rechenzentrum', fjord: 'in der Fjordhalle' };
     if (sp) s.fac[fid].objects.push({ uid: s.nextUid++, type: 'robi', x: sp.x, z: sp.z, rot: sp.rot || 0, coin: 'auto', broken: false, bought: s.day, mods });
     else this.stockAdd({ type: 'robi', mods });
-    s.messages.push({ id: 'robi:gift', day: s.day, from: 'Hashwerk GmbH', read: false, text: `Die Techniker haben gekündigt, Deniz hat dir einen Robi besorgt. ${sp ? `Er steht samt Ladestation ${IN[fid] || 'am größten Standort'}` : 'Er liegt samt Ladestation im Bestand (B) zum Aufstellen'}, mit Greifarm${mods.loet ? ' und Lötkopf' : ''}: Er fährt selbst zu kaputten Geräten und repariert zum Materialpreis${mods.loet ? '' : ' (löten kann er ab dem Lötkopf)'}. Mehr Robis gibt es im Shop unter Roboter – jede Station versorgt ihren Standort.` });
+    s.messages.push({ id: 'robi:gift', day: s.day, from: 'Hashwerk GmbH', read: false, text: `Die Techniker haben gekündigt, Deniz hat dir einen Robi besorgt. ${sp ? `Er steht samt Ladestation ${IN[fid] || 'am größten Standort'}` : `Er liegt samt Ladestation im Bestand (${K('build')}) zum Aufstellen`}, mit Greifarm${mods.loet ? ' und Lötkopf' : ''}: Er fährt selbst zu kaputten Geräten und repariert zum Materialpreis${mods.loet ? '' : ' (löten kann er ab dem Lötkopf)'}. Mehr Robis gibt es im Shop unter Roboter – jede Station versorgt ihren Standort.` });
     return true;
   },
   // Alte Spielstände: einmal Geld statt Prozent-Übergang (nach dem Laden, wenn der Tagesumsatz bekannt ist)
@@ -320,7 +321,7 @@ export const SKILL_METHODS = {
     const s = this.s; if (s.sk?.payout !== 1) return 0; s.sk.payout = s.day || 1;
     const rev = Math.max(0, this.dailyProfit?.().rev || 0), raw = Math.min(MIGR_PAY.cap, rev * MIGR_PAY.days * MIGR_PAY.share * (s.sk.payFrac ?? 1)); delete s.sk.payFrac; if (raw < 50) return 0;
     const x = nice(raw); s.cash += x;
-    s.messages.push({ id: 'sk2:geld', day: s.day, from: 'Deniz', read: false, text: `Hab deinen alten Kram verkauft, hier ${x.toLocaleString('de-DE')} $. Die Undervolt-Skripte und die ganze Technik-Liste von früher braucht keiner mehr – was du kannst, steht jetzt im Baum (T).` });
+    s.messages.push({ id: 'sk2:geld', day: s.day, from: 'Deniz', read: false, text: `Hab deinen alten Kram verkauft, hier ${x.toLocaleString('de-DE')} $. Die Undervolt-Skripte und die ganze Technik-Liste von früher braucht keiner mehr – was du kannst, steht jetzt im Baum (${K('skills')}).` });
     return x;
   },
 
@@ -374,13 +375,13 @@ export const SKILL_METHODS = {
       for (const id of sites) { for (const o of s.fac[id].objects) { const hd = PLACEABLE[o.type]; if (hd?.kind !== 'holder' || !o.items) continue; while (n > 0 && o.items.length < hd.slots) { o.items.push({ id: dv.id, b: 0 }); n--; inH++; facs.add(id); } if (!n) break; } if (!n) break; }
       for (let i = 0; i < n; i++) this.stockAdd({ type: dv.id });
       s.flags.boughtAsic = true;
-      this.contactMsg('lindqvist', `Die Spedition war da: ${dv.n}× ${d.name}${inH ? ` – ${inH === dv.n ? 'alle' : inH} direkt in freie Regale` : ''}${n ? `${inH ? ', ' : ' – '}${n} zum Aufstellen im Bestand (B)` : ''}. Tack för affären!`);
+      this.contactMsg('lindqvist', `Die Spedition war da: ${dv.n}× ${d.name}${inH ? ` – ${inH === dv.n ? 'alle' : inH} direkt in freie Regale` : ''}${n ? `${inH ? ', ' : ' – '}${n} zum Aufstellen im Bestand (${K('build')})` : ''}. Tack för affären!`);
       for (const id of facs) { this.capWarn(id); this.emit('objects', id); } if (n) this.emit('unpacked');
     }
     s.ws.deliv = L.filter((x) => x.day > day); this.dayUpdate(true);
   },
   // Ausbauten mit Fähigkeit oder Datum (UPGRADES.skill/from)
-  upLock(facId, u) { if (u.from && this.s.day < toDay(u.from)) return `ab ${monthName(u.from)}`; if (u.skill && !this.knows(u.skill)) return `Erst lernen: ${SKILL[u.skill]?.name || u.skill} (T)`; return ''; },
+  upLock(facId, u) { if (u.from && this.s.day < toDay(u.from)) return `ab ${monthName(u.from)}`; if (u.skill && !this.knows(u.skill)) return `Erst lernen: ${SKILL[u.skill]?.name || u.skill} (${K('skills')})`; return ''; },
   peakToggle(facId) { const f = this.s.fac[facId]; if (!f || !this.knows('lastman')) return false; f.peak = f.peak ? 0 : 1; this.dayUpdate(true); return true; },
   peakFx(key, facId) { const f = facId && this.s?.fac?.[facId]; if (!f?.peak) return 1; return key === 'elec' ? PEAK.elec : key === 'hash' ? PEAK.hash : 1; },
 };

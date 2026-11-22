@@ -6,6 +6,7 @@ import { toDay } from '../data/history.js';
 import { fmtUSD, fmtCoin, fmtDate, PHONE } from '../sim/game.js';
 import { ChatView, unreadChats } from './chat.js';
 import './market.css';
+import { keyHtml as KH, kbd } from '../keys.js';
 
 const DATA0 = toDay('2010-07-17'); // erste echte Bitcoin-Tageskurse
 const MONTH = 30, YEAR = 365, ALL = 99999;
@@ -133,7 +134,7 @@ export class Market {
   }
   renderTabs() {
     const bar = this.el?.querySelector('.mkb-tabs'); if (!bar) return; const tabs = this.tabs(); this.tabKey = this.tabSig(); bar.innerHTML = '';
-    const L = { shop: 'Shop', market: 'Börse', msgs: 'Nachrichten', bank: 'Bank' }, K = { shop: 'B', market: 'M' }, un = unreadChats(this.g.s), owe = !!this.g.s.bills?.open;
+    const L = { shop: 'Shop', market: 'Börse', msgs: 'Nachrichten', bank: 'Bank' }, K = { shop: KH('build'), market: KH('market') }, un = unreadChats(this.g.s), owe = !!this.g.s.bills?.open;
     for (const t of tabs) { const n = t === 'msgs' && un ? `<i class="mkb-n">${un}</i>` : t === 'bank' && owe ? '<i class="mkb-n warn">!</i>' : ''; const b = h(`<button class="mkb-tab ${t === this.tab ? 'on' : ''}">${ICON[t === 'market' ? 'chart' : t]}<span>${L[t]}</span>${K[t] ? `<kbd>${K[t]}</kbd>` : ''}${n}</button>`); b.onclick = () => this.setTab(t); bar.append(b); }
   }
   // Der Katalog (#build) wandert in den Shop-Reiter und beim Schließen zurück an seinen Platz im HUD
@@ -176,7 +177,7 @@ export class Market {
   shopExtra(list) {
     const g = this.g, ui = this.ui; if (!g.phoneOffer?.()) return; const p = PHONE.price;
     const c = h(`<div class="item mk-phone" data-price="${p}"><div class="thumb">${ICON.phone}</div><div class="t"><span>Handy ${esc(PHONE.name)}<span class="new">NEU</span></span><span class="p">${ui.money(p)}</span></div><div class="s">${esc(PHONE.desc)}</div><div class="miss">${ui.missText(p)}</div><button class="btn small primary place" ${p > g.s.cash ? 'disabled' : ''}>${ui.buyLabel(p)}</button></div>`);
-    c.onclick = () => { if (!g.orderPhone()) { ui.toast(g.canAfford(p) ? 'Bestellen ging nicht.' : 'Nicht genug Geld.', 'bad'); return; } if (g.parcelMode()) ui.ordered(`Handy ${PHONE.name}`); else { ui.audio?.buy?.(); ui.toast(`Handy ${esc(PHONE.name)} gekauft – <kbd>H</kbd>`, 'good', 4000); } ui.build(true); ui.dock?.(); };
+    c.onclick = () => { if (!g.orderPhone()) { ui.toast(g.canAfford(p) ? 'Bestellen ging nicht.' : 'Nicht genug Geld.', 'bad'); return; } if (g.parcelMode()) ui.ordered(`Handy ${PHONE.name}`); else { ui.audio?.buy?.(); ui.toast(`Handy ${esc(PHONE.name)} gekauft – ${kbd('phone')}`, 'good', 4000); } ui.build(true); ui.dock?.(); };
     list.append(c);
   }
   backToShop() { if (this.where && this.tab === 'shop') { this.hostShop(); document.body.classList.add('show-build'); this.ui.build(true); } }

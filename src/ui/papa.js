@@ -8,6 +8,7 @@ import { PEOPLE } from '../data/story.js';
 import { fmtUSD } from '../sim/game.js';
 import { playMinigame } from './minigame.js';
 import './papa.css';
+import { kbd } from '../keys.js';
 
 const h = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -94,7 +95,7 @@ export function moveScene(ui, info = {}) {
 
 // Hinweis am Fadenkreuz
 export function papaPrompt(ui, p) {
-  if (p.action === 'papaRig') return `<kbd>E</kbd>Papas Miner<div class="st">${esc(p.hint)}</div>`;
-  if (p.action === 'crate') return `<kbd>E</kbd>Auspacken<span> · ${esc(p.name || 'Kiste')}</span>`;
+  if (p.action === 'papaRig') return `${kbd('use')}Papas Miner<div class="st">${esc(p.hint)}</div>`;
+  if (p.action === 'crate') return `${kbd('use')}Auspacken<span> · ${esc(p.name || 'Kiste')}</span>`;
   return '';
 }

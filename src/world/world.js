@@ -3,6 +3,8 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Player } from './player.js';
+import { codeOf, is as keyIs } from '../keys.js';
+import { get as getPrefs, set as setPrefs } from '../prefs.js';
 import { ViewModel } from './viewmodel.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
@@ -157,7 +159,8 @@ export class World {
     Object.assign(this.glow, { edgeStrength: 0.9, edgeGlow: 0.2, edgeThickness: 1.0, pulsePeriod: 2.6, enabled: false });
     this.glow.visibleEdgeColor.set(0xffb547); this.glow.hiddenEdgeColor.set(0x5a3a10);
     this.composer.addPass(this.glow);
-    { const vp = new RenderPass(this.vm.scene, this.camera); vp.clear = false; vp.clearDepth = true; this.composer.addPass(vp); }
+    this.fov = 60; this.vmCam = new THREE.PerspectiveCamera(60, 1, 0.05, 50); // Hände: festes Sichtfeld, auch wenn die Welt breiter wird (Einstellungen)
+    { const vp = new RenderPass(this.vm.scene, this.vmCam); vp.clear = false; vp.clearDepth = true; this.composer.addPass(vp); }
     this.bloom = new UnrealBloomPass(new THREE.Vector2(512, 512), 0.28, 0.55, 1.1);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
@@ -200,7 +203,8 @@ export class World {
     const r = this.renderer, hi = q === 'high', lo = q === 'low';
     r.shadowMap.enabled = !lo; r.shadowMap.type = hi ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
     const ms = hi ? 2048 : 1024; if (this.sun.shadow.mapSize.x !== ms) { this.sun.shadow.mapSize.set(ms, ms); this.sun.shadow.map?.dispose(); this.sun.shadow.map = null; }
-    r.setPixelRatio(hi ? Math.min(window.devicePixelRatio, 1.5) : Math.min(window.devicePixelRatio, 1));
+    this.pixelBase = hi ? Math.min(window.devicePixelRatio, 1.5) : Math.min(window.devicePixelRatio, 1);
+    r.setPixelRatio(this.pixelBase * (this.rscale || 1));
     this.composer.setPixelRatio(r.getPixelRatio());
     for (const rt of [this.composer.renderTarget1, this.composer.renderTarget2]) { const n = hi ? 4 : 2; if (rt && rt.samples !== n) { rt.samples = n; rt.dispose(); } }
     this.bloom.enabled = hi;
@@ -211,8 +215,9 @@ export class World {
   }
   // Einstellung pro Gerät: 'auto' (Standard) oder eine feste Stufe. Automatisch: ohne Grafikkarte (Software-Rendering) gleich niedrig,
   // sonst wird die Bildrate gemessen und bei Ruckeln eine Stufe heruntergeschaltet; die gefundene Stufe gilt auch beim nächsten Start
-  gfxLoad() { try { return JSON.parse(localStorage.getItem('hashwerk_gfx') || '{}'); } catch (e) { return {}; } }
-  gfxSave() { try { localStorage.setItem('hashwerk_gfx', JSON.stringify(this.gfx)); } catch (e) { /* egal */ } }
+  // Gespeichert in den Einstellungen (prefs.js, früher localStorage „hashwerk_gfx“)
+  gfxLoad() { return { ...(getPrefs().gfx || {}) }; }
+  gfxSave() { setPrefs({ gfx: { ...this.gfx } }); }
   softGL() {
     try { const gl = this.renderer.getContext(), ext = gl.getExtension('WEBGL_debug_renderer_info'); const n = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)); this.glName = n; this.glSoft = /swiftshader|llvmpipe|softpipe|software|basic render/i.test(n); this.glInfo = n.replace(/^ANGLE \((.*)\)$/, '$1').replace(/\s*\(0x[0-9a-f]+\)/gi, '').replace(/,\s*(D3D|Vulkan|OpenGL)[^,]*$/i, '').slice(0, 80); return this.glSoft; } catch (e) { return false; }
   }
@@ -229,6 +234,16 @@ export class World {
     this.gfx ||= {}; this.gfx.mode = mode; if (mode !== 'auto') this.setQuality(mode); else { this.setQuality(this.gfx.auto || 'high'); this.fpsMon = { t0: 0, n: 0, bad: 0, skipUntil: performance.now() + 3000 }; }
     this.gfxSave();
   }
+  // Einstellungen: Render-Auflösung (Anteil der Pixel), Sichtfeld, Bildraten-Grenze (0 = keine)
+  setRenderScale(v) { this.rscale = v; this.renderer.setPixelRatio((this.pixelBase || 1) * v); this.composer.setPixelRatio(this.renderer.getPixelRatio()); this.resize(); }
+  setFov(v) { this.fov = v; if (!this.empire) { this.camera.fov = v; this.camera.updateProjectionMatrix(); } }
+  setFpsLimit(n) { this.fpsLimit = n || 0; this.capMs = n ? 1000 / n : 0; }
+  // Render-Drossel: höchstens ein Bild je iv Millisekunden (mit etwas Spiel, damit 60 bei 60 Hz nicht auf 30 fällt)
+  frameGate(now, iv) {
+    if (!iv) { this.lastDraw = now; return true; }
+    const el = now - (this.lastDraw || 0); if (el < iv * 0.9) return false;
+    this.lastDraw = el > iv * 2 ? now : this.lastDraw + iv; return true;
+  }
   // Bildrate messen (nur wenn das Fenster aktiv ist und gerade nichts lädt); zweimal hintereinander unter 40 Bildern pro Sekunde: eine Stufe runter
   fpsTick(now) {
     const m = this.fpsMon; if (!m) return;
@@ -236,7 +251,7 @@ export class World {
     if (!m.t0) { m.t0 = now; m.n = 0; return; }
     m.n++; const el = now - m.t0; if (el < 3000) return;
     const fps = (m.n * 1000) / el; m.t0 = 0; this.fpsNow = fps;
-    if (fps >= 40) { m.bad = 0; return; }
+    if (fps >= Math.min(40, (this.fpsLimit || 999) * 0.75)) { m.bad = 0; return; } // mit Bildraten-Grenze: gemessen an der Grenze
     if (++m.bad < 2) return; m.bad = 0;
     const next = this.quality === 'high' ? 'medium' : this.quality === 'medium' ? 'low' : null; if (!next) { this.fpsMon = null; return; }
     this.setQuality(next); this.gfx.auto = next; this.gfxSave(); m.skipUntil = now + 3000;
@@ -247,6 +262,7 @@ export class World {
     const w = window.innerWidth, h = window.innerHeight;
     this.renderer.setSize(w, h, false); this.composer.setSize(w, h);
     this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
+    if (this.vmCam) { this.vmCam.aspect = w / h; this.vmCam.updateProjectionMatrix(); }
   }
 
   // ---------- Standort ----------
@@ -891,7 +907,7 @@ export class World {
       this.cancelPlacement(); this.syncObjects(); return;
     }
     const o = this.onPlace?.(p.type, p.x, p.z, p.rot, p.template); if (!o) return;
-    const again = this.onPlaced?.(o, p) === true || !!this.player.keys.Shift; // Rigs/Miner: gleich noch einen setzen, solange Geld und Platz reichen
+    const again = this.onPlaced?.(o, p) === true || !!(this.player.keys.ShiftLeft || this.player.keys.ShiftRight); // Rigs/Miner: gleich noch einen setzen, solange Geld und Platz reichen
     if (again) this.updatePlacement(); else this.cancelPlacement();
   }
 
@@ -952,19 +968,19 @@ export class World {
       if (moved < 10) this.primaryAction();
     });
     c.addEventListener('contextmenu', (e) => e.preventDefault());
+    // Tasten über die Belegung (keys.js); player.keys merkt sich gedrückte Tasten (code) fürs Laufen
     window.addEventListener('keydown', (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
-      const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+      const c = codeOf(e);
       if (this.cine) return; // Aufwachen: keine Eingabe
-      this.player.keys[k] = true;
+      if (c) this.player.keys[c] = true;
       if (this.mode !== 'play' || this.paused) return; // im Pausenmenü keine Spieltasten
-      if (k === 'r' && this.placing) { this.placing.rot = (this.placing.rot + 1) % 4; this.updatePlacement(); }
-      if (k === 'e' && !this.placing) this.primaryAction();
-      if ((k === 'x' || k === 'Backspace') && this.placing) this.cancelPlacement();
-      // Wärmebild: Taste I über main.js (H gehört dem Handy)
-      if (k === 'f') { const on = this.vm.toggleLamp(); this.onLamp?.(on); }
+      if (keyIs('rotate', e) && this.placing) { this.placing.rot = (this.placing.rot + 1) % 4; this.updatePlacement(); }
+      if (keyIs('use', e) && !this.placing) this.primaryAction();
+      if (keyIs('cancel', e) && this.placing) this.cancelPlacement();
+      if (keyIs('lamp', e)) { const on = this.vm.toggleLamp(); this.onLamp?.(on); }
     });
-    window.addEventListener('keyup', (e) => { this.player.keys[e.key.length === 1 ? e.key.toLowerCase() : e.key] = false; });
+    window.addEventListener('keyup', (e) => { const c = codeOf(e); if (c) this.player.keys[c] = false; });
     window.addEventListener('blur', () => { this.player.keys = {}; });
   }
   primaryAction() {
@@ -1268,7 +1284,7 @@ export class World {
     if (!this.empire) return;
     this.scene.remove(this.empire); disposeTree(this.empire); this.empire = null;
     this.empireHidden.forEach((o) => (o.visible = true)); this.roomLights.forEach((l) => (l.visible = true));
-    this.camera.fov = 60; this.camera.updateProjectionMatrix(); this.doorGroup.visible = true;
+    this.camera.fov = this.fov || 60; this.camera.updateProjectionMatrix(); this.doorGroup.visible = true;
     if (reload) { this.loadFacility(this.facId); const sp = this.savedPose; if (sp) { this.player.setPose(sp.x, sp.z, sp.yaw, sp.pitch, sp.y || 0); } }
     this.onEmpire?.(false);
   }
@@ -1471,11 +1487,13 @@ export class World {
     M.rgb().emissive.setHSL(0.07 + 0.05 * Math.sin(this.t * 0.6), 0.95, 0.55); { let on = false; for (const e of this.entries.values()) if (e.running) { on = true; break; } const tgt = on && this.mode !== 'title' ? 2.2 : this.mode === 'title' ? 0.6 : 0.15; M.rgb().emissiveIntensity += (tgt - M.rgb().emissiveIntensity) * Math.min(1, dt * 3); }
     // Rendern: ist das Fenster nicht aktiv (z. B. der Chat daneben), reichen wenige Bilder pro Sekunde; hinter Menüs reichen 30
     const now = performance.now(); this.fpsTick(now);
-    const menu = !!document.body.dataset.modal || document.body.classList.contains('show-build') || !document.getElementById('modal')?.classList.contains('hidden');
+    const menu = !!document.body.dataset.modal || document.body.classList.contains('show-build') || !document.getElementById('modal')?.classList.contains('hidden') || this.paused || document.body.classList.contains('settings-open'); // auch Pause und Einstellungen
     const drive = this.focusK > 0 && this.focusK < 1; // Kamerafahrt zum Monitor: voll flüssig, sonst hinkt die Seite darauf hinterher
     const minMs = !document.hasFocus() ? 140 : menu && !drive ? 30 : 0; this.throttled = minMs > 0;
-    if (minMs && now - (this.lastDraw || 0) < minMs) return; this.lastDraw = now;
-    if (this.quality === 'low') { const r = this.renderer; r.render(this.scene, this.camera); if (this.vm.root.visible) { r.autoClear = false; r.clearDepth(); r.render(this.vm.scene, this.camera); r.autoClear = true; } } else this.composer.render();
+    this.frameMs = Math.max(minMs, this.capMs || 0); // dazu die Bildraten-Grenze aus den Einstellungen
+    if (!this.frameGate(now, this.frameMs)) return;
+    this.vmCam.position.copy(this.camera.position); this.vmCam.quaternion.copy(this.camera.quaternion);
+    if (this.quality === 'low') { const r = this.renderer; r.render(this.scene, this.camera); if (this.vm.root.visible) { r.autoClear = false; r.clearDepth(); r.render(this.vm.scene, this.vmCam); r.autoClear = true; } } else this.composer.render();
   }
 
   updateDaylight(frac) {

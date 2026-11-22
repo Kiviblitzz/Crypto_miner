@@ -1,5 +1,6 @@
 // Ego-Spieler: Maus-Blick (Pointer Lock oder Ziehen), WASD-Bewegung, Sprint, Kollision, Kopfwippen
 import * as THREE from 'three';
+import { held } from '../keys.js';
 
 export class Player {
   constructor(camera, dom) {
@@ -8,7 +9,7 @@ export class Player {
     this.yaw = 0; this.pitch = 0; this.eye = 1.62; this.radius = 0.28;
     this.keys = {}; this.locked = false; this.enabled = false;
     this.bob = 0; this.moving = false; this.stepDist = 0;
-    this.sens = 0.0022;
+    this.sens = 0.0022; this.invertY = false; // Einstellungen: Empfindlichkeit, Maus umkehren (oben/unten)
     this.touch = { x: 0, y: 0 }; // virtueller Joystick (-1..1)
     this.euler = new THREE.Euler(0, 0, 0, 'YXZ');
     this.lockAt = 0; this.avgMag = 12;
@@ -44,7 +45,7 @@ export class Player {
     window.addEventListener('blur', endDrag); document.addEventListener('visibilitychange', endDrag);
   }
   look(mx, my) {
-    this.yaw -= mx * this.sens; this.pitch -= my * this.sens;
+    this.yaw -= mx * this.sens; this.pitch -= my * this.sens * (this.invertY ? -1 : 1);
     this.pitch = Math.max(-1.45, Math.min(1.45, this.pitch));
   }
   setPose(x, z, yaw, pitch = -0.08, y = 0) { this.pos.set(x, y, z); this.yaw = yaw; this.pitch = pitch; this.apply(); }
@@ -52,11 +53,11 @@ export class Player {
   forward(out = new THREE.Vector3()) { return out.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw)); }
   // ground(x, z, y): Bodenhöhe unter dem Spieler (Treppen, Podeste) oder null = flacher Raum
   update(dt, collides, speedScale = 1, ground = null) {
-    const k = this.keys;
-    let fx = (k.w || k.ArrowUp ? 1 : 0) - (k.s || k.ArrowDown ? 1 : 0) + -this.touch.y;
-    let sx = (k.d || k.ArrowRight ? 1 : 0) - (k.a || k.ArrowLeft ? 1 : 0) + this.touch.x;
+    const k = this.keys, H = (a) => (held(a, k) ? 1 : 0); // Tasten nach der Belegung (keys.js)
+    let fx = H('fwd') - H('back') + -this.touch.y;
+    let sx = H('right') - H('left') + this.touch.x;
     const len = Math.hypot(fx, sx); if (len > 1) { fx /= len; sx /= len; }
-    const sprint = k.Shift ? 2.1 : 1;
+    const sprint = H('sprint') ? 2.1 : 1;
     const speed = 2.6 * sprint * speedScale;
     const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
     const dx = (-sin * fx + cos * sx) * speed * dt, dz = (-cos * fx - sin * sx) * speed * dt;

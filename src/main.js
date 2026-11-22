@@ -6,16 +6,22 @@ import { CHAPTERS, DIFFICULTY } from './data/world.js';
 import { PLACEABLE } from './data/hardware.js';
 import { Audio } from './ui/audio.js';
 import { initTouch } from './ui/touch.js';
+import { load as loadSettings } from './prefs.js';
+import { actionOf, is as keyIs, keyLabel } from './keys.js';
+import { initSettings } from './ui/settings.js';
 
 const SEC_PER_DAY = [Infinity, 86400, 1440, 24, 4, 0.5, 0.12]; // 1 = Echtzeit, 2 = 1 Min/s, 3 = 1 Std/s, 4 = 6 Std/s, 5 = 2 Tage/s, 6 = 8 Tage/s
 
+loadSettings(); // Einstellungen und Tastenbelegung vor allem anderen (alte Schalter werden einmalig übernommen)
 const game = new Game();
 const world = new World(document.getElementById('c'), game);
 world.loadFacility('kinder');
 const ui = new UI(game, world);
-world.onGfxAuto = (q) => ui.toast(`Grafik auf „${q === 'medium' ? 'Mittel' : 'Niedrig'}“ gestellt, damit es flüssig läuft. Ändern kannst du das unter Esc → Menü → Grafik.`, 'info', 6000);
+world.onGfxAuto = (q) => ui.toast(`Grafik auf „${q === 'medium' ? 'Mittel' : 'Niedrig'}“ gestellt, damit es flüssig läuft. Ändern kannst du das unter Esc → Einstellungen → Grafik.`, 'info', 6000);
 const audio = new Audio(); ui.audio = audio;
 window.addEventListener('pointerdown', () => audio.init(), { once: true });
+window.addEventListener('keydown', () => audio.init(), { once: true });
+initSettings({ game, world, ui, audio }); // Einstellungen (Grafik, Ton, Steuerung, Tasten, Sprache): anwenden, Knöpfe in Titelbild und Pause
 world.player.onStep = (run) => { audio.step(run); ui.steps = (ui.steps || 0) + 1; }; // Schritte zählen: Deniz schreibt, sobald man sich in der Bude umgesehen hat (ui.ideaTick)
 window.__hw = { game, world, ui }; // Debug/Tests
 document.body.dataset.mode = 'title';
@@ -98,19 +104,18 @@ document.addEventListener('visibilitychange', () => {
   else audio.ctx?.resume?.().catch(() => {});
 });
 
-// Tastatur (Hotkeys)
-// H = Handy (P geht weiter), I = Wärmebild, T = Fähigkeiten-Baum (J geht auch)
-const HOT = { j: () => ui.skills(), g: () => ui.goalActionKey(), b: () => ui.toggleBuild(), m: () => ui.market(), h: () => ui.phone(), p: () => ui.phone(), i: () => ui.toggleHeat(), c: () => ui.company(), t: () => ui.skills(), l: () => ui.ranking(), k: () => ui.toggleMap() };
+// Tastatur (Hotkeys) – alle Tasten über die Belegung (keys.js, änderbar in den Einstellungen); Esc ist fest
+const HOT = { skills: () => ui.skills(), goal: () => ui.goalActionKey(), build: () => ui.toggleBuild(), market: () => ui.market(), phone: () => ui.phone(), heat: () => ui.toggleHeat(), company: () => ui.company(), ranking: () => ui.ranking(), map: () => ui.toggleMap() };
 function onKey(e) {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || !splash.classList.contains('hidden')) return;
   if (world.cine) { e.preventDefault(); return; } // Aufwachen (World.wakeUp): keine Eingabe
   if (ui.mg) { e.preventDefault(); return; } // Mini-Spiel hat eigene Tasten (Esc bricht nur es ab)
-  const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  const act = actionOf(e);
   if (ui.sleeping) { e.preventDefault(); return; } // Schlafszene
-  if (e.code === 'Space') { e.preventDefault(); ui.speedNext(); return; } // Leertaste: nächste freigeschaltete Tempo-Stufe
-  if (e.key === '0') { ui.setSpeed(game.s.speed ? 0 : (ui.lastSpeed || 1)); return; }
-  if (['1', '2', '3', '4', '5', '6'].includes(e.key)) { ui.setSpeed(+e.key); return; }
-  if (k === 'Escape') {
+  if (act === 'speed') { e.preventDefault(); ui.speedNext(); return; } // Leertaste: nächste freigeschaltete Tempo-Stufe
+  if (act === 'halt') { ui.setSpeed(game.s.speed ? 0 : (ui.lastSpeed || 1)); return; }
+  if (act && /^sp[1-6]$/.test(act)) { ui.setSpeed(+act[2]); return; }
+  if (e.key === 'Escape') {
     if (ui.escLocal()) return; // erst das Offene: Mini-Spiel, Installer, Details im Fähigkeiten-Baum – dann Fenster, dann Pause
     if (world.mode === 'map') { ui.toggleMap(); return; }
     if (ui.mk?.esc()) return; // Börse: erst schließt Esc die Betragsauswahl, dann die Seite (am Monitor fährt die Kamera zurück)
@@ -120,29 +125,29 @@ function onKey(e) {
     if (world.mode === 'play' && !world.cine && document.pointerLockElement !== world.canvas) { ui.pause(true); return; }
     return;
   }
-  if (world.mode === 'ui' && k === 'e' && ui.modalKind === 'letter' && performance.now() - (ui.letterAt || 0) > 250) { ui.closeModal(); return; } // Brief: E legt ihn wieder weg
-  if (world.mode === 'ui' && k === 'e' && ui.inspUid && document.getElementById('modal').classList.contains('hidden') && performance.now() - (ui.openedAt || 0) > 200) { ui.resume(); return; }
-  if (world.mode === 'ui' && k === 'e' && ui.mk?.atMonitor && document.getElementById('modal').classList.contains('hidden') && performance.now() - (ui.mk.openedAt || 0) > 300) { ui.resume(); return; } // E am Monitor: wieder aufstehen
-  if ((k === 'b' || k === 'm') && !ui.stickyModal() && ui.mk?.key(k)) return; // Browser „Shop | Börse“ offen: B/M schalten den Reiter um (im Fenster: zweimal = zu)
-  if (HOT[k] && (world.mode === 'play' || world.mode === 'ui' || ui.paused || world.mode === 'map')) {
-    if (world.mode === 'map' && k !== 'k') return;
-    if (k === 'b' && world.mode === 'ui' && document.body.classList.contains('show-build')) { ui.resume(); return; }
-    if (k !== 'b' && k !== 'k' && ui.modalKind && ui.modalKind === { m: 'market', p: 'phone', h: 'phone', c: 'company', t: 'skills', l: 'ranking', j: 'skills' }[k]) { ui.resume(); return; }
+  if (world.mode === 'ui' && act === 'use' && ui.modalKind === 'letter' && performance.now() - (ui.letterAt || 0) > 250) { ui.closeModal(); return; } // Brief: Benutzen legt ihn wieder weg
+  if (world.mode === 'ui' && act === 'use' && ui.inspUid && document.getElementById('modal').classList.contains('hidden') && performance.now() - (ui.openedAt || 0) > 200) { ui.resume(); return; }
+  if (world.mode === 'ui' && act === 'use' && ui.mk?.atMonitor && document.getElementById('modal').classList.contains('hidden') && performance.now() - (ui.mk.openedAt || 0) > 300) { ui.resume(); return; } // am Monitor: wieder aufstehen
+  if ((act === 'build' || act === 'market') && !ui.stickyModal() && ui.mk?.key(act === 'build' ? 'b' : 'm')) return; // Browser „Shop | Börse“ offen: Shop/Börse schalten den Reiter um (im Fenster: zweimal = zu)
+  if (HOT[act] && (world.mode === 'play' || world.mode === 'ui' || ui.paused || world.mode === 'map')) {
+    if (world.mode === 'map' && act !== 'map') return;
+    if (act === 'build' && world.mode === 'ui' && document.body.classList.contains('show-build')) { ui.resume(); return; }
+    if (act !== 'build' && act !== 'map' && ui.modalKind && ui.modalKind === act) { ui.resume(); return; } // dieselbe Taste schließt ihr Fenster wieder (market, phone, company, skills, ranking)
     if (ui.stickyModal()) return; // Story/Finale/Rückblick nicht wegklicken
-    const NEED = { b: 'build', m: 'market', p: 'phone', h: 'phone', i: 'heat', c: 'company', t: 'skills', l: 'ranking', k: 'map', j: 'skills' };
-    if (NEED[k] && !game.has(NEED[k])) { if (NEED[k] === 'phone' && game.s.letters) ui.toast('Du hast noch kein Handy.', 'info', 1800); return; } // Tasten ohne Funktion tun nichts; H ohne Handy sagt kurz Bescheid
-    HOT[k](); return;
+    const NEED = { build: 'build', market: 'market', phone: 'phone', heat: 'heat', company: 'company', skills: 'skills', ranking: 'ranking', map: 'map' };
+    if (NEED[act] && !game.has(NEED[act])) { if (act === 'phone' && game.s.letters) ui.toast('Du hast noch kein Handy.', 'info', 1800); return; } // Tasten ohne Funktion tun nichts; das Handy ohne Handy sagt kurz Bescheid
+    HOT[act](); return;
   }
-  if (e.key === 'Delete' && world.selected) {
+  if (act === 'sell' && world.selected) {
     const o = game.findObj(world.selected); if (!o) return;
     if (!game.canSell(o)) return; // den ersten PC kann man (noch) nicht verkaufen
     if (ui.delArmed === o.uid) { const v = game.objectValue(o); game.removeObject(o.uid); ui.resume(); ui.delArmed = null; ui.toast(`Verkauft für ${v.toLocaleString('de-DE')} $`, 'good', 2500); }
-    else { ui.delArmed = o.uid; ui.toast('Nochmal Entf drücken, um das Objekt zu verkaufen.', 'info', 3000); setTimeout(() => { if (ui.delArmed === o.uid) ui.delArmed = null; }, 3000); }
+    else { ui.delArmed = o.uid; ui.toast(`Nochmal ${keyLabel('sell')} drücken, um das Objekt zu verkaufen.`, 'info', 3000); setTimeout(() => { if (ui.delArmed === o.uid) ui.delArmed = null; }, 3000); }
   }
 }
 window.addEventListener('keydown', onKey);
-// H gehört jetzt dem Handy: vor der Welt abfangen (die nahm H früher fürs Wärmebild, das jetzt auf I liegt)
-window.addEventListener('keydown', (e) => { if (e.key !== 'h' && e.key !== 'H') return; if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return; e.stopImmediatePropagation(); onKey(e); }, true);
+// Handy-Taste vor der Welt abfangen (Mini-Spiele behalten ihre eigenen Tasten)
+window.addEventListener('keydown', (e) => { if (!keyIs('phone', e) || ui.mg) return; if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return; e.stopImmediatePropagation(); onKey(e); }, true);
 
 // Spielschleife
 let last = performance.now();
